@@ -1,0 +1,482 @@
+{
+  "coreName": "ForgerEMS Ventoy Core",
+  "coreVersion": "2026.04.20.2",
+  "buildTimestampUtc": "2026-04-20T21:27:43Z",
+  "releaseType": "stable",
+  "managedChecksumPolicy": "require-for-release",
+  "manifestVersion": 1,
+  "settings": {
+    "downloadFolder": "_downloads",
+    "archiveFolder": "_archive",
+    "logFolder": "_logs",
+    "timeoutSec": 600,
+    "retryCount": 3,
+    "userAgent": "ForgerEMS-Updater/3.1",
+    "maxArchivePerItem": 5
+  },
+  "items": [
+    {
+      "name": "SystemRescue 13.00 (amd64)",
+      "type": "file",
+      "dest": "ISO\\Linux\\systemrescue-13.00-amd64.iso",
+      "url": "https://sourceforge.net/projects/systemrescuecd/files/sysresccd-x86/13.00/systemrescue-13.00-amd64.iso/download",
+      "sha256Url": "https://www.system-rescue.org/releases/13.00/systemrescue-13.00-amd64.iso.sha256",
+      "sourceType": "sourceforge",
+      "fragilityLevel": "high",
+      "fallbackRule": "Re-derive the same versioned ISO from the official SystemRescue download page and keep the official checksum source. Demote if only mirror-style paths or no official checksum remain.",
+      "maintenanceRank": 4,
+      "enabled": true,
+      "archive": true,
+      "notes": "Auto-download safe: Linux recovery environment."
+    },
+    {
+      "name": "GParted Live 1.8.1-3 (amd64)",
+      "type": "file",
+      "dest": "ISO\\Tools\\gparted-live-1.8.1-3-amd64.iso",
+      "url": "https://sourceforge.net/projects/gparted/files/gparted-live-stable/1.8.1-3/gparted-live-1.8.1-3-amd64.iso/download",
+      "sha256": "3f66b2e10b8bb2c573ed6cdd3a9b54fd0a8e7690634ab6b15c3c8f517992d1a1",
+      "sourceType": "sourceforge",
+      "fragilityLevel": "high",
+      "fallbackRule": "Re-derive the same versioned ISO from gparted.org and refresh the pinned checksum from an official project checksum or source. Demote if only page flows or unverified mirrors remain.",
+      "maintenanceRank": 5,
+      "enabled": true,
+      "archive": true,
+      "notes": "Auto-download safe: partition editor live ISO."
+    },
+    {
+      "name": "Clonezilla Live 3.3.1-35 (amd64)",
+      "type": "file",
+      "dest": "ISO\\Tools\\clonezilla-live-3.3.1-35-amd64.iso",
+      "url": "https://sourceforge.net/projects/clonezilla/files/clonezilla_live_stable/3.3.1-35/clonezilla-live-3.3.1-35-amd64.iso/download",
+      "sha256": "ac4f88c8795a917e3d3fc1a3e52d095f35fe531d459cf853cd3e2c7731043fec",
+      "sourceType": "sourceforge",
+      "fragilityLevel": "high",
+      "fallbackRule": "Re-derive the same versioned ISO from the official Clonezilla download page and refresh the pinned checksum from an official project checksum or source. Demote if only mirrors or page-only flows remain.",
+      "maintenanceRank": 6,
+      "enabled": true,
+      "archive": true,
+      "notes": "Auto-download safe: disk imaging / cloning live ISO."
+    },
+    {
+      "name": "Rescuezilla 2.6.1 (64-bit oracular)",
+      "type": "file",
+      "dest": "ISO\\Tools\\rescuezilla-2.6.1-64bit.oracular.iso",
+      "url": "https://github.com/rescuezilla/rescuezilla/releases/download/2.6.1/rescuezilla-2.6.1-64bit.oracular.iso",
+      "sha256": "7eaa7318634d4831d9bdf2b683acdcd68fb8dd42835fee0db8cb908ddfed2c74",
+      "sha256Url": "https://github.com/rescuezilla/rescuezilla/releases/download/2.6.1/SHA256SUM",
+      "sourceType": "github-release",
+      "fragilityLevel": "medium",
+      "fallbackRule": "Use rescuezilla.com or the matching official GitHub release for the same version and keep the SHA256SUM coverage. Demote if the release asset or checksum file stops matching.",
+      "maintenanceRank": 13,
+      "enabled": true,
+      "archive": true,
+      "notes": "Auto-download safe: GUI rescue/backup imaging ISO."
+    },
+
+    {
+      "name": "Ventoy 1.1.11 (Windows package)",
+      "type": "file",
+      "dest": "Tools\\Portable\\USB\\ventoy-1.1.11-windows.zip",
+      "url": "https://sourceforge.net/projects/ventoy/files/v1.1.11/ventoy-1.1.11-windows.zip/download",
+      "sha256": "1e56e02fc424c194fc4f33357cb949867854f386d67eaf9764f1c96264561493",
+      "sha256Url": "https://sourceforge.net/projects/ventoy/files/v1.1.11/sha256.txt/download",
+      "sourceType": "sourceforge",
+      "fragilityLevel": "high",
+      "fallbackRule": "Use ventoy.net to confirm the same versioned SourceForge asset and keep the official checksum file. Demote if the path stops being a direct official artifact or checksum coverage disappears.",
+      "maintenanceRank": 3,
+      "enabled": true,
+      "archive": true,
+      "notes": "Auto-download safe: official Ventoy Windows package. Ventoy2Disk installation is still a manual step."
+    },
+    {
+      "name": "MediCat Download Page",
+      "type": "page",
+      "dest": "DOWNLOAD - MediCat.url",
+      "url": "https://medicatusb.com/",
+      "enabled": true,
+      "notes": "Manual only: large community toolkit."
+    },
+
+    {
+      "name": "Windows 11 Download Page",
+      "type": "page",
+      "dest": "ISO\\Windows\\DOWNLOAD - Windows 11.url",
+      "url": "https://www.microsoft.com/software-download/windows11",
+      "enabled": true,
+      "notes": "Manual only: Microsoft official download flow."
+    },
+    {
+      "name": "Windows 10 Download Page",
+      "type": "page",
+      "dest": "ISO\\Windows\\DOWNLOAD - Windows 10.url",
+      "url": "https://www.microsoft.com/software-download/windows10ISO",
+      "enabled": true,
+      "notes": "Manual only: Microsoft official download flow."
+    },
+    {
+      "name": "Sergei Strelec WinPE Info",
+      "type": "page",
+      "dest": "ISO\\Windows\\INFO - WinPE (Sergei Strelec).url",
+      "url": "https://sergeistrelec.name/",
+      "enabled": true,
+      "notes": "Manual only: community WinPE project."
+    },
+
+    {
+      "name": "Hiren's BootCD PE Download Page",
+      "type": "page",
+      "dest": "ISO\\Tools\\DOWNLOAD - Hiren's BootCD PE.url",
+      "url": "https://www.hirensbootcd.org/download/",
+      "enabled": true,
+      "notes": "Review first: keep the official page shortcut until provenance and redistribution review is settled."
+    },
+    {
+      "name": "Clonezilla Download Page",
+      "type": "page",
+      "dest": "ISO\\Tools\\DOWNLOAD - Clonezilla.url",
+      "url": "https://clonezilla.org/downloads.php",
+      "enabled": true,
+      "notes": "Info shortcut: upstream page for the separately managed auto-download-safe Clonezilla ISO."
+    },
+    {
+      "name": "Rescuezilla Download Page",
+      "type": "page",
+      "dest": "ISO\\Tools\\DOWNLOAD - Rescuezilla.url",
+      "url": "https://rescuezilla.com/download.html",
+      "enabled": true,
+      "notes": "Info shortcut: upstream page for the separately managed auto-download-safe Rescuezilla ISO."
+    },
+    {
+      "name": "GParted Download Page",
+      "type": "page",
+      "dest": "ISO\\Tools\\DOWNLOAD - GParted.url",
+      "url": "https://gparted.org/download.php",
+      "enabled": true,
+      "notes": "Info shortcut: upstream page for the separately managed auto-download-safe GParted ISO."
+    },
+    {
+      "name": "MemTest86+ 8.00 (x86_64 ISO archive)",
+      "type": "file",
+      "dest": "ISO\\Tools\\mt86plus_8.00_x86_64.iso.zip",
+      "url": "https://www.memtest.org/download/v8.00/mt86plus_8.00_x86_64.iso.zip",
+      "sha256": "df242b91b55571d5126e8236ce7942851b7015331aaf48cfb440a8f9d2c4cc6f",
+      "sha256Url": "https://www.memtest.org/download/v8.00/sha256sum.txt",
+      "sourceType": "official-version-path",
+      "fragilityLevel": "low",
+      "fallbackRule": "Use the memtest.org versioned download directory and official sha256sum.txt for the same release. Demote if the workflow becomes page-only or checksum coverage disappears.",
+      "maintenanceRank": 14,
+      "enabled": true,
+      "archive": true,
+      "notes": "Auto-download safe: official x86_64 ISO archive. Extract the ISO before using it with Ventoy."
+    },
+    {
+      "name": "Ultimate Boot CD Download Page",
+      "type": "page",
+      "dest": "ISO\\Tools\\DOWNLOAD - Ultimate Boot CD.url",
+      "url": "https://www.ultimatebootcd.com/download.html",
+      "enabled": true,
+      "notes": "Manual only: legacy diagnostic toolkit with mixed redistribution terms."
+    },
+
+    {
+      "name": "Ubuntu 24.04.4 LTS Desktop (amd64)",
+      "type": "file",
+      "dest": "ISO\\Linux\\ubuntu-24.04.4-desktop-amd64.iso",
+      "url": "https://releases.ubuntu.com/24.04.4/ubuntu-24.04.4-desktop-amd64.iso",
+      "sha256": "3a4c9877b483ab46d7c3fbe165a0db275e1ae3cfe56a5657e5a47c2f99a99d1e",
+      "sourceType": "official-version-path",
+      "fragilityLevel": "low",
+      "fallbackRule": "Use the official Ubuntu release index for the same version and refresh the checksum from Canonical-published sums before patching. Demote if the versioned artifact is retired or no official sums remain.",
+      "maintenanceRank": 16,
+      "enabled": true,
+      "archive": true,
+      "notes": "Auto-download safe: official Ubuntu desktop ISO."
+    },
+    {
+      "name": "Linux Mint 22.3 Cinnamon (64-bit)",
+      "type": "file",
+      "dest": "ISO\\Linux\\linuxmint-22.3-cinnamon-64bit.iso",
+      "url": "https://pub.linuxmint.io/stable/22.3/linuxmint-22.3-cinnamon-64bit.iso",
+      "sha256": "a081ab202cfda17f6924128dbd2de8b63518ac0531bcfe3f1a1b88097c459bd4",
+      "sourceType": "official-mirror",
+      "fragilityLevel": "medium",
+      "fallbackRule": "Move to a Linux Mint-controlled mirror or release page for the same version and refresh the checksum from the official mirror checksum file. Demote if only third-party mirrors remain.",
+      "maintenanceRank": 7,
+      "borderline": true,
+      "enabled": true,
+      "archive": true,
+      "notes": "Auto-download safe: official Linux Mint Cinnamon ISO from the project mirror."
+    },
+    {
+      "name": "Kali Linux 2026.1 Installer (amd64)",
+      "type": "file",
+      "dest": "ISO\\Linux\\kali-linux-2026.1-installer-amd64.iso",
+      "url": "https://cdimage.kali.org/kali-2026.1/kali-linux-2026.1-installer-amd64.iso",
+      "sha256": "271477ad6ea2676c7346576971b9acc2d32fabd9c2bbaf0e6302397626149306",
+      "sourceType": "official-version-path",
+      "fragilityLevel": "low",
+      "fallbackRule": "Use the official Kali image index for the same release and refresh the checksum from official sums before patching. Demote if only alias paths or indirect mirrors remain.",
+      "maintenanceRank": 15,
+      "enabled": true,
+      "archive": true,
+      "notes": "Auto-download safe: official Kali installer ISO."
+    },
+    {
+      "name": "SystemRescue Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - SystemRescue.url",
+      "url": "https://www.system-rescue.org/Download/",
+      "enabled": true,
+      "notes": "Info shortcut: upstream page for the separately managed auto-download-safe SystemRescue ISO."
+    },
+
+    {
+      "name": "CrystalDiskInfo 9.8.0 (standard zip)",
+      "type": "file",
+      "dest": "Tools\\Portable\\Disk\\CrystalDiskInfo9_8_0.zip",
+      "url": "https://sourceforge.net/projects/crystaldiskinfo/files/9.8.0/CrystalDiskInfo9_8_0.zip/download",
+      "sha256": "c2376e490c0912f69175f45e62159462764358b5a521b526b2adfca4fe40e51a",
+      "sourceType": "sourceforge",
+      "fragilityLevel": "high",
+      "fallbackRule": "Re-derive the exact versioned asset from crystalmark.info and manually recompute the SHA256 from the official file before patching. Demote if the path stops being a direct official artifact.",
+      "maintenanceRank": 2,
+      "borderline": true,
+      "enabled": true,
+      "archive": true,
+      "notes": "Auto-download safe: official CrystalDiskInfo standard ZIP from the vendor SourceForge project. The vendor does not publish a machine-readable checksum here, so the manifest pins a verified SHA256 from the official artifact."
+    },
+    {
+      "name": "HDDScan Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Disk\\DOWNLOAD - HDDScan.url",
+      "url": "https://hddscan.com/",
+      "enabled": true,
+      "notes": "Review first: disk scan utility."
+    },
+    {
+      "name": "DiskGenius Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Disk\\DOWNLOAD - DiskGenius.url",
+      "url": "https://www.diskgenius.com/",
+      "enabled": true,
+      "notes": "Review first: partition/data recovery utility."
+    },
+
+    {
+      "name": "CPU-Z Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Hardware\\DOWNLOAD - CPU-Z.url",
+      "url": "https://www.cpuid.com/softwares/cpu-z.html",
+      "enabled": true,
+      "notes": "Manual only: CPUID download/terms are not treated as safe for automated stable downloads."
+    },
+    {
+      "name": "HWiNFO Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Hardware\\DOWNLOAD - HWiNFO.url",
+      "url": "https://www.hwinfo.com/download/",
+      "enabled": true,
+      "notes": "Manual only: business/commercial licensing applies."
+    },
+    {
+      "name": "GPU-Z Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Hardware\\DOWNLOAD - GPU-Z.url",
+      "url": "https://www.techpowerup.com/gpuz/",
+      "enabled": true,
+      "notes": "Review first: GPU details utility."
+    },
+    {
+      "name": "HWMonitor Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Hardware\\DOWNLOAD - HWMonitor.url",
+      "url": "https://www.cpuid.com/softwares/hwmonitor.html",
+      "enabled": true,
+      "notes": "Manual only: CPUID download/terms are not treated as safe for automated stable downloads."
+    },
+    {
+      "name": "OCCT Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Hardware\\DOWNLOAD - OCCT.url",
+      "url": "https://www.ocbase.com/download",
+      "enabled": true,
+      "notes": "Manual only: business/commercial licensing applies."
+    },
+
+    {
+      "name": "Angry IP Scanner 3.9.3 (Windows setup)",
+      "type": "file",
+      "dest": "Tools\\Portable\\Network\\ipscan-3.9.3-setup.exe",
+      "url": "https://github.com/angryip/ipscan/releases/download/3.9.3/ipscan-3.9.3-setup.exe",
+      "sha256": "91d77c63169249e8fcdd2d912963d4d5cd143d87b65352fc62ba8113fb49f9f5",
+      "sha256Url": "https://api.github.com/repos/angryip/ipscan/releases/assets/314847493",
+      "sourceType": "github-release",
+      "fragilityLevel": "medium",
+      "fallbackRule": "Use the matching official GitHub release asset and asset digest for the same version. Demote if the release asset disappears or the digest endpoint stops agreeing.",
+      "maintenanceRank": 10,
+      "enabled": true,
+      "archive": true,
+      "notes": "Auto-download safe: official Angry IP Scanner Windows installer with bundled Java runtime. Checksum coverage comes from the official GitHub release asset digest."
+    },
+    {
+      "name": "Advanced IP Scanner Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Network\\DOWNLOAD - Advanced IP Scanner.url",
+      "url": "https://www.advanced-ip-scanner.com/",
+      "enabled": true,
+      "notes": "Review first: quick LAN scanner."
+    },
+
+    {
+      "name": "Autoruns Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\System\\DOWNLOAD - Autoruns (Sysinternals).url",
+      "url": "https://learn.microsoft.com/sysinternals/downloads/autoruns",
+      "enabled": true,
+      "notes": "Review first: Sysinternals shortcut only."
+    },
+    {
+      "name": "Process Explorer Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\System\\DOWNLOAD - Process Explorer (Sysinternals).url",
+      "url": "https://learn.microsoft.com/sysinternals/downloads/process-explorer",
+      "enabled": true,
+      "notes": "Review first: Sysinternals shortcut only."
+    },
+    {
+      "name": "Sysinternals Suite Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\System\\DOWNLOAD - Sysinternals Suite.url",
+      "url": "https://learn.microsoft.com/sysinternals/downloads/sysinternals-suite",
+      "enabled": true,
+      "notes": "Review first: Sysinternals shortcut only."
+    },
+    {
+      "name": "BlueScreenView 1.55 (x64 zip)",
+      "type": "file",
+      "dest": "Tools\\Portable\\System\\bluescreenview-x64.zip",
+      "url": "https://www.nirsoft.net/utils/bluescreenview-x64.zip",
+      "sha256": "df57d4c9418dd2771035f2f7b70952caeb20d2269af683a0ab0665125c821479",
+      "sourceType": "official-version-path",
+      "fragilityLevel": "high",
+      "fallbackRule": "Confirm the replacement ZIP on the official NirSoft site and manually recompute the SHA256 before patching. Demote if the direct vendor file becomes page-only or ambiguous.",
+      "maintenanceRank": 1,
+      "borderline": true,
+      "enabled": true,
+      "archive": true,
+      "notes": "Auto-download safe: official NirSoft x64 portable zip."
+    },
+    {
+      "name": "DriverStoreExplorer 1.0.26 (zip)",
+      "type": "file",
+      "dest": "Tools\\Portable\\System\\DriverStoreExplorer-v1.0.26.zip",
+      "url": "https://github.com/lostindark/DriverStoreExplorer/releases/download/v1.0.26/DriverStoreExplorer-v1.0.26.zip",
+      "sha256": "89a5ed17bf7c08c869294af2202f5f9b34050f81c2feeaa6cd694970da8e931f",
+      "sha256Url": "https://api.github.com/repos/lostindark/DriverStoreExplorer/releases/assets/385341074",
+      "sourceType": "github-release",
+      "fragilityLevel": "medium",
+      "fallbackRule": "Use the matching official GitHub release ZIP and asset digest for the same version. Demote if the release asset disappears or the digest endpoint stops agreeing.",
+      "maintenanceRank": 9,
+      "enabled": true,
+      "archive": true,
+      "notes": "Auto-download safe: official DriverStoreExplorer release ZIP from the project GitHub repository. Checksum coverage comes from the official GitHub release asset digest."
+    },
+    {
+      "name": "Everything Search Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\System\\DOWNLOAD - Everything Search.url",
+      "url": "https://www.voidtools.com/",
+      "enabled": true,
+      "notes": "Review first: fast file search tool."
+    },
+
+    {
+      "name": "AnyDesk Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Remote\\DOWNLOAD - AnyDesk.url",
+      "url": "https://anydesk.com/downloads",
+      "enabled": true,
+      "notes": "Manual only: remote support utility with personal-use licensing."
+    },
+    {
+      "name": "RustDesk 1.4.6 (x86_64 exe)",
+      "type": "file",
+      "dest": "Tools\\Portable\\Remote\\rustdesk-1.4.6-x86_64.exe",
+      "url": "https://github.com/rustdesk/rustdesk/releases/download/1.4.6/rustdesk-1.4.6-x86_64.exe",
+      "sha256": "422ce31131e6537ea4f611ebf4a4d1804f28a6f58c83aa05065071c5958f1551",
+      "sha256Url": "https://api.github.com/repos/rustdesk/rustdesk/releases/assets/367293485",
+      "sourceType": "github-release",
+      "fragilityLevel": "medium",
+      "fallbackRule": "Use the matching official GitHub release asset and asset digest, then refresh the pinned checksum. Demote if the release asset or digest becomes inconsistent.",
+      "maintenanceRank": 11,
+      "enabled": true,
+      "archive": true,
+      "notes": "Auto-download safe: official RustDesk Windows x64 executable. Pinned checksum refreshed from the official GitHub release asset digest."
+    },
+
+    {
+      "name": "Rufus 4.13 Portable (x64)",
+      "type": "file",
+      "dest": "Tools\\Portable\\USB\\rufus-4.13p.exe",
+      "url": "https://github.com/pbatard/rufus/releases/download/v4.13/rufus-4.13p.exe",
+      "sha256": "a314db019d608e3d9b2eda797ba5bbe4dfc91bcd621decd144a580080eb13b1b",
+      "sha256Url": "https://api.github.com/repos/pbatard/rufus/releases/assets/357534705",
+      "sourceType": "github-release",
+      "fragilityLevel": "medium",
+      "fallbackRule": "Use the official Rufus site to confirm the matching GitHub release asset and refresh the asset digest. Demote if the official site stops pointing to a direct official asset.",
+      "maintenanceRank": 8,
+      "enabled": true,
+      "archive": true,
+      "notes": "Auto-download safe: official Rufus portable x64 executable linked from rufus.ie. Checksum coverage comes from the official GitHub release asset digest."
+    },
+    {
+      "name": "balenaEtcher 2.1.4 Setup (x64)",
+      "type": "file",
+      "dest": "Tools\\Portable\\USB\\balenaEtcher-2.1.4.Setup.exe",
+      "url": "https://github.com/balena-io/etcher/releases/download/v2.1.4/balenaEtcher-2.1.4.Setup.exe",
+      "sha256": "b75321f3f68c6f09332e97dca6b38744067826d114c04e6c05cbceff63631e62",
+      "sha256Url": "https://api.github.com/repos/balena-io/etcher/releases/assets/277395239",
+      "sourceType": "github-release",
+      "fragilityLevel": "medium",
+      "fallbackRule": "Use the matching official GitHub release asset and asset digest for the same version. Demote if the release asset disappears or the digest endpoint stops agreeing.",
+      "maintenanceRank": 12,
+      "enabled": true,
+      "archive": true,
+      "notes": "Auto-download safe: official balenaEtcher Windows installer."
+    },
+
+    {
+      "name": "DDU Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\GPU\\DOWNLOAD - DDU (Display Driver Uninstaller).url",
+      "url": "https://www.guru3d.com/download/display-driver-uninstaller-download/",
+      "enabled": true,
+      "notes": "Review first: GPU driver cleanup utility."
+    },
+    {
+      "name": "NVCleanInstall Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\GPU\\DOWNLOAD - NVCleanInstall.url",
+      "url": "https://www.techpowerup.com/download/techpowerup-nvcleanstall/",
+      "enabled": true,
+      "notes": "Review first: custom NVIDIA driver installer."
+    },
+
+    {
+      "name": "Intel Driver Download Center",
+      "type": "page",
+      "dest": "Drivers\\DRIVERS - Intel Download Center.url",
+      "url": "https://www.intel.com/content/www/us/en/download-center/home.html",
+      "enabled": true,
+      "notes": "Review first: official Intel driver portal shortcut."
+    },
+    {
+      "name": "Realtek Downloads",
+      "type": "page",
+      "dest": "Drivers\\DRIVERS - Realtek Downloads.url",
+      "url": "https://www.realtek.com/en/downloads",
+      "enabled": true,
+      "notes": "Review first: official Realtek driver portal shortcut."
+    }
+  ]
+}

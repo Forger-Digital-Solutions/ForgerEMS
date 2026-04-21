@@ -1,0 +1,83 @@
+====================================================
+           FORGEREMS DOWNLOAD CATALOG
+====================================================
+
+The Ventoy core uses three practical catalog buckets:
+
+- auto-download safe
+- manual only
+- review-first
+
+Note: "safe" still depends on upstream availability.
+It means the manifest points at an official direct
+artifact with checksum coverage today. It does not
+guarantee the upstream will stay reachable forever.
+
+HEALTH SNAPSHOT
+---------------
+
+Total safe items: 16
+Fragility: high 6 | medium 7 | low 3
+Checksum posture: pinned-only 7 | pinned+remote 8 | remote-only 1
+Status: OK 9 | OK-LIMITED 7 | DRIFT 0
+Borderline: BlueScreenView 1.55 (x64 zip); CrystalDiskInfo 9.8.0 (standard zip); Linux Mint 22.3 Cinnamon (64-bit)
+Inspect first next cycle: [1] BlueScreenView 1.55 (x64 zip); [2] CrystalDiskInfo 9.8.0 (standard zip); [3] Ventoy 1.1.11 (Windows package); [4] SystemRescue 13.00 (amd64); [5] GParted Live 1.8.1-3 (amd64)
+
+Status meanings:
+- OK -> remote checksum coverage is present
+- OK-LIMITED -> live checksum confirmation still depends on the pinned manifest hash
+
+AUTO-DOWNLOAD SAFE
+------------------
+
+[1] OK-LIMITED | high | official-version-path | pinned-only | BlueScreenView 1.55 (x64 zip)
+[2] OK-LIMITED | high | sourceforge | pinned-only | CrystalDiskInfo 9.8.0 (standard zip)
+[3] OK | high | sourceforge | pinned+remote | Ventoy 1.1.11 (Windows package)
+[4] OK | high | sourceforge | remote-only | SystemRescue 13.00 (amd64)
+[5] OK-LIMITED | high | sourceforge | pinned-only | GParted Live 1.8.1-3 (amd64)
+[6] OK-LIMITED | high | sourceforge | pinned-only | Clonezilla Live 3.3.1-35 (amd64)
+[7] OK-LIMITED | medium | official-mirror | pinned-only | Linux Mint 22.3 Cinnamon (64-bit)
+[8] OK | medium | github-release | pinned+remote | Rufus 4.13 Portable (x64)
+[9] OK | medium | github-release | pinned+remote | DriverStoreExplorer 1.0.26 (zip)
+[10] OK | medium | github-release | pinned+remote | Angry IP Scanner 3.9.3 (Windows setup)
+[11] OK | medium | github-release | pinned+remote | RustDesk 1.4.6 (x86_64 exe)
+[12] OK | medium | github-release | pinned+remote | balenaEtcher 2.1.4 Setup (x64)
+[13] OK | medium | github-release | pinned+remote | Rescuezilla 2.6.1 (64-bit oracular)
+[14] OK | low | official-version-path | pinned+remote | MemTest86+ 8.00 (x86_64 ISO archive)
+[15] OK-LIMITED | low | official-version-path | pinned-only | Kali Linux 2026.1 Installer (amd64)
+[16] OK-LIMITED | low | official-version-path | pinned-only | Ubuntu 24.04.4 LTS Desktop (amd64)
+
+MANUAL ONLY
+-----------
+
+- Windows 11 Download Page
+- Windows 10 Download Page
+- MediCat Download Page
+- Sergei Strelec WinPE Info
+- Ultimate Boot CD Download Page
+- AnyDesk Download Page
+- HWiNFO Download Page
+- OCCT Download Page
+- CPU-Z Download Page
+- HWMonitor Download Page
+
+REVIEW-FIRST
+------------
+
+- Hiren's BootCD PE Download Page
+- Autoruns Download Page
+- Process Explorer Download Page
+- Sysinternals Suite Download Page
+- Everything Search Download Page
+- GPU-Z Download Page
+- DDU Download Page
+- NVCleanInstall Download Page
+- HDDScan Download Page
+- DiskGenius Download Page
+- Advanced IP Scanner Download Page
+- Intel Driver Download Center
+- Realtek Downloads
+
+See MANAGED-DOWNLOAD-MAINTENANCE.txt for fragility
+ranking, archive locations, demotion rules, and
+release-prep maintenance guidance.

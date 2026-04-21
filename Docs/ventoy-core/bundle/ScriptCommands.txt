@@ -1,0 +1,19 @@
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+
+# Display manifest-sourced bundle version/build metadata
+.\Setup-ForgerEMS.ps1 -ShowVersion
+
+# Build the layout and seed the manifest
+.\Setup-ForgerEMS.ps1 -DriveLetter D -SeedManifest
+
+# Preview updater actions without writes or downloads
+.\Update-ForgerEMS.ps1 -DriveLetter D -WhatIf
+
+# Apply manifest-managed updates
+.\Update-ForgerEMS.ps1 -DriveLetter D
+
+# Run lightweight shipping-baseline verification in workspace scratch space
+.\Verify-VentoyCore.ps1
+
+# Optional upstream health check (HEAD-only; slower and network-dependent)
+.\Verify-VentoyCore.ps1 -Online

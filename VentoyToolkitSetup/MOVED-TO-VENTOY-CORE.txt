@@ -1,0 +1,12 @@
+VentoyToolkitSetup compatibility facade
+=======================================
+
+The canonical maintainable Ventoy core now lives in:
+
+H:\ForgerEMS\ventoy-core
+H:\ForgerEMS\manifests
+H:\ForgerEMS\Docs\ventoy-core
+
+This folder is intentionally preserved so older paths and habits still work.
+The PowerShell entrypoints here are compatibility shims that delegate to the
+canonical scripts in ventoy-core.

@@ -1,0 +1,227 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forgerems.local/schemas/forgerems.updates.schema.json",
+  "title": "ForgerEMS Ventoy Core Manifest",
+  "type": "object",
+  "required": [
+    "items"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "coreName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "coreVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "buildTimestampUtc": {
+      "type": "string",
+      "minLength": 1
+    },
+    "releaseType": {
+      "type": "string",
+      "enum": [
+        "dev",
+        "candidate",
+        "stable"
+      ]
+    },
+    "managedChecksumPolicy": {
+      "type": "string",
+      "enum": [
+        "warn",
+        "require-for-release"
+      ]
+    },
+    "manifestVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "settings": {
+      "type": "object",
+      "properties": {
+        "downloadFolder": {
+          "type": "string",
+          "minLength": 1
+        },
+        "archiveFolder": {
+          "type": "string",
+          "minLength": 1
+        },
+        "logFolder": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timeoutSec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "retryCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "userAgent": {
+          "type": "string",
+          "minLength": 1
+        },
+        "maxArchivePerItem": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "url",
+          "dest"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "file",
+              "page"
+            ]
+          },
+          "dest": {
+            "type": "string",
+            "minLength": 1
+          },
+          "url": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[A-Fa-f0-9]{64}$"
+          },
+          "sha256Url": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sourceType": {
+            "type": "string",
+            "enum": [
+              "sourceforge",
+              "github-release",
+              "official-mirror",
+              "official-version-path"
+            ]
+          },
+          "fragilityLevel": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          },
+          "fallbackRule": {
+            "type": "string",
+            "minLength": 1
+          },
+          "maintenanceRank": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "borderline": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "archive": {
+            "type": "boolean"
+          },
+          "timeoutSec": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "page"
+                }
+              },
+              "required": [
+                "type"
+              ]
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "sha256Url"
+                ]
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "page"
+                }
+              },
+              "required": [
+                "type"
+              ]
+            },
+            "then": {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "sourceType"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "fragilityLevel"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "fallbackRule"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "maintenanceRank"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "borderline"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

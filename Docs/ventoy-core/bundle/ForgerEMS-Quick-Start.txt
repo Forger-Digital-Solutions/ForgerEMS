@@ -1,0 +1,460 @@
+====================================================
+   FORGEREMS TECHBENCH USB – QUICK START GUIDE
+====================================================
+
+This USB contains the ForgerEMS setup/update scripts
+used to build and maintain a Ventoy-based recovery,
+diagnostics, repair, and deployment toolkit.
+
+====================================================
+WHAT THIS TOOLKIT IS FOR
+====================================================
+
+ForgerEMS is a technician-style USB layout designed for:
+
+- OS installs and recovery
+- system diagnostics
+- hardware checks
+- offline driver staging
+- portable repair utilities
+- bench logging and report storage
+
+It is intended to keep your USB organized, portable,
+and easy to maintain over time.
+
+====================================================
+PRIMARY SCRIPTS
+====================================================
+
+This toolkit now uses three main scripts:
+
+1) Setup-ForgerEMS.ps1
+   Builds the folder layout, writes helper files,
+   creates download shortcuts, and can seed the
+   manifest file.
+
+2) Update-ForgerEMS.ps1
+   Uses ForgerEMS.updates.json to update supported
+   files and shortcuts later.
+
+3) Verify-VentoyCore.ps1
+   Runs lightweight shipping-baseline checks for
+   wrapper entrypoints, manifest fallback, path
+   safety, and true dry-run behavior.
+   Optional -Online adds HEAD-only upstream checks.
+
+Manifest file:
+- ForgerEMS.updates.json
+
+Checksum file:
+- CHECKSUMS.sha256
+
+Schema file:
+- manifests\ForgerEMS.updates.schema.json
+
+Vendor inventory:
+- manifests\vendor.inventory.json
+
+Vendor inventory schema:
+- manifests\vendor.inventory.schema.json
+
+====================================================
+WHAT THE SETUP SCRIPT DOES
+====================================================
+
+Setup-ForgerEMS.ps1 can:
+
+- create the full ForgerEMS folder structure
+- create ISO folders for Windows, Linux, and recovery tools
+- create portable tool folders by category
+- create driver folders at the USB root
+- create working folders:
+    _downloads
+    _archive
+    _logs
+    _reports
+- add DOWNLOAD shortcuts (.url) to official/reputable pages
+- keep manual-only and review-first page shortcuts distinct
+- write inventory/readme/helper files
+- optionally seed the update manifest:
+    ForgerEMS.updates.json
+
+The setup script does NOT:
+
+- install Ventoy
+- format the USB
+- install software onto your PC
+- modify Windows system settings permanently
+
+====================================================
+IMPORTANT FIRST-TIME STEP
+====================================================
+
+Install Ventoy to the USB BEFORE loading your toolkit.
+
+Ventoy Download:
+https://www.ventoy.net/en/download.html
+
+Use:
+- Ventoy2Disk
+
+IMPORTANT:
+Installing Ventoy formats the USB drive.
+
+That means:
+1) install Ventoy first
+2) then copy your toolkit/scripts/files onto the USB
+3) then run the setup/layout script
+4) then add your ISOs and portable tools
+
+====================================================
+HOW TO RUN THE SETUP SCRIPT
+====================================================
+
+1) Plug the USB into your computer.
+
+2) Open PowerShell as Administrator.
+   - Click Start
+   - Type: PowerShell
+   - Right-click PowerShell
+   - Choose: Run as administrator
+
+3) Allow scripts for this session only:
+
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+
+4) Switch to your USB drive letter.
+   Example:
+
+   D:
+
+5) Run the main setup script from the USB root.
+   Example:
+
+   .\Setup-ForgerEMS.ps1 -DriveLetter D
+
+Optional:
+Seed the manifest file too:
+
+   .\Setup-ForgerEMS.ps1 -DriveLetter D -SeedManifest
+
+Optional:
+If you are already inside the USB root and want to
+target that drive directly, this also works:
+
+   .\Setup-ForgerEMS.ps1
+
+====================================================
+WHAT THE FOLDER LAYOUT LOOKS LIKE
+====================================================
+
+ISO\
+  Linux\        -> Ubuntu, Mint, Kali, SystemRescue
+  Tools\        -> Clonezilla, Rescuezilla, GParted, MemTest, Hiren's, UBCD
+  Windows\      -> Windows 10/11 ISOs + WinPE tools
+
+Tools\Portable\
+  Disk\         -> SMART/health/recovery utilities
+  Hardware\     -> CPU/GPU/RAM/temp/stress tools
+  Network\      -> IP scanners / network checks
+  System\       -> Sysinternals / BSOD / cleanup tools
+  Remote\       -> AnyDesk / RustDesk
+  USB\          -> Rufus / Etcher / USB helpers
+  GPU\          -> DDU / NVCleanInstall
+  Security\     -> optional portable security tools
+
+Drivers\
+  Chipset_Intel\
+  Intel_LAN\
+  Intel_WiFi\
+  Realtek_LAN\
+  Storage_NVMe\
+  Touchpad_ELAN\
+  Touchpad_Synaptics\
+
+ForgerTools\
+  DisplayForger\
+  HardwareForger\
+  EncryptionForge\
+  QuickToolsHealthCheck\
+
+Optional / Working Folders
+  MediCat.USB\
+  _downloads\
+  _archive\
+  _logs\
+  _reports\
+  Docs\
+
+====================================================
+WHY DRIVERS ARE KEPT AT ROOT
+====================================================
+
+Drivers are intentionally stored at the USB root and
+NOT inside ISO\.
+
+Reason:
+- drivers are not boot images
+- easier to browse during repair jobs
+- cleaner separation from Ventoy boot media
+- better workflow for manual installs and field fixes
+
+====================================================
+ADDING ISOs
+====================================================
+
+Copy bootable ISO files into the matching folders:
+
+  D:\ISO\Windows\
+  D:\ISO\Linux\
+  D:\ISO\Tools\
+
+Examples:
+- Windows 10 / 11 ISO -> ISO\Windows\
+- Ubuntu / Mint / Kali -> ISO\Linux\
+- Clonezilla / GParted / Rescuezilla -> ISO\Tools\
+
+After that, boot from the USB using your PC's boot menu.
+
+Common boot menu keys:
+- F12
+- ESC
+- F9
+- F11
+
+This varies by system/vendor.
+
+====================================================
+DOWNLOAD SHORTCUTS
+====================================================
+
+The setup script places .url shortcuts into the correct
+folders for the catalog entries that remain manual.
+
+Examples:
+- Windows download pages
+- Hiren's BootCD PE
+- HWiNFO
+- Intel / Realtek driver pages
+
+These are shortcut/info entries only.
+They do not download files by themselves.
+
+Manifest-managed downloads and updates are handled by:
+
+- Update-ForgerEMS.ps1
+- ForgerEMS.updates.json
+- DOWNLOAD-CATALOG.txt
+- MANAGED-DOWNLOAD-MAINTENANCE.txt
+
+Current split:
+
+- auto-download safe -> manifest-managed file items
+- manual only -> manifest-managed page shortcuts only
+- review-first -> manifest-managed page shortcuts only
+
+Safe still depends on upstream availability.
+Use MANAGED-DOWNLOAD-MAINTENANCE.txt for fragility
+ranking, fallback rules, and revalidation steps.
+
+====================================================
+MANAGED VS UNMANAGED CONTENT
+====================================================
+
+Managed/updateable content in this Ventoy core:
+
+- files explicitly listed in ForgerEMS.updates.json
+- generated DOWNLOAD and INFO shortcuts
+- generated README, inventory, and helper notes
+- updater workflow folders:
+    _downloads
+    _archive
+    _logs
+
+Manual/unmanaged content unless a source workflow is
+added later:
+
+- portable third-party tools copied into Tools\Portable
+- offline driver packs copied into Drivers
+- MediCat.USB and similar large community bundles
+- packaged/vendor ForgerTools artifacts whose source
+  repository or build process is not present here
+
+Do not assume bundled vendor content is fully
+maintainable just because it is stored in this
+workspace. Only manifest-managed items are updated by
+the shipping Ventoy core scripts.
+
+Within the manifest-managed catalog:
+
+- auto-download safe items are file entries fetched by
+  Update-ForgerEMS.ps1
+- manual-only items remain page shortcuts because the
+  flow or terms are intentionally not automated
+- review-first items remain page shortcuts until
+  checksum/provenance and operational review is good
+  enough for promotion
+
+====================================================
+UPDATE SCRIPT
+====================================================
+
+If your USB includes:
+
+  Update-ForgerEMS.ps1
+  ForgerEMS.updates.json
+
+you can run:
+
+  .\Update-ForgerEMS.ps1 -DriveLetter D
+
+This updater can:
+
+- download/update selected files into the correct folders
+- verify hashes when provided
+- write/update page shortcuts
+- archive older versions before replacing files
+- write detailed logs into _logs
+
+Useful switches:
+
+  -Force
+    Re-download/update even when the destination exists
+
+  -VerifyOnly
+    Only verify existing files using SHA-256 when available
+
+  -NoArchive
+    Replace files without keeping an archived copy
+
+  -WhatIf
+    Preview actions without making changes
+
+Optional alternate root example:
+
+  .\Update-ForgerEMS.ps1 -UsbRoot "D:\"
+
+====================================================
+RECOMMENDED WORKFLOW
+====================================================
+
+1) Install Ventoy to the USB
+2) Copy the ForgerEMS scripts/files onto the USB
+3) Run Setup-ForgerEMS.ps1
+4) Seed the manifest if needed
+5) Copy your known-good ISOs into ISO folders
+6) Add portable apps / drivers / Forger tools
+7) Run Update-ForgerEMS.ps1 later for maintenance
+8) Keep logs, reports, and archived versions on-drive
+
+====================================================
+SAFETY NOTES
+====================================================
+
+- Always confirm the correct USB drive letter before running scripts.
+- Install Ventoy before copying your final toolkit layout.
+- Re-running the setup/layout script is safe.
+- The setup/layout script does NOT format the USB.
+- Ventoy installation DOES format the USB.
+- Archive older versions if you care about rollback.
+- Some community tools may move/change URLs over time.
+- Hash verification is strongly recommended where available.
+
+====================================================
+COMMUNITY TOOLS / LICENSE NOTES
+====================================================
+
+Some items commonly used in recovery toolkits are
+community-built or distributed outside a simple direct
+download flow.
+
+Examples:
+- Sergei Strelec
+- MediCat
+- some WinPE-based toolkits
+
+For those:
+- use official/home pages
+- follow their license terms
+- verify what you download
+- keep your own known-good copies when appropriate
+
+====================================================
+VERIFICATION
+====================================================
+
+Run the lightweight verification script before
+calling this baseline shippable:
+
+  .\Verify-VentoyCore.ps1
+
+To revalidate the managed safe bucket without
+changing the manifest:
+
+  .\Verify-VentoyCore.ps1 -RevalidateManagedDownloads
+
+This also writes a short operator summary under:
+
+  .\.verify\managed-download-revalidation\latest\
+  managed-download-summary.txt
+
+By default it writes disposable scratch artifacts
+under:
+
+  .\.verify\
+
+Policy:
+- keep .verify as workspace-only scratch space
+- do not copy .verify onto shipping USB media
+- it is safe to delete and regenerate as needed
+- use it for preview/test roots, not real payloads
+
+====================================================
+SUGGESTED FIRST RUN
+====================================================
+
+Typical first-run flow:
+
+  Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+  D:
+  .\Setup-ForgerEMS.ps1 -DriveLetter D -SeedManifest
+
+Then test the updater safely:
+
+  .\Update-ForgerEMS.ps1 -DriveLetter D -WhatIf
+
+Then run lightweight verification:
+
+  .\Verify-VentoyCore.ps1
+
+Optional:
+Show version/build metadata:
+
+  .\Setup-ForgerEMS.ps1 -ShowVersion
+
+Optional:
+Run upstream health checks:
+
+  .\Verify-VentoyCore.ps1 -Online
+
+Recommended before rebuilding or shipping a USB:
+
+  .\Verify-VentoyCore.ps1 -RevalidateManagedDownloads
+
+Then review:
+
+  managed-download-summary.txt
+
+If a release bundle includes `CHECKSUMS.sha256`, the verification
+script will validate those hashes automatically.
+
+If a release bundle also includes `SIGNATURE.txt`, the verification
+script will validate that integrity seal automatically too.
+
+Then run the updater for real:
+
+  .\Update-ForgerEMS.ps1 -DriveLetter D
+
+====================================================
+END OF FILE
+====================================================
