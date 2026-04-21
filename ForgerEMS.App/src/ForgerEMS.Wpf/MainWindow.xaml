@@ -1,0 +1,538 @@
+<Window x:Class="VentoyToolkitSetup.Wpf.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="ForgerEMS"
+        Width="1480"
+        Height="940"
+        MinWidth="1180"
+        MinHeight="760"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        FontFamily="Segoe UI">
+    <Window.Resources>
+        <Style TargetType="GroupBox">
+            <Setter Property="Margin" Value="0,0,0,16" />
+            <Setter Property="Padding" Value="16" />
+            <Setter Property="Background" Value="{DynamicResource PanelBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource PanelBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="GroupBox">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="14"
+                                Padding="{TemplateBinding Padding}">
+                            <DockPanel LastChildFill="True">
+                                <TextBlock DockPanel.Dock="Top"
+                                           Margin="0,0,0,12"
+                                           FontSize="14"
+                                           FontFamily="Bahnschrift SemiCondensed"
+                                           FontWeight="SemiBold"
+                                           Foreground="#FF38251A"
+                                           Text="{TemplateBinding Header}" />
+                                <ContentPresenter />
+                            </DockPanel>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="Button">
+            <Setter Property="Margin" Value="0,0,0,10" />
+            <Setter Property="Padding" Value="14,10" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentDeepBrush}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="MinHeight" Value="40" />
+        </Style>
+
+        <Style x:Key="SecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="#FFF7F1EA" />
+            <Setter Property="BorderBrush" Value="#FFD7B18E" />
+            <Setter Property="Foreground" Value="#FF7C3315" />
+        </Style>
+
+        <Style x:Key="FooterButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Margin" Value="0,0,10,0" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Background" Value="#FFFFFFFF" />
+            <Setter Property="BorderBrush" Value="{DynamicResource PanelBorderBrush}" />
+            <Setter Property="Foreground" Value="#FF5C2F16" />
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="BorderBrush" Value="{DynamicResource PanelBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="10" />
+        </Style>
+
+        <Style TargetType="ComboBox">
+            <Setter Property="BorderBrush" Value="{DynamicResource PanelBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,6" />
+        </Style>
+
+        <Style x:Key="UsbTargetComboItemStyle" TargetType="ComboBoxItem">
+            <Setter Property="IsEnabled" Value="{Binding IsSelectable}" />
+            <Setter Property="Opacity" Value="1" />
+            <Style.Triggers>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.55" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0"
+                Margin="0,0,0,18"
+                Padding="18"
+                Background="{DynamicResource HeroBackgroundBrush}"
+                BorderBrush="#FF394659"
+                BorderThickness="1"
+                CornerRadius="18">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="340" />
+                </Grid.ColumnDefinitions>
+
+                <Border Width="76"
+                        Height="76"
+                        Margin="0,0,16,0"
+                        Background="#0FFFFFFF"
+                        BorderBrush="#FFCF8C5C"
+                        BorderThickness="1"
+                        CornerRadius="18">
+                    <Grid>
+                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <TextBlock HorizontalAlignment="Center"
+                                       FontSize="26"
+                                       FontFamily="Bahnschrift SemiCondensed"
+                                       FontWeight="Bold"
+                                       Foreground="#FFFFE2C7"
+                                       Text="FE" />
+                            <TextBlock HorizontalAlignment="Center"
+                                       FontSize="10"
+                                       Foreground="#FFE0C3A7"
+                                       Text="brand mark" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <StackPanel Grid.Column="1">
+                    <TextBlock FontSize="11"
+                               FontFamily="Bahnschrift SemiCondensed"
+                               FontWeight="SemiBold"
+                               Foreground="#FFD9B392"
+                               Text="FORGER DIGITAL SOLUTIONS" />
+                    <TextBlock FontSize="29"
+                               FontFamily="Bahnschrift SemiCondensed"
+                               FontWeight="Bold"
+                               Foreground="{DynamicResource HeroTextBrush}"
+                               Text="ForgerEMS" />
+                    <TextBlock Margin="0,4,0,10"
+                               FontSize="13"
+                               Foreground="{DynamicResource HeroSubtextBrush}"
+                               Text="Field-ready Windows controller for the existing PowerShell backend. Built to verify, stage, update, and inspect recovery media without rewriting backend rules." />
+
+                    <StackPanel Orientation="Horizontal">
+                        <Border Margin="0,0,12,0"
+                                Padding="10,5"
+                                Background="#14FFFFFF"
+                                BorderBrush="#FFCF8C5C"
+                                BorderThickness="1"
+                                CornerRadius="999">
+                            <TextBlock FontWeight="SemiBold"
+                                       Foreground="#FFFFDAB8"
+                                       Text="{Binding BackendModeText}" />
+                        </Border>
+
+                        <TextBlock VerticalAlignment="Center"
+                                   FontSize="13"
+                                   Foreground="#FFD7DEE8"
+                                   Text="{Binding BackendRootText}"
+                                   TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </StackPanel>
+
+                <Border Grid.Column="2"
+                        Margin="24,0,0,0"
+                        Padding="14,12"
+                        Background="{Binding StatusBackground}"
+                        BorderBrush="{Binding StatusBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="14">
+                    <StackPanel>
+                        <TextBlock FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="{Binding StatusForeground}"
+                                   Text="{Binding StatusText}" />
+                        <TextBlock Margin="0,5,0,0"
+                                   FontSize="12"
+                                   Foreground="{Binding StatusForeground}"
+                                   Opacity="0.92"
+                                   Text="{Binding StatusDetail}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="430" />
+                <ColumnDefinition Width="18" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <ScrollViewer Grid.Column="0"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          CanContentScroll="False">
+                <StackPanel Margin="0,0,4,0">
+                    <GroupBox Header="USB Target">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <ComboBox Grid.Column="0"
+                                          ItemsSource="{Binding UsbTargets}"
+                                          SelectedItem="{Binding SelectedUsbTarget}"
+                                          IsEnabled="{Binding IsIdle}"
+                                          ItemContainerStyle="{StaticResource UsbTargetComboItemStyle}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel>
+                                                <TextBlock FontWeight="SemiBold"
+                                                           Foreground="#FF231A15"
+                                                           Text="{Binding DisplayName}" />
+                                                <TextBlock Margin="0,2,0,0"
+                                                           FontSize="11.5"
+                                                           Foreground="{DynamicResource SlateTextBrush}"
+                                                           Text="{Binding SelectionWarningDisplay}"
+                                                           TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+
+                                <Button Grid.Column="1"
+                                        Margin="10,0,0,0"
+                                        Padding="12,8"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Content="Refresh"
+                                        Command="{Binding RefreshUsbTargetsCommand}" />
+                            </Grid>
+
+                            <Grid Margin="0,0,0,12" Grid.IsSharedSizeScope="True">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="TargetLabel" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="#FF7A6758" Text="Drive" />
+                                <TextBlock Grid.Row="0" Grid.Column="1" Foreground="#FF1F1814" Text="{Binding SelectedUsbTarget.RootPath, TargetNullValue=No USB target selected}" />
+
+                                <TextBlock Grid.Row="1" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="#FF7A6758" Text="Label" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Foreground="#FF1F1814" Text="{Binding SelectedUsbTarget.LabelDisplay, TargetNullValue=—}" />
+
+                                <TextBlock Grid.Row="2" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="#FF7A6758" Text="Capacity" />
+                                <TextBlock Grid.Row="2" Grid.Column="1" Foreground="#FF1F1814" Text="{Binding SelectedUsbTarget.DisplayTotalBytes, TargetNullValue=—}" />
+
+                                <TextBlock Grid.Row="3" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="#FF7A6758" Text="Free space" />
+                                <TextBlock Grid.Row="3" Grid.Column="1" Foreground="#FF1F1814" Text="{Binding SelectedUsbTarget.DisplayFreeBytes, TargetNullValue=—}" />
+
+                                <TextBlock Grid.Row="4" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="#FF7A6758" Text="File system" />
+                                <TextBlock Grid.Row="4" Grid.Column="1" Foreground="#FF1F1814" Text="{Binding SelectedUsbTarget.FileSystem, TargetNullValue=—}" />
+
+                                <TextBlock Grid.Row="5" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="#FF7A6758" Text="Drive type" />
+                                <TextBlock Grid.Row="5" Grid.Column="1" Foreground="#FF1F1814" Text="{Binding SelectedUsbTarget.SelectionStatusText, TargetNullValue=—}" />
+
+                                <TextBlock Grid.Row="6" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="#FF7A6758" Text="Bus type" />
+                                <TextBlock Grid.Row="6" Grid.Column="1" Foreground="#FF1F1814" Text="{Binding SelectedUsbTarget.BusTypeDisplay, TargetNullValue=—}" />
+
+                                <TextBlock Grid.Row="7" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="#FF7A6758" Text="Device" />
+                                <TextBlock Grid.Row="7" Grid.Column="1" Foreground="#FF1F1814" Text="{Binding SelectedUsbTarget.DeviceIdentityDisplay, TargetNullValue=—}" TextWrapping="Wrap" />
+
+                                <TextBlock Grid.Row="8" Margin="0,0,14,0" FontWeight="SemiBold" Foreground="#FF7A6758" Text="Speed" />
+                                <TextBlock Grid.Row="8" Grid.Column="1" Foreground="#FF1F1814" Text="{Binding SelectedUsbTarget.SpeedDisplayNormalized, TargetNullValue=Not available}" />
+                            </Grid>
+
+                            <Border Padding="12"
+                                    Background="{Binding TargetWarningBackground}"
+                                    BorderBrush="{Binding TargetWarningBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="10">
+                                <TextBlock FontSize="12"
+                                           Foreground="{Binding TargetWarningForeground}"
+                                           Text="{Binding TargetWarningText}"
+                                           TextWrapping="Wrap" />
+                            </Border>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <GroupBox Header="Ventoy">
+                        <StackPanel>
+                            <Border Padding="12"
+                                    Background="{Binding VentoyStatusBackground}"
+                                    BorderBrush="{Binding VentoyStatusBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="10">
+                                <StackPanel>
+                                    <TextBlock FontWeight="SemiBold"
+                                               Foreground="{Binding VentoyStatusForeground}"
+                                               Text="{Binding VentoyStatusText}" />
+                                    <TextBlock Margin="0,5,0,0"
+                                               FontSize="12"
+                                               Foreground="{Binding VentoyStatusForeground}"
+                                               Text="{Binding VentoyDetailText}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+
+                            <TextBlock Margin="0,10,0,12"
+                                       FontSize="12"
+                                       Foreground="#FF6A5546"
+                                       Text="{Binding VentoyPackageText}"
+                                       TextWrapping="Wrap" />
+
+                            <Button Content="Install/Update Ventoy"
+                                    Command="{Binding InstallOrUpdateVentoyCommand}" />
+                        </StackPanel>
+                    </GroupBox>
+
+                    <GroupBox Header="Actions">
+                        <StackPanel>
+                            <CheckBox Margin="0,0,0,12"
+                                      IsChecked="{Binding UseDryRun}"
+                                      IsEnabled="{Binding IsIdle}"
+                                      Content="Dry-run for Setup USB and Update USB where the backend supports it" />
+
+                            <Button Content="Verify"
+                                    Command="{Binding VerifyCommand}" />
+
+                            <Button Content="Revalidate Managed Downloads"
+                                    Command="{Binding RevalidateManagedDownloadsCommand}" />
+
+                            <Button Content="Setup USB"
+                                    Command="{Binding SetupUsbCommand}" />
+
+                            <Button Content="Update USB"
+                                    Command="{Binding UpdateUsbCommand}" />
+
+                            <Button Content="Refresh Backend Context"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Command="{Binding RefreshAllCommand}" />
+
+                            <Border Margin="0,6,0,10"
+                                    Padding="12"
+                                    Background="{Binding TargetWarningBackground}"
+                                    BorderBrush="{Binding TargetWarningBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="10">
+                                <TextBlock FontSize="12"
+                                           Foreground="{Binding TargetWarningForeground}"
+                                           Text="{Binding ActionWarningText}"
+                                           TextWrapping="Wrap" />
+                            </Border>
+
+                            <Border Padding="12"
+                                    Background="#FFFDF9F4"
+                                    BorderBrush="{DynamicResource PanelBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="10">
+                                <StackPanel>
+                                    <TextBlock FontSize="12"
+                                               FontWeight="SemiBold"
+                                               Foreground="#FF7A6758"
+                                               Text="Last command" />
+                                    <TextBlock Margin="0,6,0,0"
+                                               Foreground="#FF1F1814"
+                                               Text="{Binding LastCommandText}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <GroupBox Header="Managed Download Summary">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,10">
+                                <Border DockPanel.Dock="Left"
+                                        Padding="10,4"
+                                        Background="{Binding ManagedSummaryStatusBackground}"
+                                        BorderBrush="{Binding ManagedSummaryStatusBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="999">
+                                    <TextBlock FontWeight="SemiBold"
+                                               Foreground="{Binding ManagedSummaryStatusForeground}"
+                                               Text="{Binding ManagedSummaryStatusText}" />
+                                </Border>
+
+                                <TextBlock Margin="10,0,0,0"
+                                           VerticalAlignment="Center"
+                                           FontSize="12"
+                                           Foreground="#FF6A5546"
+                                           Text="{Binding ManagedSummaryUpdatedText}" />
+                            </DockPanel>
+
+                            <TextBlock FontSize="12"
+                                       Foreground="#FF6A5546"
+                                       Text="{Binding ManagedSummaryPathText}"
+                                       TextWrapping="Wrap" />
+
+                            <TextBox Margin="0,10,0,0"
+                                     Height="240"
+                                     FontFamily="Consolas"
+                                     FontSize="12.5"
+                                     Background="#FFF9FBFD"
+                                     IsReadOnly="True"
+                                     Text="{Binding ManagedSummaryText, Mode=OneWay}"
+                                     TextWrapping="Wrap"
+                                     VerticalScrollBarVisibility="Auto"
+                                     AcceptsReturn="True" />
+                        </StackPanel>
+                    </GroupBox>
+                </StackPanel>
+            </ScrollViewer>
+
+            <GroupBox Grid.Column="2" Header="Logs">
+                <DockPanel LastChildFill="True">
+                    <Grid DockPanel.Dock="Top" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0"
+                                   VerticalAlignment="Center"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource SlateTextBrush}"
+                                   Text="Live PowerShell output and controlled execution logs." />
+
+                        <CheckBox Grid.Column="1"
+                                  Margin="12,0,12,0"
+                                  VerticalAlignment="Center"
+                                  IsChecked="{Binding AutoScrollLogs}"
+                                  Content="Auto-scroll" />
+
+                        <Button Grid.Column="2"
+                                Width="96"
+                                Margin="0"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Content="Clear log"
+                                Command="{Binding ClearLogsCommand}" />
+                    </Grid>
+
+                    <Border DockPanel.Dock="Top"
+                            Margin="0,0,0,12"
+                            Padding="12"
+                            Background="#FFF7F1EA"
+                            BorderBrush="{DynamicResource PanelBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="10">
+                        <TextBlock FontFamily="Consolas"
+                                   Foreground="#FF5C4737"
+                                   Text="{Binding LastCommandText}"
+                                   TextWrapping="Wrap" />
+                    </Border>
+
+                    <ListBox x:Name="LogListBox"
+                             Background="#FF131A20"
+                             BorderThickness="0"
+                             ItemsSource="{Binding Logs}"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Padding" Value="0" />
+                                <Setter Property="Margin" Value="0" />
+                                <Setter Property="BorderThickness" Value="0" />
+                                <Setter Property="Background" Value="Transparent" />
+                                <Setter Property="Focusable" Value="False" />
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Margin="0,0,0,4"
+                                           FontFamily="Consolas"
+                                           FontSize="12.5"
+                                           Foreground="{Binding Foreground}"
+                                           Text="{Binding DisplayText}"
+                                           TextWrapping="Wrap" />
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
+            </GroupBox>
+        </Grid>
+
+        <Border Grid.Row="2"
+                Margin="0,16,0,0"
+                Padding="14,12"
+                Background="{DynamicResource PanelBackgroundBrush}"
+                BorderBrush="{DynamicResource PanelBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0"
+                            Orientation="Horizontal">
+                    <Button Style="{StaticResource FooterButtonStyle}"
+                            Content="About"
+                            Command="{Binding ShowAboutCommand}" />
+                    <Button Style="{StaticResource FooterButtonStyle}"
+                            Content="FAQ"
+                            Command="{Binding ShowFaqCommand}" />
+                    <Button Style="{StaticResource FooterButtonStyle}"
+                            Content="Legal"
+                            Command="{Binding ShowLegalCommand}" />
+                </StackPanel>
+
+                <TextBlock Grid.Column="1"
+                           VerticalAlignment="Center"
+                           Margin="12,0,0,0"
+                           FontSize="12"
+                           Foreground="{DynamicResource SlateTextBrush}"
+                           Text="ForgerEMS © Forger Digital Solutions" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

@@ -1,0 +1,23 @@
+<Application x:Class="VentoyToolkitSetup.Wpf.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <LinearGradientBrush x:Key="WindowBackgroundBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#FFF8F4EE" Offset="0" />
+            <GradientStop Color="#FFECE4D9" Offset="1" />
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="HeroBackgroundBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#FF101826" Offset="0" />
+            <GradientStop Color="#FF1A2332" Offset="0.58" />
+            <GradientStop Color="#FF312113" Offset="1" />
+        </LinearGradientBrush>
+        <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#FFFCFBF9" />
+        <SolidColorBrush x:Key="PanelBorderBrush" Color="#FFE1D5C8" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#FFB4531A" />
+        <SolidColorBrush x:Key="AccentDeepBrush" Color="#FF8A3B12" />
+        <SolidColorBrush x:Key="AccentSoftBrush" Color="#FFF3E1CF" />
+        <SolidColorBrush x:Key="HeroTextBrush" Color="#FFF8F2E9" />
+        <SolidColorBrush x:Key="HeroSubtextBrush" Color="#FFD5DCE6" />
+        <SolidColorBrush x:Key="SlateTextBrush" Color="#FF3E4D60" />
+    </Application.Resources>
+</Application>
