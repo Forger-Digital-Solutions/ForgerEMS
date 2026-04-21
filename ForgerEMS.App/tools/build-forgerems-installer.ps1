@@ -1,17 +1,23 @@
 <#
 .SYNOPSIS
-Builds the portable publish output and compiles the Inno Setup installer.
+Builds the portable publish output, stages a bundled backend, and compiles the
+Inno Setup installer.
 
 .DESCRIPTION
 This helper keeps the installer workflow reproducible:
 1. publish the self-contained single-file win-x64 frontend
-2. compile installer\ForgerEMS.iss with Inno Setup
+2. stage a version-matched bundled backend from a verified release bundle
+3. compile installer\ForgerEMS.iss with Inno Setup
 
 .PARAMETER Version
-Installer/app version. Defaults to 1.0.0.
+Installer/app version. Defaults to the WPF project version.
 
 .PARAMETER SkipPublish
 Skip dotnet publish and reuse the existing publish output.
+
+.PARAMETER ReleaseBundleRoot
+Optional explicit release-bundle root to stage into the installer. When omitted,
+the newest verified folder under ..\release\ventoy-core\ is used.
 
 .EXAMPLE
 .\tools\build-forgerems-installer.ps1
@@ -22,18 +28,33 @@ Skip dotnet publish and reuse the existing publish output.
 
 [CmdletBinding()]
 param(
-    [string]$Version = "1.0.0",
-    [switch]$SkipPublish
+    [string]$Version = "",
+    [switch]$SkipPublish,
+    [string]$ReleaseBundleRoot = ""
 )
 
 $ErrorActionPreference = "Stop"
 
-$repoRoot = Split-Path -Parent $PSScriptRoot
-$csprojPath = Join-Path $repoRoot "src\ForgerEMS.Wpf\ForgerEMS.Wpf.csproj"
-$publishDir = Join-Path $repoRoot "src\ForgerEMS.Wpf\bin\Release\net8.0-windows\win-x64\publish"
-$issPath = Join-Path $repoRoot "installer\ForgerEMS.iss"
-$outputDir = Join-Path $repoRoot "dist\installer"
+$appRoot = Split-Path -Parent $PSScriptRoot
+$csprojPath = Join-Path $appRoot "src\ForgerEMS.Wpf\ForgerEMS.Wpf.csproj"
+$publishDir = Join-Path $appRoot "src\ForgerEMS.Wpf\bin\Release\net8.0-windows\win-x64\publish"
+$issPath = Join-Path $appRoot "installer\ForgerEMS.iss"
+$stageScriptPath = Join-Path $appRoot "tools\stage-bundled-backend.ps1"
+$backendStageRoot = Join-Path $appRoot "dist\backend-stage\backend"
+$outputDir = Join-Path $appRoot "dist\installer"
 $appExePath = Join-Path $publishDir "ForgerEMS.exe"
+
+function Get-ProjectVersion {
+    param([Parameter(Mandatory)][string]$ProjectPath)
+
+    [xml]$projectXml = Get-Content -LiteralPath $ProjectPath -Raw
+    $versionNode = $projectXml.Project.PropertyGroup.Version | Select-Object -First 1
+    if ([string]::IsNullOrWhiteSpace([string]$versionNode)) {
+        throw "Could not read <Version> from $ProjectPath"
+    }
+
+    return [string]$versionNode
+}
 
 function Resolve-IsccPath {
     $candidates = @(
@@ -60,6 +81,14 @@ if (-not (Test-Path -LiteralPath $issPath)) {
     throw "Installer script not found: $issPath"
 }
 
+if (-not (Test-Path -LiteralPath $stageScriptPath)) {
+    throw "Bundled backend stage script not found: $stageScriptPath"
+}
+
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    $Version = Get-ProjectVersion -ProjectPath $csprojPath
+}
+
 if (-not $SkipPublish) {
     Write-Host "Publishing ForgerEMS..." -ForegroundColor Cyan
     dotnet publish $csprojPath -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true
@@ -72,6 +101,16 @@ if (-not (Test-Path -LiteralPath $appExePath)) {
     throw "Published executable not found: $appExePath"
 }
 
+Write-Host "Staging bundled backend..." -ForegroundColor Cyan
+& $stageScriptPath `
+    -FrontendVersion $Version `
+    -ReleaseBundleRoot $ReleaseBundleRoot `
+    -OutputRoot $backendStageRoot
+
+if (-not (Test-Path -LiteralPath (Join-Path $backendStageRoot "Verify-VentoyCore.ps1"))) {
+    throw "Bundled backend staging completed, but Verify-VentoyCore.ps1 was not found at $backendStageRoot"
+}
+
 New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
 $isccPath = Resolve-IsccPath
 
@@ -79,6 +118,7 @@ Write-Host "Compiling installer with Inno Setup..." -ForegroundColor Cyan
 & $isccPath `
     "/DAppVersion=$Version" `
     "/DPublishDir=$publishDir" `
+    "/DBackendBundleDir=$backendStageRoot" `
     "/DOutputDir=$outputDir" `
     $issPath
 

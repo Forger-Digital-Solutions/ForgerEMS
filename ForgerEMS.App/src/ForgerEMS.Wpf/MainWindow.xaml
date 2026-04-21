@@ -150,7 +150,7 @@
                     <TextBlock Margin="0,4,0,10"
                                FontSize="13"
                                Foreground="{DynamicResource HeroSubtextBrush}"
-                               Text="Field-ready Windows controller for the existing PowerShell backend. Built to verify, stage, update, and inspect recovery media without rewriting backend rules." />
+                               Text="Field-ready Windows controller for the existing PowerShell backend. Built to verify, stage, update, and inspect recovery media without rewriting backend rules, now with installed-mode backend bundling." />
 
                     <StackPanel Orientation="Horizontal">
                         <Border Margin="0,0,12,0"
@@ -170,6 +170,18 @@
                                    Text="{Binding BackendRootText}"
                                    TextTrimming="CharacterEllipsis" />
                     </StackPanel>
+
+                    <TextBlock Margin="0,8,0,0"
+                               FontSize="12"
+                               Foreground="#FFE7D3C4"
+                               Text="{Binding BackendVersionText}"
+                               TextWrapping="Wrap" />
+
+                    <TextBlock Margin="0,4,0,0"
+                               FontSize="11.5"
+                               Foreground="#FFD0DDEA"
+                               Text="{Binding BackendDiagnosticText}"
+                               TextWrapping="Wrap" />
                 </StackPanel>
 
                 <Border Grid.Column="2"

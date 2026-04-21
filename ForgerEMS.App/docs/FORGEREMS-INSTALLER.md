@@ -1,7 +1,7 @@
 # ForgerEMS Installer
 
 This document covers the lightweight Windows installer strategy for the native
-`ForgerEMS` frontend.
+`ForgerEMS` frontend and the installed-mode v2 backend bundle.
 
 ## Installer Choice
 
@@ -27,12 +27,11 @@ The installer places the frontend under:
 Installed files:
 
 - `ForgerEMS.exe`
-- `ForgerEMS-Installed-README.txt`
+- `backend\` verified backend release-bundle
+- `docs\ForgerEMS-Installed-README.txt`
 
 Not installed:
 
-- backend repo content
-- release-bundle scripts
 - ISOs
 - tool payloads
 - Ventoy binaries
@@ -51,6 +50,7 @@ The installed app behaves like the portable build:
 - runtime data stays in `%LOCALAPPDATA%\ForgerEMS\Runtime\`
 - the app itself does not require admin for normal operation
 - backend execution still uses the existing PowerShell script model
+- installed mode now defaults to `%ProgramFiles%\ForgerEMS\backend\`
 
 Installer note:
 
@@ -101,6 +101,10 @@ Installed readme:
 
 - `installer/ForgerEMS-Installed-README.txt`
 
+Bundled backend staging helper:
+
+- `tools/stage-bundled-backend.ps1`
+
 ## Build Steps
 
 ### Manual build
@@ -123,6 +127,7 @@ Installed readme:
 What the script does:
 
 - runs the publish step unless `-SkipPublish` is used
+- stages a minimal version-matched backend from a verified release bundle
 - resolves `ISCC.exe`
 - compiles the installer into the output folder
 
@@ -151,8 +156,43 @@ When you move to a new version:
 
 The `AppId` should stay the same so upgrades keep working.
 
-## Practical Limitation
+## Installed Layout
 
-Because the installer does not bundle the backend repo or a release bundle, the
-installed frontend is still just the controller. Backend discovery still
-depends on a valid repo or release-bundle working context being available.
+Installed layout for v2:
+
+```text
+%ProgramFiles%\ForgerEMS\
+  ForgerEMS.exe
+  backend\
+    Verify-VentoyCore.ps1
+    Setup-ForgerEMS.ps1
+    Update-ForgerEMS.ps1
+    manifests\
+    docs\
+    VERSION.txt
+    RELEASE-BUNDLE.txt
+    CHECKSUMS.sha256
+    SIGNATURE.txt
+    ForgerEMS.bundled-backend.json
+  docs\
+    ForgerEMS-Installed-README.txt
+```
+
+## Bundled Backend Rules
+
+The staged backend bundle must:
+
+- come from an existing verified `release\ventoy-core\<version>\` folder
+- include the required scripts, manifests, and backend support files
+- exclude large payloads, ISO content, Drivers, and `Tools\Portable`
+- include metadata that pins the frontend version expected by the bundle
+
+At runtime the app validates:
+
+- required bundled files exist
+- bundle metadata is readable
+- frontend version matches the bundled backend expectation
+- required checksum entries still match the bundled files
+
+If that validation fails, the bundled backend is ignored and the app falls back
+to repo mode or external release-bundle mode when available.

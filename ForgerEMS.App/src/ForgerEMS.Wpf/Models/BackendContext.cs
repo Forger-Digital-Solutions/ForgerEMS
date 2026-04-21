@@ -5,8 +5,9 @@ namespace VentoyToolkitSetup.Wpf.Models;
 public enum BackendMode
 {
     Unknown = 0,
-    Repo = 1,
-    ReleaseBundle = 2
+    Bundled = 1,
+    Repo = 2,
+    ReleaseBundle = 3
 }
 
 public sealed class BackendContext
@@ -27,9 +28,14 @@ public sealed class BackendContext
 
     public string DiagnosticMessage { get; init; } = string.Empty;
 
+    public string FrontendVersion { get; init; } = string.Empty;
+
+    public string BackendVersion { get; init; } = string.Empty;
+
     public string ModeLabel =>
         Mode switch
         {
+            BackendMode.Bundled => "Bundled backend",
             BackendMode.Repo => "Repo mode",
             BackendMode.ReleaseBundle => "Release-bundle mode",
             _ => "Backend unavailable"
@@ -58,19 +64,20 @@ public sealed class BackendContext
     public string ReleaseVentoyManualNotePath =>
         string.IsNullOrWhiteSpace(RootPath)
             ? string.Empty
-            : Path.Combine(RootPath, "IfScriptFails(ManualSetup)", "Ventoy_Official.txt");
+            : Path.Combine(RootPath, "docs", "IfScriptFails(ManualSetup)", "Ventoy_Official.txt");
 
     public string RepoVentoyManualNotePath =>
         string.IsNullOrWhiteSpace(RootPath)
             ? string.Empty
             : Path.Combine(RootPath, "Docs", "ventoy-core", "bundle", "IfScriptFails(ManualSetup)", "Ventoy_Official.txt");
 
-    public static BackendContext Unavailable(string message)
+    public static BackendContext Unavailable(string message, string frontendVersion = "")
     {
         return new BackendContext
         {
             IsAvailable = false,
             Mode = BackendMode.Unknown,
+            FrontendVersion = frontendVersion,
             DiagnosticMessage = message
         };
     }

@@ -11,6 +11,10 @@
   #define PublishDir "..\src\ForgerEMS.Wpf\bin\Release\net8.0-windows\win-x64\publish"
 #endif
 
+#ifndef BackendBundleDir
+  #define BackendBundleDir "..\dist\backend-stage\backend"
+#endif
+
 #ifndef OutputDir
   #define OutputDir "..\dist\installer"
 #endif
@@ -55,7 +59,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "{#PublishDir}\ForgerEMS.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\installer\ForgerEMS-Installed-README.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#BackendBundleDir}\*"; DestDir: "{app}\backend"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\installer\ForgerEMS-Installed-README.txt"; DestDir: "{app}\docs"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\ForgerEMS"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#MyAppExeName}"

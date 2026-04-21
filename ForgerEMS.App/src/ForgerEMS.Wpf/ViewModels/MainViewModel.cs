@@ -178,6 +178,38 @@ public sealed class MainViewModel : ObservableObject
             ? _backendContext.RootPath
             : _backendContext.DiagnosticMessage;
 
+    public string BackendDiagnosticText =>
+        string.IsNullOrWhiteSpace(_backendContext.DiagnosticMessage)
+            ? "No backend details are available."
+            : _backendContext.DiagnosticMessage;
+
+    public string BackendVersionText
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(_backendContext.FrontendVersion) &&
+                string.IsNullOrWhiteSpace(_backendContext.BackendVersion))
+            {
+                return _backendContext.IsAvailable
+                    ? "Backend version not detected."
+                    : "Frontend version is unavailable.";
+            }
+
+            var parts = new System.Collections.Generic.List<string>();
+            if (!string.IsNullOrWhiteSpace(_backendContext.FrontendVersion))
+            {
+                parts.Add($"Frontend {_backendContext.FrontendVersion}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(_backendContext.BackendVersion))
+            {
+                parts.Add($"Backend {_backendContext.BackendVersion}");
+            }
+
+            return string.Join(" | ", parts);
+        }
+    }
+
     public string StatusText
     {
         get => _statusText;
@@ -363,7 +395,9 @@ public sealed class MainViewModel : ObservableObject
         {
             SetStatus(
                 "Backend ready",
-                $"{_backendContext.ModeLabel} detected. You can verify immediately and run setup or update after selecting a target.",
+                _backendContext.Mode == BackendMode.Bundled
+                    ? "Bundled backend detected. Installed mode is self-contained and ready to verify or operate against a selected USB."
+                    : $"{_backendContext.ModeLabel} detected. You can verify immediately and run setup or update after selecting a target.",
                 ReadyBackground,
                 ReadyBorder,
                 ReadyForeground);
@@ -822,7 +856,7 @@ public sealed class MainViewModel : ObservableObject
         _userPromptService.ShowMessage(
             "About ForgerEMS",
             "ForgerEMS is a native Windows controller for the existing PowerShell backend.\n\n" +
-            "It discovers repo mode or release-bundle mode, lets an operator verify the backend, set up or update a USB, revalidate managed downloads, inspect live logs, and surface managed-download status without rewriting backend rules in C#.",
+            "It discovers a bundled backend for installed mode, or falls back to repo mode and external release-bundle mode, letting an operator verify the backend, set up or update a USB, revalidate managed downloads, inspect live logs, and surface managed-download status without rewriting backend rules in C#.",
             MessageBoxImage.Information);
     }
 
@@ -833,8 +867,10 @@ public sealed class MainViewModel : ObservableObject
             "1. Verify uses the existing backend verification script.\n" +
             "2. Setup USB and Update USB call the backend setup/update scripts only.\n" +
             "3. Dry-run applies where the backend supports -WhatIf.\n" +
-            "4. Managed-download summaries come from .verify output or bundled release history.\n" +
-            "5. Ventoy install/update still happens manually inside the official Ventoy2Disk tool, even when launched from this app.",
+            "4. Installed mode prefers the bundled backend under the app folder.\n" +
+            "5. Repo mode and external release-bundle mode still work for advanced operators.\n" +
+            "6. Managed-download summaries come from .verify output or bundled release history.\n" +
+            "7. Ventoy install/update still happens manually inside the official Ventoy2Disk tool, even when launched from this app.",
             MessageBoxImage.Information);
     }
 
@@ -860,6 +896,8 @@ public sealed class MainViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(BackendModeText));
         OnPropertyChanged(nameof(BackendRootText));
+        OnPropertyChanged(nameof(BackendDiagnosticText));
+        OnPropertyChanged(nameof(BackendVersionText));
         RaiseCommandStates();
     }
 

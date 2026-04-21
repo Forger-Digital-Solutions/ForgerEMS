@@ -76,6 +76,8 @@ public partial class App : Application
             lines.Add($"BackendAvailable: {backendContext.IsAvailable}");
             lines.Add($"BackendMode: {backendContext.ModeLabel}");
             lines.Add($"BackendRoot: {backendContext.RootPath}");
+            lines.Add($"BackendVersion: {backendContext.BackendVersion}");
+            lines.Add($"BackendDiagnostic: {backendContext.DiagnosticMessage}");
 
             var request = new PowerShellRunRequest
             {
