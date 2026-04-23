@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
@@ -50,9 +51,10 @@ public sealed class MainViewModel : ObservableObject
     private Brush _statusForeground = RunningForeground;
     private string _lastCommandText = "No command has been run yet.";
     private string _managedSummaryText = "No managed-download summary has been loaded yet.";
-    private string _managedSummaryPathText = "Summary file: not detected";
+    private string _managedSummaryPathText = "Summary source: not detected";
     private string _managedSummaryUpdatedText = "Updated: n/a";
     private string _managedSummaryStatusText = "No snapshot";
+    private string _logsText = string.Empty;
     private Brush _managedSummaryStatusBackground = WarningBackground;
     private Brush _managedSummaryStatusBorderBrush = WarningBorder;
     private Brush _managedSummaryStatusForeground = WarningForeground;
@@ -94,6 +96,7 @@ public sealed class MainViewModel : ObservableObject
         SetupUsbCommand = new AsyncRelayCommand(RunSetupUsbAsync, CanRunTargetedActions);
         UpdateUsbCommand = new AsyncRelayCommand(RunUpdateUsbAsync, CanRunTargetedActions);
         InstallOrUpdateVentoyCommand = new AsyncRelayCommand(RunInstallOrUpdateVentoyAsync, CanRunTargetedActions);
+        CopyLogsCommand = new RelayCommand(CopyLogs, () => !string.IsNullOrWhiteSpace(LogsText));
         ClearLogsCommand = new RelayCommand(ClearLogs, () => Logs.Count > 0);
         ShowAboutCommand = new RelayCommand(ShowAbout);
         ShowFaqCommand = new RelayCommand(ShowFaq);
@@ -117,6 +120,8 @@ public sealed class MainViewModel : ObservableObject
     public AsyncRelayCommand UpdateUsbCommand { get; }
 
     public AsyncRelayCommand InstallOrUpdateVentoyCommand { get; }
+
+    public RelayCommand CopyLogsCommand { get; }
 
     public RelayCommand ClearLogsCommand { get; }
 
@@ -270,6 +275,12 @@ public sealed class MainViewModel : ObservableObject
         private set => SetProperty(ref _managedSummaryStatusText, value);
     }
 
+    public string LogsText
+    {
+        get => _logsText;
+        private set => SetProperty(ref _logsText, value);
+    }
+
     public Brush ManagedSummaryStatusBackground
     {
         get => _managedSummaryStatusBackground;
@@ -372,7 +383,10 @@ public sealed class MainViewModel : ObservableObject
 
     private bool CanRunTargetedActions()
     {
-        return !_isBusy && _backendContext.IsAvailable && SelectedUsbTarget?.IsSelectable == true;
+        return !_isBusy &&
+               _backendContext.IsAvailable &&
+               SelectedUsbTarget is not null &&
+               GetTargetExecutionBlockReason(SelectedUsbTarget) is null;
     }
 
     private async Task RefreshAllAsync()
@@ -416,7 +430,8 @@ public sealed class MainViewModel : ObservableObject
     private async Task RefreshUsbTargetsAsync()
     {
         var previousSelection = SelectedUsbTarget?.RootPath;
-        var targets = await _usbDetectionService.GetUsbTargetsAsync();
+        var detectionResult = await _usbDetectionService.GetUsbTargetsAsync();
+        var targets = detectionResult.Targets;
 
         UsbTargets.Clear();
         foreach (var target in targets)
@@ -442,6 +457,7 @@ public sealed class MainViewModel : ObservableObject
         }
 
         UpdateTargetWarnings();
+        AppendUsbDetectionDiagnostics(detectionResult.Diagnostics);
 
         if (UsbTargets.Count == 0)
         {
@@ -482,14 +498,14 @@ public sealed class MainViewModel : ObservableObject
 
     private async Task RunSetupUsbAsync()
     {
-        if (SelectedUsbTarget is null)
+        if (!TryGetValidatedSelectedTarget("Setup USB", out var selectedUsbTarget))
         {
             return;
         }
 
         if (!ConfirmTargetedAction(
                 "Setup USB",
-                SelectedUsbTarget,
+                selectedUsbTarget,
                 UseDryRun
                     ? "Dry-run is enabled. The backend should preview changes without modifying the target."
                     : "This will create or refresh toolkit folders on the selected target and can seed the manifest."))
@@ -500,20 +516,25 @@ public sealed class MainViewModel : ObservableObject
         var arguments = new System.Collections.Generic.List<string>
         {
             "-UsbRoot",
-            SelectedUsbTarget.RootPath,
-            "-SeedManifest"
+            selectedUsbTarget.RootPath,
+            "-SeedManifest",
+            "-NonInteractive"
         };
 
         if (UseDryRun)
         {
             arguments.Add("-WhatIf");
         }
+        else
+        {
+            arguments.Add("-WaitForManagedDownloads");
+        }
 
         await RunScriptAsync(
             ScriptActionType.SetupUsb,
             new PowerShellRunRequest
             {
-                DisplayName = UseDryRun ? "Setup USB (dry-run)" : "Setup USB",
+                DisplayName = UseDryRun ? "Setup USB (dry-run)" : "Setup USB + managed downloads",
                 WorkingDirectory = _backendContext.WorkingDirectory,
                 ScriptPath = _backendContext.SetupScriptPath,
                 Arguments = arguments
@@ -522,14 +543,14 @@ public sealed class MainViewModel : ObservableObject
 
     private async Task RunUpdateUsbAsync()
     {
-        if (SelectedUsbTarget is null)
+        if (!TryGetValidatedSelectedTarget("Update USB", out var selectedUsbTarget))
         {
             return;
         }
 
         if (!ConfirmTargetedAction(
                 "Update USB",
-                SelectedUsbTarget,
+                selectedUsbTarget,
                 UseDryRun
                     ? "Dry-run is enabled. The backend should only preview archive and replacement steps."
                     : "This can archive and replace managed files on the selected target."))
@@ -540,7 +561,7 @@ public sealed class MainViewModel : ObservableObject
         var arguments = new System.Collections.Generic.List<string>
         {
             "-UsbRoot",
-            SelectedUsbTarget.RootPath
+            selectedUsbTarget.RootPath
         };
 
         if (UseDryRun)
@@ -561,14 +582,14 @@ public sealed class MainViewModel : ObservableObject
 
     private async Task RunInstallOrUpdateVentoyAsync()
     {
-        if (SelectedUsbTarget is null)
+        if (!TryGetValidatedSelectedTarget("Install/Update Ventoy", out var selectedUsbTarget))
         {
             return;
         }
 
         if (!ConfirmTargetedAction(
                 "Install/Update Ventoy",
-                SelectedUsbTarget,
+                selectedUsbTarget,
                 "This downloads the official Ventoy package from the manifest-defined source, verifies the pinned SHA-256, extracts it to a local operator cache, and launches Ventoy2Disk. The actual install/update still happens manually inside Ventoy2Disk and may repartition the selected USB."))
         {
             return;
@@ -577,7 +598,7 @@ public sealed class MainViewModel : ObservableObject
         ClearLogs();
         LastCommandText = "Install/Update Ventoy -> official package + Ventoy2Disk";
         AppendLog(new LogLine(DateTimeOffset.Now, $"Working directory: {_backendContext.WorkingDirectory}", LogSeverity.Info));
-        AppendLog(new LogLine(DateTimeOffset.Now, $"Target USB: {SelectedUsbTarget.RootPath} ({SelectedUsbTarget.LabelDisplay})", LogSeverity.Info));
+        AppendLog(new LogLine(DateTimeOffset.Now, $"Target USB: {selectedUsbTarget.RootPath} ({selectedUsbTarget.LabelDisplay})", LogSeverity.Info));
         AppendLog(new LogLine(DateTimeOffset.Now, VentoyPackageText, LogSeverity.Info));
 
         SetStatus(
@@ -590,7 +611,7 @@ public sealed class MainViewModel : ObservableObject
         IsBusy = true;
         try
         {
-            var result = await _ventoyIntegrationService.InstallOrUpdateAsync(_backendContext, SelectedUsbTarget, AppendLog);
+            var result = await _ventoyIntegrationService.InstallOrUpdateAsync(_backendContext, selectedUsbTarget, AppendLog);
             await RefreshVentoyStatusAsync();
 
             if (result.Succeeded)
@@ -708,8 +729,8 @@ public sealed class MainViewModel : ObservableObject
             ? "Managed-download summary is empty."
             : summary.Text;
         ManagedSummaryPathText = summary.IsAvailable
-            ? $"Summary file: {summary.SummaryPath}"
-            : "Summary file: not detected";
+            ? $"Summary source: {summary.SummaryPath}"
+            : "Summary source: not detected";
         ManagedSummaryUpdatedText = summary.LastUpdatedUtc.HasValue
             ? $"Updated: {summary.LastUpdatedUtc.Value:yyyy-MM-dd HH:mm:ss} UTC"
             : "Updated: n/a";
@@ -769,6 +790,21 @@ public sealed class MainViewModel : ObservableObject
 
     private bool ConfirmTargetedAction(string actionName, UsbTargetInfo target, string actionWarning)
     {
+        var executionBlockReason = GetTargetExecutionBlockReason(target);
+        if (!string.IsNullOrWhiteSpace(executionBlockReason))
+        {
+            SetStatus(
+                "USB target blocked",
+                executionBlockReason,
+                ErrorBackground,
+                ErrorBorder,
+                ErrorForeground);
+
+            AppendLog(new LogLine(DateTimeOffset.Now, executionBlockReason, LogSeverity.Error, isErrorStream: true));
+            _userPromptService.ShowMessage("USB target blocked", executionBlockReason, MessageBoxImage.Error);
+            return false;
+        }
+
         var message =
             $"{actionName} for {target.RootPath} ({target.LabelDisplay})?{Environment.NewLine}{Environment.NewLine}" +
             $"Drive type: {target.DriveType} / {target.BusTypeDisplay}{Environment.NewLine}" +
@@ -779,6 +815,66 @@ public sealed class MainViewModel : ObservableObject
             $"{actionWarning}";
 
         return _userPromptService.Confirm(actionName, message);
+    }
+
+    private bool TryGetValidatedSelectedTarget(string actionName, out UsbTargetInfo target)
+    {
+        target = SelectedUsbTarget!;
+        if (SelectedUsbTarget is null)
+        {
+            return false;
+        }
+
+        var executionBlockReason = GetTargetExecutionBlockReason(SelectedUsbTarget);
+        if (string.IsNullOrWhiteSpace(executionBlockReason))
+        {
+            target = SelectedUsbTarget;
+            return true;
+        }
+
+        SetStatus(
+            "USB target blocked",
+            executionBlockReason,
+            ErrorBackground,
+            ErrorBorder,
+            ErrorForeground);
+
+        AppendLog(new LogLine(DateTimeOffset.Now, $"{actionName} blocked: {executionBlockReason}", LogSeverity.Error, isErrorStream: true));
+        _userPromptService.ShowMessage("USB target blocked", executionBlockReason, MessageBoxImage.Error);
+        return false;
+    }
+
+    private static string? GetTargetExecutionBlockReason(UsbTargetInfo? target)
+    {
+        if (target is null)
+        {
+            return "Select the main USB storage partition before running this action.";
+        }
+
+        var hasVentoyEfiLabel = target.Label.Contains("VTOYEFI", StringComparison.OrdinalIgnoreCase);
+        var isTooSmall = target.TotalBytes > 0 && target.TotalBytes < UsbTargetInfo.MinimumTargetBytes;
+
+        if (hasVentoyEfiLabel || target.IsEfiSystemPartition || target.IsUndersizedPartition || isTooSmall)
+        {
+            return
+                "You selected a boot partition, not the main USB storage." + Environment.NewLine + Environment.NewLine +
+                $"Target: {target.RootPath} ({target.LabelDisplay})" + Environment.NewLine +
+                $"Size: {target.DisplayTotalBytes}" + Environment.NewLine +
+                $"Filesystem: {target.FileSystem}" + Environment.NewLine +
+                $"IsBoot: {target.IsBootDrive}" + Environment.NewLine +
+                $"IsSystem: {target.IsSystemDrive}" + Environment.NewLine +
+                $"Partition type: {target.PartitionTypeDisplay}" + Environment.NewLine +
+                "Select the largest main USB data partition instead.";
+        }
+
+        if (!target.IsSelectable)
+        {
+            return string.IsNullOrWhiteSpace(target.SelectionWarningDisplay)
+                ? "This USB target is blocked and cannot be used for Setup USB, Update USB, or Ventoy actions."
+                : target.SelectionWarningDisplay;
+        }
+
+        return null;
     }
 
     private void ApplyVentoyStatus(VentoyStatusInfo status)
@@ -833,7 +929,16 @@ public sealed class MainViewModel : ObservableObject
         if (!SelectedUsbTarget.IsSelectable)
         {
             TargetWarningText = SelectedUsbTarget.SelectionWarningDisplay;
-            ActionWarningText = "This target is blocked. ForgerEMS will not run target-specific actions against a system or boot drive.";
+            ActionWarningText = "This target is blocked. ForgerEMS will not run target-specific actions against an EFI or other clearly unsafe USB partition.";
+            SetTargetWarningVisuals(ErrorBackground, ErrorBorder, ErrorForeground);
+            return;
+        }
+
+        var executionBlockReason = GetTargetExecutionBlockReason(SelectedUsbTarget);
+        if (!string.IsNullOrWhiteSpace(executionBlockReason))
+        {
+            TargetWarningText = executionBlockReason;
+            ActionWarningText = "This target is blocked. You selected a boot partition, not the main USB storage.";
             SetTargetWarningVisuals(ErrorBackground, ErrorBorder, ErrorForeground);
             return;
         }
@@ -849,6 +954,18 @@ public sealed class MainViewModel : ObservableObject
         TargetWarningText = SelectedUsbTarget.SelectionWarningDisplay;
         ActionWarningText = "Setup USB, Update USB, and Install/Update Ventoy can change the selected USB. Confirm the drive letter and label before continuing.";
         SetTargetWarningVisuals(WarningBackground, WarningBorder, WarningForeground);
+    }
+
+    private void AppendUsbDetectionDiagnostics(IReadOnlyList<string> diagnostics)
+    {
+        foreach (var diagnostic in diagnostics.Where(item => !string.IsNullOrWhiteSpace(item)))
+        {
+            var severity = diagnostic.Contains("excluded", StringComparison.OrdinalIgnoreCase)
+                ? LogSeverity.Warning
+                : LogSeverity.Info;
+
+            AppendLog(new LogLine(DateTimeOffset.Now, diagnostic, severity));
+        }
     }
 
     private void ShowAbout()
@@ -869,7 +986,7 @@ public sealed class MainViewModel : ObservableObject
             "3. Dry-run applies where the backend supports -WhatIf.\n" +
             "4. Installed mode prefers the bundled backend under the app folder.\n" +
             "5. Repo mode and external release-bundle mode still work for advanced operators.\n" +
-            "6. Managed-download summaries come from .verify output or bundled release history.\n" +
+            "6. Managed-download summaries combine the live manifest snapshot with the newest revalidation snapshot when one is available.\n" +
             "7. Ventoy install/update still happens manually inside the official Ventoy2Disk tool, even when launched from this app.",
             MessageBoxImage.Information);
     }
@@ -888,8 +1005,20 @@ public sealed class MainViewModel : ObservableObject
         Application.Current.Dispatcher.Invoke(() =>
         {
             Logs.Clear();
+            LogsText = string.Empty;
+            CopyLogsCommand.RaiseCanExecuteChanged();
             ClearLogsCommand.RaiseCanExecuteChanged();
         });
+    }
+
+    private void CopyLogs()
+    {
+        if (string.IsNullOrWhiteSpace(LogsText))
+        {
+            return;
+        }
+
+        Clipboard.SetText(LogsText);
     }
 
     private void NotifyBackendChanged()
@@ -910,6 +1039,7 @@ public sealed class MainViewModel : ObservableObject
         SetupUsbCommand.RaiseCanExecuteChanged();
         UpdateUsbCommand.RaiseCanExecuteChanged();
         InstallOrUpdateVentoyCommand.RaiseCanExecuteChanged();
+        CopyLogsCommand.RaiseCanExecuteChanged();
         ClearLogsCommand.RaiseCanExecuteChanged();
     }
 
@@ -924,6 +1054,8 @@ public sealed class MainViewModel : ObservableObject
                 Logs.RemoveAt(0);
             }
 
+            LogsText = string.Join(Environment.NewLine, Logs.Select(item => item.DisplayText));
+            CopyLogsCommand.RaiseCanExecuteChanged();
             ClearLogsCommand.RaiseCanExecuteChanged();
         });
 

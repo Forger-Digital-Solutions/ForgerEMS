@@ -57,6 +57,19 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
+[InstallDelete]
+Type: files; Name: "{app}\Verify-VentoyCore.ps1"
+Type: files; Name: "{app}\Setup-ForgerEMS.ps1"
+Type: files; Name: "{app}\Update-ForgerEMS.ps1"
+Type: files; Name: "{app}\ForgerEMS.Runtime.ps1"
+Type: files; Name: "{app}\Setup_Toolkit.ps1"
+Type: files; Name: "{app}\Setup_USB_Toolkit.ps1"
+Type: files; Name: "{app}\ForgerEMS.updates.json"
+Type: files; Name: "{app}\VERSION.txt"
+Type: files; Name: "{app}\RELEASE-BUNDLE.txt"
+Type: files; Name: "{app}\CHECKSUMS.sha256"
+Type: files; Name: "{app}\SIGNATURE.txt"
+
 [Files]
 Source: "{#PublishDir}\ForgerEMS.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BackendBundleDir}\*"; DestDir: "{app}\backend"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -68,3 +81,16 @@ Name: "{autodesktop}\ForgerEMS"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: 
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch ForgerEMS"; Flags: nowait postinstall skipifsilent unchecked
+
+[UninstallDelete]
+Type: files; Name: "{app}\Verify-VentoyCore.ps1"
+Type: files; Name: "{app}\Setup-ForgerEMS.ps1"
+Type: files; Name: "{app}\Update-ForgerEMS.ps1"
+Type: files; Name: "{app}\ForgerEMS.Runtime.ps1"
+Type: files; Name: "{app}\Setup_Toolkit.ps1"
+Type: files; Name: "{app}\Setup_USB_Toolkit.ps1"
+Type: files; Name: "{app}\ForgerEMS.updates.json"
+Type: files; Name: "{app}\VERSION.txt"
+Type: files; Name: "{app}\RELEASE-BUNDLE.txt"
+Type: files; Name: "{app}\CHECKSUMS.sha256"
+Type: files; Name: "{app}\SIGNATURE.txt"

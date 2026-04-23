@@ -27,7 +27,7 @@
       "maintenanceRank": 4,
       "enabled": true,
       "archive": true,
-      "notes": "Auto-download safe: Linux recovery environment."
+      "notes": "Active managed autodownload: Linux recovery environment."
     },
     {
       "name": "GParted Live 1.8.1-3 (amd64)",
@@ -41,7 +41,7 @@
       "maintenanceRank": 5,
       "enabled": true,
       "archive": true,
-      "notes": "Auto-download safe: partition editor live ISO."
+      "notes": "Active managed autodownload: partition editor live ISO."
     },
     {
       "name": "Clonezilla Live 3.3.1-35 (amd64)",
@@ -55,7 +55,7 @@
       "maintenanceRank": 6,
       "enabled": true,
       "archive": true,
-      "notes": "Auto-download safe: disk imaging / cloning live ISO."
+      "notes": "Active managed autodownload: disk imaging / cloning live ISO."
     },
     {
       "name": "Rescuezilla 2.6.1 (64-bit oracular)",
@@ -70,7 +70,7 @@
       "maintenanceRank": 13,
       "enabled": true,
       "archive": true,
-      "notes": "Auto-download safe: GUI rescue/backup imaging ISO."
+      "notes": "Active managed autodownload: GUI rescue/backup imaging ISO."
     },
 
     {
@@ -86,12 +86,12 @@
       "maintenanceRank": 3,
       "enabled": true,
       "archive": true,
-      "notes": "Auto-download safe: official Ventoy Windows package. Ventoy2Disk installation is still a manual step."
+      "notes": "Active managed autodownload: official Ventoy Windows package. Ventoy2Disk installation is still a manual step."
     },
     {
       "name": "MediCat Download Page",
       "type": "page",
-      "dest": "DOWNLOAD - MediCat.url",
+      "dest": "MediCat.USB\\DOWNLOAD - MediCat.url",
       "url": "https://medicatusb.com/",
       "enabled": true,
       "notes": "Manual only: large community toolkit."
@@ -136,7 +136,7 @@
       "dest": "ISO\\Tools\\DOWNLOAD - Clonezilla.url",
       "url": "https://clonezilla.org/downloads.php",
       "enabled": true,
-      "notes": "Info shortcut: upstream page for the separately managed auto-download-safe Clonezilla ISO."
+      "notes": "Info shortcut: upstream page for the active managed autodownload Clonezilla ISO."
     },
     {
       "name": "Rescuezilla Download Page",
@@ -144,7 +144,7 @@
       "dest": "ISO\\Tools\\DOWNLOAD - Rescuezilla.url",
       "url": "https://rescuezilla.com/download.html",
       "enabled": true,
-      "notes": "Info shortcut: upstream page for the separately managed auto-download-safe Rescuezilla ISO."
+      "notes": "Info shortcut: upstream page for the active managed autodownload Rescuezilla ISO."
     },
     {
       "name": "GParted Download Page",
@@ -152,7 +152,7 @@
       "dest": "ISO\\Tools\\DOWNLOAD - GParted.url",
       "url": "https://gparted.org/download.php",
       "enabled": true,
-      "notes": "Info shortcut: upstream page for the separately managed auto-download-safe GParted ISO."
+      "notes": "Info shortcut: upstream page for the active managed autodownload GParted ISO."
     },
     {
       "name": "MemTest86+ 8.00 (x86_64 ISO archive)",
@@ -167,7 +167,7 @@
       "maintenanceRank": 14,
       "enabled": true,
       "archive": true,
-      "notes": "Auto-download safe: official x86_64 ISO archive. Extract the ISO before using it with Ventoy."
+      "notes": "Active managed autodownload: official x86_64 ISO archive. Extract the ISO before using it with Ventoy."
     },
     {
       "name": "Ultimate Boot CD Download Page",
@@ -176,6 +176,14 @@
       "url": "https://www.ultimatebootcd.com/download.html",
       "enabled": true,
       "notes": "Manual only: legacy diagnostic toolkit with mixed redistribution terms."
+    },
+    {
+      "name": "MemTest86+ Download Page",
+      "type": "page",
+      "dest": "ISO\\Tools\\DOWNLOAD - MemTest86+.url",
+      "url": "https://www.memtest.org/",
+      "enabled": true,
+      "notes": "Info shortcut: upstream page for the active managed autodownload MemTest86+ release."
     },
 
     {
@@ -190,7 +198,7 @@
       "maintenanceRank": 16,
       "enabled": true,
       "archive": true,
-      "notes": "Auto-download safe: official Ubuntu desktop ISO."
+      "notes": "Active managed autodownload: official Ubuntu desktop ISO."
     },
     {
       "name": "Linux Mint 22.3 Cinnamon (64-bit)",
@@ -205,7 +213,7 @@
       "borderline": true,
       "enabled": true,
       "archive": true,
-      "notes": "Auto-download safe: official Linux Mint Cinnamon ISO from the project mirror."
+      "notes": "Active managed autodownload: official Linux Mint Cinnamon ISO from the project mirror."
     },
     {
       "name": "Kali Linux 2026.1 Installer (amd64)",
@@ -219,7 +227,23 @@
       "maintenanceRank": 15,
       "enabled": true,
       "archive": true,
-      "notes": "Auto-download safe: official Kali installer ISO."
+      "notes": "Active managed autodownload: official Kali installer ISO."
+    },
+    {
+      "name": "Ubuntu Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Ubuntu.url",
+      "url": "https://ubuntu.com/download/desktop",
+      "enabled": true,
+      "notes": "Info shortcut: upstream page for the active managed autodownload Ubuntu ISO."
+    },
+    {
+      "name": "Kali Linux Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Kali Linux.url",
+      "url": "https://www.kali.org/get-kali/",
+      "enabled": true,
+      "notes": "Info shortcut: upstream page for the active managed autodownload Kali ISO."
     },
     {
       "name": "SystemRescue Download Page",
@@ -227,7 +251,31 @@
       "dest": "ISO\\Linux\\DOWNLOAD - SystemRescue.url",
       "url": "https://www.system-rescue.org/Download/",
       "enabled": true,
-      "notes": "Info shortcut: upstream page for the separately managed auto-download-safe SystemRescue ISO."
+      "notes": "Info shortcut: upstream page for the active managed autodownload SystemRescue ISO."
+    },
+    {
+      "name": "Fedora Workstation Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Fedora Workstation.url",
+      "url": "https://fedoraproject.org/en/workstation/download/",
+      "enabled": true,
+      "notes": "Manual only: official Fedora workstation download page."
+    },
+    {
+      "name": "Endless OS Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Endless OS.url",
+      "url": "https://www.endlessos.org/os",
+      "enabled": true,
+      "notes": "Manual only: official Endless OS download page."
+    },
+    {
+      "name": "Linux Mint Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Linux Mint.url",
+      "url": "https://linuxmint.com/download.php",
+      "enabled": true,
+      "notes": "Info shortcut: upstream page for the active managed autodownload Linux Mint ISO."
     },
 
     {
@@ -239,11 +287,11 @@
       "sourceType": "sourceforge",
       "fragilityLevel": "high",
       "fallbackRule": "Re-derive the exact versioned asset from crystalmark.info and manually recompute the SHA256 from the official file before patching. Demote if the path stops being a direct official artifact.",
-      "maintenanceRank": 2,
+      "maintenanceRank": 8,
       "borderline": true,
       "enabled": true,
       "archive": true,
-      "notes": "Auto-download safe: official CrystalDiskInfo standard ZIP from the vendor SourceForge project. The vendor does not publish a machine-readable checksum here, so the manifest pins a verified SHA256 from the official artifact."
+      "notes": "Active managed autodownload: official CrystalDiskInfo standard ZIP from the vendor SourceForge project. The vendor does not publish a machine-readable checksum here, so the manifest pins a verified SHA256 from the official artifact."
     },
     {
       "name": "HDDScan Download Page",
@@ -260,6 +308,14 @@
       "url": "https://www.diskgenius.com/",
       "enabled": true,
       "notes": "Review first: partition/data recovery utility."
+    },
+    {
+      "name": "CrystalDiskInfo Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Disk\\DOWNLOAD - CrystalDiskInfo.url",
+      "url": "https://crystalmark.info/en/software/crystaldiskinfo/",
+      "enabled": true,
+      "notes": "Info shortcut: upstream page for the active managed autodownload CrystalDiskInfo package."
     },
 
     {
@@ -316,7 +372,7 @@
       "maintenanceRank": 10,
       "enabled": true,
       "archive": true,
-      "notes": "Auto-download safe: official Angry IP Scanner Windows installer with bundled Java runtime. Checksum coverage comes from the official GitHub release asset digest."
+      "notes": "Active managed autodownload: official Angry IP Scanner Windows installer with bundled Java runtime. Checksum coverage comes from the official GitHub release asset digest."
     },
     {
       "name": "Advanced IP Scanner Download Page",
@@ -325,6 +381,14 @@
       "url": "https://www.advanced-ip-scanner.com/",
       "enabled": true,
       "notes": "Review first: quick LAN scanner."
+    },
+    {
+      "name": "Angry IP Scanner Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Network\\DOWNLOAD - Angry IP Scanner.url",
+      "url": "https://angryip.org/download/",
+      "enabled": true,
+      "notes": "Info shortcut: upstream page for the active managed autodownload Angry IP Scanner installer."
     },
 
     {
@@ -364,7 +428,7 @@
       "borderline": true,
       "enabled": true,
       "archive": true,
-      "notes": "Auto-download safe: official NirSoft x64 portable zip."
+      "notes": "Active managed autodownload: official NirSoft x64 portable zip."
     },
     {
       "name": "DriverStoreExplorer 1.0.26 (zip)",
@@ -379,7 +443,7 @@
       "maintenanceRank": 9,
       "enabled": true,
       "archive": true,
-      "notes": "Auto-download safe: official DriverStoreExplorer release ZIP from the project GitHub repository. Checksum coverage comes from the official GitHub release asset digest."
+      "notes": "Active managed autodownload: official DriverStoreExplorer release ZIP from the project GitHub repository. Checksum coverage comes from the official GitHub release asset digest."
     },
     {
       "name": "Everything Search Download Page",
@@ -388,6 +452,22 @@
       "url": "https://www.voidtools.com/",
       "enabled": true,
       "notes": "Review first: fast file search tool."
+    },
+    {
+      "name": "BlueScreenView Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\System\\DOWNLOAD - BlueScreenView.url",
+      "url": "https://www.nirsoft.net/utils/blue_screen_view.html",
+      "enabled": true,
+      "notes": "Info shortcut: upstream page for the active managed autodownload BlueScreenView package."
+    },
+    {
+      "name": "DriverStoreExplorer Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\System\\DOWNLOAD - DriverStoreExplorer.url",
+      "url": "https://github.com/lostindark/DriverStoreExplorer",
+      "enabled": true,
+      "notes": "Info shortcut: upstream page for the active managed autodownload DriverStoreExplorer release."
     },
 
     {
@@ -411,7 +491,31 @@
       "maintenanceRank": 11,
       "enabled": true,
       "archive": true,
-      "notes": "Auto-download safe: official RustDesk Windows x64 executable. Pinned checksum refreshed from the official GitHub release asset digest."
+      "notes": "Active managed autodownload: official RustDesk Windows x64 executable. Pinned checksum refreshed from the official GitHub release asset digest."
+    },
+    {
+      "name": "Malwarebytes AdwCleaner Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Security\\DOWNLOAD - AdwCleaner.url",
+      "url": "https://www.malwarebytes.com/adwcleaner",
+      "enabled": true,
+      "notes": "Manual only: official adware cleaner download page."
+    },
+    {
+      "name": "Emsisoft Emergency Kit Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Security\\DOWNLOAD - Emsisoft Emergency Kit.url",
+      "url": "https://www.emsisoft.com/en/home/emergency-kit/",
+      "enabled": true,
+      "notes": "Manual only: official portable malware cleanup toolkit page."
+    },
+    {
+      "name": "RustDesk Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Remote\\DOWNLOAD - RustDesk.url",
+      "url": "https://rustdesk.com/download",
+      "enabled": true,
+      "notes": "Info shortcut: upstream page for the active managed autodownload RustDesk client."
     },
 
     {
@@ -424,10 +528,10 @@
       "sourceType": "github-release",
       "fragilityLevel": "medium",
       "fallbackRule": "Use the official Rufus site to confirm the matching GitHub release asset and refresh the asset digest. Demote if the official site stops pointing to a direct official asset.",
-      "maintenanceRank": 8,
+      "maintenanceRank": 2,
       "enabled": true,
       "archive": true,
-      "notes": "Auto-download safe: official Rufus portable x64 executable linked from rufus.ie. Checksum coverage comes from the official GitHub release asset digest."
+      "notes": "Active managed autodownload: official Rufus portable x64 executable linked from rufus.ie. Checksum coverage comes from the official GitHub release asset digest."
     },
     {
       "name": "balenaEtcher 2.1.4 Setup (x64)",
@@ -442,7 +546,31 @@
       "maintenanceRank": 12,
       "enabled": true,
       "archive": true,
-      "notes": "Auto-download safe: official balenaEtcher Windows installer."
+      "notes": "Active managed autodownload: official balenaEtcher Windows installer."
+    },
+    {
+      "name": "Ventoy Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\USB\\DOWNLOAD - Ventoy.url",
+      "url": "https://www.ventoy.net/en/download.html",
+      "enabled": true,
+      "notes": "Info shortcut: upstream page for the active managed autodownload Ventoy package."
+    },
+    {
+      "name": "Rufus Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\USB\\DOWNLOAD - Rufus.url",
+      "url": "https://rufus.ie/",
+      "enabled": true,
+      "notes": "Info shortcut: upstream page for the active managed autodownload Rufus package."
+    },
+    {
+      "name": "balenaEtcher Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\USB\\DOWNLOAD - balenaEtcher.url",
+      "url": "https://etcher.balena.io/",
+      "enabled": true,
+      "notes": "Info shortcut: upstream page for the active managed autodownload balenaEtcher installer."
     },
 
     {
@@ -463,20 +591,84 @@
     },
 
     {
+      "name": "Realtek Audio Drivers",
+      "type": "page",
+      "dest": "Drivers\\Audio\\DOWNLOAD - Realtek Audio Drivers.url",
+      "url": "https://www.realtek.com/en/downloads",
+      "enabled": true,
+      "notes": "Review first: official Realtek driver portal shortcut."
+    },
+    {
+      "name": "Intel Wireless Bluetooth Drivers",
+      "type": "page",
+      "dest": "Drivers\\Bluetooth\\DOWNLOAD - Intel Bluetooth Drivers.url",
+      "url": "https://www.intel.com/content/www/us/en/download/18649/intel-wireless-bluetooth-drivers-for-windows-10-and-windows-11.html",
+      "enabled": true,
+      "notes": "Review first: official Intel Bluetooth driver page."
+    },
+    {
       "name": "Intel Driver Download Center",
       "type": "page",
-      "dest": "Drivers\\DRIVERS - Intel Download Center.url",
+      "dest": "Drivers\\Chipset\\DOWNLOAD - Intel Drivers.url",
       "url": "https://www.intel.com/content/www/us/en/download-center/home.html",
       "enabled": true,
       "notes": "Review first: official Intel driver portal shortcut."
     },
     {
+      "name": "AMD Drivers and Support",
+      "type": "page",
+      "dest": "Drivers\\Graphics\\DOWNLOAD - AMD Drivers.url",
+      "url": "https://www.amd.com/en/support/download/drivers.html",
+      "enabled": true,
+      "notes": "Review first: official AMD graphics and chipset driver portal shortcut."
+    },
+    {
+      "name": "Intel Graphics Drivers",
+      "type": "page",
+      "dest": "Drivers\\Graphics\\DOWNLOAD - Intel Graphics Drivers.url",
+      "url": "https://www.intel.com/content/www/us/en/support/articles/000090440.html",
+      "enabled": true,
+      "notes": "Review first: official Intel graphics driver index."
+    },
+    {
+      "name": "NVIDIA Drivers",
+      "type": "page",
+      "dest": "Drivers\\Graphics\\DOWNLOAD - NVIDIA Drivers.url",
+      "url": "https://www.nvidia.com/en-us/drivers/",
+      "enabled": true,
+      "notes": "Review first: official NVIDIA graphics driver portal shortcut."
+    },
+    {
+      "name": "Intel Ethernet Drivers",
+      "type": "page",
+      "dest": "Drivers\\Network\\DOWNLOAD - Intel Ethernet Drivers.url",
+      "url": "https://www.intel.com/content/www/us/en/download/15084/intel-ethernet-adapter-complete-driver-pack.html",
+      "enabled": true,
+      "notes": "Review first: official Intel Ethernet driver page."
+    },
+    {
       "name": "Realtek Downloads",
       "type": "page",
-      "dest": "Drivers\\DRIVERS - Realtek Downloads.url",
+      "dest": "Drivers\\Network\\DOWNLOAD - Realtek Drivers.url",
       "url": "https://www.realtek.com/en/downloads",
       "enabled": true,
       "notes": "Review first: official Realtek driver portal shortcut."
+    },
+    {
+      "name": "Intel Rapid Storage Technology Support",
+      "type": "page",
+      "dest": "Drivers\\Storage\\DOWNLOAD - Intel RST Drivers.url",
+      "url": "https://www.intel.com/content/www/us/en/support/products/55005/technologies/intel-rapid-storage-technology-intel-rst.html",
+      "enabled": true,
+      "notes": "Review first: official Intel Rapid Storage Technology support and download page."
+    },
+    {
+      "name": "Intel Wireless Wi-Fi Drivers",
+      "type": "page",
+      "dest": "Drivers\\Wireless\\DOWNLOAD - Intel Wi-Fi Drivers.url",
+      "url": "https://www.intel.com/content/www/us/en/download/19351/intel-wireless-wi-fi-drivers-for-windows-10-and-windows-11.html",
+      "enabled": true,
+      "notes": "Review first: official Intel Wi-Fi driver page."
     }
   ]
 }

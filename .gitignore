@@ -33,3 +33,4 @@ VentoyToolkitSetup/IfScriptFails(ManualSetup)/
 *.temp
 *.zip
 dist/
+PreRelease/

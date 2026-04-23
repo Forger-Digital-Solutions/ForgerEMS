@@ -66,18 +66,43 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
+$runtimeHelperCandidates = @(
+    (Join-Path $PSScriptRoot "ForgerEMS.Runtime.ps1"),
+    (Join-Path $PSScriptRoot "backend\ForgerEMS.Runtime.ps1")
+) | Select-Object -Unique
+
+$runtimeHelperImported = $false
+foreach ($runtimeHelperCandidate in $runtimeHelperCandidates) {
+    if (Test-Path -LiteralPath $runtimeHelperCandidate) {
+        . $runtimeHelperCandidate
+        $runtimeHelperImported = $true
+        break
+    }
+}
+
+if (-not $runtimeHelperImported) {
+    throw "ForgerEMS runtime helper was not found. Checked: $($runtimeHelperCandidates -join '; ')"
+}
+
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
 
 $script:LogFile = $null
 $script:Summary = [ordered]@{
-    Total      = 0
-    Skipped    = 0
-    Verified   = 0
-    Updated    = 0
-    Shortcut   = 0
-    Failed     = 0
-    Archived   = 0
-    Disabled   = 0
+    Total                    = 0
+    ManagedFileItems         = 0
+    PlaceholderItems         = 0
+    Downloaded               = 0
+    Skipped                  = 0
+    Verified                 = 0
+    Updated                  = 0
+    Shortcut                 = 0
+    PlaceholderOnly          = 0
+    Failed                   = 0
+    FailedWithFallback       = 0
+    Archived                 = 0
+    Disabled                 = 0
+    FallbackShortcutsCreated = 0
+    FallbackShortcutsReused  = 0
 }
 
 function Write-Log {
@@ -125,7 +150,27 @@ function Get-Sha256 {
     param([Parameter(Mandatory)][string]$Path)
 
     if (-not (Test-Path -LiteralPath $Path)) { return $null }
-    (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+
+    $getFileHashCommand = Get-Command -Name Get-FileHash -ErrorAction SilentlyContinue
+    if ($getFileHashCommand) {
+        return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+
+    $stream = [IO.File]::OpenRead($Path)
+    try {
+        $sha256 = [Security.Cryptography.SHA256]::Create()
+        try {
+            $hashBytes = $sha256.ComputeHash($stream)
+        }
+        finally {
+            $sha256.Dispose()
+        }
+
+        return (([BitConverter]::ToString($hashBytes)) -replace '-', '').ToLowerInvariant()
+    }
+    finally {
+        $stream.Dispose()
+    }
 }
 
 function Safe-FileName {
@@ -147,6 +192,564 @@ URL=$Url
     Set-Content -LiteralPath $ShortcutPath -Value $content -Encoding ASCII
 }
 
+function Get-ManifestDestinationKey {
+    param([AllowNull()][string]$RelativePath)
+
+    if ([string]::IsNullOrWhiteSpace($RelativePath)) {
+        return ""
+    }
+
+    return ([string]$RelativePath).Trim().ToLowerInvariant()
+}
+
+function Normalize-ManifestMatchText {
+    param([AllowNull()][string]$Text)
+
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        return ""
+    }
+
+    return ([regex]::Replace($Text.ToLowerInvariant(), '[^a-z0-9]+', ' ')).Trim()
+}
+
+function Get-PlaceholderDisplayLabelFromDestination {
+    param([AllowNull()][string]$RelativePath)
+
+    if ([string]::IsNullOrWhiteSpace($RelativePath)) {
+        return ""
+    }
+
+    $leafName = [IO.Path]::GetFileNameWithoutExtension($RelativePath)
+    if ([string]::IsNullOrWhiteSpace($leafName)) {
+        return ""
+    }
+
+    return (($leafName -replace '^(download|info)\s*-\s*', '').Trim())
+}
+
+function Test-ManagedPlaceholderShadowMatch {
+    param(
+        [Parameter(Mandatory)]$PageItem,
+        [Parameter(Mandatory)]$ManagedItem
+    )
+
+    $pageDest = ([string]$(if ($PageItem.dest) { $PageItem.dest } else { "" })).Trim()
+    $managedDest = ([string]$(if ($ManagedItem.dest) { $ManagedItem.dest } else { "" })).Trim()
+
+    if ([string]::IsNullOrWhiteSpace($pageDest) -or [string]::IsNullOrWhiteSpace($managedDest)) {
+        return $false
+    }
+
+    $pageDir = Split-Path -Parent $pageDest
+    $managedDir = Split-Path -Parent $managedDest
+
+    if (-not [string]::Equals($pageDir, $managedDir, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $false
+    }
+
+    $pageLabels = @(
+        (Normalize-ManifestMatchText -Text (Get-PlaceholderDisplayLabelFromDestination -RelativePath $pageDest))
+        (Normalize-ManifestMatchText -Text ([string]$(if ($PageItem.name) { $PageItem.name } else { "" })))
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+
+    $managedTargets = @(
+        (Normalize-ManifestMatchText -Text ([string]$(if ($ManagedItem.name) { $ManagedItem.name } else { "" })))
+        (Normalize-ManifestMatchText -Text ([IO.Path]::GetFileNameWithoutExtension($managedDest)))
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+
+    foreach ($pageLabel in $pageLabels) {
+        foreach ($managedTarget in $managedTargets) {
+            if ($managedTarget.Contains($pageLabel) -or $pageLabel.Contains($managedTarget)) {
+                return $true
+            }
+        }
+    }
+
+    return $false
+}
+
+function Get-ActiveManagedPlaceholderPlan {
+    param([Parameter(Mandatory)][object[]]$Items)
+
+    $enabledManagedFileItems = @(
+        $Items | Where-Object {
+            $itemEnabled = $true
+            if ($null -ne $_.enabled) {
+                $itemEnabled = [bool]$_.enabled
+            }
+
+            $itemType = ([string]$(if ($_.type) { $_.type } else { "file" })).Trim().ToLowerInvariant()
+            $itemEnabled -and $itemType -eq "file"
+        }
+    )
+
+    $byPlaceholderDest = @{}
+    $byManagedDest = @{}
+
+    foreach ($item in $Items) {
+        if ($null -eq $item) { continue }
+
+        $itemEnabled = $true
+        if ($null -ne $item.enabled) {
+            $itemEnabled = [bool]$item.enabled
+        }
+
+        $itemType = ([string]$(if ($item.type) { $item.type } else { "file" })).Trim().ToLowerInvariant()
+        if (-not $itemEnabled -or $itemType -ne "page") {
+            continue
+        }
+
+        $matchedManagedItem = @(
+            $enabledManagedFileItems | Where-Object {
+                Test-ManagedPlaceholderShadowMatch -PageItem $item -ManagedItem $_
+            }
+        ) | Select-Object -First 1
+
+        if ($null -eq $matchedManagedItem) {
+            continue
+        }
+
+        $placeholderDest = ([string]$item.dest).Trim()
+        $managedDest = ([string]$matchedManagedItem.dest).Trim()
+        $placeholderKey = Get-ManifestDestinationKey -RelativePath $placeholderDest
+        $managedKey = Get-ManifestDestinationKey -RelativePath $managedDest
+        $entry = [PSCustomObject]@{
+            PlaceholderDest = $placeholderDest
+            ManagedDest     = $managedDest
+            PlaceholderItem = $item
+            ManagedItem     = $matchedManagedItem
+        }
+
+        if (-not $byPlaceholderDest.ContainsKey($placeholderKey)) {
+            $byPlaceholderDest[$placeholderKey] = $entry
+        }
+
+        if (-not $byManagedDest.ContainsKey($managedKey)) {
+            $byManagedDest[$managedKey] = New-Object System.Collections.Generic.List[object]
+        }
+
+        [void]$byManagedDest[$managedKey].Add($entry)
+    }
+
+    return [PSCustomObject]@{
+        ByPlaceholderDest = $byPlaceholderDest
+        ByManagedDest     = $byManagedDest
+    }
+}
+
+function Get-PreferredFallbackShortcutPath {
+    param(
+        [Parameter(Mandatory)][string]$Root,
+        [Parameter(Mandatory)][string]$ManagedDestination,
+        [Parameter(Mandatory)]$ManagedPlaceholderPlan
+    )
+
+    $managedKey = Get-ManifestDestinationKey -RelativePath $ManagedDestination
+    if (-not $ManagedPlaceholderPlan.ByManagedDest.ContainsKey($managedKey)) {
+        return $null
+    }
+
+    $entry = @($ManagedPlaceholderPlan.ByManagedDest[$managedKey] | Select-Object -First 1)
+    if ($entry.Count -eq 0) {
+        return $null
+    }
+
+    return (Resolve-RootChildPath -Root $Root -RelativePath ([string]$entry[0].PlaceholderDest))
+}
+
+function Remove-ManagedSuccessPlaceholders {
+    param(
+        [Parameter(Mandatory)][string]$Root,
+        [Parameter(Mandatory)][string]$ManagedDestination,
+        [Parameter(Mandatory)]$ManagedPlaceholderPlan
+    )
+
+    $managedKey = Get-ManifestDestinationKey -RelativePath $ManagedDestination
+    if (-not $ManagedPlaceholderPlan.ByManagedDest.ContainsKey($managedKey)) {
+        return 0
+    }
+
+    $removedCount = 0
+
+    foreach ($entry in @($ManagedPlaceholderPlan.ByManagedDest[$managedKey] | ForEach-Object { $_ })) {
+        $placeholderDestRel = ([string]$entry.PlaceholderDest).Trim()
+        if ([string]::IsNullOrWhiteSpace($placeholderDestRel)) {
+            continue
+        }
+
+        $placeholderPath = Resolve-RootChildPath -Root $Root -RelativePath $placeholderDestRel
+        if (-not (Test-Path -LiteralPath $placeholderPath)) {
+            continue
+        }
+
+        try {
+            if ($PSCmdlet.ShouldProcess($placeholderDestRel, "Remove placeholder shortcut because managed payload staged successfully")) {
+                Remove-Item -LiteralPath $placeholderPath -Force
+                Write-Log "Removed placeholder shortcut because managed payload staged successfully: $placeholderPath" "OK"
+            }
+            else {
+                Write-Log "Would remove placeholder shortcut because managed payload staged successfully: $placeholderPath" "INFO"
+            }
+
+            $removedCount++
+        }
+        catch {
+            Write-Log "Failed to remove placeholder shortcut after managed staging for '$ManagedDestination': $($_.Exception.Message)" "WARN"
+        }
+    }
+
+    return $removedCount
+}
+
+function Write-DownloadFallbackShortcut {
+    param(
+        [Parameter(Mandatory)][string]$DestinationPath,
+        [Parameter(Mandatory)][string]$ItemName,
+        [Parameter(Mandatory)][string]$Url,
+        [AllowNull()][string]$PreferredShortcutPath
+    )
+
+    try {
+        $destinationDir = Split-Path -Parent $DestinationPath
+        if ([string]::IsNullOrWhiteSpace($destinationDir)) {
+            return [PSCustomObject]@{
+                Outcome      = "none"
+                ShortcutPath = ""
+            }
+        }
+
+        Ensure-Dir -Path $destinationDir
+
+        $shortcutPath = $null
+
+        if (-not [string]::IsNullOrWhiteSpace($PreferredShortcutPath)) {
+            $shortcutPath = $PreferredShortcutPath
+            $preferredShortcutDir = Split-Path -Parent $shortcutPath
+            if (-not [string]::IsNullOrWhiteSpace($preferredShortcutDir)) {
+                Ensure-Dir -Path $preferredShortcutDir
+            }
+
+            if (Test-Path -LiteralPath $shortcutPath) {
+                Write-Log "Using existing fallback shortcut because managed download failed: $shortcutPath" "WARN"
+                return [PSCustomObject]@{
+                    Outcome      = "existing"
+                    ShortcutPath = $shortcutPath
+                }
+            }
+        }
+        else {
+            $itemNameToken = (($ItemName -split '\s+')[0]).Trim()
+            if (-not [string]::IsNullOrWhiteSpace($itemNameToken)) {
+                $existingRelatedShortcut = Get-ChildItem -LiteralPath $destinationDir -Filter "*.url" -ErrorAction SilentlyContinue |
+                    Where-Object { $_.BaseName -like ("*" + $itemNameToken + "*") } |
+                    Select-Object -First 1
+
+                if ($existingRelatedShortcut) {
+                    Write-Log "Using existing seeded placeholder shortcut as fallback because managed download failed: $($existingRelatedShortcut.FullName)" "WARN"
+                    return [PSCustomObject]@{
+                        Outcome      = "existing"
+                        ShortcutPath = $existingRelatedShortcut.FullName
+                    }
+                }
+            }
+
+            $shortcutName = "DOWNLOAD - " + (Safe-FileName -Text $ItemName) + ".url"
+            $shortcutPath = Join-Path $destinationDir $shortcutName
+
+            if (Test-Path -LiteralPath $shortcutPath) {
+                Write-Log "Using existing fallback shortcut because managed download failed: $shortcutPath" "WARN"
+                return [PSCustomObject]@{
+                    Outcome      = "existing"
+                    ShortcutPath = $shortcutPath
+                }
+            }
+        }
+
+        Write-UrlShortcut -ShortcutPath $shortcutPath -Url $Url
+        Write-Log "Fallback shortcut written because managed download failed: $shortcutPath" "WARN"
+        return [PSCustomObject]@{
+            Outcome      = "created"
+            ShortcutPath = $shortcutPath
+        }
+    }
+    catch {
+        Write-Log "Failed to write fallback shortcut for '$ItemName': $($_.Exception.Message)" "WARN"
+        return [PSCustomObject]@{
+            Outcome      = "error"
+            ShortcutPath = ""
+        }
+    }
+}
+
+function Get-ExceptionDiagnostic {
+    param(
+        [Management.Automation.ErrorRecord]$ErrorRecord,
+        [System.Exception]$Exception
+    )
+
+    $current = if ($ErrorRecord) {
+        $ErrorRecord.Exception
+    }
+    else {
+        $Exception
+    }
+
+    if ($null -eq $current) {
+        return "Unknown error."
+    }
+
+    $parts = New-Object System.Collections.Generic.List[string]
+    $depth = 0
+
+    while ($current -and $depth -lt 4) {
+        $entry = "{0}: {1}" -f $current.GetType().FullName, $current.Message
+
+        try {
+            $statusCodeProperty = $current.PSObject.Properties["StatusCode"]
+            if ($statusCodeProperty -and $null -ne $current.StatusCode) {
+                $entry += " [HTTP $([int]$current.StatusCode)]"
+            }
+        }
+        catch {
+        }
+
+        try {
+            $responseProperty = $current.PSObject.Properties["Response"]
+            if ($responseProperty -and $null -ne $current.Response) {
+                $statusCode = $current.Response.StatusCode
+                if ($null -ne $statusCode) {
+                    $entry += " [Response $([int]$statusCode)]"
+                }
+            }
+        }
+        catch {
+        }
+
+        $parts.Add($entry)
+        $current = $current.InnerException
+        $depth++
+    }
+
+    return ($parts -join " <= ")
+}
+
+function Get-FileStateDescription {
+    param([Parameter(Mandatory)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return "missing"
+    }
+
+    $item = Get-Item -LiteralPath $Path
+    return "exists ($($item.Length) bytes) at $Path"
+}
+
+function Get-NormalizedDisplayText {
+    param([AllowNull()]$Value)
+
+    if ($null -eq $Value) {
+        return ""
+    }
+
+    $parts = @($Value) | ForEach-Object { [string]$_ } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+    if (-not $parts -or $parts.Count -eq 0) {
+        return ""
+    }
+
+    return (($parts -join " ").Trim())
+}
+
+function Get-HttpStatusCodeDisplayText {
+    param([AllowNull()]$Value)
+
+    $text = Get-NormalizedDisplayText -Value $Value
+    if ([string]::IsNullOrWhiteSpace($text)) {
+        return ""
+    }
+
+    $match = [regex]::Match($text, '\b\d{3}\b')
+    if ($match.Success) {
+        return $match.Value
+    }
+
+    return $text
+}
+
+function Invoke-HttpClientDownload {
+    param(
+        [Parameter(Mandatory)][string]$Url,
+        [Parameter(Mandatory)][string]$OutFile,
+        [int]$TimeoutSec = 180,
+        [string]$UserAgent = "ForgerEMS-Updater/3.1"
+    )
+
+    Add-Type -AssemblyName System.Net.Http | Out-Null
+
+    $handler = New-Object System.Net.Http.HttpClientHandler
+    $handler.AllowAutoRedirect = $true
+    try {
+        $handler.AutomaticDecompression = [System.Net.DecompressionMethods]::GZip -bor [System.Net.DecompressionMethods]::Deflate
+    }
+    catch {
+    }
+
+    $client = New-Object System.Net.Http.HttpClient($handler)
+    $client.Timeout = [TimeSpan]::FromSeconds($TimeoutSec)
+    $client.DefaultRequestHeaders.UserAgent.ParseAdd($UserAgent)
+
+    $response = $null
+    $responseStream = $null
+    $fileStream = $null
+
+    try {
+        $response = $client.GetAsync($Url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+        $null = $response.EnsureSuccessStatusCode()
+
+        $responseStream = $response.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
+        $fileStream = [IO.File]::Open($OutFile, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        $responseStream.CopyTo($fileStream)
+
+        return [PSCustomObject]@{
+            Method      = "HttpClient"
+            StatusCode  = [int]$response.StatusCode
+            ReasonPhrase = [string]$response.ReasonPhrase
+            FinalUri    = [string]$response.RequestMessage.RequestUri.AbsoluteUri
+        }
+    }
+    finally {
+        if ($fileStream) {
+            $fileStream.Dispose()
+        }
+
+        if ($responseStream) {
+            $responseStream.Dispose()
+        }
+
+        if ($response) {
+            $response.Dispose()
+        }
+
+        $client.Dispose()
+        $handler.Dispose()
+    }
+}
+
+function Invoke-CurlDownload {
+    param(
+        [Parameter(Mandatory)][string]$Url,
+        [Parameter(Mandatory)][string]$OutFile,
+        [int]$TimeoutSec = 180,
+        [string]$UserAgent = "ForgerEMS-Updater/3.1"
+    )
+
+    $curlPath = Join-Path $env:SystemRoot "System32\curl.exe"
+    if (-not (Test-Path -LiteralPath $curlPath)) {
+        throw "curl.exe is not available on this system."
+    }
+
+    $arguments = @(
+        "-L",
+        "-sS",
+        "--fail",
+        "--retry", "2",
+        "--connect-timeout", [string]$TimeoutSec,
+        "--user-agent", $UserAgent,
+        "--output", $OutFile,
+        $Url
+    )
+
+    & $curlPath @arguments 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "curl.exe exited with code $LASTEXITCODE."
+    }
+
+    return [PSCustomObject]@{
+        Method   = "curl.exe"
+        ExitCode = 0
+        FinalUri = $Url
+    }
+}
+
+function Get-UrlText {
+    param(
+        [Parameter(Mandatory)][string]$Url,
+        [int]$TimeoutSec = 60,
+        [string]$UserAgent = "ForgerEMS-Updater/3.1"
+    )
+
+    $headers = @{ "User-Agent" = $UserAgent }
+    $methods = @(
+        @{
+            Name = "HttpClient"
+            Action = {
+                Add-Type -AssemblyName System.Net.Http | Out-Null
+
+                $handler = New-Object System.Net.Http.HttpClientHandler
+                $handler.AllowAutoRedirect = $true
+                try {
+                    $handler.AutomaticDecompression = [System.Net.DecompressionMethods]::GZip -bor [System.Net.DecompressionMethods]::Deflate
+                }
+                catch {
+                }
+
+                $client = New-Object System.Net.Http.HttpClient($handler)
+                $client.Timeout = [TimeSpan]::FromSeconds($TimeoutSec)
+                $client.DefaultRequestHeaders.UserAgent.ParseAdd($UserAgent)
+
+                if ($Url -like "https://api.github.com/*") {
+                    $client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json")
+                    $client.DefaultRequestHeaders.Add("X-GitHub-Api-Version", "2022-11-28")
+                }
+
+                $response = $null
+                try {
+                    $response = $client.GetAsync($Url).GetAwaiter().GetResult()
+                    $null = $response.EnsureSuccessStatusCode()
+                    [PSCustomObject]@{
+                        Text         = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+                        Method       = "HttpClient"
+                        StatusCode   = [int]$response.StatusCode
+                        ReasonPhrase = [string]$response.ReasonPhrase
+                        FinalUri     = [string]$response.RequestMessage.RequestUri.AbsoluteUri
+                    }
+                }
+                finally {
+                    if ($response) {
+                        $response.Dispose()
+                    }
+
+                    $client.Dispose()
+                    $handler.Dispose()
+                }
+            }
+        },
+        @{
+            Name = "Invoke-WebRequest"
+            Action = {
+                $response = Invoke-WebRequest -Uri $Url -Headers $headers -TimeoutSec $TimeoutSec -MaximumRedirection 10 -UseBasicParsing
+                [PSCustomObject]@{
+                    Text         = [string]$response.Content
+                    Method       = "Invoke-WebRequest"
+                    StatusCode   = if ($response.StatusCode) { [int]$response.StatusCode } else { 0 }
+                    ReasonPhrase = if ($response.StatusDescription) { [string]$response.StatusDescription } else { "" }
+                    FinalUri     = if ($response.BaseResponse -and $response.BaseResponse.ResponseUri) { [string]$response.BaseResponse.ResponseUri.AbsoluteUri } else { $Url }
+                }
+            }
+        }
+    )
+
+    foreach ($method in $methods) {
+        try {
+            return & $method.Action
+        }
+        catch {
+            Write-Log "Checksum source fetch via $($method.Name) failed: $(Get-ExceptionDiagnostic -ErrorRecord $_)" "WARN"
+        }
+    }
+
+    throw "All checksum source fetch strategies failed for $Url"
+}
+
 function Download-File {
     param(
         [Parameter(Mandatory)][string]$Url,
@@ -160,22 +763,135 @@ function Download-File {
 
     for ($attempt = 1; $attempt -le $Retries; $attempt++) {
         try {
+            Write-Log "Download attempt $attempt/$Retries starting: $Url" "INFO"
+
             if (Test-Path -LiteralPath $OutFile) {
                 Remove-Item -LiteralPath $OutFile -Force -ErrorAction SilentlyContinue
             }
 
-            try {
-                Start-BitsTransfer -Source $Url -Destination $OutFile -ErrorAction Stop
+            $downloadSucceeded = $false
+            $downloadTrace = @()
+            $downloadMethods = @(
+                @{
+                    Name   = "HttpClient"
+                    Action = {
+                        Invoke-HttpClientDownload -Url $Url -OutFile $OutFile -TimeoutSec $TimeoutSec -UserAgent $UserAgent
+                    }
+                },
+                @{
+                    Name   = "Invoke-WebRequest"
+                    Action = {
+                        $response = Invoke-WebRequest -Uri $Url -OutFile $OutFile -Headers $headers -TimeoutSec $TimeoutSec -MaximumRedirection 10 -UseBasicParsing
+                        [PSCustomObject]@{
+                            Method       = "Invoke-WebRequest"
+                            StatusCode   = if ($response.StatusCode) { [int]$response.StatusCode } else { $null }
+                            ReasonPhrase = if ($response.StatusDescription) { [string]$response.StatusDescription } else { "" }
+                            FinalUri     = if ($response.BaseResponse -and $response.BaseResponse.ResponseUri) { [string]$response.BaseResponse.ResponseUri.AbsoluteUri } else { $Url }
+                        }
+                    }
+                },
+                @{
+                    Name   = "curl.exe"
+                    Action = {
+                        Invoke-CurlDownload -Url $Url -OutFile $OutFile -TimeoutSec $TimeoutSec -UserAgent $UserAgent
+                    }
+                },
+                @{
+                    Name   = "BITS"
+                    Action = {
+                        Start-BitsTransfer -Source $Url -Destination $OutFile -ErrorAction Stop
+                        [PSCustomObject]@{
+                            Method       = "BITS"
+                            StatusCode   = $null
+                            ReasonPhrase = ""
+                            FinalUri     = $Url
+                        }
+                    }
+                }
+            )
+
+            foreach ($downloadMethod in $downloadMethods) {
+                try {
+                    Write-Log "Using $($downloadMethod.Name) for foreground download." "INFO"
+                    $downloadMetadata = & $downloadMethod.Action
+                    $downloadMetadataRecord = @($downloadMetadata | Select-Object -First 1)[0]
+
+                    if (-not (Test-Path -LiteralPath $OutFile)) {
+                        throw "The download method returned without creating '$OutFile'."
+                    }
+
+                    $sizeBytes = (Get-Item -LiteralPath $OutFile).Length
+                    if ($sizeBytes -le 0) {
+                        throw "The downloaded file is empty."
+                    }
+
+                    $downloadStatusCode = if ($downloadMetadataRecord -and $downloadMetadataRecord.PSObject.Properties["StatusCode"]) { Get-HttpStatusCodeDisplayText -Value $downloadMetadataRecord.StatusCode } else { "" }
+                    $downloadReasonPhrase = if ($downloadMetadataRecord -and $downloadMetadataRecord.PSObject.Properties["ReasonPhrase"]) { Get-NormalizedDisplayText -Value $downloadMetadataRecord.ReasonPhrase } else { "" }
+                    $downloadFinalUri = if ($downloadMetadataRecord -and $downloadMetadataRecord.PSObject.Properties["FinalUri"]) { Get-NormalizedDisplayText -Value $downloadMetadataRecord.FinalUri } else { "" }
+
+                    Write-Log "Download completed via $($downloadMethod.Name): $OutFile ($sizeBytes bytes)" "OK"
+                    if (-not [string]::IsNullOrWhiteSpace($downloadStatusCode)) {
+                        Write-Log (("Download HTTP status via $($downloadMethod.Name): $downloadStatusCode $downloadReasonPhrase").TrimEnd()) "INFO"
+                    }
+                    if (-not [string]::IsNullOrWhiteSpace($downloadFinalUri)) {
+                        Write-Log "Download final URL via $($downloadMethod.Name): $downloadFinalUri" "INFO"
+                    }
+                    Write-Log "Download destination state after transfer: $(Get-FileStateDescription -Path $OutFile)" "INFO"
+                    $traceEntry = "$($downloadMethod.Name)=success"
+                    if (-not [string]::IsNullOrWhiteSpace($downloadStatusCode)) {
+                        $traceEntry += " [HTTP $downloadStatusCode"
+                        if (-not [string]::IsNullOrWhiteSpace($downloadReasonPhrase)) {
+                            $traceEntry += " $downloadReasonPhrase"
+                        }
+                        $traceEntry += "]"
+                    }
+                    $downloadTrace += $traceEntry
+                    $downloadSucceeded = $true
+
+                    $attemptSummary = if ($downloadTrace.Count -gt 0) { $downloadTrace -join "; " } else { "none" }
+
+                    return [PSCustomObject]@{
+                        Method       = $downloadMethod.Name
+                        SizeBytes    = $sizeBytes
+                        OutFile      = $OutFile
+                        StatusCode   = $downloadStatusCode
+                        ReasonPhrase = $downloadReasonPhrase
+                        FinalUri     = $downloadFinalUri
+                        AttemptSummary = $attemptSummary
+                    }
+                }
+                catch {
+                    $failureDiagnostic = Get-ExceptionDiagnostic -ErrorRecord $_
+                    Write-Log "$($downloadMethod.Name) download strategy failed: $failureDiagnostic" "WARN"
+                    Write-Log "Destination state after $($downloadMethod.Name) failure: $(Get-FileStateDescription -Path $OutFile)" "INFO"
+                    $failureStatusCode = Get-HttpStatusCodeDisplayText -Value $failureDiagnostic
+                    $traceEntry = "$($downloadMethod.Name)=failed"
+                    if ($failureStatusCode -match '^\d{3}$') {
+                        $traceEntry += " [HTTP $failureStatusCode]"
+                    }
+                    if (-not [string]::IsNullOrWhiteSpace($failureDiagnostic)) {
+                        $traceEntry += " {$failureDiagnostic}"
+                    }
+                    $downloadTrace += $traceEntry
+                    if (Test-Path -LiteralPath $OutFile) {
+                        Remove-Item -LiteralPath $OutFile -Force -ErrorAction SilentlyContinue
+                    }
+                }
             }
-            catch {
-                Write-Log "BITS failed, falling back to Invoke-WebRequest: $Url" "WARN"
-                Invoke-WebRequest -Uri $Url -OutFile $OutFile -Headers $headers -TimeoutSec $TimeoutSec -UseBasicParsing
+
+            if (-not $downloadSucceeded) {
+                $attemptSummary = if ($downloadTrace.Count -gt 0) { $downloadTrace -join "; " } else { "none" }
+                Write-Log "Downloader methods attempted: $attemptSummary" "WARN"
+
+                $failure = New-Object System.Exception("All download strategies failed for $Url")
+                $failure.Data["AttemptedMethodSummary"] = $attemptSummary
+                throw $failure
             }
 
             return
         }
         catch {
-            Write-Log "Download attempt $attempt failed for $Url :: $($_.Exception.Message)" "WARN"
+            Write-Log "Download attempt $attempt failed for $Url :: $(Get-ExceptionDiagnostic -ErrorRecord $_)" "WARN"
             if ($attempt -eq $Retries) { throw }
             Start-Sleep -Seconds ([Math]::Min(5 * $attempt, 15))
         }
@@ -189,18 +905,28 @@ function Get-ShaFromUrl {
         [string]$UserAgent = "ForgerEMS-Updater/3.1"
     )
 
-    $tmp = Join-Path $env:TEMP ("forgerems_sha_" + [Guid]::NewGuid().ToString("N") + ".txt")
     try {
-        Invoke-WebRequest -Uri $ShaUrl -OutFile $tmp -Headers @{ "User-Agent" = $UserAgent } -TimeoutSec $TimeoutSec -UseBasicParsing | Out-Null
-        $txt = (Get-Content -LiteralPath $tmp -Raw).Trim()
+        $response = Get-UrlText -Url $ShaUrl -TimeoutSec $TimeoutSec -UserAgent $UserAgent
+        $txt = ([string]$response.Text).Trim()
         $m = [regex]::Match($txt, '([a-fA-F0-9]{64})')
         if ($m.Success) {
-            return $m.Groups[1].Value.ToLowerInvariant()
+            return [PSCustomObject]@{
+                Sha256       = $m.Groups[1].Value.ToLowerInvariant()
+                Method       = [string]$response.Method
+                StatusCode   = Get-HttpStatusCodeDisplayText -Value $response.StatusCode
+                ReasonPhrase = Get-NormalizedDisplayText -Value $response.ReasonPhrase
+                FinalUri     = Get-NormalizedDisplayText -Value $response.FinalUri
+            }
         }
-        return $null
+        return [PSCustomObject]@{
+            Sha256       = $null
+            Method       = [string]$response.Method
+            StatusCode   = Get-HttpStatusCodeDisplayText -Value $response.StatusCode
+            ReasonPhrase = Get-NormalizedDisplayText -Value $response.ReasonPhrase
+            FinalUri     = Get-NormalizedDisplayText -Value $response.FinalUri
+        }
     }
     finally {
-        Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -729,6 +1455,32 @@ function Get-VentoyCoreVersionInfo {
     }
 }
 
+function Get-ManifestItemExecutionOrder {
+    param([Parameter(Mandatory)]$Item)
+
+    $type = ([string]$(if ($Item.type) { $Item.type } else { "file" })).Trim().ToLowerInvariant()
+    if ($type -eq "page") {
+        return 900
+    }
+
+    $dest = ([string]$Item.dest).Trim()
+
+    switch -Wildcard ($dest) {
+        "Tools\Portable\USB\*"      { return 10 }
+        "Tools\Portable\Security\*" { return 20 }
+        "Tools\Portable\Disk\*"     { return 30 }
+        "Tools\Portable\Hardware\*" { return 40 }
+        "Tools\Portable\System\*"   { return 50 }
+        "Tools\Portable\Remote\*"   { return 60 }
+        "Tools\Portable\GPU\*"      { return 70 }
+        "Tools\Portable\Network\*"  { return 80 }
+        "ISO\Tools\*"               { return 100 }
+        "ISO\Windows\*"             { return 110 }
+        "ISO\Linux\*"               { return 120 }
+        default                     { return 200 }
+    }
+}
+
 function Show-VentoyCoreVersionInfo {
     $info = Get-VentoyCoreVersionInfo
     Write-Host ("{0} {1} ({2})" -f $info.Name, $info.Version, $info.BuildTimestampUtc) -ForegroundColor Cyan
@@ -774,7 +1526,56 @@ if (-not $manifest.items) {
     throw "Manifest has no items."
 }
 
-foreach ($item in $manifest.items) {
+$orderedItems = @($manifest.items) | Sort-Object `
+    @{ Expression = { Get-ManifestItemExecutionOrder -Item $_ } }, `
+    @{ Expression = { ([string]$(if ($_.dest) { $_.dest } else { "" })).Trim() } }, `
+    @{ Expression = { ([string]$(if ($_.name) { $_.name } else { "" })).Trim() } }
+
+$activeManagedPlaceholderPlan = Get-ActiveManagedPlaceholderPlan -Items $orderedItems
+
+$enabledManagedFileItems = @(
+    $orderedItems | Where-Object {
+        $itemEnabled = $true
+        if ($null -ne $_.enabled) {
+            $itemEnabled = [bool]$_.enabled
+        }
+
+        $itemType = ([string]$(if ($_.type) { $_.type } else { "file" })).Trim().ToLowerInvariant()
+        $itemEnabled -and $itemType -eq "file"
+    }
+)
+$enabledPlaceholderItems = @(
+    $orderedItems | Where-Object {
+        $itemEnabled = $true
+        if ($null -ne $_.enabled) {
+            $itemEnabled = [bool]$_.enabled
+        }
+
+        $itemType = ([string]$(if ($_.type) { $_.type } else { "file" })).Trim().ToLowerInvariant()
+        $destKey = Get-ManifestDestinationKey -RelativePath ([string]$(if ($_.dest) { $_.dest } else { "" }))
+        $itemEnabled -and $itemType -eq "page" -and -not $activeManagedPlaceholderPlan.ByPlaceholderDest.ContainsKey($destKey)
+    }
+)
+
+Write-Log "Managed download phase started." "INFO"
+Write-Log "Queued managed auto-download items: $($enabledManagedFileItems.Count)" "INFO"
+Write-Log "Queued placeholder/info shortcut items: $($enabledPlaceholderItems.Count)" "INFO"
+Write-Log "Suppressed placeholder/info shortcuts for active managed downloads: $($activeManagedPlaceholderPlan.ByPlaceholderDest.Count)" "INFO"
+Write-Log "Execution order: portable tools first, larger ISO items later, shortcuts last." "INFO"
+
+foreach ($queuedItem in $enabledManagedFileItems) {
+    $queuedName = ([string]$(if ($queuedItem.name) { $queuedItem.name } else { "<unnamed managed item>" })).Trim()
+    $queuedDest = ([string]$(if ($queuedItem.dest) { $queuedItem.dest } else { "<no-destination>" })).Trim()
+    Write-Log "Queued managed item: $queuedName -> $queuedDest" "INFO"
+}
+
+foreach ($queuedPlaceholder in $enabledPlaceholderItems) {
+    $queuedName = ([string]$(if ($queuedPlaceholder.name) { $queuedPlaceholder.name } else { "<unnamed placeholder item>" })).Trim()
+    $queuedDest = ([string]$(if ($queuedPlaceholder.dest) { $queuedPlaceholder.dest } else { "<no-destination>" })).Trim()
+    Write-Log "Queued placeholder item: $queuedName -> $queuedDest" "INFO"
+}
+
+foreach ($item in $orderedItems) {
     $script:Summary.Total++
 
     $name = ([string]$item.name).Trim()
@@ -807,9 +1608,29 @@ foreach ($item in $manifest.items) {
     if ($null -ne $item.archive) { $archiveItem = [bool]$item.archive }
 
     Write-Log "---- $name ----" "INFO"
+    Write-Log "Manifest item selected: $name" "INFO"
+    $destKey = Get-ManifestDestinationKey -RelativePath $destRel
+    if ($type -eq "page" -and $activeManagedPlaceholderPlan.ByPlaceholderDest.ContainsKey($destKey)) {
+        Write-Log "Type: $type" "INFO"
+        Write-Log "Dest: $destRel" "INFO"
+        Write-Log "Resolved destination path: $dest" "INFO"
+        Write-Log "Manifest source URL: $url" "INFO"
+        Write-Log "Skipped placeholder creation because item is active managed download: $destRel" "INFO"
+        $script:Summary.Skipped++
+        continue
+    }
+    if ($type -eq "page") {
+        $script:Summary.PlaceholderItems++
+        Write-Log "Item role: seeded placeholder / info shortcut" "INFO"
+    }
+    else {
+        $script:Summary.ManagedFileItems++
+        Write-Log "Item role: managed auto-download item" "INFO"
+    }
     Write-Log "Type: $type" "INFO"
     Write-Log "Dest: $destRel" "INFO"
-    Write-Log "URL:  $url" "INFO"
+    Write-Log "Resolved destination path: $dest" "INFO"
+    Write-Log "Manifest source URL: $url" "INFO"
 
     if ($type -eq "page") {
         if ($VerifyOnly) {
@@ -828,6 +1649,7 @@ foreach ($item in $manifest.items) {
             Write-UrlShortcut -ShortcutPath $dest -Url $url
             Write-Log "Shortcut updated: $destRel" "OK"
             $script:Summary.Shortcut++
+            $script:Summary.PlaceholderOnly++
         }
         catch {
             Write-Log "Shortcut write failed: $($_.Exception.Message)" "ERROR"
@@ -843,25 +1665,57 @@ foreach ($item in $manifest.items) {
         continue
     }
 
+    $preferredFallbackShortcutPath = Get-PreferredFallbackShortcutPath -Root $root -ManagedDestination $destRel -ManagedPlaceholderPlan $activeManagedPlaceholderPlan
     $sha = ([string]$item.sha256).Trim().ToLowerInvariant()
     $shaUrl = ([string]$item.sha256Url).Trim()
+    $shaResult = $null
 
     if (-not $sha -and $shaUrl -and ($VerifyOnly -or -not $WhatIfPreference)) {
+        Write-Log "Checksum source URL: $shaUrl" "INFO"
         try {
-            $sha = Get-ShaFromUrl -ShaUrl $shaUrl -TimeoutSec $itemTimeout -UserAgent $userAgent
+            $shaResult = Get-ShaFromUrl -ShaUrl $shaUrl -TimeoutSec $itemTimeout -UserAgent $userAgent
+            $sha = ([string]$shaResult.Sha256).Trim().ToLowerInvariant()
             if ($sha) {
-                Write-Log "Fetched SHA256 from sha256Url." "OK"
+                Write-Log "Checksum source resolved via $($shaResult.Method)." "OK"
+                if (-not [string]::IsNullOrWhiteSpace([string]$shaResult.StatusCode)) {
+                    Write-Log (("Checksum source HTTP status: $($shaResult.StatusCode) $($shaResult.ReasonPhrase)").TrimEnd()) "INFO"
+                }
+                if (-not [string]::IsNullOrWhiteSpace([string]$shaResult.FinalUri)) {
+                    Write-Log "Checksum source final URL: $($shaResult.FinalUri)" "INFO"
+                    Write-Log "Resolved checksum source URL: $($shaResult.FinalUri)" "INFO"
+                }
+                Write-Log "Fetched SHA256 from sha256Url: $sha" "OK"
             }
             else {
                 Write-Log "sha256Url was provided but no valid hash was parsed." "WARN"
+                if ($shaResult) {
+                    Write-Log "Checksum source method result: $($shaResult.Method)" "INFO"
+                    if (-not [string]::IsNullOrWhiteSpace([string]$shaResult.StatusCode)) {
+                        Write-Log (("Checksum source HTTP status: $($shaResult.StatusCode) $($shaResult.ReasonPhrase)").TrimEnd()) "INFO"
+                    }
+                    if (-not [string]::IsNullOrWhiteSpace([string]$shaResult.FinalUri)) {
+                        Write-Log "Checksum source final URL: $($shaResult.FinalUri)" "INFO"
+                        Write-Log "Resolved checksum source URL: $($shaResult.FinalUri)" "INFO"
+                    }
+                }
             }
         }
         catch {
-            Write-Log "Failed fetching sha256Url: $($_.Exception.Message)" "WARN"
+            Write-Log "Failed fetching sha256Url: $(Get-ExceptionDiagnostic -ErrorRecord $_)" "WARN"
         }
     }
     elseif (-not $sha -and $shaUrl -and $WhatIfPreference) {
+        Write-Log "Checksum source URL: $shaUrl" "INFO"
         Write-Log "WhatIf: would fetch SHA256 from sha256Url during a real run." "INFO"
+    }
+    elseif ($sha) {
+        Write-Log "Pinned SHA256 from manifest: $sha" "INFO"
+        if ($shaUrl) {
+            Write-Log "Checksum source URL available for maintenance: $shaUrl" "INFO"
+        }
+        else {
+            Write-Log "Checksum source URL: not provided (using pinned manifest SHA256 only)." "INFO"
+        }
     }
 
     if ($VerifyOnly) {
@@ -873,8 +1727,11 @@ foreach ($item in $manifest.items) {
 
         if ($sha) {
             $cur = Get-Sha256 -Path $dest
+            Write-Log "Checksum expected vs actual: expected=$sha actual=$cur" "INFO"
             if ($cur -eq $sha) {
                 Write-Log "Verified OK (sha256 match)." "OK"
+                Write-Log "Checksum verified: $cur" "OK"
+                Write-Log "Destination state after verify: $(Get-FileStateDescription -Path $dest)" "INFO"
                 $script:Summary.Verified++
             }
             else {
@@ -894,6 +1751,8 @@ foreach ($item in $manifest.items) {
         $cur = Get-Sha256 -Path $dest
         if ($cur -eq $sha) {
             Write-Log "Up-to-date (sha256 match). Skipping." "OK"
+            [void](Remove-ManagedSuccessPlaceholders -Root $root -ManagedDestination $destRel -ManagedPlaceholderPlan $activeManagedPlaceholderPlan)
+            $script:Summary.Verified++
             $script:Summary.Skipped++
             continue
         }
@@ -912,26 +1771,63 @@ foreach ($item in $manifest.items) {
 
     $tmpName = Safe-FileName -Text $name
     $tmpPath = Join-Path $dlDir ($tmpName + ".download")
+    $downloadResult = $null
 
     try {
-        Download-File -Url $url -OutFile $tmpPath -TimeoutSec $itemTimeout -UserAgent $userAgent -Retries $retries
+        Write-Log "Download start: $name" "INFO"
+        $downloadResult = Download-File -Url $url -OutFile $tmpPath -TimeoutSec $itemTimeout -UserAgent $userAgent -Retries $retries
+        if ($downloadResult) {
+            if (-not [string]::IsNullOrWhiteSpace([string]$downloadResult.AttemptSummary)) {
+                Write-Log "Downloader methods attempted: $($downloadResult.AttemptSummary)" "INFO"
+            }
+            Write-Log "Downloader used: $($downloadResult.Method)" "INFO"
+            if (-not [string]::IsNullOrWhiteSpace([string]$downloadResult.StatusCode)) {
+                Write-Log (("Download HTTP status: $($downloadResult.StatusCode) $($downloadResult.ReasonPhrase)").TrimEnd()) "INFO"
+            }
+            if (-not [string]::IsNullOrWhiteSpace([string]$downloadResult.FinalUri)) {
+                Write-Log "Resolved source URL: $($downloadResult.FinalUri)" "INFO"
+            }
+            Write-Log "Staged file existence and size: $(Get-FileStateDescription -Path $tmpPath)" "INFO"
+        }
     }
     catch {
-        Write-Log "Download failed: $($_.Exception.Message)" "ERROR"
+        Write-Log "Item failed: $name" "ERROR"
+        Write-Log "Download failed for '$name': $(Get-ExceptionDiagnostic -ErrorRecord $_)" "ERROR"
+        if ($_.Exception.Data.Contains("AttemptedMethodSummary")) {
+            Write-Log "Downloader methods attempted: $($_.Exception.Data['AttemptedMethodSummary'])" "WARN"
+        }
+        Write-Log "Staged file existence and size: $(Get-FileStateDescription -Path $tmpPath)" "INFO"
+        $fallbackResult = Write-DownloadFallbackShortcut -DestinationPath $dest -ItemName $name -Url $url -PreferredShortcutPath $preferredFallbackShortcutPath
+        $script:Summary.FailedWithFallback++
+        switch ($fallbackResult.Outcome) {
+            "created"  { $script:Summary.FallbackShortcutsCreated++ }
+            "existing" { $script:Summary.FallbackShortcutsReused++ }
+        }
+        if ($fallbackResult.Outcome -eq "created" -or $fallbackResult.Outcome -eq "existing") {
+            Write-Log "Fallback shortcut outcome for '$name': $($fallbackResult.Outcome) -> $($fallbackResult.ShortcutPath)" "WARN"
+        }
+        else {
+            Write-Log "Fallback shortcut outcome for '$name': $($fallbackResult.Outcome)" "WARN"
+        }
+        Write-Log "Item staging verdict: FAILED WITH FALLBACK" "ERROR"
         $script:Summary.Failed++
         continue
     }
 
     try {
+        $verifiedHash = $null
         if ($sha) {
-            $got = Get-Sha256 -Path $tmpPath
-            if ($got -ne $sha) {
-                throw "SHA256 mismatch. Expected=$sha Got=$got"
+            $verifiedHash = Get-Sha256 -Path $tmpPath
+            Write-Log "Checksum expected vs actual: expected=$sha actual=$verifiedHash" "INFO"
+            if ($verifiedHash -ne $sha) {
+                throw "SHA256 mismatch. Expected=$sha Got=$verifiedHash"
             }
-            Write-Log "SHA256 OK." "OK"
+            Write-Log "Checksum verification passed: $name" "OK"
+            Write-Log "Checksum verified: $verifiedHash" "OK"
+            $script:Summary.Verified++
         }
         else {
-            Write-Log "No sha256 set for '$name' (recommended for important ISOs/tools)." "WARN"
+            Write-Log "Checksum verification skipped: no sha256 set for '$name' (recommended for important ISOs/tools)." "WARN"
         }
 
         if (-not $NoArchive -and $archiveItem -and (Test-Path -LiteralPath $dest)) {
@@ -944,30 +1840,75 @@ foreach ($item in $manifest.items) {
 
         Move-Item -LiteralPath $tmpPath -Destination $dest -Force
 
+        Write-Log "Final file written: $dest" "OK"
+        Write-Log "Final destination write result: success -> $(Get-FileStateDescription -Path $dest)" "INFO"
+        if ($sha) {
+            Write-Log "Verified payload ready at destination with expected SHA256: $sha" "OK"
+        }
+        [void](Remove-ManagedSuccessPlaceholders -Root $root -ManagedDestination $destRel -ManagedPlaceholderPlan $activeManagedPlaceholderPlan)
         Write-Log "Updated: $name" "OK"
+        Write-Log "Item staging verdict: STAGED" "OK"
+        $script:Summary.Downloaded++
         $script:Summary.Updated++
     }
     catch {
-        Write-Log "Update failed for '$name': $($_.Exception.Message)" "ERROR"
+        Write-Log "Item failed: $name" "ERROR"
+        Write-Log "Update failed for '$name': $(Get-ExceptionDiagnostic -ErrorRecord $_)" "ERROR"
+        Write-Log "Staged file existence and size: $(Get-FileStateDescription -Path $tmpPath)" "INFO"
+        Write-Log "Final destination write result: failed -> $dest" "ERROR"
+        $fallbackResult = Write-DownloadFallbackShortcut -DestinationPath $dest -ItemName $name -Url $url -PreferredShortcutPath $preferredFallbackShortcutPath
+        $script:Summary.FailedWithFallback++
+        switch ($fallbackResult.Outcome) {
+            "created"  { $script:Summary.FallbackShortcutsCreated++ }
+            "existing" { $script:Summary.FallbackShortcutsReused++ }
+        }
+        if ($fallbackResult.Outcome -eq "created" -or $fallbackResult.Outcome -eq "existing") {
+            Write-Log "Fallback shortcut outcome for '$name': $($fallbackResult.Outcome) -> $($fallbackResult.ShortcutPath)" "WARN"
+        }
+        else {
+            Write-Log "Fallback shortcut outcome for '$name': $($fallbackResult.Outcome)" "WARN"
+        }
+        Write-Log "Item staging verdict: FAILED WITH FALLBACK" "ERROR"
         $script:Summary.Failed++
         if (Test-Path -LiteralPath $tmpPath) {
             Remove-Item -LiteralPath $tmpPath -Force -ErrorAction SilentlyContinue
         }
+        Write-Log "Staged file existence and size after cleanup: $(Get-FileStateDescription -Path $tmpPath)" "INFO"
     }
 }
 
-Write-Log "---------------- SUMMARY ----------------" "INFO"
-Write-Log "Total:    $($script:Summary.Total)" "INFO"
-Write-Log "Updated:  $($script:Summary.Updated)" "INFO"
-Write-Log "Verified: $($script:Summary.Verified)" "INFO"
-Write-Log "Shortcut: $($script:Summary.Shortcut)" "INFO"
-Write-Log "Archived: $($script:Summary.Archived)" "INFO"
-Write-Log "Skipped:  $($script:Summary.Skipped)" "INFO"
-Write-Log "Disabled: $($script:Summary.Disabled)" "INFO"
-Write-Log "Failed:   $($script:Summary.Failed)" "INFO"
+$skippedOrPlaceholderOnly = $script:Summary.Skipped + $script:Summary.PlaceholderOnly
+$finalFailureMessage = $null
+
+Write-Log "---------------- MANAGED-DOWNLOAD SUMMARY ----------------" "INFO"
+Write-Log "Total manifest items: $($script:Summary.Total)" "INFO"
+Write-Log "Managed auto-download items: $($script:Summary.ManagedFileItems)" "INFO"
+Write-Log "Seeded placeholder/info shortcut items: $($script:Summary.PlaceholderItems)" "INFO"
+Write-Log "Downloaded successfully: $($script:Summary.Downloaded)" "INFO"
+Write-Log "Verified successfully: $($script:Summary.Verified)" "INFO"
+Write-Log "Failed and covered by fallback shortcut: $($script:Summary.FailedWithFallback)" "INFO"
+Write-Log "Skipped / placeholder only: $skippedOrPlaceholderOnly" "INFO"
+Write-Log "Fallback shortcuts created: $($script:Summary.FallbackShortcutsCreated)" "INFO"
+Write-Log "Fallback shortcuts reused: $($script:Summary.FallbackShortcutsReused)" "INFO"
+Write-Log "Archived prior files: $($script:Summary.Archived)" "INFO"
+Write-Log "Disabled manifest items: $($script:Summary.Disabled)" "INFO"
+Write-Log "Total failed items: $($script:Summary.Failed)" "INFO"
+
+if ($script:Summary.Failed -gt 0) {
+    Write-Log "USB readiness: PARTIALLY STAGED. Review failed items and the fallback shortcuts before treating this USB as ready." "ERROR"
+    $finalFailureMessage = "Managed download pass completed with $($script:Summary.Failed) failed item(s). The USB is only partially staged."
+}
+else {
+    Write-Log "USB readiness: READY. Managed auto-download items completed without failures." "OK"
+}
+
 if ($script:LogFile -and (Test-Path -LiteralPath (Split-Path -Parent $script:LogFile))) {
     Write-Log "Log saved: $script:LogFile" "OK"
 }
 else {
     Write-Log "Log file was not created because the run was previewed only." "INFO"
+}
+
+if ($finalFailureMessage) {
+    throw $finalFailureMessage
 }

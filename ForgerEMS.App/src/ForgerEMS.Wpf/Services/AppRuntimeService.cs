@@ -39,7 +39,7 @@ public sealed class AppRuntimeService : IAppRuntimeService
     public AppRuntimeService()
     {
         RuntimeRoot = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            ResolveLocalApplicationDataRoot(),
             "ForgerEMS",
             "Runtime");
 
@@ -49,6 +49,23 @@ public sealed class AppRuntimeService : IAppRuntimeService
         LogsRoot = Path.Combine(RuntimeRoot, "logs");
         DiagnosticsRoot = Path.Combine(RuntimeRoot, "diagnostics");
         _sessionLogPath = Path.Combine(LogsRoot, $"forgerems-session-{DateTime.UtcNow:yyyyMMdd-HHmmss}.log");
+    }
+
+    private static string ResolveLocalApplicationDataRoot()
+    {
+        var localAppData = Environment.GetEnvironmentVariable("LOCALAPPDATA");
+        if (!string.IsNullOrWhiteSpace(localAppData))
+        {
+            return Path.GetFullPath(localAppData);
+        }
+
+        localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (string.IsNullOrWhiteSpace(localAppData))
+        {
+            throw new InvalidOperationException("Could not resolve LOCALAPPDATA for the current user.");
+        }
+
+        return Path.GetFullPath(localAppData);
     }
 
     public string RuntimeRoot { get; }

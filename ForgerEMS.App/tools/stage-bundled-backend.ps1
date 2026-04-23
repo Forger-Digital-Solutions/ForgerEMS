@@ -38,6 +38,7 @@ $rootFilesToCopy = @(
     "Verify-VentoyCore.ps1",
     "Setup-ForgerEMS.ps1",
     "Update-ForgerEMS.ps1",
+    "ForgerEMS.Runtime.ps1",
     "Setup_Toolkit.ps1",
     "Setup_USB_Toolkit.ps1",
     "ForgerEMS.updates.json",

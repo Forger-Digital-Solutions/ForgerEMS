@@ -1,4 +1,3 @@
-using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Windows;
 using VentoyToolkitSetup.Wpf.ViewModels;
@@ -45,7 +44,6 @@ public partial class MainWindow : Window
         _currentViewModel = viewModel;
         if (_currentViewModel is not null)
         {
-            _currentViewModel.Logs.CollectionChanged += OnLogsCollectionChanged;
             _currentViewModel.PropertyChanged += OnViewModelPropertyChanged;
         }
     }
@@ -54,24 +52,15 @@ public partial class MainWindow : Window
     {
         if (viewModel is not null)
         {
-            viewModel.Logs.CollectionChanged -= OnLogsCollectionChanged;
             viewModel.PropertyChanged -= OnViewModelPropertyChanged;
         }
     }
 
-    private void OnLogsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
-        if (_currentViewModel?.AutoScrollLogs != true || LogListBox.Items.Count == 0)
-        {
-            return;
-        }
-
-        ScrollLogsToEnd();
-    }
-
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(MainViewModel.AutoScrollLogs) && _currentViewModel?.AutoScrollLogs == true)
+        if ((e.PropertyName == nameof(MainViewModel.AutoScrollLogs) ||
+             e.PropertyName == nameof(MainViewModel.LogsText)) &&
+            _currentViewModel?.AutoScrollLogs == true)
         {
             ScrollLogsToEnd();
         }
@@ -81,9 +70,9 @@ public partial class MainWindow : Window
     {
         Dispatcher.BeginInvoke(() =>
         {
-            if (LogListBox.Items.Count > 0)
+            if (!string.IsNullOrEmpty(LogTextBox.Text))
             {
-                LogListBox.ScrollIntoView(LogListBox.Items[LogListBox.Items.Count - 1]);
+                LogTextBox.ScrollToEnd();
             }
         });
     }

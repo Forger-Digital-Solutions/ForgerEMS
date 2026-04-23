@@ -128,6 +128,7 @@ ForgerEMS PowerShell backend.
 - Managed-download summary surfacing inside the UI
 - Controlled Ventoy handoff using the official package and `Ventoy2Disk`
 - Portable distribution and Windows installer distribution
+- Installed mode includes a verified bundled backend under the app folder
 
 ### Included artifacts
 
@@ -137,8 +138,8 @@ ForgerEMS PowerShell backend.
 
 ### Important limitations
 
-- The frontend does not bundle the backend repo or full release bundle
-- Installed mode still depends on a valid backend working context nearby
+- The installer bundles only the small verified backend release bundle, not
+  third-party payloads, ISOs, drivers, portable tools, or Ventoy binaries
 - Ventoy installation remains an operator-confirmed step in the official
   Ventoy tool
 - Full interactive installer/uninstaller validation should still be completed
@@ -185,67 +186,64 @@ Installed mode is best for users who want:
 Expectations:
 
 - the app installs under `%ProgramFiles%\ForgerEMS\`
+- the installer includes a verified backend under
+  `%ProgramFiles%\ForgerEMS\backend\`
 - runtime data still goes to `%LOCALAPPDATA%\ForgerEMS\Runtime\`
 - the app itself does not require admin for normal use
-- backend discovery still has the same nearby-backend requirement as portable
-  mode
+- installed mode prefers the bundled backend by default
+- repo mode and external release-bundle mode remain available for advanced
+  override and development scenarios
 
-### Backend discovery limitation
+### Backend discovery behavior
 
-Current limitation:
+Current behavior:
 
-- the installed frontend does not bundle the backend
+- installed mode first validates the bundled backend under the app folder
+- if the bundled backend is missing, corrupted, or version-mismatched, it is
+  ignored
+- after that, discovery can still fall back to repo mode or an external
+  release-bundle context when one is available
 
-That means the app still needs access to a valid working context containing the
-existing PowerShell entrypoints:
+The bundled backend must contain:
 
 - `Verify-VentoyCore.ps1`
 - `Setup-ForgerEMS.ps1`
 - `Update-ForgerEMS.ps1`
-
-In practice, a user needs one of these nearby:
-
-- the repo root
-- or a release-bundle root
-
-If those scripts are not discoverable from the current working context or
-ancestor path, the UI will report that the backend is unavailable.
+- `ForgerEMS.Runtime.ps1`
+- manifests, docs, checksums, signature, and bundle metadata
 
 ## Final Risk Callout
 
 Remaining known limitations before public release:
 
-1. Installed mode does not bundle the backend.
-   The installer intentionally ships only the frontend and installed readme.
-
-2. No full interactive installer/uninstaller validation has been completed yet.
+1. No full interactive installer/uninstaller validation has been completed yet.
    The installer compiled successfully, but the full user-facing install,
    shortcut, uninstall, and uninstall-preserves-runtime-data flow should still
    be exercised manually.
 
-3. Backend discovery is path-dependent.
-   Discovery works when the app is launched in or under a repo tree or release
-   bundle tree. A standalone installed app in `Program Files` will not discover
-   the backend on its own unless the user launches it in a context where the
-   scripts are reachable.
+2. The installer does not bundle third-party payloads.
+   This is intentional. The backend can create layout, shortcuts, managed
+   downloads, and Ventoy handoff, but ISO/tool/driver payloads still come from
+   the managed manifest or manual operator workflows.
 
-4. Installed-mode user expectations may not match current architecture.
-   Public users may assume an installed app is self-contained when it currently
-   remains a frontend controller.
+3. Bundled backend validation is strict.
+   If checksums, metadata, or frontend/backend version alignment fail, the app
+   ignores the bundled backend and reports a backend discovery problem unless
+   an external override context is available.
 
-5. Ventoy operations still rely on the official external tool.
+4. Ventoy operations still rely on the official external tool.
    This is intentional and legally safer, but it means the flow is not fully
    in-app.
 
-## Installed-Mode Strategy V2 Recommendation
+## Installed-Mode Backend Strategy
 
-### Recommended future direction
+### Current direction
 
-Recommended `v2` path:
+Current `v1.0.0` path:
 
 - bundle a verified release-bundle backend alongside the installed app
 
-### Why this is the cleaner future path
+### Why this is the cleaner path
 
 Benefits:
 
@@ -277,7 +275,7 @@ Tradeoffs:
 
 ### Final recommendation
 
-For public installed mode, the cleaner `v2` is:
+For public installed mode, keep:
 
 - ship the frontend together with a small verified release-bundle backend
 

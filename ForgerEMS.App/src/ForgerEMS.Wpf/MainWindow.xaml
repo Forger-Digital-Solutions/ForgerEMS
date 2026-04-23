@@ -271,6 +271,7 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
 
                                 <TextBlock Grid.Row="0" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="#FF7A6758" Text="Drive" />
@@ -297,8 +298,11 @@
                                 <TextBlock Grid.Row="7" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="#FF7A6758" Text="Device" />
                                 <TextBlock Grid.Row="7" Grid.Column="1" Foreground="#FF1F1814" Text="{Binding SelectedUsbTarget.DeviceIdentityDisplay, TargetNullValue=—}" TextWrapping="Wrap" />
 
-                                <TextBlock Grid.Row="8" Margin="0,0,14,0" FontWeight="SemiBold" Foreground="#FF7A6758" Text="Speed" />
-                                <TextBlock Grid.Row="8" Grid.Column="1" Foreground="#FF1F1814" Text="{Binding SelectedUsbTarget.SpeedDisplayNormalized, TargetNullValue=Not available}" />
+                                <TextBlock Grid.Row="8" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="#FF7A6758" Text="Read speed" />
+                                <TextBlock Grid.Row="8" Grid.Column="1" Foreground="#FF1F1814" Text="{Binding SelectedUsbTarget.ReadSpeedDisplayNormalized, TargetNullValue=Not benchmarked}" />
+
+                                <TextBlock Grid.Row="9" Margin="0,0,14,0" FontWeight="SemiBold" Foreground="#FF7A6758" Text="Write speed" />
+                                <TextBlock Grid.Row="9" Grid.Column="1" Foreground="#FF1F1814" Text="{Binding SelectedUsbTarget.WriteSpeedDisplayNormalized, TargetNullValue=Not benchmarked}" />
                             </Grid>
 
                             <Border Padding="12"
@@ -446,6 +450,7 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
                         <TextBlock Grid.Column="0"
@@ -461,6 +466,13 @@
                                   Content="Auto-scroll" />
 
                         <Button Grid.Column="2"
+                                Width="96"
+                                Margin="0,0,10,0"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Content="Copy log"
+                                Command="{Binding CopyLogsCommand}" />
+
+                        <Button Grid.Column="3"
                                 Width="96"
                                 Margin="0"
                                 Style="{StaticResource SecondaryButtonStyle}"
@@ -481,33 +493,22 @@
                                    TextWrapping="Wrap" />
                     </Border>
 
-                    <ListBox x:Name="LogListBox"
+                    <TextBox x:Name="LogTextBox"
                              Background="#FF131A20"
                              BorderThickness="0"
-                             ItemsSource="{Binding Logs}"
-                             ScrollViewer.VerticalScrollBarVisibility="Auto"
-                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                        <ListBox.ItemContainerStyle>
-                            <Style TargetType="ListBoxItem">
-                                <Setter Property="Padding" Value="0" />
-                                <Setter Property="Margin" Value="0" />
-                                <Setter Property="BorderThickness" Value="0" />
-                                <Setter Property="Background" Value="Transparent" />
-                                <Setter Property="Focusable" Value="False" />
-                            </Style>
-                        </ListBox.ItemContainerStyle>
-
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Margin="0,0,0,4"
-                                           FontFamily="Consolas"
-                                           FontSize="12.5"
-                                           Foreground="{Binding Foreground}"
-                                           Text="{Binding DisplayText}"
-                                           TextWrapping="Wrap" />
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
+                             Padding="16"
+                             FontFamily="Consolas"
+                             FontSize="12.5"
+                             Foreground="#FFE0E8F4"
+                             SelectionBrush="#FFD7B18E"
+                             IsReadOnly="True"
+                             IsUndoEnabled="False"
+                             Text="{Binding LogsText, Mode=OneWay}"
+                             TextWrapping="NoWrap"
+                             AcceptsReturn="True"
+                             AcceptsTab="True"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Auto" />
                 </DockPanel>
             </GroupBox>
         </Grid>

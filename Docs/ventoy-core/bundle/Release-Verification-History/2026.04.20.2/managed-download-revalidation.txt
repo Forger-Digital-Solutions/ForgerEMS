@@ -1,0 +1,105 @@
+ForgerEMS managed-download revalidation
+====================================
+
+This report checks the enabled manifest-managed file items only.
+It does not modify the manifest or auto-promote/demote entries.
+Generated: 2026-04-21 11:17:51
+Managed file items: 16
+Fragility: high 6 | medium 7 | low 3
+Checksum posture: pinned-only 7 | pinned+remote 8 | remote-only 1
+Status: OK 9 | OK-LIMITED 7 | DRIFT 0
+Borderline: BlueScreenView 1.55 (x64 zip); CrystalDiskInfo 9.8.0 (standard zip); Linux Mint 22.3 Cinnamon (64-bit)
+Inspect first next cycle: [1] BlueScreenView 1.55 (x64 zip); [2] CrystalDiskInfo 9.8.0 (standard zip); [3] Ventoy 1.1.11 (Windows package); [4] SystemRescue 13.00 (amd64); [5] GParted Live 1.8.1-3 (amd64)
+Top fragility slice (ranks 1-7): [1] BlueScreenView 1.55 (x64 zip); [2] CrystalDiskInfo 9.8.0 (standard zip); [3] Ventoy 1.1.11 (Windows package); [4] SystemRescue 13.00 (amd64); [5] GParted Live 1.8.1-3 (amd64); [6] Clonezilla Live 3.3.1-35 (amd64); [7] Linux Mint 22.3 Cinnamon (64-bit)
+Release-prep gate: PASS
+Archive root: E:\GitCommit\.verify\managed-download-revalidation\20260421_111751
+
+[1] OK-LIMITED | high/official-version-path | pinned-only | BlueScreenView 1.55 (x64 zip)
+  url: https://www.nirsoft.net/utils/bluescreenview-x64.zip
+  checksum source: pinned manifest hash only
+  borderline: yes
+  note: no remote checksum source configured; revalidation is limited to the pinned manifest hash
+  fallback: Confirm the replacement ZIP on the official NirSoft site and manually recompute the SHA256 before patching. Demote if the direct vendor file becomes page-only or ambiguous.
+
+[2] OK-LIMITED | high/sourceforge | pinned-only | CrystalDiskInfo 9.8.0 (standard zip)
+  url: https://sourceforge.net/projects/crystaldiskinfo/files/9.8.0/CrystalDiskInfo9_8_0.zip/download
+  checksum source: pinned manifest hash only
+  borderline: yes
+  note: no remote checksum source configured; revalidation is limited to the pinned manifest hash
+  fallback: Re-derive the exact versioned asset from crystalmark.info and manually recompute the SHA256 from the official file before patching. Demote if the path stops being a direct official artifact.
+
+[3] OK | high/sourceforge | pinned+remote | Ventoy 1.1.11 (Windows package)
+  url: https://sourceforge.net/projects/ventoy/files/v1.1.11/ventoy-1.1.11-windows.zip/download
+  checksum source: https://sourceforge.net/projects/ventoy/files/v1.1.11/sha256.txt/download
+  fallback: Use ventoy.net to confirm the same versioned SourceForge asset and keep the official checksum file. Demote if the path stops being a direct official artifact or checksum coverage disappears.
+
+[4] OK | high/sourceforge | remote-only | SystemRescue 13.00 (amd64)
+  url: https://sourceforge.net/projects/systemrescuecd/files/sysresccd-x86/13.00/systemrescue-13.00-amd64.iso/download
+  checksum source: https://www.system-rescue.org/releases/13.00/systemrescue-13.00-amd64.iso.sha256
+  fallback: Re-derive the same versioned ISO from the official SystemRescue download page and keep the official checksum source. Demote if only mirror-style paths or no official checksum remain.
+
+[5] OK-LIMITED | high/sourceforge | pinned-only | GParted Live 1.8.1-3 (amd64)
+  url: https://sourceforge.net/projects/gparted/files/gparted-live-stable/1.8.1-3/gparted-live-1.8.1-3-amd64.iso/download
+  checksum source: pinned manifest hash only
+  note: no remote checksum source configured; revalidation is limited to the pinned manifest hash
+  fallback: Re-derive the same versioned ISO from gparted.org and refresh the pinned checksum from an official project checksum or source. Demote if only page flows or unverified mirrors remain.
+
+[6] OK-LIMITED | high/sourceforge | pinned-only | Clonezilla Live 3.3.1-35 (amd64)
+  url: https://sourceforge.net/projects/clonezilla/files/clonezilla_live_stable/3.3.1-35/clonezilla-live-3.3.1-35-amd64.iso/download
+  checksum source: pinned manifest hash only
+  note: no remote checksum source configured; revalidation is limited to the pinned manifest hash
+  fallback: Re-derive the same versioned ISO from the official Clonezilla download page and refresh the pinned checksum from an official project checksum or source. Demote if only mirrors or page-only flows remain.
+
+[7] OK-LIMITED | medium/official-mirror | pinned-only | Linux Mint 22.3 Cinnamon (64-bit)
+  url: https://pub.linuxmint.io/stable/22.3/linuxmint-22.3-cinnamon-64bit.iso
+  checksum source: pinned manifest hash only
+  borderline: yes
+  note: no remote checksum source configured; revalidation is limited to the pinned manifest hash
+  fallback: Move to a Linux Mint-controlled mirror or release page for the same version and refresh the checksum from the official mirror checksum file. Demote if only third-party mirrors remain.
+
+[8] OK | medium/github-release | pinned+remote | Rufus 4.13 Portable (x64)
+  url: https://github.com/pbatard/rufus/releases/download/v4.13/rufus-4.13p.exe
+  checksum source: https://api.github.com/repos/pbatard/rufus/releases/assets/357534705
+  fallback: Use the official Rufus site to confirm the matching GitHub release asset and refresh the asset digest. Demote if the official site stops pointing to a direct official asset.
+
+[9] OK | medium/github-release | pinned+remote | DriverStoreExplorer 1.0.26 (zip)
+  url: https://github.com/lostindark/DriverStoreExplorer/releases/download/v1.0.26/DriverStoreExplorer-v1.0.26.zip
+  checksum source: https://api.github.com/repos/lostindark/DriverStoreExplorer/releases/assets/385341074
+  fallback: Use the matching official GitHub release ZIP and asset digest for the same version. Demote if the release asset disappears or the digest endpoint stops agreeing.
+
+[10] OK | medium/github-release | pinned+remote | Angry IP Scanner 3.9.3 (Windows setup)
+  url: https://github.com/angryip/ipscan/releases/download/3.9.3/ipscan-3.9.3-setup.exe
+  checksum source: https://api.github.com/repos/angryip/ipscan/releases/assets/314847493
+  fallback: Use the matching official GitHub release asset and asset digest for the same version. Demote if the release asset disappears or the digest endpoint stops agreeing.
+
+[11] OK | medium/github-release | pinned+remote | RustDesk 1.4.6 (x86_64 exe)
+  url: https://github.com/rustdesk/rustdesk/releases/download/1.4.6/rustdesk-1.4.6-x86_64.exe
+  checksum source: https://api.github.com/repos/rustdesk/rustdesk/releases/assets/367293485
+  fallback: Use the matching official GitHub release asset and asset digest, then refresh the pinned checksum. Demote if the release asset or digest becomes inconsistent.
+
+[12] OK | medium/github-release | pinned+remote | balenaEtcher 2.1.4 Setup (x64)
+  url: https://github.com/balena-io/etcher/releases/download/v2.1.4/balenaEtcher-2.1.4.Setup.exe
+  checksum source: https://api.github.com/repos/balena-io/etcher/releases/assets/277395239
+  fallback: Use the matching official GitHub release asset and asset digest for the same version. Demote if the release asset disappears or the digest endpoint stops agreeing.
+
+[13] OK | medium/github-release | pinned+remote | Rescuezilla 2.6.1 (64-bit oracular)
+  url: https://github.com/rescuezilla/rescuezilla/releases/download/2.6.1/rescuezilla-2.6.1-64bit.oracular.iso
+  checksum source: https://github.com/rescuezilla/rescuezilla/releases/download/2.6.1/SHA256SUM
+  fallback: Use rescuezilla.com or the matching official GitHub release for the same version and keep the SHA256SUM coverage. Demote if the release asset or checksum file stops matching.
+
+[14] OK | low/official-version-path | pinned+remote | MemTest86+ 8.00 (x86_64 ISO archive)
+  url: https://www.memtest.org/download/v8.00/mt86plus_8.00_x86_64.iso.zip
+  checksum source: https://www.memtest.org/download/v8.00/sha256sum.txt
+  fallback: Use the memtest.org versioned download directory and official sha256sum.txt for the same release. Demote if the workflow becomes page-only or checksum coverage disappears.
+
+[15] OK-LIMITED | low/official-version-path | pinned-only | Kali Linux 2026.1 Installer (amd64)
+  url: https://cdimage.kali.org/kali-2026.1/kali-linux-2026.1-installer-amd64.iso
+  checksum source: pinned manifest hash only
+  note: no remote checksum source configured; revalidation is limited to the pinned manifest hash
+  fallback: Use the official Kali image index for the same release and refresh the checksum from official sums before patching. Demote if only alias paths or indirect mirrors remain.
+
+[16] OK-LIMITED | low/official-version-path | pinned-only | Ubuntu 24.04.4 LTS Desktop (amd64)
+  url: https://releases.ubuntu.com/24.04.4/ubuntu-24.04.4-desktop-amd64.iso
+  checksum source: pinned manifest hash only
+  note: no remote checksum source configured; revalidation is limited to the pinned manifest hash
+  fallback: Use the official Ubuntu release index for the same version and refresh the checksum from Canonical-published sums before patching. Demote if the versioned artifact is retired or no official sums remain.

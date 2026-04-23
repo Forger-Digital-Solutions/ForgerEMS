@@ -3,16 +3,16 @@
 Runs regression checks for the Ventoy core shipping baseline.
 
 .DESCRIPTION
-Creates disposable scratch roots under .verify, invokes the public setup/update
-entrypoints in separate PowerShell processes, and verifies the core safety and
+Creates disposable scratch roots under the per-user runtime workspace at
+%LOCALAPPDATA%\ForgerEMS\.verify, invokes the public setup/update entrypoints
+in separate PowerShell processes, and verifies the core safety and
 compatibility guarantees: wrapper entrypoints, bundled-manifest fallback, path
 escape rejection, and true dry-run behavior. With -Online, it also performs
 HEAD-only upstream checks for managed URLs and vendor inventory sources.
 
 .PARAMETER VerifyRoot
 Base scratch directory for verification artifacts. A timestamped run folder is
-created underneath this path. Defaults to <repo>\.verify in repo mode and to a
-local .verify folder in release-bundle mode.
+created underneath this path. Defaults to %LOCALAPPDATA%\ForgerEMS\.verify.
 
 .PARAMETER Online
 Enable HEAD-only upstream checks for manifest URLs, checksum URLs, and known
@@ -63,6 +63,24 @@ param(
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
+
+$runtimeHelperCandidates = @(
+    (Join-Path $PSScriptRoot "ForgerEMS.Runtime.ps1"),
+    (Join-Path $PSScriptRoot "backend\ForgerEMS.Runtime.ps1")
+) | Select-Object -Unique
+
+$runtimeHelperImported = $false
+foreach ($runtimeHelperCandidate in $runtimeHelperCandidates) {
+    if (Test-Path -LiteralPath $runtimeHelperCandidate) {
+        . $runtimeHelperCandidate
+        $runtimeHelperImported = $true
+        break
+    }
+}
+
+if (-not $runtimeHelperImported) {
+    throw "ForgerEMS runtime helper was not found. Checked: $($runtimeHelperCandidates -join '; ')"
+}
 
 $powerShellExe = Join-Path $PSHOME "powershell.exe"
 if (-not (Test-Path -LiteralPath $powerShellExe)) {
@@ -130,7 +148,7 @@ function Get-DirectoryChildCount {
     ).Count
 }
 
-function Get-VentoyCoreRuntimeRoot {
+function Get-VentoyCoreContentRoot {
     $parent = Split-Path -Parent $PSScriptRoot
 
     if (Test-Path -LiteralPath (Join-Path $parent "manifests\ForgerEMS.updates.json")) {
@@ -141,11 +159,11 @@ function Get-VentoyCoreRuntimeRoot {
 }
 
 function Resolve-BundledManifestPath {
-    $runtimeRoot = Get-VentoyCoreRuntimeRoot
+    $contentRoot = Get-VentoyCoreContentRoot
     $candidates = @(
         (Join-Path $PSScriptRoot "ForgerEMS.updates.json"),
         (Join-Path $PSScriptRoot "manifests\ForgerEMS.updates.json"),
-        (Join-Path $runtimeRoot "manifests\ForgerEMS.updates.json")
+        (Join-Path $contentRoot "manifests\ForgerEMS.updates.json")
     )
 
     foreach ($candidate in ($candidates | Select-Object -Unique)) {
@@ -158,10 +176,10 @@ function Resolve-BundledManifestPath {
 }
 
 function Resolve-VendorInventoryPath {
-    $runtimeRoot = Get-VentoyCoreRuntimeRoot
+    $contentRoot = Get-VentoyCoreContentRoot
     $candidates = @(
         (Join-Path $PSScriptRoot "manifests\vendor.inventory.json"),
-        (Join-Path $runtimeRoot "manifests\vendor.inventory.json")
+        (Join-Path $contentRoot "manifests\vendor.inventory.json")
     )
 
     foreach ($candidate in ($candidates | Select-Object -Unique)) {
@@ -744,7 +762,7 @@ function Write-ManagedDownloadRevalidationArtifacts {
     [void]$summaryLines.Add("ForgerEMS managed-download summary")
     [void]$summaryLines.Add("================================")
     [void]$summaryLines.Add(("Generated: " + (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")))
-    [void]$summaryLines.Add(("Total safe items: " + $summary.TotalCount))
+    [void]$summaryLines.Add(("Active managed items: " + $summary.TotalCount))
     [void]$summaryLines.Add(("Fragility: high " + $summary.HighCount + " | medium " + $summary.MediumCount + " | low " + $summary.LowCount))
     [void]$summaryLines.Add(("Checksum posture: pinned-only " + $summary.PinnedOnlyCount + " | pinned+remote " + $summary.PinnedRemoteCount + " | remote-only " + $summary.RemoteOnlyCount))
     [void]$summaryLines.Add(("Status: OK " + $summary.OkCount + " | OK-LIMITED " + $summary.OkLimitedCount + " | DRIFT " + $summary.DriftCount))
@@ -1079,16 +1097,128 @@ function Invoke-PublicScript {
         [Parameter(Mandatory)][string]$ScriptPath,
         [Parameter(Mandatory)][string[]]$Arguments,
         [Parameter(Mandatory)][string]$LogPath,
+        [int]$TimeoutSec = 180,
         [switch]$AllowFailure
     )
 
-    $output = & $powerShellExe -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @Arguments 2>&1 | Out-String
-    $exitCode = $LASTEXITCODE
+    $wrapperPath = New-ForgerEMSRuntimeTempFile -Prefix "verify_invoke" -Extension ".ps1"
+    $stdoutPath = New-ForgerEMSRuntimeTempFile -Prefix "verify_stdout" -Extension ".log"
+    $stderrPath = New-ForgerEMSRuntimeTempFile -Prefix "verify_stderr" -Extension ".log"
 
-    Set-Content -LiteralPath $LogPath -Value $output -Encoding UTF8
+    try {
+        $argumentInvocationParts = @(
+            foreach ($argument in $Arguments) {
+                $text = [string]$argument
+                if ($text -match '^-[A-Za-z][A-Za-z0-9-]*$') {
+                    $text
+                }
+                else {
+                    "'" + $text.Replace("'", "''") + "'"
+                }
+            }
+        )
+
+        $argumentInvocationText = if ($argumentInvocationParts.Count -gt 0) {
+            " " + ($argumentInvocationParts -join " ")
+        }
+        else {
+            ""
+        }
+
+        $wrapperContent = @"
+`$ErrorActionPreference = "Stop"
+`$scriptPath = '$($ScriptPath.Replace("'", "''"))'
+
+try {
+    & `$scriptPath$argumentInvocationText
+    if (`$LASTEXITCODE -ne `$null) {
+        exit `$LASTEXITCODE
+    }
+
+    exit 0
+}
+catch {
+    try {
+        [Console]::Error.WriteLine((`$_ | Out-String).TrimEnd())
+    }
+    catch {
+        [Console]::Error.WriteLine(`$_.Exception.Message)
+    }
+
+    exit 1
+}
+"@
+
+        Set-Content -LiteralPath $wrapperPath -Value $wrapperContent -Encoding UTF8
+
+        $process = Start-Process `
+            -FilePath $powerShellExe `
+            -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $wrapperPath) `
+            -RedirectStandardOutput $stdoutPath `
+            -RedirectStandardError $stderrPath `
+            -NoNewWindow `
+            -PassThru
+
+        $timedOut = -not $process.WaitForExit($TimeoutSec * 1000)
+        if ($timedOut) {
+            try {
+                $process.Kill()
+            }
+            catch {}
+        }
+
+        $process.WaitForExit()
+        $process.Refresh()
+        $exitCode = $process.ExitCode
+
+        $stdout = if (Test-Path -LiteralPath $stdoutPath) {
+            Get-Content -LiteralPath $stdoutPath -Raw
+        }
+        else {
+            ""
+        }
+
+        $stderr = if (Test-Path -LiteralPath $stderrPath) {
+            Get-Content -LiteralPath $stderrPath -Raw
+        }
+        else {
+            ""
+        }
+
+        $outputParts = @()
+        if (-not [string]::IsNullOrWhiteSpace($stdout)) {
+            $outputParts += $stdout.TrimEnd()
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($stderr)) {
+            $outputParts += $stderr.TrimEnd()
+        }
+
+        $output = $outputParts -join [Environment]::NewLine
+        Set-Content -LiteralPath $LogPath -Value $output -Encoding UTF8
+
+        if ($timedOut) {
+            throw "Script timed out after $TimeoutSec second(s). See $LogPath"
+        }
+
+        # Some packaged host combinations intermittently surface a null ExitCode
+        # even though the child script completed. Infer failure when stderr looks
+        # like a PowerShell exception, otherwise treat the run as a success.
+        if ($null -eq $exitCode) {
+            $hasErrorSignal = (
+                (-not [string]::IsNullOrWhiteSpace($stderr)) -or
+                ($output -match '(?im)^\s*(At .+:\d+ char:|CategoryInfo\s*:|FullyQualifiedErrorId\s*:|Exception:|RuntimeException)')
+            )
+            $exitCode = if ($hasErrorSignal) { 1 } else { 0 }
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $wrapperPath, $stdoutPath, $stderrPath -Force -ErrorAction SilentlyContinue
+    }
 
     if (-not $AllowFailure -and $exitCode -ne 0) {
-        throw "Script failed with exit code $exitCode. See $LogPath"
+        $displayExitCode = if ($null -eq $exitCode) { "<null>" } else { [string]$exitCode }
+        throw "Script failed with exit code $displayExitCode. See $LogPath"
     }
 
     return [PSCustomObject]@{
@@ -1103,6 +1233,8 @@ function Run-Test {
         [Parameter(Mandatory)][string]$Name,
         [Parameter(Mandatory)][scriptblock]$Body
     )
+
+    Write-Status "[RUN] $Name" "INFO"
 
     try {
         & $Body
@@ -1185,7 +1317,7 @@ if ($RevalidateManagedDownloads) {
     $Online = $true
 }
 
-$runtimeRoot = Get-VentoyCoreRuntimeRoot
+$runtimeLayout = Ensure-ForgerEMSRuntimeLayout
 $manifestPath = Resolve-BundledManifestPath
 $vendorInventoryPath = Resolve-VendorInventoryPath
 $checksumsPath = Resolve-ChecksumsPath
@@ -1195,7 +1327,10 @@ $versionInfo = Get-VentoyCoreVersionInfo
 $managedChecksumPolicy = Get-ManagedChecksumPolicy -Manifest $manifest
 
 if ([string]::IsNullOrWhiteSpace($VerifyRoot)) {
-    $VerifyRoot = Join-Path $runtimeRoot ".verify"
+    $VerifyRoot = $runtimeLayout.VerifyRoot
+}
+else {
+    $VerifyRoot = [IO.Path]::GetFullPath($VerifyRoot)
 }
 
 $runStamp = (Get-Date -Format "yyyyMMdd_HHmmss_fff") + "_" + ([Guid]::NewGuid().ToString("N").Substring(0, 8))
@@ -1210,6 +1345,7 @@ Ensure-Dir -Path $runRoot
 
 Write-Status ("Ventoy core: {0} {1} ({2})" -f $versionInfo.Name, $versionInfo.Version, $versionInfo.BuildTimestampUtc) "INFO"
 Write-Status ("Release: " + $versionInfo.ReleaseType) "INFO"
+Write-Status ("Runtime workspace: " + $runtimeLayout.Root) "INFO"
 Write-Status ("Verification artifacts: " + $runRoot) "INFO"
 
 if ($RevalidateManagedDownloads) {
@@ -1292,8 +1428,23 @@ if (-not $RevalidateManagedDownloads) {
         $root = New-RunDirectory -BaseRoot $runRoot -Name "setup-wrapper-seed"
         $result = Invoke-PublicScript `
             -ScriptPath $setupScript `
-            -Arguments @("-UsbRoot", $root, "-OwnerName", "Verify", "-SeedManifest") `
+            -Arguments @("-UsbRoot", $root, "-OwnerName", "Verify", "-SeedManifest", "-LayoutOnly") `
             -LogPath (Join-Path $runRoot "setup-wrapper-seeds-manifest.log")
+
+        $suppressedShortcutRelativePaths = @(
+            @($manifest.items) | Where-Object {
+                $itemType = if ($_.type) { ([string]$_.type).Trim().ToLowerInvariant() } else { "file" }
+                $itemEnabled = $true
+                if ($null -ne $_.enabled) {
+                    $itemEnabled = [bool]$_.enabled
+                }
+
+                $itemNotes = if ($_.notes) { ([string]$_.notes).Trim().ToLowerInvariant() } else { "" }
+                $itemEnabled -and $itemType -eq "page" -and $itemNotes.StartsWith("info shortcut:")
+            } | ForEach-Object {
+                [string]$_.dest
+            }
+        )
 
         foreach ($expectedRelativePath in @(
             "README.txt",
@@ -1301,15 +1452,28 @@ if (-not $RevalidateManagedDownloads) {
             "Docs\ForgerEMS-Download-Catalog.txt",
             "Docs\ForgerEMS-Managed-Download-Maintenance.txt",
             "Docs\ForgerEMS-Link-Inventory.csv",
-            "IfScriptFails(ManualSetup)\Ventoy_Official.txt"
+            "Drivers\README.txt",
+            "MediCat.USB\DOWNLOAD - MediCat.url",
+            "ISO\Linux\DOWNLOAD - Fedora Workstation.url",
+            "ISO\Linux\DOWNLOAD - Endless OS.url",
+            "Tools\Portable\Security\DOWNLOAD - AdwCleaner.url"
         )) {
             $expectedPath = Join-Path $root $expectedRelativePath
             Assert-Condition -Condition (Test-Path -LiteralPath $expectedPath) -Message "Expected setup artifact missing: $expectedPath"
         }
 
+        foreach ($unexpectedRelativePath in @(
+            "IfScriptFails(ManualSetup)",
+            "ForgerTools"
+        ) + $suppressedShortcutRelativePaths) {
+            $unexpectedPath = Join-Path $root $unexpectedRelativePath
+            Assert-Condition -Condition (-not (Test-Path -LiteralPath $unexpectedPath)) -Message "Legacy layout artifact should not be created: $unexpectedPath"
+        }
+
         $legacyVentoyShortcut = Join-Path $root "DOWNLOAD - Ventoy.url"
         Assert-Condition -Condition (-not (Test-Path -LiteralPath $legacyVentoyShortcut)) -Message "Ventoy should no longer be seeded as a root shortcut."
 
+        Assert-Condition -Condition ($result.Output -match "LayoutOnly was specified\. Managed download pass skipped\.") -Message "Setup wrapper output did not report the layout-only managed download skip."
         Assert-Condition -Condition ($result.Output -match "Done\. ForgerEMS layout created") -Message "Setup wrapper output did not include the success summary."
     }
 
@@ -1334,6 +1498,70 @@ if (-not $RevalidateManagedDownloads) {
         Assert-Condition -Condition ($result.ExitCode -eq 0) -Message "Updater preview returned a non-zero exit code."
         Assert-Condition -Condition ($result.Output -match [regex]::Escape($manifestPath)) -Message "Updater did not report using the bundled fallback manifest."
         Assert-Condition -Condition ((Get-DirectoryChildCount -Path $root) -eq 0) -Message "Updater preview created files or directories."
+    }
+
+    Run-Test -Name "updater-cleans-active-managed-shadow-placeholder" -Body {
+        $root = New-RunDirectory -BaseRoot $runRoot -Name "updater-cleans-shadow-placeholder"
+        $linuxRoot = Join-Path $root "ISO\Linux"
+        Ensure-Dir -Path $linuxRoot
+
+        $payloadPath = Join-Path $linuxRoot "ubuntu-verified.iso"
+        [IO.File]::WriteAllBytes($payloadPath, [Text.Encoding]::ASCII.GetBytes("verified managed payload"))
+        $payloadHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $payloadPath).Hash.ToLowerInvariant()
+
+        $placeholderPath = Join-Path $linuxRoot "DOWNLOAD - Ubuntu.url"
+        Set-Content -LiteralPath $placeholderPath -Value "[InternetShortcut]`r`nURL=https://example.com/ubuntu" -Encoding ASCII
+
+        $manifestUnderTestPath = Join-Path $root "ForgerEMS.updates.json"
+        $manifestContent = @"
+{
+  "coreName": "ForgerEMS Ventoy Core",
+  "coreVersion": "verify-test",
+  "buildTimestampUtc": "2026-04-20T00:00:00Z",
+  "releaseType": "stable",
+  "managedChecksumPolicy": "require-for-release",
+  "manifestVersion": 1,
+  "settings": {
+    "downloadFolder": "_downloads",
+    "archiveFolder": "_archive",
+    "logFolder": "_logs",
+    "timeoutSec": 5,
+    "retryCount": 1,
+    "maxArchivePerItem": 1
+  },
+  "items": [
+    {
+      "name": "Ubuntu Verified Payload",
+      "type": "file",
+      "dest": "ISO\\Linux\\ubuntu-verified.iso",
+      "url": "https://example.com/ubuntu.iso",
+      "sha256": "$payloadHash",
+      "enabled": true,
+      "archive": false
+    },
+    {
+      "name": "Ubuntu Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Ubuntu.url",
+      "url": "https://example.com/ubuntu",
+      "enabled": true
+    }
+  ]
+}
+"@
+
+        Set-Content -LiteralPath $manifestUnderTestPath -Value $manifestContent -Encoding UTF8
+
+        $result = Invoke-PublicScript `
+            -ScriptPath $updateScript `
+            -Arguments @("-UsbRoot", $root, "-ManifestName", "ForgerEMS.updates.json") `
+            -LogPath (Join-Path $runRoot "updater-cleans-active-managed-shadow-placeholder.log")
+
+        Assert-Condition -Condition ($result.ExitCode -eq 0) -Message "Updater did not complete successfully when the managed payload was already verified."
+        Assert-Condition -Condition (Test-Path -LiteralPath $payloadPath) -Message "Verified managed payload should remain in place."
+        Assert-Condition -Condition (-not (Test-Path -LiteralPath $placeholderPath)) -Message "Shadow placeholder shortcut should be removed once the managed payload owns the slot."
+        Assert-Condition -Condition ($result.Output -match "Removed placeholder shortcut because managed payload staged successfully") -Message "Updater output did not report active managed placeholder cleanup."
+        Assert-Condition -Condition ($result.Output -match "Skipped placeholder creation because item is active managed download") -Message "Updater output did not report skipping the shadow placeholder item."
     }
 
     Run-Test -Name "manifest-path-escape-is-rejected" -Body {
@@ -1544,7 +1772,7 @@ Write-Status ("Artifacts kept at: " + $runRoot) "INFO"
 if ($script:ManagedRevalidationSummary) {
     Write-Host ""
     Write-Status "Managed download summary" "INFO"
-    Write-Status ("- total safe items: " + $script:ManagedRevalidationSummary.TotalCount) "INFO"
+    Write-Status ("- active managed items: " + $script:ManagedRevalidationSummary.TotalCount) "INFO"
     Write-Status ("- fragility: high " + $script:ManagedRevalidationSummary.HighCount + " | medium " + $script:ManagedRevalidationSummary.MediumCount + " | low " + $script:ManagedRevalidationSummary.LowCount) "INFO"
     Write-Status ("- checksum posture: pinned-only " + $script:ManagedRevalidationSummary.PinnedOnlyCount + " | pinned+remote " + $script:ManagedRevalidationSummary.PinnedRemoteCount + " | remote-only " + $script:ManagedRevalidationSummary.RemoteOnlyCount) "INFO"
     Write-Status ("- status: OK " + $script:ManagedRevalidationSummary.OkCount + " | OK-LIMITED " + $script:ManagedRevalidationSummary.OkLimitedCount + " | DRIFT " + $script:ManagedRevalidationSummary.DriftCount) "INFO"

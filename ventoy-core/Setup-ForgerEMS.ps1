@@ -34,6 +34,18 @@ Copy the bundled manifest into the selected root if it does not already exist.
 .PARAMETER ForceManifestOverwrite
 Overwrite an existing target manifest when used together with -SeedManifest.
 
+.PARAMETER LayoutOnly
+Create the USB layout and supporting docs without automatically launching the
+managed download/update pass.
+
+.PARAMETER WaitForManagedDownloads
+Keep setup attached to the managed download/update pass instead of launching it
+in the background after layout creation.
+
+.PARAMETER NonInteractive
+Disable interactive prompts. Required for attached GUI runs so setup never
+blocks waiting for stdin.
+
 .PARAMETER ShowVersion
 Display the Ventoy core version/build metadata from the bundled manifest and
 exit without making changes.
@@ -46,6 +58,12 @@ exit without making changes.
 
 .EXAMPLE
 .\Setup-ForgerEMS.ps1 -UsbRoot "H:\" -WhatIf
+
+.EXAMPLE
+.\Setup-ForgerEMS.ps1 -UsbRoot "D:\" -LayoutOnly
+
+.EXAMPLE
+.\Setup-ForgerEMS.ps1 -UsbRoot "D:\" -WaitForManagedDownloads
 
 .EXAMPLE
 .\Setup-ForgerEMS.ps1 -ShowVersion
@@ -66,6 +84,9 @@ param(
     [switch]$OpenManualPages,
     [switch]$SeedManifest,
     [switch]$ForceManifestOverwrite,
+    [switch]$LayoutOnly,
+    [switch]$WaitForManagedDownloads,
+    [switch]$NonInteractive,
     [switch]$ShowVersion
 )
 

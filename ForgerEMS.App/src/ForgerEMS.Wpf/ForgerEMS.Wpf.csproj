@@ -21,6 +21,7 @@
     <DebugType>embedded</DebugType>
     <PublishTrimmed>false</PublishTrimmed>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin\**;obj\**;.artifacts\**</DefaultItemExcludes>
   </PropertyGroup>
 
 </Project>

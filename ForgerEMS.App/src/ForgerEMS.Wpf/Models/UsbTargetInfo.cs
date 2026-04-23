@@ -4,6 +4,10 @@ namespace VentoyToolkitSetup.Wpf.Models;
 
 public sealed class UsbTargetInfo
 {
+    public const long MinimumTargetBytes = 1L * 1024 * 1024 * 1024;
+    public const long LargeDataPartitionBytes = 4L * 1024 * 1024 * 1024;
+    public const long PreferredVentoyDataPartitionBytes = 10L * 1024 * 1024 * 1024;
+
     public string DriveLetter { get; init; } = string.Empty;
 
     public string RootPath { get; init; } = string.Empty;
@@ -26,7 +30,11 @@ public sealed class UsbTargetInfo
 
     public string DeviceModel { get; init; } = string.Empty;
 
-    public string SpeedDisplay { get; init; } = "Not available";
+    public string ReadSpeedDisplay { get; init; } = "Not benchmarked";
+
+    public string WriteSpeedDisplay { get; init; } = "Not benchmarked";
+
+    public string PartitionType { get; init; } = string.Empty;
 
     public bool IsSystemDrive { get; init; }
 
@@ -34,9 +42,21 @@ public sealed class UsbTargetInfo
 
     public bool IsRemovableMedia { get; init; }
 
+    public bool IsEfiSystemPartition { get; init; }
+
+    public bool IsUndersizedPartition { get; init; }
+
+    public bool HasVentoyCompanionEfiPartition { get; init; }
+
+    public bool IsLargeDataPartition { get; init; }
+
+    public bool IsPreferredUsbTarget { get; init; }
+
     public bool IsSelectable { get; init; } = true;
 
     public string SelectionWarning { get; init; } = string.Empty;
+
+    public string ClassificationDetails { get; init; } = string.Empty;
 
     public string LabelDisplay => string.IsNullOrWhiteSpace(Label) ? "(no label)" : Label;
 
@@ -69,28 +89,54 @@ public sealed class UsbTargetInfo
 
     public string BusTypeDisplay => string.IsNullOrWhiteSpace(BusType) ? "Unknown" : BusType;
 
-    public string SpeedDisplayNormalized => string.IsNullOrWhiteSpace(SpeedDisplay) ? "Not available" : SpeedDisplay;
+    public string ReadSpeedDisplayNormalized => string.IsNullOrWhiteSpace(ReadSpeedDisplay) ? "Not benchmarked" : ReadSpeedDisplay;
+
+    public string WriteSpeedDisplayNormalized => string.IsNullOrWhiteSpace(WriteSpeedDisplay) ? "Not benchmarked" : WriteSpeedDisplay;
 
     public string SelectionStatusText =>
         !IsSelectable
             ? "Blocked"
+            : IsPreferredUsbTarget
+                ? "Preferred USB"
             : IsRemovableMedia
                 ? "Removable USB"
                 : "Fixed USB";
 
     public string RoleDisplay =>
-        IsSystemDrive || IsBootDrive
-            ? "System or boot volume"
-            : "Operator target";
+        IsEfiSystemPartition
+            ? "Boot / EFI partition"
+            : IsPreferredUsbTarget
+                ? "Ventoy data partition"
+            : IsLargeDataPartition
+                ? "Main USB data partition"
+            : IsUndersizedPartition
+                ? "Small utility partition"
+                : "Operator target";
+
+    public string PartitionTypeDisplay =>
+        string.IsNullOrWhiteSpace(PartitionType)
+            ? "Unknown"
+            : PartitionType;
+
+    public bool ShouldBlockExecution =>
+        !IsSelectable ||
+        IsEfiSystemPartition ||
+        IsUndersizedPartition ||
+        (TotalBytes > 0 && TotalBytes < MinimumTargetBytes);
 
     public string SelectionWarningDisplay =>
         string.IsNullOrWhiteSpace(SelectionWarning)
             ? "Double-check the drive letter and label before running destructive actions."
             : SelectionWarning;
 
+    public string ClassificationDetailsDisplay =>
+        string.IsNullOrWhiteSpace(ClassificationDetails)
+            ? $"size={DisplayTotalBytes}; filesystem={FileSystem}; IsBoot={IsBootDrive}; IsSystem={IsSystemDrive}; partitionType={PartitionTypeDisplay}"
+            : ClassificationDetails;
+
     public string DisplayName => $"{RootPath}  {LabelDisplay}  {SelectionStatusText}  {DisplayTotalBytes} total";
 
-    private static string FormatBytes(long bytes)
+    public static string FormatBytes(long bytes)
     {
         if (bytes <= 0)
         {

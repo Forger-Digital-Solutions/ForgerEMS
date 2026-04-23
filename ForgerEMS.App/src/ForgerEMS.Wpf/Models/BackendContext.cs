@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 
 namespace VentoyToolkitSetup.Wpf.Models;
@@ -42,9 +43,13 @@ public sealed class BackendContext
         };
 
     public string PrimaryManagedSummaryPath =>
-        string.IsNullOrWhiteSpace(RootPath)
-            ? string.Empty
-            : Path.Combine(RootPath, ".verify", "managed-download-revalidation", "latest", "managed-download-summary.txt");
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "ForgerEMS",
+            ".verify",
+            "managed-download-revalidation",
+            "latest",
+            "managed-download-summary.txt");
 
     public string ReleaseVerificationHistoryRoot =>
         string.IsNullOrWhiteSpace(RootPath)

@@ -1,158 +1,191 @@
-====================================================
-   FORGEREMS MANAGED DOWNLOAD MAINTENANCE GUIDE
-====================================================
+ForgerEMS Managed Download Maintenance
+======================================
 
-This guide applies to the 16 manifest-managed
-auto-download-safe file entries only.
+Scope
+-----
+This guide applies to the 16 active
+manifest-managed autodownload file entries only.
+Disabled-but-eligible managed candidates: 0
+
+Managed still depends on upstream availability.
+If a vendor moves or removes an official artifact or
+checksum source, the entry may need repair or demotion.
 
 Health snapshot
 ---------------
-
-Total safe items: 16
+Active managed items: 16
+Disabled-but-eligible items: 0
 Fragility: high 6 | medium 7 | low 3
 Checksum posture: pinned-only 7 | pinned+remote 8 | remote-only 1
 Status: OK 9 | OK-LIMITED 7 | DRIFT 0
-Borderline: BlueScreenView 1.55 (x64 zip); CrystalDiskInfo 9.8.0 (standard zip); Linux Mint 22.3 Cinnamon (64-bit)
-Inspect first next cycle: [1] BlueScreenView 1.55 (x64 zip); [2] CrystalDiskInfo 9.8.0 (standard zip); [3] Ventoy 1.1.11 (Windows package); [4] SystemRescue 13.00 (amd64); [5] GParted Live 1.8.1-3 (amd64)
+Borderline: BlueScreenView 1.55 (x64 zip); Linux Mint 22.3 Cinnamon (64-bit); CrystalDiskInfo 9.8.0 (standard zip)
+Inspect first next cycle: [1] BlueScreenView 1.55 (x64 zip); [2] Rufus 4.13 Portable (x64); [3] Ventoy 1.1.11 (Windows package); [4] SystemRescue 13.00 (amd64); [5] GParted Live 1.8.1-3 (amd64)
 
 Status meanings
 ---------------
+- OK -> URL plus remote checksum coverage should participate
+  fully in live revalidation
+- OK-LIMITED -> URL can be probed live, but checksum
+  confirmation still depends on the pinned manifest hash
 
-- OK -> URL plus remote checksum coverage should participate fully in live revalidation
-- OK-LIMITED -> URL can be probed live, but checksum confirmation still depends on the pinned manifest hash
-
-REVALIDATION WORKFLOW
+Revalidation workflow
 ---------------------
-
 Run:
+  .\\Verify-VentoyCore.ps1 -RevalidateManagedDownloads
 
-  .\Verify-VentoyCore.ps1 -RevalidateManagedDownloads
+This checks:
+- each enabled managed file URL still resolves
+- each remote checksum source still resolves
+- drift is reported without changing the manifest
 
 Archive outputs are written under:
-
-- .\.verify\managed-download-revalidation\<timestamp>\
-- .\.verify\managed-download-revalidation\latest\
+- %LOCALAPPDATA%\\ForgerEMS\\.verify\\managed-download-revalidation\\<timestamp>\\
+- %LOCALAPPDATA%\\ForgerEMS\\.verify\\managed-download-revalidation\\latest\\
 
 Expected files:
-
 - managed-download-summary.txt
 - managed-download-revalidation.csv
 - managed-download-revalidation.txt
 
-Release bundle history path:
+Failure guidance
+----------------
+If a managed download breaks:
+1. Confirm whether the artifact moved on the official
+   project page, release index, or official release feed.
+2. Confirm checksum coverage cleanly from an official
+   checksum file, asset digest, or a freshly verified
+   hash from the live official artifact.
+3. Patch the manifest only when the new URL is still an
+   official direct artifact with the same legal/operational
+   safety profile.
+4. If scope must be narrowed temporarily while the item is
+   still otherwise acceptable, keep the official page
+   shortcut and classify it as disabled-but-eligible.
+5. Demote to review-first or manual-only when the flow
+   becomes page-only, account-gated, EULA-sensitive,
+   checksum-poor, or provenance becomes ambiguous.
+6. Do not patch around a broken upstream with third-party
+   mirrors, repacks, scraper URLs, or unofficial checksum
+   sources just to keep automation alive.
 
-- docs\Release-Verification-History\<coreVersion>\
+Demote immediately when
+----------------------
+- the URL no longer resolves cleanly from the official source
+- the artifact can no longer be matched confidently to the
+  intended versioned payload
+- checksum coverage can no longer be confirmed or pinned
+  safely from the official artifact/source
+- the upstream flow becomes gated, clickthrough-based,
+  account-bound, or otherwise ambiguous
 
-That folder is the clean release-facing location for:
-
-- what was verified for the release
-- when it was verified
-- what the managed-download status looked like at ship time
-
-DEMOTION TRIGGERS
------------------
-
-Demote a safe item back to review-first when any of
-these become true:
-
-1. The URL no longer resolves cleanly from the official source.
-2. The artifact can no longer be matched confidently to the intended versioned payload.
-3. The checksum can no longer be confirmed or pinned safely from the official artifact or checksum source.
-4. The upstream flow becomes gated, clickthrough-based, account-bound, EULA-sensitive, or otherwise ambiguous.
-
-Do not patch around those conditions with third-party
-mirrors, scraper URLs, repacks, or unofficial checksum
-sites just to keep automation alive.
-
-OPERATOR DECISION GUIDE
------------------------
-
-- High-fragility item drifts -> stop automation for that
+Decision guide
+--------------
+- high-fragility item drifts -> stop automation for that
   item, confirm the official replacement path/checksum,
-  then patch or demote before release use.
-- Pinned-only item changes upstream -> recompute the
-  hash from the live official artifact, update the pin
-  only if the artifact match is still confident, and
-  demote if confidence is lost.
-- Checksum source disappears -> keep automation only if
-  the official artifact is still clear and a new pinned
-  hash can be verified safely; otherwise demote.
-- Formerly safe item must be demoted -> convert it back
-  to a review-first page entry, keep the official page
-  shortcut, and remove automated-download claims.
+  then patch or demote before release use
+- pinned-only item changes upstream -> recompute the hash
+  from the live official artifact, update the pin, and
+  demote if the artifact match is no longer confident
+- checksum source disappears -> rely only on a safely
+  recomputed pinned hash if the official artifact is still
+  clear; otherwise demote
+- formerly active item pauses for scope reasons -> keep the
+  official page shortcut, classify it as disabled-but-
+  eligible, and remove active managed claims
+- formerly active item becomes questionable -> convert it to
+  review-first or manual-only, preserve the official page
+  shortcut, and remove automated download claims
 
-PRE-RELEASE GATE
+Maintenance cadence
+-------------------
+- monthly: run the revalidation workflow
+- before shipping or rebuilding a toolkit USB
+- after any manifest URL/checksum edit
+- quarterly: manually review high-fragility items first
+
+Retention policy
 ----------------
+- timestamped revalidation snapshots -> keep 12 months
+  plus any snapshot tied to a shipped release
+- release verification artifacts -> keep for every shipped
+  candidate/stable release while that release is retained
+- summary reports -> latest\\ is rolling only; timestamped
+  summaries follow the same 12-month + shipped-release rule
 
-Before any candidate/stable build intended for
-distribution:
-
-1. Run .\Verify-VentoyCore.ps1
-2. Run .\Verify-VentoyCore.ps1 -RevalidateManagedDownloads
+Pre-release gate
+----------------
+Before any candidate/stable build intended for distribution:
+1. Run .\\Verify-VentoyCore.ps1
+2. Run .\\Verify-VentoyCore.ps1 -RevalidateManagedDownloads
 3. Review managed-download-summary.txt
-4. Confirm maintenance ranks 1-7 have no unresolved drift, checksum ambiguity, or provenance ambiguity
+4. Ensure maintenance ranks 1-7 have no unresolved drift
+   or provenance/checksum ambiguity
 
-PRIORITY RANKING
+Priority ranking
 ----------------
-
 [1] BlueScreenView 1.55 (x64 zip)
   status: OK-LIMITED | fragility: high | source: official-version-path | checksum: pinned-only
   borderline: yes
+  fallback: Confirm the replacement ZIP on the official NirSoft site and manually recompute the SHA256 before patching. Demote if the direct vendor file becomes page-only or ambiguous.
 
-[2] CrystalDiskInfo 9.8.0 (standard zip)
-  status: OK-LIMITED | fragility: high | source: sourceforge | checksum: pinned-only
-  borderline: yes
+[2] Rufus 4.13 Portable (x64)
+  status: OK | fragility: medium | source: github-release | checksum: pinned+remote
+  fallback: Use the official Rufus site to confirm the matching GitHub release asset and refresh the asset digest. Demote if the official site stops pointing to a direct official asset.
 
 [3] Ventoy 1.1.11 (Windows package)
   status: OK | fragility: high | source: sourceforge | checksum: pinned+remote
+  fallback: Use ventoy.net to confirm the same versioned SourceForge asset and keep the official checksum file. Demote if the path stops being a direct official artifact or checksum coverage disappears.
 
 [4] SystemRescue 13.00 (amd64)
   status: OK | fragility: high | source: sourceforge | checksum: remote-only
+  fallback: Re-derive the same versioned ISO from the official SystemRescue download page and keep the official checksum source. Demote if only mirror-style paths or no official checksum remain.
 
 [5] GParted Live 1.8.1-3 (amd64)
   status: OK-LIMITED | fragility: high | source: sourceforge | checksum: pinned-only
+  fallback: Re-derive the same versioned ISO from gparted.org and refresh the pinned checksum from an official project checksum or source. Demote if only page flows or unverified mirrors remain.
 
 [6] Clonezilla Live 3.3.1-35 (amd64)
   status: OK-LIMITED | fragility: high | source: sourceforge | checksum: pinned-only
+  fallback: Re-derive the same versioned ISO from the official Clonezilla download page and refresh the pinned checksum from an official project checksum or source. Demote if only mirrors or page-only flows remain.
 
 [7] Linux Mint 22.3 Cinnamon (64-bit)
   status: OK-LIMITED | fragility: medium | source: official-mirror | checksum: pinned-only
   borderline: yes
+  fallback: Move to a Linux Mint-controlled mirror or release page for the same version and refresh the checksum from the official mirror checksum file. Demote if only third-party mirrors remain.
 
-[8] Rufus 4.13 Portable (x64)
-  status: OK | fragility: medium | source: github-release | checksum: pinned+remote
+[8] CrystalDiskInfo 9.8.0 (standard zip)
+  status: OK-LIMITED | fragility: high | source: sourceforge | checksum: pinned-only
+  borderline: yes
+  fallback: Re-derive the exact versioned asset from crystalmark.info and manually recompute the SHA256 from the official file before patching. Demote if the path stops being a direct official artifact.
 
 [9] DriverStoreExplorer 1.0.26 (zip)
   status: OK | fragility: medium | source: github-release | checksum: pinned+remote
+  fallback: Use the matching official GitHub release ZIP and asset digest for the same version. Demote if the release asset disappears or the digest endpoint stops agreeing.
 
 [10] Angry IP Scanner 3.9.3 (Windows setup)
   status: OK | fragility: medium | source: github-release | checksum: pinned+remote
+  fallback: Use the matching official GitHub release asset and asset digest for the same version. Demote if the release asset disappears or the digest endpoint stops agreeing.
 
 [11] RustDesk 1.4.6 (x86_64 exe)
   status: OK | fragility: medium | source: github-release | checksum: pinned+remote
+  fallback: Use the matching official GitHub release asset and asset digest, then refresh the pinned checksum. Demote if the release asset or digest becomes inconsistent.
 
 [12] balenaEtcher 2.1.4 Setup (x64)
   status: OK | fragility: medium | source: github-release | checksum: pinned+remote
+  fallback: Use the matching official GitHub release asset and asset digest for the same version. Demote if the release asset disappears or the digest endpoint stops agreeing.
 
 [13] Rescuezilla 2.6.1 (64-bit oracular)
   status: OK | fragility: medium | source: github-release | checksum: pinned+remote
+  fallback: Use rescuezilla.com or the matching official GitHub release for the same version and keep the SHA256SUM coverage. Demote if the release asset or checksum file stops matching.
 
 [14] MemTest86+ 8.00 (x86_64 ISO archive)
   status: OK | fragility: low | source: official-version-path | checksum: pinned+remote
+  fallback: Use the memtest.org versioned download directory and official sha256sum.txt for the same release. Demote if the workflow becomes page-only or checksum coverage disappears.
 
 [15] Kali Linux 2026.1 Installer (amd64)
   status: OK-LIMITED | fragility: low | source: official-version-path | checksum: pinned-only
+  fallback: Use the official Kali image index for the same release and refresh the checksum from official sums before patching. Demote if only alias paths or indirect mirrors remain.
 
 [16] Ubuntu 24.04.4 LTS Desktop (amd64)
   status: OK-LIMITED | fragility: low | source: official-version-path | checksum: pinned-only
-
-RETENTION POLICY
-----------------
-
-- timestamped revalidation snapshots -> keep 12 months
-  plus any snapshot tied to a shipped release
-- release verification artifacts -> keep for every
-  shipped candidate/stable release while retained
-- summary reports -> latest\ is rolling only;
-  timestamped summaries follow the same 12-month
-  plus shipped-release rule
+  fallback: Use the official Ubuntu release index for the same version and refresh the checksum from Canonical-published sums before patching. Demote if the versioned artifact is retired or no official sums remain.

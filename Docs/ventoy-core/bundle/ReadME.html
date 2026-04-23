@@ -58,8 +58,8 @@
 
     <!-- Top quick links -->
     <div class="toplinks" aria-label="Quick links">
-      <a href="IfScriptFails(ManualSetup)/README-DETAILS.html" target="_blank" rel="noopener">
-        📘 <strong>Full Setup Guide</strong> <small>(links + where everything goes)</small>
+      <a href="DOWNLOAD-CATALOG.txt" target="_blank" rel="noopener">
+        📘 <strong>Download Catalog</strong> <small>(managed vs manual items)</small>
       </a>
       <a href="https://www.ventoy.net/en/download.html" target="_blank" rel="noopener">
         ⬇️ <strong>Download Ventoy</strong> <small>(install Ventoy first)</small>
@@ -105,7 +105,7 @@
         <div class="mono">
 FORGEREMS (USB ROOT)
 ├── ISO
-│   ├── Linux        (Ubuntu, Mint, Kali, SystemRescue)
+│   ├── Linux        (Ubuntu, Mint, Kali, Fedora, Endless OS, SystemRescue)
 │   ├── Tools        (Clonezilla, GParted, Rescuezilla, MemTest86+, Hiren’s PE, UBCD)
 │   └── Windows      (Windows 10, Windows 11, WinPE — Sergei Strelec)
 ├── Tools
@@ -116,9 +116,9 @@ FORGEREMS (USB ROOT)
 │       ├── System      (Sysinternals, BlueScreenView, DriverStoreExplorer, Everything)
 │       ├── Remote      (AnyDesk, RustDesk)
 │       ├── USB         (Rufus, Ventoy, balenaEtcher)
+│       ├── Security    (AdwCleaner, Emsisoft Emergency Kit)
 │       └── GPU         (DDU, NVCleanInstall)
-├── Drivers           (Offline driver packs: Chipset/LAN/WiFi/NVMe/Touchpad)
-├── ForgerTools        (DisplayForger, HardwareForger, EncryptionForge, QuickTools)
+├── Drivers           (Audio / Bluetooth / Chipset / Graphics / Input / Network / Storage / Wireless)
 ├── MediCat.USB        (Optional: copy MediCat folder here)
 ├── _downloads         (Updater staging)
 ├── _archive           (Old versions)
@@ -193,7 +193,7 @@ FORGEREMS (USB ROOT)
         </div>
 
         <p style="margin-top:10px;color:var(--muted);font-size:13px;">
-          Optional: Run <span style="font-family:var(--mono);">Update-ForgerEMS.ps1</span> to refresh selected tools and archive older versions.
+          Setup now auto-starts the managed download pass unless you choose layout-only mode. Managed downloads launch in the background by default, and <span style="font-family:var(--mono);">-WaitForManagedDownloads</span> keeps Setup attached until downloads finish. Run <span style="font-family:var(--mono);">Update-ForgerEMS.ps1</span> later for on-demand refreshes and archival updates.
         </p>
       </section>
 
@@ -208,8 +208,7 @@ FORGEREMS (USB ROOT)
 
   <!--
     NOTE:
-    This Visual README links to a separate file named "README-DETAILS.html"
-    Place that file in the USB root next to this one for a clean, clickable guide.
+    This Visual README links to DOWNLOAD-CATALOG.txt for the current managed/manual item split.
   -->
 </body>
 </html>

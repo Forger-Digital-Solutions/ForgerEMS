@@ -1,43 +1,54 @@
-====================================================
-           FORGEREMS DOWNLOAD CATALOG
-====================================================
+ForgerEMS Download Catalog
+==========================
 
-The Ventoy core uses three practical catalog buckets:
+The Ventoy core uses explicit catalog roles so the
+manifest, folder contents, and UX all describe the
+same business rule:
 
-- auto-download safe
+- active managed autodownload
+- disabled but eligible for re-promotion
+- info shortcut
+- placeholder-only
 - manual only
 - review-first
 
-Note: "safe" still depends on upstream availability.
+Note: managed still depends on upstream availability.
 It means the manifest points at an official direct
 artifact with checksum coverage today. It does not
-guarantee the upstream will stay reachable forever.
+guarantee that the upstream will stay reachable or
+unchanged forever.
 
-HEALTH SNAPSHOT
+Health snapshot
 ---------------
-
-Total safe items: 16
+Active managed items: 16
+Disabled-but-eligible items: 0
+Shortcut roles: info 16 | placeholder-only 0 | manual-only 14 | review-first 21
 Fragility: high 6 | medium 7 | low 3
 Checksum posture: pinned-only 7 | pinned+remote 8 | remote-only 1
 Status: OK 9 | OK-LIMITED 7 | DRIFT 0
-Borderline: BlueScreenView 1.55 (x64 zip); CrystalDiskInfo 9.8.0 (standard zip); Linux Mint 22.3 Cinnamon (64-bit)
-Inspect first next cycle: [1] BlueScreenView 1.55 (x64 zip); [2] CrystalDiskInfo 9.8.0 (standard zip); [3] Ventoy 1.1.11 (Windows package); [4] SystemRescue 13.00 (amd64); [5] GParted Live 1.8.1-3 (amd64)
+Borderline: BlueScreenView 1.55 (x64 zip); Linux Mint 22.3 Cinnamon (64-bit); CrystalDiskInfo 9.8.0 (standard zip)
+Inspect first next cycle: [1] BlueScreenView 1.55 (x64 zip); [2] Rufus 4.13 Portable (x64); [3] Ventoy 1.1.11 (Windows package); [4] SystemRescue 13.00 (amd64); [5] GParted Live 1.8.1-3 (amd64)
 
-Status meanings:
-- OK -> remote checksum coverage is present
-- OK-LIMITED -> live checksum confirmation still depends on the pinned manifest hash
+Active managed autodownload
+---------------------------
+- manifest-managed file item
+- official direct artifact URL
+- no gated/account/clickthrough flow
+- checksum coverage in the manifest
+- setup/update should leave only the real payload after success
 
-AUTO-DOWNLOAD SAFE
-------------------
-
+Current items:
 [1] OK-LIMITED | high | official-version-path | pinned-only | BlueScreenView 1.55 (x64 zip)
-[2] OK-LIMITED | high | sourceforge | pinned-only | CrystalDiskInfo 9.8.0 (standard zip)
+  borderline: yes
+[2] OK | medium | github-release | pinned+remote | Rufus 4.13 Portable (x64)
 [3] OK | high | sourceforge | pinned+remote | Ventoy 1.1.11 (Windows package)
 [4] OK | high | sourceforge | remote-only | SystemRescue 13.00 (amd64)
 [5] OK-LIMITED | high | sourceforge | pinned-only | GParted Live 1.8.1-3 (amd64)
 [6] OK-LIMITED | high | sourceforge | pinned-only | Clonezilla Live 3.3.1-35 (amd64)
 [7] OK-LIMITED | medium | official-mirror | pinned-only | Linux Mint 22.3 Cinnamon (64-bit)
-[8] OK | medium | github-release | pinned+remote | Rufus 4.13 Portable (x64)
+  borderline: yes
+[8] OK-LIMITED | high | sourceforge | pinned-only | CrystalDiskInfo 9.8.0 (standard zip)
+  borderline: yes
 [9] OK | medium | github-release | pinned+remote | DriverStoreExplorer 1.0.26 (zip)
 [10] OK | medium | github-release | pinned+remote | Angry IP Scanner 3.9.3 (Windows setup)
 [11] OK | medium | github-release | pinned+remote | RustDesk 1.4.6 (x86_64 exe)
@@ -47,37 +58,100 @@ AUTO-DOWNLOAD SAFE
 [15] OK-LIMITED | low | official-version-path | pinned-only | Kali Linux 2026.1 Installer (amd64)
 [16] OK-LIMITED | low | official-version-path | pinned-only | Ubuntu 24.04.4 LTS Desktop (amd64)
 
-MANUAL ONLY
------------
+Disabled but eligible for re-promotion
+--------------------------------------
+- manifest-managed file item
+- currently not active in this manifest
+- should be re-enabled only when the same official
+  source/checksum/verifier rules still hold
 
-- Windows 11 Download Page
-- Windows 10 Download Page
+Current items:
+- none
+
+Info shortcuts
+--------------
+- manifest-managed page shortcut paired with an active
+  managed autodownload item
+- setup/update suppresses the shortcut while the real
+  managed payload owns the slot
+
+Current items:
+- Angry IP Scanner Download Page -> Tools\Portable\Network\DOWNLOAD - Angry IP Scanner.url
+- balenaEtcher Download Page -> Tools\Portable\USB\DOWNLOAD - balenaEtcher.url
+- BlueScreenView Download Page -> Tools\Portable\System\DOWNLOAD - BlueScreenView.url
+- Clonezilla Download Page -> ISO\Tools\DOWNLOAD - Clonezilla.url
+- CrystalDiskInfo Download Page -> Tools\Portable\Disk\DOWNLOAD - CrystalDiskInfo.url
+- DriverStoreExplorer Download Page -> Tools\Portable\System\DOWNLOAD - DriverStoreExplorer.url
+- GParted Download Page -> ISO\Tools\DOWNLOAD - GParted.url
+- Kali Linux Download Page -> ISO\Linux\DOWNLOAD - Kali Linux.url
+- Linux Mint Download Page -> ISO\Linux\DOWNLOAD - Linux Mint.url
+- MemTest86+ Download Page -> ISO\Tools\DOWNLOAD - MemTest86+.url
+- Rescuezilla Download Page -> ISO\Tools\DOWNLOAD - Rescuezilla.url
+- Rufus Download Page -> Tools\Portable\USB\DOWNLOAD - Rufus.url
+- RustDesk Download Page -> Tools\Portable\Remote\DOWNLOAD - RustDesk.url
+- SystemRescue Download Page -> ISO\Linux\DOWNLOAD - SystemRescue.url
+- Ubuntu Download Page -> ISO\Linux\DOWNLOAD - Ubuntu.url
+- Ventoy Download Page -> Tools\Portable\USB\DOWNLOAD - Ventoy.url
+
+Placeholder-only
+----------------
+- manifest-managed page shortcut only
+- used when an item is intentionally not active managed
+  today, but is not excluded forever
+
+Current items:
+- none
+
+Manual only
+-----------
+- manifest-managed page shortcut only
+- excluded from managed autodownload by legal,
+  corporate, or safety policy
+
+Current items:
+- AnyDesk Download Page
+- CPU-Z Download Page
+- Emsisoft Emergency Kit Download Page
+- Endless OS Download Page
+- Fedora Workstation Download Page
+- HWiNFO Download Page
+- HWMonitor Download Page
+- Malwarebytes AdwCleaner Download Page
 - MediCat Download Page
+- OCCT Download Page
 - Sergei Strelec WinPE Info
 - Ultimate Boot CD Download Page
-- AnyDesk Download Page
-- HWiNFO Download Page
-- OCCT Download Page
-- CPU-Z Download Page
-- HWMonitor Download Page
+- Windows 10 Download Page
+- Windows 11 Download Page
 
-REVIEW-FIRST
+Review-first
 ------------
+- manifest-managed page shortcut only
+- not approved for managed autodownload until checksum,
+  provenance, or operational review is good enough
 
-- Hiren's BootCD PE Download Page
+Current items:
+- Advanced IP Scanner Download Page
+- AMD Drivers and Support
 - Autoruns Download Page
-- Process Explorer Download Page
-- Sysinternals Suite Download Page
+- DDU Download Page
+- DiskGenius Download Page
 - Everything Search Download Page
 - GPU-Z Download Page
-- DDU Download Page
-- NVCleanInstall Download Page
 - HDDScan Download Page
-- DiskGenius Download Page
-- Advanced IP Scanner Download Page
+- Hiren's BootCD PE Download Page
 - Intel Driver Download Center
+- Intel Ethernet Drivers
+- Intel Graphics Drivers
+- Intel Rapid Storage Technology Support
+- Intel Wireless Bluetooth Drivers
+- Intel Wireless Wi-Fi Drivers
+- NVCleanInstall Download Page
+- NVIDIA Drivers
+- Process Explorer Download Page
+- Realtek Audio Drivers
 - Realtek Downloads
+- Sysinternals Suite Download Page
 
 See MANAGED-DOWNLOAD-MAINTENANCE.txt for fragility
-ranking, archive locations, demotion rules, and
-release-prep maintenance guidance.
+ranking, fallback rules, cadence, and recovery steps.

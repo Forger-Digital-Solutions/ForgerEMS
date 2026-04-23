@@ -1,0 +1,17 @@
+Release Verification Status
+=========================
+CoreVersion: 2026.04.20.2
+BuildTimestampUtc: 2026-04-20T21:27:43Z
+ReleaseType: stable
+ManagedDownloadArtifactMode: included-current-verification-artifacts
+ManagedDownloadSnapshotGeneratedUtc: 2026-04-21T15:17:52Z
+HistoryFolder: docs\\Release-Verification-History\\2026.04.20.2
+
+Bundled files:
+- managed-download-summary.txt
+- managed-download-revalidation.txt
+- managed-download-revalidation.csv
+
+Operator action:
+- review the bundled managed-download snapshot before ship
+- regenerate after build if a fresher verification pass is required

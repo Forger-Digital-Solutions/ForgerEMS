@@ -36,6 +36,18 @@ Copy the bundled manifest into the selected root if it does not already exist.
 .PARAMETER ForceManifestOverwrite
 Overwrite an existing target manifest when used together with -SeedManifest.
 
+.PARAMETER LayoutOnly
+Create the USB layout and supporting docs without automatically launching the
+managed download/update pass.
+
+.PARAMETER WaitForManagedDownloads
+Keep setup attached to the managed download/update pass instead of launching it
+in the background after layout creation.
+
+.PARAMETER NonInteractive
+Disable interactive prompts. Required for attached GUI runs so setup never
+blocks waiting for stdin.
+
 .PARAMETER ShowVersion
 Display the Ventoy core version/build metadata from the bundled manifest and
 exit without making changes.
@@ -48,6 +60,12 @@ exit without making changes.
 
 .EXAMPLE
 .\Setup-ForgerEMS.ps1 -UsbRoot "H:\" -WhatIf
+
+.EXAMPLE
+.\Setup-ForgerEMS.ps1 -UsbRoot "D:\" -LayoutOnly
+
+.EXAMPLE
+.\Setup-ForgerEMS.ps1 -UsbRoot "D:\" -WaitForManagedDownloads
 
 .EXAMPLE
 .\Setup-ForgerEMS.ps1 -ShowVersion
@@ -68,6 +86,9 @@ param(
     [switch]$OpenManualPages,
     [switch]$SeedManifest,
     [switch]$ForceManifestOverwrite,
+    [switch]$LayoutOnly,
+    [switch]$WaitForManagedDownloads,
+    [switch]$NonInteractive,
     [switch]$ShowVersion
 )
 
@@ -538,11 +559,141 @@ function Show-VentoyCoreVersionInfo {
     Write-Host ("Manifest: " + $info.ManifestPath) -ForegroundColor DarkCyan
 }
 
+function Get-ManifestDestinationKey {
+    param([AllowNull()][string]$RelativePath)
+
+    if ([string]::IsNullOrWhiteSpace($RelativePath)) {
+        return ""
+    }
+
+    return ([string]$RelativePath).Trim().ToLowerInvariant()
+}
+
+function Normalize-ManifestMatchText {
+    param([AllowNull()][string]$Text)
+
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        return ""
+    }
+
+    return ([regex]::Replace($Text.ToLowerInvariant(), '[^a-z0-9]+', ' ')).Trim()
+}
+
+function Get-PlaceholderDisplayLabelFromDestination {
+    param([AllowNull()][string]$RelativePath)
+
+    if ([string]::IsNullOrWhiteSpace($RelativePath)) {
+        return ""
+    }
+
+    $leafName = [IO.Path]::GetFileNameWithoutExtension($RelativePath)
+    if ([string]::IsNullOrWhiteSpace($leafName)) {
+        return ""
+    }
+
+    return (($leafName -replace '^(download|info)\s*-\s*', '').Trim())
+}
+
+function Test-ManagedPlaceholderShadowMatch {
+    param(
+        [Parameter(Mandatory)]$PageItem,
+        [Parameter(Mandatory)]$ManagedItem
+    )
+
+    $pageDest = ([string]$(if ($PageItem.dest) { $PageItem.dest } else { "" })).Trim()
+    $managedDest = ([string]$(if ($ManagedItem.dest) { $ManagedItem.dest } else { "" })).Trim()
+
+    if ([string]::IsNullOrWhiteSpace($pageDest) -or [string]::IsNullOrWhiteSpace($managedDest)) {
+        return $false
+    }
+
+    $pageDir = Split-Path -Parent $pageDest
+    $managedDir = Split-Path -Parent $managedDest
+
+    if (-not [string]::Equals($pageDir, $managedDir, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $false
+    }
+
+    $pageLabels = @(
+        (Normalize-ManifestMatchText -Text (Get-PlaceholderDisplayLabelFromDestination -RelativePath $pageDest))
+        (Normalize-ManifestMatchText -Text ([string]$(if ($PageItem.name) { $PageItem.name } else { "" })))
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+
+    $managedTargets = @(
+        (Normalize-ManifestMatchText -Text ([string]$(if ($ManagedItem.name) { $ManagedItem.name } else { "" })))
+        (Normalize-ManifestMatchText -Text ([IO.Path]::GetFileNameWithoutExtension($managedDest)))
+    ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+
+    foreach ($pageLabel in $pageLabels) {
+        foreach ($managedTarget in $managedTargets) {
+            if ($managedTarget.Contains($pageLabel) -or $pageLabel.Contains($managedTarget)) {
+                return $true
+            }
+        }
+    }
+
+    return $false
+}
+
+function Get-ActiveManagedPlaceholderPlanFromManifest {
+    param([Parameter(Mandatory)]$Manifest)
+
+    $enabledManagedFileItems = @(
+        @($Manifest.items) | Where-Object {
+            $itemEnabled = $true
+            if ($null -ne $_.enabled) {
+                $itemEnabled = [bool]$_.enabled
+            }
+
+            $itemType = ([string]$(if ($_.type) { $_.type } else { "file" })).Trim().ToLowerInvariant()
+            $itemEnabled -and $itemType -eq "file"
+        }
+    )
+
+    $byPlaceholderDest = @{}
+
+    foreach ($item in @($Manifest.items)) {
+        if ($null -eq $item) { continue }
+
+        $itemEnabled = $true
+        if ($null -ne $item.enabled) {
+            $itemEnabled = [bool]$item.enabled
+        }
+
+        $itemType = ([string]$(if ($item.type) { $item.type } else { "file" })).Trim().ToLowerInvariant()
+        if (-not $itemEnabled -or $itemType -ne "page") {
+            continue
+        }
+
+        $matchedManagedItem = @(
+            $enabledManagedFileItems | Where-Object {
+                Test-ManagedPlaceholderShadowMatch -PageItem $item -ManagedItem $_
+            }
+        ) | Select-Object -First 1
+
+        if ($null -eq $matchedManagedItem) {
+            continue
+        }
+
+        $destKey = Get-ManifestDestinationKey -RelativePath ([string]$item.dest)
+        if (-not $byPlaceholderDest.ContainsKey($destKey)) {
+            $byPlaceholderDest[$destKey] = [PSCustomObject]@{
+                PlaceholderItem = $item
+                ManagedItem     = $matchedManagedItem
+            }
+        }
+    }
+
+    return $byPlaceholderDest
+}
+
 function Get-ShortcutDefinitionsFromManifest {
     param([Parameter(Mandatory)][string]$Root)
 
     $manifest = Get-BundledManifestTemplate -Root $Root
     $links = @()
+    $suppressedPaths = @()
+    $activeManagedPlaceholderPlan = Get-ActiveManagedPlaceholderPlanFromManifest -Manifest $manifest
 
     foreach ($item in $manifest.items) {
         $enabled = $true
@@ -555,7 +706,15 @@ function Get-ShortcutDefinitionsFromManifest {
             continue
         }
 
-        $destPath = Resolve-RootChildPath -Root $Root -RelativePath ([string]$item.dest)
+        $destRel = ([string]$item.dest).Trim()
+        $destKey = Get-ManifestDestinationKey -RelativePath $destRel
+        if ($activeManagedPlaceholderPlan.ContainsKey($destKey)) {
+            Write-Log "Skipped placeholder creation because item is active managed download: $destRel" "INFO"
+            $suppressedPaths += Resolve-RootChildPath -Root $Root -RelativePath $destRel
+            continue
+        }
+
+        $destPath = Resolve-RootChildPath -Root $Root -RelativePath $destRel
         $links += [PSCustomObject]@{
             Folder = Split-Path -Parent $destPath
             Name   = Split-Path -Leaf $destPath
@@ -563,16 +722,23 @@ function Get-ShortcutDefinitionsFromManifest {
         }
     }
 
-    return $links
+    return [PSCustomObject]@{
+        Links           = $links
+        SuppressedPaths = $suppressedPaths
+    }
 }
 
 function Get-ManagedCatalogDataFromManifest {
     param([Parameter(Mandatory)][string]$Root)
 
     $manifest = Get-BundledManifestTemplate -Root $Root
-    $auto = New-Object System.Collections.Generic.List[object]
+    $activeManaged = New-Object System.Collections.Generic.List[object]
+    $disabledEligible = New-Object System.Collections.Generic.List[object]
+    $info = New-Object System.Collections.Generic.List[object]
+    $placeholder = New-Object System.Collections.Generic.List[object]
     $manual = New-Object System.Collections.Generic.List[object]
     $review = New-Object System.Collections.Generic.List[object]
+    $otherPages = New-Object System.Collections.Generic.List[object]
 
     foreach ($item in @($manifest.items)) {
         if ($null -eq $item) { continue }
@@ -582,13 +748,28 @@ function Get-ManagedCatalogDataFromManifest {
             $isEnabled = [bool]$item.enabled
         }
 
-        if (-not $isEnabled) { continue }
-
         $type = if ($item.type) { ([string]$item.type).Trim().ToLowerInvariant() } else { "file" }
         $notes = if ($item.notes) { ([string]$item.notes).Trim().ToLowerInvariant() } else { "" }
 
         if ($type -eq "file") {
-            [void]$auto.Add($item)
+            if ($isEnabled) {
+                [void]$activeManaged.Add($item)
+            }
+            else {
+                [void]$disabledEligible.Add($item)
+            }
+            continue
+        }
+
+        if (-not $isEnabled) { continue }
+
+        if ($notes.StartsWith("info shortcut:")) {
+            [void]$info.Add($item)
+            continue
+        }
+
+        if ($notes.StartsWith("placeholder only:")) {
+            [void]$placeholder.Add($item)
             continue
         }
 
@@ -599,14 +780,21 @@ function Get-ManagedCatalogDataFromManifest {
 
         if ($notes.StartsWith("review first:")) {
             [void]$review.Add($item)
+            continue
         }
+
+        [void]$otherPages.Add($item)
     }
 
     return [PSCustomObject]@{
-        Manifest = $manifest
-        Auto     = $auto.ToArray()
-        Manual   = $manual.ToArray()
-        Review   = $review.ToArray()
+        Manifest          = $manifest
+        ActiveManaged     = $activeManaged.ToArray()
+        DisabledEligible  = $disabledEligible.ToArray()
+        Info              = $info.ToArray()
+        Placeholder       = $placeholder.ToArray()
+        Manual            = $manual.ToArray()
+        Review            = $review.ToArray()
+        OtherPages        = $otherPages.ToArray()
     }
 }
 
@@ -615,7 +803,7 @@ function Get-ManagedDownloadRankingFromManifest {
 
     $catalogData = Get-ManagedCatalogDataFromManifest -Root $Root
     return @(
-        $catalogData.Auto |
+        $catalogData.ActiveManaged |
         Sort-Object `
             @{ Expression = {
                     if ($null -ne $_.maintenanceRank -and -not [string]::IsNullOrWhiteSpace([string]$_.maintenanceRank)) {
@@ -703,19 +891,36 @@ function Get-DownloadCatalogTextFromManifest {
     param([Parameter(Mandatory)][string]$Root)
 
     $catalogData = Get-ManagedCatalogDataFromManifest -Root $Root
-    $summary = Get-ManagedDownloadSummaryFromItems -Items @($catalogData.Auto)
+    $summary = Get-ManagedDownloadSummaryFromItems -Items @($catalogData.ActiveManaged)
     $lines = New-Object System.Collections.Generic.List[string]
+    $borderlineText = if (@($summary.BorderlineItems).Count -gt 0) {
+        ($summary.BorderlineItems | ForEach-Object { [string]$_.name }) -join "; "
+    }
+    else {
+        "none"
+    }
+    $nextCycleText = if (@($summary.NextCycleItems).Count -gt 0) {
+        ($summary.NextCycleItems | ForEach-Object { "[" + [string]$_.maintenanceRank + "] " + [string]$_.name }) -join "; "
+    }
+    else {
+        "none"
+    }
 
     [void]$lines.Add("ForgerEMS Download Catalog")
     [void]$lines.Add("==========================")
     [void]$lines.Add("")
-    [void]$lines.Add("The Ventoy core uses three practical catalog buckets:")
+    [void]$lines.Add("The Ventoy core uses explicit catalog roles so the")
+    [void]$lines.Add("manifest, folder contents, and UX all describe the")
+    [void]$lines.Add("same business rule:")
     [void]$lines.Add("")
-    [void]$lines.Add("- auto-download safe")
+    [void]$lines.Add("- active managed autodownload")
+    [void]$lines.Add("- disabled but eligible for re-promotion")
+    [void]$lines.Add("- info shortcut")
+    [void]$lines.Add("- placeholder-only")
     [void]$lines.Add("- manual only")
     [void]$lines.Add("- review-first")
     [void]$lines.Add("")
-    [void]$lines.Add("Note: 'safe' still depends on upstream availability.")
+    [void]$lines.Add("Note: managed still depends on upstream availability.")
     [void]$lines.Add("It means the manifest points at an official direct")
     [void]$lines.Add("artifact with checksum coverage today. It does not")
     [void]$lines.Add("guarantee that the upstream will stay reachable or")
@@ -723,52 +928,135 @@ function Get-DownloadCatalogTextFromManifest {
     [void]$lines.Add("")
     [void]$lines.Add("Health snapshot")
     [void]$lines.Add("---------------")
-    [void]$lines.Add(("Total safe items: " + $summary.TotalCount))
+    [void]$lines.Add(("Active managed items: " + $summary.TotalCount))
+    [void]$lines.Add(("Disabled-but-eligible items: " + @($catalogData.DisabledEligible).Count))
+    [void]$lines.Add(("Shortcut roles: info " + @($catalogData.Info).Count + " | placeholder-only " + @($catalogData.Placeholder).Count + " | manual-only " + @($catalogData.Manual).Count + " | review-first " + @($catalogData.Review).Count))
     [void]$lines.Add(("Fragility: high " + $summary.HighCount + " | medium " + $summary.MediumCount + " | low " + $summary.LowCount))
     [void]$lines.Add(("Checksum posture: pinned-only " + $summary.PinnedOnlyCount + " | pinned+remote " + $summary.PinnedRemoteCount + " | remote-only " + $summary.RemoteOnlyCount))
     [void]$lines.Add(("Status: OK " + $summary.OkCount + " | OK-LIMITED " + $summary.OkLimitedCount + " | DRIFT 0"))
-    [void]$lines.Add(("Borderline: " + (($summary.BorderlineItems | ForEach-Object { [string]$_.name }) -join "; ")))
-    [void]$lines.Add(("Inspect first next cycle: " + (($summary.NextCycleItems | ForEach-Object { "[" + [string]$_.maintenanceRank + "] " + [string]$_.name }) -join "; ")))
+    [void]$lines.Add(("Borderline: " + $borderlineText))
+    [void]$lines.Add(("Inspect first next cycle: " + $nextCycleText))
     [void]$lines.Add("")
-    [void]$lines.Add("Auto-download safe")
-    [void]$lines.Add("------------------")
+    [void]$lines.Add("Active managed autodownload")
+    [void]$lines.Add("---------------------------")
     [void]$lines.Add("- manifest-managed file item")
     [void]$lines.Add("- official direct artifact URL")
     [void]$lines.Add("- no gated/account/clickthrough flow")
     [void]$lines.Add("- checksum coverage in the manifest")
-    [void]$lines.Add("- status class is baseline metadata, not a live URL probe")
+    [void]$lines.Add("- setup/update should leave only the real payload after success")
     [void]$lines.Add("")
     [void]$lines.Add("Current items:")
-    foreach ($item in @($summary.RankedItems)) {
-        $status = Get-ManagedDownloadStatusFromItem -Item $item
-        $checksumPosture = Get-ManagedDownloadChecksumPostureFromItem -Item $item
-        [void]$lines.Add(("[{0}] {1} | {2} | {3} | {4} | {5}" -f [int]$item.maintenanceRank, $status, [string]$item.fragilityLevel, [string]$item.sourceType, $checksumPosture, [string]$item.name))
-        if (Test-ManagedDownloadBorderline -Item $item) {
-            [void]$lines.Add("  borderline: yes")
+    if (@($summary.RankedItems).Count -eq 0) {
+        [void]$lines.Add("- none")
+    }
+    else {
+        foreach ($item in @($summary.RankedItems)) {
+            $status = Get-ManagedDownloadStatusFromItem -Item $item
+            $checksumPosture = Get-ManagedDownloadChecksumPostureFromItem -Item $item
+            [void]$lines.Add(("[{0}] {1} | {2} | {3} | {4} | {5}" -f [int]$item.maintenanceRank, $status, [string]$item.fragilityLevel, [string]$item.sourceType, $checksumPosture, [string]$item.name))
+            if (Test-ManagedDownloadBorderline -Item $item) {
+                [void]$lines.Add("  borderline: yes")
+            }
+        }
+    }
+    [void]$lines.Add("")
+    [void]$lines.Add("Disabled but eligible for re-promotion")
+    [void]$lines.Add("--------------------------------------")
+    [void]$lines.Add("- manifest-managed file item")
+    [void]$lines.Add("- currently not active in this manifest")
+    [void]$lines.Add("- should be re-enabled only when the same official")
+    [void]$lines.Add("  source/checksum/verifier rules still hold")
+    [void]$lines.Add("")
+    [void]$lines.Add("Current items:")
+    if (@($catalogData.DisabledEligible).Count -eq 0) {
+        [void]$lines.Add("- none")
+    }
+    else {
+        foreach ($item in @(
+            $catalogData.DisabledEligible |
+            Sort-Object `
+                @{ Expression = {
+                        if ($null -ne $_.maintenanceRank -and -not [string]::IsNullOrWhiteSpace([string]$_.maintenanceRank)) {
+                            [int]$_.maintenanceRank
+                        }
+                        else {
+                            [int]::MaxValue
+                        }
+                    }
+                },
+                @{ Expression = { [string]$_.name } }
+        )) {
+            $checksumPosture = Get-ManagedDownloadChecksumPostureFromItem -Item $item
+            [void]$lines.Add(("[{0}] {1} | {2} | {3} | {4}" -f [int]$item.maintenanceRank, [string]$item.fragilityLevel, [string]$item.sourceType, $checksumPosture, [string]$item.name))
+            if (Test-ManagedDownloadBorderline -Item $item) {
+                [void]$lines.Add("  borderline: yes")
+            }
+        }
+    }
+    [void]$lines.Add("")
+    [void]$lines.Add("Info shortcuts")
+    [void]$lines.Add("--------------")
+    [void]$lines.Add("- manifest-managed page shortcut paired with an active")
+    [void]$lines.Add("  managed autodownload item")
+    [void]$lines.Add("- setup/update suppresses the shortcut while the real")
+    [void]$lines.Add("  managed payload owns the slot")
+    [void]$lines.Add("")
+    [void]$lines.Add("Current items:")
+    if (@($catalogData.Info).Count -eq 0) {
+        [void]$lines.Add("- none")
+    }
+    else {
+        foreach ($item in @($catalogData.Info | Sort-Object @{ Expression = { [string]$_.name } })) {
+            [void]$lines.Add("- " + [string]$item.name + " -> " + [string]$item.dest)
+        }
+    }
+    [void]$lines.Add("")
+    [void]$lines.Add("Placeholder-only")
+    [void]$lines.Add("----------------")
+    [void]$lines.Add("- manifest-managed page shortcut only")
+    [void]$lines.Add("- used when an item is intentionally not active managed")
+    [void]$lines.Add("  today, but is not excluded forever")
+    [void]$lines.Add("")
+    [void]$lines.Add("Current items:")
+    if (@($catalogData.Placeholder).Count -eq 0) {
+        [void]$lines.Add("- none")
+    }
+    else {
+        foreach ($item in @($catalogData.Placeholder | Sort-Object @{ Expression = { [string]$_.name } })) {
+            [void]$lines.Add("- " + [string]$item.name + " -> " + [string]$item.dest)
         }
     }
     [void]$lines.Add("")
     [void]$lines.Add("Manual only")
     [void]$lines.Add("-----------")
     [void]$lines.Add("- manifest-managed page shortcut only")
-    [void]$lines.Add("- licensing, redistribution, or install flow makes")
-    [void]$lines.Add("  automation inappropriate in the stable baseline")
+    [void]$lines.Add("- excluded from managed autodownload by legal,")
+    [void]$lines.Add("  corporate, or safety policy")
     [void]$lines.Add("")
     [void]$lines.Add("Current items:")
-    foreach ($item in @($catalogData.Manual)) {
-        [void]$lines.Add("- " + [string]$item.name)
+    if (@($catalogData.Manual).Count -eq 0) {
+        [void]$lines.Add("- none")
+    }
+    else {
+        foreach ($item in @($catalogData.Manual | Sort-Object @{ Expression = { [string]$_.name } })) {
+            [void]$lines.Add("- " + [string]$item.name)
+        }
     }
     [void]$lines.Add("")
     [void]$lines.Add("Review-first")
     [void]$lines.Add("------------")
     [void]$lines.Add("- manifest-managed page shortcut only")
-    [void]$lines.Add("- still manual today because checksum coverage,")
-    [void]$lines.Add("  provenance, or operational stability is not yet")
-    [void]$lines.Add("  good enough for the stable baseline")
+    [void]$lines.Add("- not approved for managed autodownload until checksum,")
+    [void]$lines.Add("  provenance, or operational review is good enough")
     [void]$lines.Add("")
     [void]$lines.Add("Current items:")
-    foreach ($item in @($catalogData.Review)) {
-        [void]$lines.Add("- " + [string]$item.name)
+    if (@($catalogData.Review).Count -eq 0) {
+        [void]$lines.Add("- none")
+    }
+    else {
+        foreach ($item in @($catalogData.Review | Sort-Object @{ Expression = { [string]$_.name } })) {
+            [void]$lines.Add("- " + [string]$item.name)
+        }
     }
     [void]$lines.Add("")
     [void]$lines.Add("See MANAGED-DOWNLOAD-MAINTENANCE.txt for fragility")
@@ -781,30 +1069,44 @@ function Get-ManagedDownloadMaintenanceTextFromManifest {
     param([Parameter(Mandatory)][string]$Root)
 
     $catalogData = Get-ManagedCatalogDataFromManifest -Root $Root
-    $summary = Get-ManagedDownloadSummaryFromItems -Items @($catalogData.Auto)
+    $summary = Get-ManagedDownloadSummaryFromItems -Items @($catalogData.ActiveManaged)
     $rankedItems = @($summary.RankedItems)
     $lines = New-Object System.Collections.Generic.List[string]
+    $borderlineText = if (@($summary.BorderlineItems).Count -gt 0) {
+        ($summary.BorderlineItems | ForEach-Object { [string]$_.name }) -join "; "
+    }
+    else {
+        "none"
+    }
+    $nextCycleText = if (@($summary.NextCycleItems).Count -gt 0) {
+        ($summary.NextCycleItems | ForEach-Object { "[" + [string]$_.maintenanceRank + "] " + [string]$_.name }) -join "; "
+    }
+    else {
+        "none"
+    }
 
     [void]$lines.Add("ForgerEMS Managed Download Maintenance")
     [void]$lines.Add("======================================")
     [void]$lines.Add("")
     [void]$lines.Add("Scope")
     [void]$lines.Add("-----")
-    [void]$lines.Add("This guide applies to the 16 manifest-managed")
-    [void]$lines.Add("auto-download-safe file entries only.")
+    [void]$lines.Add(("This guide applies to the " + $summary.TotalCount + " active"))
+    [void]$lines.Add("manifest-managed autodownload file entries only.")
+    [void]$lines.Add(("Disabled-but-eligible managed candidates: " + @($catalogData.DisabledEligible).Count))
     [void]$lines.Add("")
-    [void]$lines.Add("Safe still depends on upstream availability.")
+    [void]$lines.Add("Managed still depends on upstream availability.")
     [void]$lines.Add("If a vendor moves or removes an official artifact or")
     [void]$lines.Add("checksum source, the entry may need repair or demotion.")
     [void]$lines.Add("")
     [void]$lines.Add("Health snapshot")
     [void]$lines.Add("---------------")
-    [void]$lines.Add(("Total safe items: " + $summary.TotalCount))
+    [void]$lines.Add(("Active managed items: " + $summary.TotalCount))
+    [void]$lines.Add(("Disabled-but-eligible items: " + @($catalogData.DisabledEligible).Count))
     [void]$lines.Add(("Fragility: high " + $summary.HighCount + " | medium " + $summary.MediumCount + " | low " + $summary.LowCount))
     [void]$lines.Add(("Checksum posture: pinned-only " + $summary.PinnedOnlyCount + " | pinned+remote " + $summary.PinnedRemoteCount + " | remote-only " + $summary.RemoteOnlyCount))
     [void]$lines.Add(("Status: OK " + $summary.OkCount + " | OK-LIMITED " + $summary.OkLimitedCount + " | DRIFT 0"))
-    [void]$lines.Add(("Borderline: " + (($summary.BorderlineItems | ForEach-Object { [string]$_.name }) -join "; ")))
-    [void]$lines.Add(("Inspect first next cycle: " + (($summary.NextCycleItems | ForEach-Object { "[" + [string]$_.maintenanceRank + "] " + [string]$_.name }) -join "; ")))
+    [void]$lines.Add(("Borderline: " + $borderlineText))
+    [void]$lines.Add(("Inspect first next cycle: " + $nextCycleText))
     [void]$lines.Add("")
     [void]$lines.Add("Status meanings")
     [void]$lines.Add("---------------")
@@ -824,8 +1126,8 @@ function Get-ManagedDownloadMaintenanceTextFromManifest {
     [void]$lines.Add("- drift is reported without changing the manifest")
     [void]$lines.Add("")
     [void]$lines.Add("Archive outputs are written under:")
-    [void]$lines.Add("- .\\.verify\\managed-download-revalidation\\<timestamp>\\")
-    [void]$lines.Add("- .\\.verify\\managed-download-revalidation\\latest\\")
+    [void]$lines.Add("- %LOCALAPPDATA%\\ForgerEMS\\.verify\\managed-download-revalidation\\<timestamp>\\")
+    [void]$lines.Add("- %LOCALAPPDATA%\\ForgerEMS\\.verify\\managed-download-revalidation\\latest\\")
     [void]$lines.Add("")
     [void]$lines.Add("Expected files:")
     [void]$lines.Add("- managed-download-summary.txt")
@@ -843,10 +1145,13 @@ function Get-ManagedDownloadMaintenanceTextFromManifest {
     [void]$lines.Add("3. Patch the manifest only when the new URL is still an")
     [void]$lines.Add("   official direct artifact with the same legal/operational")
     [void]$lines.Add("   safety profile.")
-    [void]$lines.Add("4. Demote back to review-first when the flow becomes page-")
-    [void]$lines.Add("   only, account-gated, EULA-sensitive, checksum-poor, or")
-    [void]$lines.Add("   provenance becomes ambiguous.")
-    [void]$lines.Add("5. Do not patch around a broken upstream with third-party")
+    [void]$lines.Add("4. If scope must be narrowed temporarily while the item is")
+    [void]$lines.Add("   still otherwise acceptable, keep the official page")
+    [void]$lines.Add("   shortcut and classify it as disabled-but-eligible.")
+    [void]$lines.Add("5. Demote to review-first or manual-only when the flow")
+    [void]$lines.Add("   becomes page-only, account-gated, EULA-sensitive,")
+    [void]$lines.Add("   checksum-poor, or provenance becomes ambiguous.")
+    [void]$lines.Add("6. Do not patch around a broken upstream with third-party")
     [void]$lines.Add("   mirrors, repacks, scraper URLs, or unofficial checksum")
     [void]$lines.Add("   sources just to keep automation alive.")
     [void]$lines.Add("")
@@ -871,8 +1176,11 @@ function Get-ManagedDownloadMaintenanceTextFromManifest {
     [void]$lines.Add("- checksum source disappears -> rely only on a safely")
     [void]$lines.Add("  recomputed pinned hash if the official artifact is still")
     [void]$lines.Add("  clear; otherwise demote")
-    [void]$lines.Add("- formerly safe item must be demoted -> convert it back to")
-    [void]$lines.Add("  a review-first page entry, preserve the official page")
+    [void]$lines.Add("- formerly active item pauses for scope reasons -> keep the")
+    [void]$lines.Add("  official page shortcut, classify it as disabled-but-")
+    [void]$lines.Add("  eligible, and remove active managed claims")
+    [void]$lines.Add("- formerly active item becomes questionable -> convert it to")
+    [void]$lines.Add("  review-first or manual-only, preserve the official page")
     [void]$lines.Add("  shortcut, and remove automated download claims")
     [void]$lines.Add("")
     [void]$lines.Add("Maintenance cadence")
@@ -937,7 +1245,8 @@ function Ensure-Folder {
 function Resolve-UsbRoot {
     param(
         [string]$Drive,
-        [string]$Root
+        [string]$Root,
+        [switch]$NonInteractive
     )
 
     if ($Drive -and $Root) {
@@ -973,6 +1282,10 @@ function Resolve-UsbRoot {
             Write-Host ("Detected the release bundle at '{0}'. Using USB root '{1}'." -f $currentBundleRoot, $scriptDriveRoot) -ForegroundColor Cyan
             return $scriptDriveRoot
         }
+    }
+
+    if ($NonInteractive) {
+        throw "A USB target must be supplied with -DriveLetter or -UsbRoot when -NonInteractive is used."
     }
 
     Write-Host ""
@@ -1021,6 +1334,149 @@ URL=$Url
     }
     else {
         Write-Log "Would write shortcut: $ShortcutPath" "INFO"
+    }
+}
+
+function Remove-PathIfPresent {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [string]$Description = "Remove legacy generated item",
+        [switch]$Recurse
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $false
+    }
+
+    if ($PSCmdlet.ShouldProcess($Path, $Description)) {
+        Remove-Item -LiteralPath $Path -Recurse:$Recurse -Force
+        Write-Log "Removed legacy item: $Path" "OK"
+    }
+    else {
+        Write-Log "Would remove legacy item: $Path" "INFO"
+    }
+
+    return $true
+}
+
+function Remove-DirectoryIfEmpty {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [string]$Description = "Remove empty legacy directory"
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
+        return $false
+    }
+
+    $children = @(Get-ChildItem -LiteralPath $Path -Force -ErrorAction SilentlyContinue)
+    if ($children.Count -gt 0) {
+        return $false
+    }
+
+    return Remove-PathIfPresent -Path $Path -Description $Description -Recurse
+}
+
+function Remove-LegacyGeneratedTree {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [string[]]$AllowedFileNames = @(),
+        [string[]]$AllowedDirectoryNames = @(),
+        [string]$Description = "Remove legacy generated tree"
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
+        return $false
+    }
+
+    $unexpectedFiles = @(
+        Get-ChildItem -LiteralPath $Path -Recurse -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -notin $AllowedFileNames }
+    )
+
+    if ($unexpectedFiles.Count -gt 0) {
+        Write-Log "Retained legacy folder with unexpected files: $Path" "WARN"
+        return $false
+    }
+
+    $unexpectedDirectories = @(
+        Get-ChildItem -LiteralPath $Path -Recurse -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -notin $AllowedDirectoryNames }
+    )
+
+    if ($unexpectedDirectories.Count -gt 0) {
+        Write-Log "Retained legacy folder with unexpected subfolders: $Path" "WARN"
+        return $false
+    }
+
+    return Remove-PathIfPresent -Path $Path -Description $Description -Recurse
+}
+
+function Test-InteractivePromptAvailable {
+    try {
+        if (-not [Environment]::UserInteractive) {
+            return $false
+        }
+    }
+    catch {
+        return $false
+    }
+
+    try {
+        if ([Console]::IsInputRedirected) {
+            return $false
+        }
+    }
+    catch {
+        return $false
+    }
+
+    try {
+        if ([Console]::IsOutputRedirected -or [Console]::IsErrorRedirected) {
+            return $false
+        }
+    }
+    catch {
+        return $false
+    }
+
+    return $true
+}
+
+function Get-PowerShellExePath {
+    $candidate = Join-Path $PSHOME "powershell.exe"
+    if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+        return $candidate
+    }
+
+    return "powershell.exe"
+}
+
+function Start-ManagedDownloadPassInBackground {
+    param(
+        [Parameter(Mandatory)][string]$UpdateScriptPath,
+        [Parameter(Mandatory)][string]$Root,
+        [Parameter(Mandatory)][string]$ManifestName,
+        [Parameter(Mandatory)][string]$LogDirectory
+    )
+
+    $powerShellExe = Get-PowerShellExePath
+    $stamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    $stdoutPath = J $LogDirectory ("update-launcher_" + $stamp + ".stdout.log")
+    $stderrPath = J $LogDirectory ("update-launcher_" + $stamp + ".stderr.log")
+
+    $process = Start-Process `
+        -FilePath $powerShellExe `
+        -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $UpdateScriptPath, "-UsbRoot", $Root, "-ManifestName", $ManifestName) `
+        -RedirectStandardOutput $stdoutPath `
+        -RedirectStandardError $stderrPath `
+        -WindowStyle Hidden `
+        -PassThru
+
+    return [PSCustomObject]@{
+        ProcessId  = $process.Id
+        StdoutPath = $stdoutPath
+        StderrPath = $stderrPath
     }
 }
 
@@ -1077,7 +1533,7 @@ if ($ShowVersion) {
     return
 }
 
-$root = Resolve-UsbRoot -Drive $DriveLetter -Root $UsbRoot
+$root = Resolve-UsbRoot -Drive $DriveLetter -Root $UsbRoot -NonInteractive:$NonInteractive
 
 $versionInfo = Get-VentoyCoreVersionInfo
 
@@ -1107,19 +1563,14 @@ $paths = @(
     (J $root "Tools\Portable\Security"),
 
     (J $root "Drivers"),
-    (J $root "Drivers\Chipset_Intel"),
-    (J $root "Drivers\Intel_LAN"),
-    (J $root "Drivers\Intel_WiFi"),
-    (J $root "Drivers\Realtek_LAN"),
-    (J $root "Drivers\Storage_NVMe"),
-    (J $root "Drivers\Touchpad_ELAN"),
-    (J $root "Drivers\Touchpad_Synaptics"),
-
-    (J $root "ForgerTools"),
-    (J $root "ForgerTools\DisplayForger"),
-    (J $root "ForgerTools\HardwareForger"),
-    (J $root "ForgerTools\EncryptionForge"),
-    (J $root "ForgerTools\QuickToolsHealthCheck"),
+    (J $root "Drivers\Audio"),
+    (J $root "Drivers\Bluetooth"),
+    (J $root "Drivers\Chipset"),
+    (J $root "Drivers\Graphics"),
+    (J $root "Drivers\Input"),
+    (J $root "Drivers\Network"),
+    (J $root "Drivers\Storage"),
+    (J $root "Drivers\Wireless"),
 
     (J $root "_logs"),
     (J $root "_reports"),
@@ -1127,7 +1578,6 @@ $paths = @(
     (J $root "_archive"),
 
     (J $root "Docs"),
-    (J $root "IfScriptFails(ManualSetup)"),
     (J $root "MediCat.USB")
 )
 
@@ -1135,7 +1585,51 @@ foreach ($p in $paths) {
     Ensure-Folder -Path $p
 }
 
-$links = Get-ShortcutDefinitionsFromManifest -Root $root
+$legacyGeneratedManualFolder = J $root "IfScriptFails(ManualSetup)"
+Remove-LegacyGeneratedTree -Path $legacyGeneratedManualFolder -AllowedFileNames @(
+    "Windows11_Official.txt",
+    "Windows10_Official.txt",
+    "Ventoy_Official.txt",
+    "MediCat_Manual.txt",
+    "SergeiStrelec_Manual.txt",
+    "Hirens_Manual.txt"
+) -Description "Remove legacy manual fallback notes folder" | Out-Null
+
+$legacyForgerToolsFolder = J $root "ForgerTools"
+Remove-LegacyGeneratedTree -Path $legacyForgerToolsFolder -AllowedDirectoryNames @(
+    "DisplayForger",
+    "HardwareForger",
+    "EncryptionForge",
+    "QuickToolsHealthCheck"
+) -Description "Remove legacy ForgerTools placeholder folder" | Out-Null
+
+foreach ($legacyDriverFolder in @(
+    (J $root "Drivers\Chipset_Intel"),
+    (J $root "Drivers\Intel_LAN"),
+    (J $root "Drivers\Intel_WiFi"),
+    (J $root "Drivers\Realtek_LAN"),
+    (J $root "Drivers\Storage_NVMe"),
+    (J $root "Drivers\Touchpad_ELAN"),
+    (J $root "Drivers\Touchpad_Synaptics")
+)) {
+    Remove-DirectoryIfEmpty -Path $legacyDriverFolder -Description "Remove empty legacy driver folder" | Out-Null
+}
+
+foreach ($legacyShortcut in @(
+    (J $root "DOWNLOAD - MediCat.url"),
+    (J $root "Drivers\DRIVERS - Intel Download Center.url"),
+    (J $root "Drivers\DRIVERS - Realtek Downloads.url")
+)) {
+    Remove-PathIfPresent -Path $legacyShortcut -Description "Remove legacy generated shortcut" | Out-Null
+}
+
+$shortcutPlan = Get-ShortcutDefinitionsFromManifest -Root $root
+
+foreach ($suppressedPath in @($shortcutPlan.SuppressedPaths | Sort-Object -Unique)) {
+    Remove-PathIfPresent -Path $suppressedPath -Description "Remove placeholder shortcut for active managed download" | Out-Null
+}
+
+$links = @($shortcutPlan.Links)
 
 foreach ($item in $links) {
     Ensure-Folder -Path $item.Folder
@@ -1143,51 +1637,14 @@ foreach ($item in $links) {
     Write-UrlShortcut -ShortcutPath $shortcut -Url $item.Url
 }
 
-$manualItems = @(
-    @{
-        Title = "Windows 11 Official Download"
-        Url = "https://www.microsoft.com/software-download/windows11"
-        Note = (J $root "IfScriptFails(ManualSetup)\Windows11_Official.txt")
-        Notes = "Microsoft changes download flow often. Use official page."
-    },
-    @{
-        Title = "Windows 10 Official Download"
-        Url = "https://www.microsoft.com/software-download/windows10ISO"
-        Note = (J $root "IfScriptFails(ManualSetup)\Windows10_Official.txt")
-        Notes = "Microsoft changes download flow often. Use official page."
-    },
-    @{
-        Title = "Ventoy Official Download"
-        Url = "https://www.ventoy.net/en/download.html"
-        Note = (J $root "IfScriptFails(ManualSetup)\Ventoy_Official.txt")
-        Notes = "Install Ventoy manually with Ventoy2Disk before using this USB as a boot device."
-    },
-    @{
-        Title = "MediCat USB"
-        Url = "https://medicatusb.com/"
-        Note = (J $root "IfScriptFails(ManualSetup)\MediCat_Manual.txt")
-        Notes = "Manual/folder-based toolkit. Distribution and size vary."
-    },
-    @{
-        Title = "Sergei Strelec"
-        Url = "https://sergeistrelec.name/"
-        Note = (J $root "IfScriptFails(ManualSetup)\SergeiStrelec_Manual.txt")
-        Notes = "Community project; use your preferred known-good source/workflow."
-    },
-    @{
-        Title = "Hiren's BootCD PE"
-        Url = "https://www.hirensbootcd.org/download/"
-        Note = (J $root "IfScriptFails(ManualSetup)\Hirens_Manual.txt")
-        Notes = "Keep a known-good copy from the official page."
-    }
-)
-
-foreach ($item in $manualItems) {
-    Add-ManualLinkFile -Path $item.Note -Title $item.Title -Url $item.Url -Notes $item.Notes
-}
-
-if (-not $OwnerName -and -not $WhatIfPreference) {
+if (-not $OwnerName -and -not $WhatIfPreference -and -not $NonInteractive -and (Test-InteractivePromptAvailable)) {
     $OwnerName = Read-Host "Optional: Enter your name for README (or press Enter to skip)"
+}
+elseif (-not $OwnerName -and -not $WhatIfPreference -and $NonInteractive) {
+    Write-Log "Non-interactive mode is active. README owner prompt was skipped." "INFO"
+}
+elseif (-not $OwnerName) {
+    Write-Log "Owner name was not supplied. README owner will remain unset." "INFO"
 }
 
 $ownerText = if ($OwnerName -and $OwnerName.Trim().Length -gt 0) { $OwnerName.Trim() } else { "Not set" }
@@ -1210,7 +1667,7 @@ Status:  Verify after major updates
 BOOT (Ventoy)
 -------------
 $root\ISO\Windows -> Windows 10/11 ISOs + WinPE tools
-$root\ISO\Linux   -> Ubuntu, Mint, Kali, SystemRescue
+$root\ISO\Linux   -> Ubuntu, Mint, Kali, Fedora, Endless OS, SystemRescue
 $root\ISO\Tools   -> Clonezilla, Rescuezilla, GParted, MemTest, Hiren's PE, UBCD
 
 PORTABLE APPS (Run in Windows / WinPE)
@@ -1226,14 +1683,14 @@ $root\Tools\Portable\Security
 
 DRIVERS
 -------
-$root\Drivers
-
-FORGER APPS
------------
-$root\ForgerTools\DisplayForger
-$root\ForgerTools\HardwareForger
-$root\ForgerTools\EncryptionForge
-$root\ForgerTools\QuickToolsHealthCheck
+$root\Drivers\Audio
+$root\Drivers\Bluetooth
+$root\Drivers\Chipset
+$root\Drivers\Graphics
+$root\Drivers\Input
+$root\Drivers\Network
+$root\Drivers\Storage
+$root\Drivers\Wireless
 
 WORKING FOLDERS
 ---------------
@@ -1250,9 +1707,9 @@ Supported by the Ventoy core lifecycle:
 - _downloads, _archive, and _logs workflow data
 
 Catalog split:
-- auto-download safe -> manifest-managed file items
-- manual only -> manifest-managed page shortcuts only
-- review-first -> manifest-managed page shortcuts only
+- active managed autodownload -> enabled manifest-managed file items
+- disabled but eligible -> disabled manifest-managed file items
+- info / placeholder / manual / review-first -> manifest-managed page shortcuts
 - see Docs\ForgerEMS-Download-Catalog.txt for the current bucket list
 - see Docs\ForgerEMS-Managed-Download-Maintenance.txt for revalidation,
   fragility ranking, and fallback rules
@@ -1261,22 +1718,23 @@ Not fully managed in this repo baseline:
 - portable third-party tools copied into Tools\Portable
 - offline driver bundles under Drivers
 - MediCat.USB
-- packaged/vendor ForgerTools content without its source repo
 
 NOTES
 -----
 - Install Ventoy first with Ventoy2Disk.
 - Copy ISO files into the matching ISO folders.
-- Run Update-ForgerEMS.ps1 to fetch the auto-download-safe bucket.
-- Use the remaining DOWNLOAD shortcuts for manual-only and review-first items.
-- "Safe" still depends on upstream availability.
+- Setup now auto-starts the managed autodownload pass unless -LayoutOnly is used.
+- By default the managed download pass launches in the background.
+- Use -WaitForManagedDownloads if you want Setup to stay attached until downloads finish.
+- Use the remaining DOWNLOAD shortcuts for placeholder/manual/review-first items.
+- Managed autodownload still depends on upstream availability.
 - Revalidate managed downloads before rebuild/shipping:
   .\Verify-VentoyCore.ps1 -RevalidateManagedDownloads
 - Review the latest summary at:
-  .\.verify\managed-download-revalidation\latest\managed-download-summary.txt
+  %LOCALAPPDATA%\ForgerEMS\.verify\managed-download-revalidation\latest\managed-download-summary.txt
 - MediCat is folder-based; place it at root if you use it.
 - Run Update-ForgerEMS.ps1 later to refresh manifest-managed items.
-- Portable apps, drivers, and bundled vendor folders remain manual unless a maintained source/update workflow is added.
+- Portable apps and driver bundles remain manual unless a maintained source/update workflow is added.
 - Re-running this script is safe.
 =====================================================
 "@
@@ -1303,20 +1761,21 @@ Release: $($versionInfo.ReleaseType)
 This script:
 - creates the full folder structure
 - creates URL shortcuts
-- creates manual-download note files
 - writes README and inventory CSV
 - optionally seeds the manifest
 - uses _logs / _downloads / _archive / _reports consistently
 
 Important:
 - Ventoy must still be installed separately
-- Use Update-ForgerEMS.ps1 for the auto-download-safe bucket
-- Manual-only and review-first items still use official page shortcuts
+- Setup auto-starts the managed autodownload pass unless -LayoutOnly is used
+- Setup launches managed downloads in the background by default
+- Use -WaitForManagedDownloads to keep Setup attached until downloads finish
+- Placeholder/manual/review-first items still use official page shortcuts
 - Drivers are intentionally kept at the root, not under ISO
 - Run Update-ForgerEMS.ps1 for manifest-driven refreshes
-- "Safe" still depends on upstream availability; revalidate before rebuilds
+- Managed autodownload still depends on upstream availability; revalidate before rebuilds
 - Run .\Verify-VentoyCore.ps1 -RevalidateManagedDownloads for URL/checksum drift
-- Review .\.verify\managed-download-revalidation\latest\managed-download-summary.txt
+- Review %LOCALAPPDATA%\ForgerEMS\.verify\managed-download-revalidation\latest\managed-download-summary.txt
   before any distribution-intended rebuild
 - Safe to rerun
 
@@ -1331,7 +1790,6 @@ Not fully managed:
 - portable third-party binaries copied into Tools\Portable
 - offline driver packs copied under Drivers
 - MediCat.USB and other large community bundles
-- packaged vendor content without a tracked source/build pipeline
 
 Core folders:
 - ISO\Windows
@@ -1339,7 +1797,6 @@ Core folders:
 - ISO\Tools
 - Drivers
 - Tools\Portable
-- ForgerTools
 - _logs
 - _downloads
 - _archive
@@ -1352,6 +1809,142 @@ if ($PSCmdlet.ShouldProcess($bootstrapNotesPath, "Write bootstrap notes")) {
 }
 else {
     Write-Log "Would write bootstrap notes: $bootstrapNotesPath" "INFO"
+}
+
+$driverGuidePath = J $root "Drivers\README.txt"
+$driverGuide = @"
+ForgerEMS Driver Staging
+========================
+
+Use these folders to keep driver packs tidy:
+- Audio
+- Bluetooth
+- Chipset
+- Graphics
+- Input
+- Network
+- Storage
+- Wireless
+
+Tips
+----
+- Prefer OEM support packages for laptops and all-in-ones.
+- Drop extracted INF folders or vendor installers into the best matching category.
+- Use the DOWNLOAD shortcuts in Drivers\* as starting points for official vendor pages.
+- Keep large vendor packs unzipped only when needed to save space.
+- Archive superseded driver bundles in _archive if you want local rollback copies.
+"@
+
+if ($PSCmdlet.ShouldProcess($driverGuidePath, "Write driver guide")) {
+    Set-Content -LiteralPath $driverGuidePath -Value $driverGuide -Encoding UTF8
+    Write-Log "Driver guide written: $driverGuidePath" "OK"
+}
+else {
+    Write-Log "Would write driver guide: $driverGuidePath" "INFO"
+}
+
+$driverCategoryNotes = [ordered]@{
+    "Audio" = @"
+ForgerEMS Audio Driver Staging
+==============================
+
+Store OEM audio packages here.
+
+Recommended:
+- prefer the laptop or motherboard vendor support page first
+- use Realtek packages only when they match the hardware and OEM workflow
+- keep extracted INF folders here when Windows Setup or Device Manager needs them
+"@
+    "Bluetooth" = @"
+ForgerEMS Bluetooth Driver Staging
+==================================
+
+Store OEM Bluetooth packages here.
+
+Recommended:
+- prefer OEM support pages for laptops and combo Wi-Fi/Bluetooth adapters
+- Intel Bluetooth packages are a good fallback for Intel wireless chipsets
+- keep adapter-specific installers or extracted INF folders here
+"@
+    "Chipset" = @"
+ForgerEMS Chipset Driver Staging
+================================
+
+Store chipset, ME, and related platform packages here.
+
+Recommended:
+- OEM support page first for platform-tuned packages
+- Intel generic packages are useful when OEM support is stale
+- archive older chipset bundles in _archive if you keep rollback copies
+"@
+    "Graphics" = @"
+ForgerEMS Graphics Driver Staging
+=================================
+
+Store GPU driver packages here.
+
+Recommended:
+- keep Intel, AMD, and NVIDIA packages separated by vendor subfolder if needed
+- prefer OEM graphics packages on laptops with switchable graphics
+- keep clean-install helpers such as DDU in Tools\Portable\GPU instead
+"@
+    "Input" = @"
+ForgerEMS Input Driver Staging
+==============================
+
+Store touchpad, keyboard, card-reader, pen, or other input packages here.
+
+Recommended:
+- ELAN and Synaptics drivers are commonly OEM-customized
+- use the PC vendor support page first for touchpad packages
+- keep extracted INF folders here for manual install scenarios
+"@
+    "Network" = @"
+ForgerEMS Network Driver Staging
+================================
+
+Store wired LAN or Ethernet packages here.
+
+Recommended:
+- Realtek and Intel Ethernet packages are the most common starting points
+- keep extracted INF folders here for offline recovery installs
+- archive superseded NIC packs in _archive if you keep rollback copies
+"@
+    "Storage" = @"
+ForgerEMS Storage Driver Staging
+================================
+
+Store NVMe, RAID, VMD, and storage controller packages here.
+
+Recommended:
+- use OEM packages first when Windows Setup cannot see a drive
+- Intel RST / VMD packages are common on modern Intel platforms
+- keep extracted load-driver folders here for Windows install media use
+"@
+    "Wireless" = @"
+ForgerEMS Wireless Driver Staging
+=================================
+
+Store Wi-Fi packages here.
+
+Recommended:
+- use OEM Wi-Fi packages first on laptops
+- Intel Wi-Fi packages are useful for Intel adapters when OEM support is outdated
+- keep extracted INF folders here for offline installs
+"@
+}
+
+foreach ($driverCategory in $driverCategoryNotes.Keys) {
+    $driverCategoryReadmePath = J $root ("Drivers\" + $driverCategory + "\README.txt")
+    $driverCategoryReadme = $driverCategoryNotes[$driverCategory]
+
+    if ($PSCmdlet.ShouldProcess($driverCategoryReadmePath, "Write driver category guide")) {
+        Set-Content -LiteralPath $driverCategoryReadmePath -Value $driverCategoryReadme -Encoding UTF8
+        Write-Log "Driver category guide written: $driverCategoryReadmePath" "OK"
+    }
+    else {
+        Write-Log "Would write driver category guide: $driverCategoryReadmePath" "INFO"
+    }
 }
 
 $downloadCatalogPath = J $root "Docs\ForgerEMS-Download-Catalog.txt"
@@ -1390,16 +1983,6 @@ foreach ($item in $links) {
     }
 }
 
-foreach ($item in $manualItems) {
-    $inventoryRows += [PSCustomObject]@{
-        Type   = "ManualNote"
-        Folder = Split-Path -Parent $item.Note
-        Name   = Split-Path -Leaf $item.Note
-        Url    = $item.Url
-        Notes  = $item.Notes
-    }
-}
-
 if ($PSCmdlet.ShouldProcess($inventoryPath, "Write inventory CSV")) {
     $inventoryRows | Export-Csv -LiteralPath $inventoryPath -NoTypeInformation -Encoding UTF8
     Write-Log "Inventory written: $inventoryPath" "OK"
@@ -1427,6 +2010,60 @@ if ($SeedManifest) {
     }
 }
 
+if (-not $LayoutOnly) {
+    $updateScriptPath = Join-Path $PSScriptRoot "Update-ForgerEMS.ps1"
+    if (-not (Test-Path -LiteralPath $updateScriptPath -PathType Leaf)) {
+        throw "Managed download pass could not start because the updater was not found: $updateScriptPath"
+    }
+
+    $updateParameters = @{
+        UsbRoot      = $root
+        ManifestName = $ManifestName
+    }
+
+    try {
+        if ($WhatIfPreference) {
+            $updateParameters["WhatIf"] = $true
+            Write-Log "Setup preview will include the managed download pass." "INFO"
+            & $updateScriptPath @updateParameters
+            Write-Log "Managed download pass completed in preview mode." "OK"
+        }
+        elseif ($WaitForManagedDownloads) {
+            Write-Log "Starting managed download pass in attached mode..." "INFO"
+            & $updateScriptPath @updateParameters
+            Write-Log "Managed download pass completed." "OK"
+        }
+        else {
+            $logsRoot = J $root "_logs"
+            Write-Log "Starting managed download pass in background..." "INFO"
+            try {
+                $launchInfo = Start-ManagedDownloadPassInBackground `
+                    -UpdateScriptPath $updateScriptPath `
+                    -Root $root `
+                    -ManifestName $ManifestName `
+                    -LogDirectory $logsRoot
+
+                Write-Log "Managed download pass started in background (PID $($launchInfo.ProcessId))." "OK"
+                Write-Log "Watch $logsRoot for update_*.log and launcher output if you want live progress." "INFO"
+                Write-Log "Launcher stdout: $($launchInfo.StdoutPath)" "INFO"
+                Write-Log "Launcher stderr: $($launchInfo.StderrPath)" "INFO"
+            }
+            catch {
+                Write-Log "Background launch failed. Falling back to attached mode: $($_.Exception.Message)" "WARN"
+                & $updateScriptPath @updateParameters
+                Write-Log "Managed download pass completed." "OK"
+            }
+        }
+    }
+    catch {
+        Write-Log "Managed download pass did not fully complete: $($_.Exception.Message)" "ERROR"
+        throw
+    }
+}
+else {
+    Write-Log "LayoutOnly was specified. Managed download pass skipped." "WARN"
+}
+
 Open-UrlsIfRequested -Urls @(
     "https://www.ventoy.net/en/download.html",
     "https://www.microsoft.com/software-download/windows11",
@@ -1439,8 +2076,19 @@ Open-UrlsIfRequested -Urls @(
     "https://medicatusb.com/"
 ) -Enabled:$OpenManualPages
 
-Write-Log "Done. ForgerEMS layout created and shortcuts/docs added." "OK"
-Write-Log "Next: install Ventoy, add ISOs/tools, then run Update-ForgerEMS.ps1." "OK"
+Write-Log "Done. ForgerEMS layout created and shortcuts/docs updated." "OK"
+if ($LayoutOnly) {
+    Write-Log "Next: install Ventoy, add ISO/manual items, then run Update-ForgerEMS.ps1 when you want managed downloads." "OK"
+}
+elseif ($WaitForManagedDownloads) {
+    Write-Log "Next: install Ventoy, review any remaining placeholder/manual/review-first shortcuts, and rerun Update-ForgerEMS.ps1 later for refreshes." "OK"
+}
+else {
+    $rootLogsPath = J $root "_logs"
+    $rootDownloadsPath = J $root "_downloads"
+    Write-Log "Next: downloads are running in the background; watch $rootLogsPath and $rootDownloadsPath for activity." "OK"
+    Write-Log "Next after downloads: install Ventoy if you have not already, review remaining placeholder/manual/review-first shortcuts, and rerun Update-ForgerEMS.ps1 later for refreshes." "OK"
+}
 if ($script:LogFile -and (Test-Path -LiteralPath (Split-Path -Parent $script:LogFile))) {
     Write-Log "Log saved: $script:LogFile" "OK"
 }

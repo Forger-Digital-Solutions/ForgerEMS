@@ -1,4 +1,0 @@
-﻿MediCat USB
-https://medicatusb.com/
-
-Manual/folder-based toolkit. Distribution and size vary.

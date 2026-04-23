@@ -1,4 +1,0 @@
-﻿Ventoy Official Download
-https://www.ventoy.net/en/download.html
-
-Install Ventoy manually with Ventoy2Disk before using this USB as a boot device.

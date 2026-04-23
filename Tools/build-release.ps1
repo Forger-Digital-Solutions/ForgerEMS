@@ -333,6 +333,7 @@ function Get-ReleaseChecksumRelativePaths {
         "Setup_Toolkit.ps1",
         "Update-ForgerEMS.ps1",
         "Verify-VentoyCore.ps1",
+        "ForgerEMS.Runtime.ps1",
         "ForgerEMS.updates.json",
         "manifests/ForgerEMS.updates.schema.json",
         "manifests/vendor.inventory.json",
@@ -341,6 +342,21 @@ function Get-ReleaseChecksumRelativePaths {
         "RELEASE-BUNDLE.txt"
     )) {
         [void]$paths.Add($path)
+    }
+
+    foreach ($optionalPath in @(
+        "docs/DOWNLOAD-CATALOG.txt",
+        "docs/ForgerEMS-Quick-Start.txt",
+        "docs/MANAGED-DOWNLOAD-MAINTENANCE.txt",
+        "docs/README.txt",
+        "docs/ReadME.html",
+        "docs/ScriptCommands.txt",
+        "tools/ScriptCommands.txt"
+    )) {
+        $fullOptionalPath = Join-Path $TargetRoot ($optionalPath -replace '/', '\')
+        if (Test-Path -LiteralPath $fullOptionalPath) {
+            [void]$paths.Add($optionalPath)
+        }
     }
 
     foreach ($optionalPath in @(
@@ -463,6 +479,24 @@ function Write-ReleaseVerificationHistory {
         $managedArtifactMode = "included-current-verification-artifacts"
         $snapshotGeneratedUtc = (Get-Item -LiteralPath (Join-Path $managedSourceRoot "managed-download-summary.txt")).LastWriteTimeUtc.ToString("yyyy-MM-ddTHH:mm:ssZ")
     }
+    else {
+        $hasTrackedManagedSnapshot = $true
+        foreach ($artifactName in $managedArtifactNames) {
+            if (-not (Test-Path -LiteralPath (Join-Path $releaseHistoryRoot $artifactName))) {
+                $hasTrackedManagedSnapshot = $false
+                break
+            }
+        }
+
+        if ($hasTrackedManagedSnapshot) {
+            foreach ($artifactName in $managedArtifactNames) {
+                [void]$includedFiles.Add($artifactName)
+            }
+
+            $managedArtifactMode = "included-tracked-verification-artifacts"
+            $snapshotGeneratedUtc = (Get-Item -LiteralPath (Join-Path $releaseHistoryRoot "managed-download-summary.txt")).LastWriteTimeUtc.ToString("yyyy-MM-ddTHH:mm:ssZ")
+        }
+    }
 
     $historyReadme = @"
 Release Verification History
@@ -480,6 +514,9 @@ Managed download artifact mode:
 - included-current-verification-artifacts
   Current managed-download summary/revalidation files were copied from
   .verify\managed-download-revalidation\latest at build time.
+- included-tracked-verification-artifacts
+  Tracked release-history summary/revalidation files were bundled because no
+  fresher .verify\managed-download-revalidation\latest snapshot was present.
 - operator-generated-after-build
   No current managed-download snapshot was bundled. Run
   .\Verify-VentoyCore.ps1 -RevalidateManagedDownloads after build and record
@@ -516,7 +553,7 @@ Retention:
 
     [void]$statusLines.Add("")
     [void]$statusLines.Add("Operator action:")
-    if ($managedArtifactMode -eq "included-current-verification-artifacts") {
+    if ($managedArtifactMode -in @("included-current-verification-artifacts", "included-tracked-verification-artifacts")) {
         [void]$statusLines.Add("- review the bundled managed-download snapshot before ship")
         [void]$statusLines.Add("- regenerate after build if a fresher verification pass is required")
     }
@@ -630,7 +667,8 @@ foreach ($scriptName in @(
     "Setup_USB_Toolkit.ps1",
     "Setup_Toolkit.ps1",
     "Update-ForgerEMS.ps1",
-    "Verify-VentoyCore.ps1"
+    "Verify-VentoyCore.ps1",
+    "ForgerEMS.Runtime.ps1"
 )) {
     Copy-Item -LiteralPath (Join-Path $canonicalScriptRoot $scriptName) -Destination (Join-Path $targetRoot $scriptName) -Force
 }
@@ -674,6 +712,7 @@ Compatibility/support entrypoints:
 - Setup_USB_Toolkit.ps1
 - Setup_Toolkit.ps1
 - Verify-VentoyCore.ps1
+- ForgerEMS.Runtime.ps1
 
 Included support content:
 - docs\

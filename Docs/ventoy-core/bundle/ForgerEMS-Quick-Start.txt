@@ -74,7 +74,7 @@ Setup-ForgerEMS.ps1 can:
     _logs
     _reports
 - add DOWNLOAD shortcuts (.url) to official/reputable pages
-- keep manual-only and review-first page shortcuts distinct
+- keep active-managed page companions separate from placeholder/manual/review-first shortcuts
 - write inventory/readme/helper files
 - optionally seed the update manifest:
     ForgerEMS.updates.json
@@ -149,7 +149,7 @@ WHAT THE FOLDER LAYOUT LOOKS LIKE
 ====================================================
 
 ISO\
-  Linux\        -> Ubuntu, Mint, Kali, SystemRescue
+  Linux\        -> Ubuntu, Mint, Kali, Fedora, Endless OS, SystemRescue
   Tools\        -> Clonezilla, Rescuezilla, GParted, MemTest, Hiren's, UBCD
   Windows\      -> Windows 10/11 ISOs + WinPE tools
 
@@ -164,19 +164,14 @@ Tools\Portable\
   Security\     -> optional portable security tools
 
 Drivers\
-  Chipset_Intel\
-  Intel_LAN\
-  Intel_WiFi\
-  Realtek_LAN\
-  Storage_NVMe\
-  Touchpad_ELAN\
-  Touchpad_Synaptics\
-
-ForgerTools\
-  DisplayForger\
-  HardwareForger\
-  EncryptionForge\
-  QuickToolsHealthCheck\
+  Audio\
+  Bluetooth\
+  Chipset\
+  Graphics\
+  Input\
+  Network\
+  Storage\
+  Wireless\
 
 Optional / Working Folders
   MediCat.USB\
@@ -211,7 +206,7 @@ Copy bootable ISO files into the matching folders:
 
 Examples:
 - Windows 10 / 11 ISO -> ISO\Windows\
-- Ubuntu / Mint / Kali -> ISO\Linux\
+- Ubuntu / Mint / Kali / Fedora / Endless OS -> ISO\Linux\
 - Clonezilla / GParted / Rescuezilla -> ISO\Tools\
 
 After that, boot from the USB using your PC's boot menu.
@@ -235,12 +230,20 @@ Examples:
 - Windows download pages
 - Hiren's BootCD PE
 - HWiNFO
-- Intel / Realtek driver pages
+- AdwCleaner / Emsisoft Emergency Kit
+- AMD / Intel / NVIDIA / Realtek driver pages
 
 These are shortcut/info entries only.
 They do not download files by themselves.
 
-Manifest-managed downloads and updates are handled by:
+Setup now auto-starts the managed download pass
+unless you use -LayoutOnly.
+
+By default Setup launches managed downloads in the background.
+Use -WaitForManagedDownloads if you want Setup to stay attached
+until downloads finish.
+
+Managed downloads and later refreshes are handled by:
 
 - Update-ForgerEMS.ps1
 - ForgerEMS.updates.json
@@ -249,11 +252,11 @@ Manifest-managed downloads and updates are handled by:
 
 Current split:
 
-- auto-download safe -> manifest-managed file items
-- manual only -> manifest-managed page shortcuts only
-- review-first -> manifest-managed page shortcuts only
+- active managed autodownload -> enabled manifest-managed file items
+- disabled but eligible -> disabled manifest-managed file items
+- info / placeholder / manual / review-first -> manifest-managed page shortcuts
 
-Safe still depends on upstream availability.
+Managed autodownload still depends on upstream availability.
 Use MANAGED-DOWNLOAD-MAINTENANCE.txt for fragility
 ranking, fallback rules, and revalidation steps.
 
@@ -277,8 +280,6 @@ added later:
 - portable third-party tools copied into Tools\Portable
 - offline driver packs copied into Drivers
 - MediCat.USB and similar large community bundles
-- packaged/vendor ForgerTools artifacts whose source
-  repository or build process is not present here
 
 Do not assume bundled vendor content is fully
 maintainable just because it is stored in this
@@ -287,8 +288,12 @@ the shipping Ventoy core scripts.
 
 Within the manifest-managed catalog:
 
-- auto-download safe items are file entries fetched by
-  Update-ForgerEMS.ps1
+- active managed autodownload items are file entries
+  fetched by Update-ForgerEMS.ps1
+- info shortcuts are official page companions for active
+  managed items and are suppressed after managed success
+- placeholder-only items remain page shortcuts because
+  the item is not active managed today
 - manual-only items remain page shortcuts because the
   flow or terms are intentionally not automated
 - review-first items remain page shortcuts until
@@ -299,7 +304,7 @@ Within the manifest-managed catalog:
 UPDATE SCRIPT
 ====================================================
 
-If your USB includes:
+If you want to refresh the managed bucket again later and your USB includes:
 
   Update-ForgerEMS.ps1
   ForgerEMS.updates.json
@@ -344,7 +349,7 @@ RECOMMENDED WORKFLOW
 4) Seed the manifest if needed
 5) Copy your known-good ISOs into ISO folders
 6) Add portable apps / drivers / Forger tools
-7) Run Update-ForgerEMS.ps1 later for maintenance
+7) Run Update-ForgerEMS.ps1 later for on-demand maintenance
 8) Keep logs, reports, and archived versions on-drive
 
 ====================================================

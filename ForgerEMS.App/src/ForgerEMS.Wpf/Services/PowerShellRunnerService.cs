@@ -79,6 +79,8 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
             throw new InvalidOperationException($"Failed to start PowerShell for {request.DisplayName}.");
         }
 
+        process.StandardInput.Close();
+
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
@@ -134,6 +136,7 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
         {
             FileName = GetPowerShellExecutable(),
             WorkingDirectory = request.WorkingDirectory,
+            RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -190,7 +193,8 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
 
         if (normalized.Contains("[ERROR]", StringComparison.OrdinalIgnoreCase) ||
             normalized.StartsWith("[FAIL]", StringComparison.OrdinalIgnoreCase) ||
-            normalized.Contains("verification failed", StringComparison.OrdinalIgnoreCase))
+            normalized.Contains("verification failed", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Contains("USB readiness: PARTIALLY STAGED", StringComparison.OrdinalIgnoreCase))
         {
             return LogSeverity.Error;
         }
@@ -207,7 +211,8 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
         if (normalized.Contains("[OK]", StringComparison.OrdinalIgnoreCase) ||
             normalized.StartsWith("[PASS]", StringComparison.OrdinalIgnoreCase) ||
             normalized.Contains("verification passed", StringComparison.OrdinalIgnoreCase) ||
-            normalized.Contains("Restore succeeded", StringComparison.OrdinalIgnoreCase))
+            normalized.Contains("Restore succeeded", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Contains("USB readiness: READY", StringComparison.OrdinalIgnoreCase))
         {
             return LogSeverity.Success;
         }
