@@ -1,0 +1,21 @@
+Proprietary License
+
+Copyright (c) Forger Digital Solutions. All rights reserved.
+
+ForgerEMS, including its source code, scripts, manifests, documentation,
+installer configuration, branding, and release assets, is proprietary software
+owned by Forger Digital Solutions unless a separate written agreement states
+otherwise.
+
+You may view, build, and use this repository only with permission from Forger
+Digital Solutions. You may not copy, redistribute, sublicense, sell, publish, or
+create derivative works from this software without prior written authorization.
+
+Third-party tools, runtimes, libraries, and vendor payloads referenced by this
+project remain governed by their own license terms.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL FORGER
+DIGITAL SOLUTIONS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING
+FROM USE OF THE SOFTWARE.

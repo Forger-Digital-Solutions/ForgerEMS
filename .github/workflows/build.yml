@@ -1,0 +1,54 @@
+name: build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ForgerEMS
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore .\ForgerEMS.sln
+
+      - name: Build
+        run: dotnet build .\ForgerEMS.sln -c Release --no-restore
+
+      - name: Validate manifests
+        run: |
+          Get-Content .\manifests\ForgerEMS.updates.json -Raw | ConvertFrom-Json | Out-Null
+          Get-Content .\manifests\ForgerEMS.updates.schema.json -Raw | ConvertFrom-Json | Out-Null
+          Get-Content .\manifests\vendor.inventory.json -Raw | ConvertFrom-Json | Out-Null
+          Get-Content .\manifests\vendor.inventory.schema.json -Raw | ConvertFrom-Json | Out-Null
+
+      - name: Backend offline verification
+        run: .\backend\Verify-VentoyCore.ps1
+
+      - name: Release dry run
+        run: .\tools\build-release.ps1 -Version 1.0.0-beta.ci -DryRun
+
+      - name: Upload logs and release dry-run output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forgerems-build-output
+          path: |
+            release/**
+            .verify/**
+            dist/**

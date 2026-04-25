@@ -1,36 +1,65 @@
-.verify/*
-!.verify/README.md
+# ForgerEMS source repository ignore policy
+# Track source, scripts, manifests, docs, and installer configuration only.
 
-release/*
-!release/README.md
-
-.tmp/
-.vs/
+# .NET / Visual Studio
 **/bin/
 **/obj/
+.vs/
 *.user
 *.suo
+*.userosscache
+*.sln.docstates
+TestResults/
+coverage/
 
-_archive/
-_downloads/
-_logs/
-_reports/
+# Build and release outputs
+dist/
+release/
+PreRelease/
+*.zip
+*.exe
+*.msi
+*.nupkg
+*.snupkg
+*.log
 
+# Large USB / OS / portable payloads
+*.iso
+*.img
+*.vhd
+*.vhdx
+*.wim
+*.esd
 ISO/
 MediCat.USB/
 Drivers/
 ForgerTools/
 Tools/Portable/
+tools/Portable/
+Portable/
+portable-tools/
+portable/
 
-Docs/ForgerEMS-Bootstrap-Notes.txt
-Docs/ForgerEMS-Link-Inventory.csv
-VentoyToolkitSetup/*.url
-VentoyToolkitSetup/IfScriptFails(ManualSetup)/
+# Local verification and download scratch space
+.verify/*
+!.verify/
+!.verify/README.md
+.tmp/
+_archive/
+_downloads/
+_logs/
+_reports/
+
+# Local-only operator notes and shortcuts
+docs/ForgerEMS-Bootstrap-Notes.txt
+docs/ForgerEMS-Link-Inventory.csv
+backend/legacy/VentoyToolkitSetup/*.url
+backend/legacy/VentoyToolkitSetup/IfScriptFails(ManualSetup)/
 /DOWNLOAD - MediCat.url
 /ForgerEMS.updates.json
 
+# Temporary files
 *.tmp
 *.temp
-*.zip
-dist/
-PreRelease/
+*.bak
+*.orig

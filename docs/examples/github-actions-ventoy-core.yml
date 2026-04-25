@@ -1,0 +1,38 @@
+# Reference copy of the active workflow.
+# The live workflow now exists at .github/workflows/build.yml.
+
+name: ventoy-core
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify-and-build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Offline verification (blocking)
+        run: .\backend\Verify-VentoyCore.ps1
+
+      - name: Build release (blocking)
+        run: .\tools\build-release.ps1 -DryRun
+
+      - name: Online verification (non-blocking)
+        continue-on-error: true
+        run: .\backend\Verify-VentoyCore.ps1 -Online
+
+      - name: Upload generated release artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ventoy-core-release
+          path: |
+            release/ventoy-core/**
+            .verify/**
