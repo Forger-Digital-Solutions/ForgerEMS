@@ -91,12 +91,12 @@ function Resolve-IsccPath {
     throw "ISCC.exe was not found. Install Inno Setup 6 or rerun with -DryRun."
 }
 
-function Get-InnoVersionInfo {
+function ConvertTo-WindowsVersion {
     param([Parameter(Mandatory)][string]$Value)
 
-    $match = [regex]::Match($Value, '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?:\.(?<build>\d+))?')
+    $match = [regex]::Match($Value.Trim(), '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?:\.(?<build>\d+))?')
     if (-not $match.Success) {
-        return "1.0.0.0"
+        throw "Version '$Value' must start with a semantic numeric core like 1.2.3."
     }
 
     $build = if ($match.Groups["build"].Success) { $match.Groups["build"].Value } else { "0" }
@@ -203,7 +203,7 @@ if ($DryRun -or $SkipInstaller) {
 else {
     Write-Step "Compiling installer"
     $isccPath = Resolve-IsccPath -ExplicitPath $InnoCompilerPath
-    $appVersionInfo = Get-InnoVersionInfo -Value $Version
+    $appVersionInfo = ConvertTo-WindowsVersion -Value $Version
     & $isccPath `
         "/DAppVersion=$Version" `
         "/DAppVersionInfo=$appVersionInfo" `
