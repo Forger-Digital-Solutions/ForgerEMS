@@ -1,0 +1,11 @@
+{
+  "product": "ForgerEMS",
+  "publisher": "Forger Digital Solutions",
+  "version": "1.0.1",
+  "channel": "Beta",
+  "backendVersion": "2026.04.20.2",
+  "runtime": "win-x64",
+  "configuration": "Release",
+  "dryRun": false,
+  "generatedUtc": "2026-04-26T12:37:15.2136289Z"
+}

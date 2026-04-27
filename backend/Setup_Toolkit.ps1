@@ -236,11 +236,46 @@ function Resolve-SelectedUsbRoot {
         $driveRoot = Get-PathDriveRoot -Path $resolvedPath
         if ($driveRoot -and $resolvedPath -ne $driveRoot) {
             Write-Host ("{0} '{1}' is inside the release bundle. Using USB root '{2}' instead." -f $Source, $resolvedPath, $driveRoot) -ForegroundColor Yellow
+            Assert-UsbRootIsSafe -Root $driveRoot
             return $driveRoot
         }
     }
 
+    Assert-UsbRootIsSafe -Root $resolvedPath
     return $resolvedPath
+}
+
+function Assert-UsbRootIsSafe {
+    param([Parameter(Mandatory)][string]$Root)
+
+    $driveRoot = [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($Root))
+    if ([string]::IsNullOrWhiteSpace($driveRoot)) {
+        throw "Could not resolve a drive root for selected USB target '$Root'."
+    }
+
+    if ($driveRoot.TrimEnd('\') -ieq "C:") {
+        throw "C:\ is the protected Windows system drive and can never be used by ForgerEMS."
+    }
+}
+
+function Move-LegacyDocsFolderIfSafe {
+    param([Parameter(Mandatory)][string]$Root)
+
+    $legacyDocsPath = Join-Path $Root "Docs"
+    $docsPath = Join-Path $Root "_docs"
+
+    if ((Test-Path -LiteralPath $legacyDocsPath -PathType Container) -and -not (Test-Path -LiteralPath $docsPath)) {
+        if ($PSCmdlet.ShouldProcess($legacyDocsPath, "Rename legacy Docs folder to _docs")) {
+            Rename-Item -LiteralPath $legacyDocsPath -NewName "_docs" -ErrorAction Stop
+            Write-Log "Renamed legacy Docs folder to _docs." "OK"
+        }
+        else {
+            Write-Log "Would rename legacy Docs folder to _docs." "INFO"
+        }
+    }
+    elseif (Test-Path -LiteralPath $legacyDocsPath -PathType Container) {
+        Write-Log "Legacy Docs folder still exists; keeping it for compatibility because _docs is already present." "INFO"
+    }
 }
 
 function Resolve-RootChildPath {
@@ -1545,6 +1580,8 @@ Write-Log ("Ventoy core: {0} {1} ({2})" -f $versionInfo.Name, $versionInfo.Versi
 Write-Log ("Release: " + $versionInfo.ReleaseType) "INFO"
 Write-Log "Using root: $root" "INFO"
 
+Move-LegacyDocsFolderIfSafe -Root $root
+
 $paths = @(
     (J $root "ISO"),
     (J $root "ISO\Linux"),
@@ -1573,11 +1610,7 @@ $paths = @(
     (J $root "Drivers\Wireless"),
 
     (J $root "_logs"),
-    (J $root "_reports"),
-    (J $root "_downloads"),
-    (J $root "_archive"),
-
-    (J $root "Docs"),
+    (J $root "_docs"),
     (J $root "MediCat.USB")
 )
 
@@ -1638,107 +1671,91 @@ foreach ($item in $links) {
 }
 
 if (-not $OwnerName -and -not $WhatIfPreference -and -not $NonInteractive -and (Test-InteractivePromptAvailable)) {
-    $OwnerName = Read-Host "Optional: Enter your name for README (or press Enter to skip)"
+    $OwnerName = Read-Host "Optional: Enter USB owner / bench name for README (or press Enter to use this PC name)"
 }
 elseif (-not $OwnerName -and -not $WhatIfPreference -and $NonInteractive) {
-    Write-Log "Non-interactive mode is active. README owner prompt was skipped." "INFO"
+    Write-Log "Non-interactive mode is active. README owner will use this PC name." "INFO"
 }
 elseif (-not $OwnerName) {
-    Write-Log "Owner name was not supplied. README owner will remain unset." "INFO"
+    Write-Log "Owner name was not supplied. README owner will use this PC name." "INFO"
 }
 
-$ownerText = if ($OwnerName -and $OwnerName.Trim().Length -gt 0) { $OwnerName.Trim() } else { "Not set" }
-$readmePath = Join-Path $root "README.txt"
+$ownerText = if ($OwnerName -and $OwnerName.Trim().Length -gt 0) { $OwnerName.Trim() } elseif ($env:COMPUTERNAME) { $env:COMPUTERNAME } else { [System.Net.Dns]::GetHostName() }
 $date = (Get-Date).ToString("yyyy-MM-dd")
 
 $readme = @"
-=====================================================
-                FORGEREMS TECHBENCH USB
-=====================================================
+# ForgerEMS TechBench USB
 
-Owner:   $ownerText
-Created: $date
-Bundle:  $($versionInfo.Version)
-Build:   $($versionInfo.BuildTimestampUtc)
-Release: $($versionInfo.ReleaseType)
-Purpose: System repair, recovery, diagnostics, OS install, portable bench tools
-Status:  Verify after major updates
+**Owner:** $ownerText<br>
+**Created:** $date<br>
+**Bundle version:** $($versionInfo.Version)<br>
+**Build timestamp:** $($versionInfo.BuildTimestampUtc)<br>
+**Release channel:** $($versionInfo.ReleaseType)
 
-BOOT (Ventoy)
--------------
-$root\ISO\Windows -> Windows 10/11 ISOs + WinPE tools
-$root\ISO\Linux   -> Ubuntu, Mint, Kali, Fedora, Endless OS, SystemRescue
-$root\ISO\Tools   -> Clonezilla, Rescuezilla, GParted, MemTest, Hiren's PE, UBCD
+## Purpose
 
-PORTABLE APPS (Run in Windows / WinPE)
---------------------------------------
-$root\Tools\Portable\Disk
-$root\Tools\Portable\Hardware
-$root\Tools\Portable\Network
-$root\Tools\Portable\System
-$root\Tools\Portable\Remote
-$root\Tools\Portable\USB
-$root\Tools\Portable\GPU
-$root\Tools\Portable\Security
+ForgerEMS TechBench USB is a technician-focused recovery, repair, diagnostics, OS install, and portable apps drive.
 
-DRIVERS
--------
-$root\Drivers\Audio
-$root\Drivers\Bluetooth
-$root\Drivers\Chipset
-$root\Drivers\Graphics
-$root\Drivers\Input
-$root\Drivers\Network
-$root\Drivers\Storage
-$root\Drivers\Wireless
+## Status
 
-WORKING FOLDERS
----------------
-$root\_logs
-$root\_reports
-$root\_downloads
-$root\_archive
+Verify after major updates and before shipping a customer-facing bench drive.
 
-SUPPORTED VS NOT FULLY MANAGED
-------------------------------
-Supported by the Ventoy core lifecycle:
-- items listed in ForgerEMS.updates.json
-- generated DOWNLOAD/INFO shortcuts
-- _downloads, _archive, and _logs workflow data
+## Boot / Ventoy
 
-Catalog split:
-- active managed autodownload -> enabled manifest-managed file items
-- disabled but eligible -> disabled manifest-managed file items
-- info / placeholder / manual / review-first -> manifest-managed page shortcuts
-- see Docs\ForgerEMS-Download-Catalog.txt for the current bucket list
-- see Docs\ForgerEMS-Managed-Download-Maintenance.txt for revalidation,
-  fragility ranking, and fallback rules
+- $root\ISO\Windows - Windows 10/11 ISOs and WinPE tools
+- $root\ISO\Linux - Ubuntu, Mint, Kali, Fedora, Endless OS, SystemRescue
+- $root\ISO\Tools - Clonezilla, Rescuezilla, GParted, MemTest, Hiren's PE, UBCD
+- USB preparation, update, and conversion to Ventoy can be started directly inside the ForgerEMS app.
 
-Not fully managed in this repo baseline:
-- portable third-party tools copied into Tools\Portable
-- offline driver bundles under Drivers
-- MediCat.USB
+## Portable Apps
 
-NOTES
------
-- Install Ventoy first with Ventoy2Disk.
-- Copy ISO files into the matching ISO folders.
-- Setup now auto-starts the managed autodownload pass unless -LayoutOnly is used.
-- By default the managed download pass launches in the background.
-- Use -WaitForManagedDownloads if you want Setup to stay attached until downloads finish.
-- Use the remaining DOWNLOAD shortcuts for placeholder/manual/review-first items.
-- Managed autodownload still depends on upstream availability.
-- Revalidate managed downloads before rebuild/shipping:
-  .\Verify-VentoyCore.ps1 -RevalidateManagedDownloads
-- Review the latest summary at:
-  %LOCALAPPDATA%\ForgerEMS\.verify\managed-download-revalidation\latest\managed-download-summary.txt
-- MediCat is folder-based; place it at root if you use it.
-- Run Update-ForgerEMS.ps1 later to refresh manifest-managed items.
-- Portable apps and driver bundles remain manual unless a maintained source/update workflow is added.
-- Re-running this script is safe.
-=====================================================
+- $root\Tools\Portable\Disk
+- $root\Tools\Portable\Hardware
+- $root\Tools\Portable\Network
+- $root\Tools\Portable\System
+- $root\Tools\Portable\Remote
+- $root\Tools\Portable\USB
+- $root\Tools\Portable\GPU
+- $root\Tools\Portable\Security
+
+## How To Use
+
+1. Select the USB target in the ForgerEMS app.
+2. Prepare or convert the USB to Ventoy from inside the app.
+3. Download or update the toolkit from inside the app.
+4. Copy ISO files into the matching ISO folders.
+5. Use portable apps from Windows or WinPE.
+
+## Maintenance / Update
+
+- Run Update-ForgerEMS.ps1 or use **Download / Update Toolkit** in the ForgerEMS app to refresh manifest-managed items.
+- Revalidate managed downloads before rebuild/shipping with .\Verify-VentoyCore.ps1 -RevalidateManagedDownloads.
+- Catalog and maintenance files are written under _docs.
+- _logs contains ForgerEMS setup/update logs when scripts run.
+- Legacy Docs folders remain compatible, but new generated documentation uses _docs.
+
+## Storage Guidance
+
+- **64GB or larger is recommended** for complete download mode because Medicat.USB is large.
+- **32GB can work** for smaller or base toolkit setups.
+
+## Supported vs. Manual
+
+Supported by the ForgerEMS lifecycle:
+
+- Items listed in ForgerEMS.updates.json
+- Generated download/info shortcuts
+- Managed download and update workflow data when those workflows run
+
+Manual or partially managed:
+
+- Portable third-party tools copied into Tools\Portable
+- Offline driver bundles under Drivers
+- Medicat.USB
 "@
 
+$readmePath = Join-Path $root "README.md"
+$legacyReadmePath = Join-Path $root "README.txt"
 if ($PSCmdlet.ShouldProcess($readmePath, "Write README")) {
     Set-Content -LiteralPath $readmePath -Value $readme -Encoding UTF8
     Write-Log "README written: $readmePath" "OK"
@@ -1747,7 +1764,8 @@ else {
     Write-Log "Would write README: $readmePath" "INFO"
 }
 
-$bootstrapNotesPath = J $root "Docs\ForgerEMS-Bootstrap-Notes.txt"
+Remove-PathIfPresent -Path $legacyReadmePath -Description "Remove legacy generated README.txt" | Out-Null
+
 $bootstrapNotes = @"
 ForgerEMS Bootstrap Notes
 =========================
@@ -1761,9 +1779,9 @@ Release: $($versionInfo.ReleaseType)
 This script:
 - creates the full folder structure
 - creates URL shortcuts
-- writes README and inventory CSV
+- writes README.md and inventory CSV
 - optionally seeds the manifest
-- uses _logs / _downloads / _archive / _reports consistently
+- uses _logs and _docs consistently; managed downloads create workflow folders only when needed
 
 Important:
 - Ventoy must still be installed separately
@@ -1782,9 +1800,9 @@ Important:
 Supported scope:
 - manifest-listed files and URL shortcuts
 - manifest and generated inventory/readme files
-- _downloads, _archive, and _logs workflow folders
-- Docs\ForgerEMS-Download-Catalog.txt category guide
-- Docs\ForgerEMS-Managed-Download-Maintenance.txt maintenance guide
+- _logs workflow folder
+- _docs\ForgerEMS-Download-Catalog.txt category guide
+- _docs\ForgerEMS-Managed-Download-Maintenance.txt maintenance guide
 
 Not fully managed:
 - portable third-party binaries copied into Tools\Portable
@@ -1798,11 +1816,11 @@ Core folders:
 - Drivers
 - Tools\Portable
 - _logs
-- _downloads
-- _archive
-- _reports
+- _logs
+- _docs
 "@
 
+$bootstrapNotesPath = Join-Path $root "_docs\ForgerEMS-Bootstrap-Notes.txt"
 if ($PSCmdlet.ShouldProcess($bootstrapNotesPath, "Write bootstrap notes")) {
     Set-Content -LiteralPath $bootstrapNotesPath -Value $bootstrapNotes -Encoding UTF8
     Write-Log "Bootstrap notes written: $bootstrapNotesPath" "OK"
@@ -1947,7 +1965,7 @@ foreach ($driverCategory in $driverCategoryNotes.Keys) {
     }
 }
 
-$downloadCatalogPath = J $root "Docs\ForgerEMS-Download-Catalog.txt"
+$downloadCatalogPath = Join-Path $root "_docs\ForgerEMS-Download-Catalog.txt"
 $downloadCatalog = Get-DownloadCatalogTextFromManifest -Root $root
 
 if ($PSCmdlet.ShouldProcess($downloadCatalogPath, "Write download catalog")) {
@@ -1958,7 +1976,7 @@ else {
     Write-Log "Would write download catalog: $downloadCatalogPath" "INFO"
 }
 
-$maintenanceGuidePath = J $root "Docs\ForgerEMS-Managed-Download-Maintenance.txt"
+$maintenanceGuidePath = Join-Path $root "_docs\ForgerEMS-Managed-Download-Maintenance.txt"
 $maintenanceGuide = Get-ManagedDownloadMaintenanceTextFromManifest -Root $root
 
 if ($PSCmdlet.ShouldProcess($maintenanceGuidePath, "Write managed download maintenance guide")) {
@@ -1969,7 +1987,7 @@ else {
     Write-Log "Would write managed download maintenance guide: $maintenanceGuidePath" "INFO"
 }
 
-$inventoryPath = J $root "Docs\ForgerEMS-Link-Inventory.csv"
+$inventoryPath = Join-Path $root "_docs\ForgerEMS-Link-Inventory.csv"
 
 $inventoryRows = @()
 

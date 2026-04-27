@@ -1,0 +1,5 @@
+ForgerEMS Ventoy Core
+Version: 2026.04.20.2
+Build:   2026-04-20T21:27:43Z
+Release: stable
+Source:  manifests\ForgerEMS.updates.json

@@ -1,0 +1,43 @@
+Shippable Bundle: ForgerEMS Ventoy Core
+========================================
+
+Version: 2026.04.20.2
+Build:   2026-04-20T21:27:43Z
+Release: stable
+
+Primary public entrypoints:
+- Setup-ForgerEMS.ps1
+- Update-ForgerEMS.ps1
+
+Compatibility/support entrypoints:
+- Setup_USB_Toolkit.ps1
+- Setup_Toolkit.ps1
+- Verify-VentoyCore.ps1
+- ForgerEMS.Runtime.ps1
+
+Included support content:
+- docs\
+- manifests\
+- tools\ScriptCommands.txt
+- CHECKSUMS.sha256
+- SIGNATURE.txt
+- docs\Release-Verification-History\2026.04.20.2\
+
+Supported by this bundle:
+- ventoy-core scripts and wrappers included here
+- ForgerEMS.updates.json and manifest-driven setup/update lifecycle
+- release-bundle docs and verification entrypoint
+
+Not fully managed by this bundle:
+- Tools\Portable payloads
+- Drivers payloads
+- MediCat.USB
+- vendor binaries without a tracked source/build workflow
+
+This bundle is intended to ship as a whole release folder.
+
+Managed download verification history:
+- mode: included-current-verification-artifacts
+- status file: docs\Release-Verification-History\2026.04.20.2\RELEASE-VERIFICATION-STATUS.txt
+- if bundled, review the included managed-download summary/revalidation files
+- if not bundled, run .\Verify-VentoyCore.ps1 -RevalidateManagedDownloads after build

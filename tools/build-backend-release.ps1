@@ -640,10 +640,34 @@ $validationStamp = (Get-Date -Format "yyyyMMdd_HHmmss_fff") + "_" + ([Guid]::New
 $validationRoot = Join-Path $repoRoot (".verify\build-release-validate-" + $validationStamp)
 Ensure-Dir -Path $validationRoot
 $validationLog = Join-Path $validationRoot "validate-manifest.log"
+$validationUsbRoot = $validationRoot
+$validationSubstDrive = ""
+
+if ([IO.Path]::GetPathRoot([IO.Path]::GetFullPath($validationRoot)).TrimEnd('\') -ieq "C:") {
+    foreach ($letter in "Z","Y","X","W","V","U","T") {
+        if (-not (Test-Path -LiteralPath ($letter + ":\"))) {
+            $result = & subst.exe ($letter + ":") ([IO.Path]::GetFullPath($validationRoot)) 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "Could not create validation scratch drive: $result"
+            }
+
+            $validationSubstDrive = $letter + ":"
+            $validationUsbRoot = $letter + ":\"
+            break
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($validationSubstDrive)) {
+        throw "No free drive letter was available for release validation scratch."
+    }
+}
 
 Write-Status ("Validating manifest with canonical updater: " + $manifestPath) "INFO"
-$validationOutput = & $powerShellExe -NoProfile -ExecutionPolicy Bypass -File $updateScript -UsbRoot $validationRoot -ManifestName $manifestPath -WhatIf 2>&1 | Out-String
+$validationOutput = & $powerShellExe -NoProfile -ExecutionPolicy Bypass -File $updateScript -UsbRoot $validationUsbRoot -ManifestName $manifestPath -WhatIf 2>&1 | Out-String
 $validationExitCode = $LASTEXITCODE
+if ($validationSubstDrive) {
+    & subst.exe $validationSubstDrive /D 2>$null
+}
 Set-Content -LiteralPath $validationLog -Value $validationOutput -Encoding UTF8
 
 if ($validationExitCode -ne 0) {

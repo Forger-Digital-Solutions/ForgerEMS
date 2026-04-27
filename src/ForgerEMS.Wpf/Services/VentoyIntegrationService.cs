@@ -106,7 +106,8 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
         {
             DisplayName = "Prepare official Ventoy package",
             WorkingDirectory = backendContext.WorkingDirectory,
-            InlineCommand = BuildPreparationCommand(package.Url, packagePath, extractRoot, package.Sha256)
+            InlineCommand = BuildPreparationCommand(package.Url, packagePath, extractRoot, package.Sha256),
+            ProgressItemName = "Ventoy package"
         };
 
         var runResult = await _powerShellRunnerService.RunAsync(request, onOutput, cancellationToken).ConfigureAwait(false);

@@ -44,6 +44,7 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
         var stdoutBuilder = new StringBuilder();
         var stderrBuilder = new StringBuilder();
         var startedAtUtc = DateTimeOffset.UtcNow;
+        var lastOutputUtc = DateTimeOffset.UtcNow;
         var sync = new object();
 
         using var process = new Process
@@ -99,8 +100,38 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
             }
         });
 
-        await process.WaitForExitAsync().ConfigureAwait(false);
+        var heartbeatTask = Task.Run(async () =>
+        {
+            while (!process.HasExited && !cancellationToken.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken).ConfigureAwait(false);
+
+                if (process.HasExited || cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+
+                if (string.IsNullOrWhiteSpace(request.ProgressItemName))
+                {
+                    continue;
+                }
+
+                if (DateTimeOffset.UtcNow - lastOutputUtc >= TimeSpan.FromSeconds(5))
+                {
+                    PublishLine($"[INFO] Downloading {request.ProgressItemName}... working (no progress data)", isErrorStream: false);
+                }
+            }
+        }, cancellationToken);
+
+        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
         process.WaitForExit();
+        try
+        {
+            await heartbeatTask.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+        }
 
         if (cancellationToken.IsCancellationRequested)
         {
@@ -125,6 +156,8 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
             {
                 outputLines.Add(line);
             }
+
+            lastOutputUtc = DateTimeOffset.UtcNow;
 
             onOutput?.Invoke(line);
         }
@@ -200,6 +233,7 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
         }
 
         if (normalized.Contains("[WARN]", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Contains("[ACTION]", StringComparison.OrdinalIgnoreCase) ||
             normalized.StartsWith("WARNING", StringComparison.OrdinalIgnoreCase) ||
             normalized.Contains("Warnings: 1", StringComparison.OrdinalIgnoreCase) ||
             normalized.Contains("Warnings: 2", StringComparison.OrdinalIgnoreCase) ||
@@ -209,6 +243,7 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
         }
 
         if (normalized.Contains("[OK]", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Contains("[COMPLETE]", StringComparison.OrdinalIgnoreCase) ||
             normalized.StartsWith("[PASS]", StringComparison.OrdinalIgnoreCase) ||
             normalized.Contains("verification passed", StringComparison.OrdinalIgnoreCase) ||
             normalized.Contains("Restore succeeded", StringComparison.OrdinalIgnoreCase) ||

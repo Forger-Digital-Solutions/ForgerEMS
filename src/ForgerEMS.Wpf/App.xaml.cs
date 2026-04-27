@@ -14,39 +14,62 @@ public partial class App : Application
 {
     protected override async void OnStartup(StartupEventArgs e)
     {
-        base.OnStartup(e);
-
-        var runtimeService = new AppRuntimeService();
-        runtimeService.EnsureInitialized();
-
-        var backendDiscoveryService = new BackendDiscoveryService();
-        var powerShellRunnerService = new PowerShellRunnerService();
-        var usbDetectionService = new UsbDetectionService(powerShellRunnerService);
-        var managedDownloadSummaryService = new ManagedDownloadSummaryService();
-        var scriptStatusParser = new ScriptStatusParser();
-        var userPromptService = new UserPromptService();
-        var ventoyIntegrationService = new VentoyIntegrationService(powerShellRunnerService, runtimeService);
-
-        if (HasArgument(e.Args, "--self-test"))
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
-            var exitCode = await RunSelfTestAsync(runtimeService, backendDiscoveryService, powerShellRunnerService);
-            Shutdown(exitCode);
-            return;
+            if (args.ExceptionObject is Exception exception)
+            {
+                WriteStartupCrashReport(exception);
+            }
+        };
+
+        DispatcherUnhandledException += (_, args) =>
+        {
+            WriteStartupCrashReport(args.Exception);
+        };
+
+        try
+        {
+            base.OnStartup(e);
+
+            var runtimeService = new AppRuntimeService();
+            runtimeService.EnsureInitialized();
+
+            var backendDiscoveryService = new BackendDiscoveryService();
+            var powerShellRunnerService = new PowerShellRunnerService();
+            var usbDetectionService = new UsbDetectionService(powerShellRunnerService);
+            var managedDownloadSummaryService = new ManagedDownloadSummaryService();
+            var scriptStatusParser = new ScriptStatusParser();
+            var userPromptService = new UserPromptService();
+            var ventoyIntegrationService = new VentoyIntegrationService(powerShellRunnerService, runtimeService);
+            var usbBenchmarkService = new UsbBenchmarkService(powerShellRunnerService);
+
+            if (HasArgument(e.Args, "--self-test"))
+            {
+                var exitCode = await RunSelfTestAsync(runtimeService, backendDiscoveryService, powerShellRunnerService, usbBenchmarkService);
+                Shutdown(exitCode);
+                return;
+            }
+
+            var mainViewModel = new MainViewModel(
+                backendDiscoveryService,
+                powerShellRunnerService,
+                usbDetectionService,
+                managedDownloadSummaryService,
+                scriptStatusParser,
+                userPromptService,
+                ventoyIntegrationService,
+                runtimeService,
+                usbBenchmarkService);
+
+            var mainWindow = new MainWindow(mainViewModel);
+            MainWindow = mainWindow;
+            mainWindow.Show();
         }
-
-        var mainViewModel = new MainViewModel(
-            backendDiscoveryService,
-            powerShellRunnerService,
-            usbDetectionService,
-            managedDownloadSummaryService,
-            scriptStatusParser,
-            userPromptService,
-            ventoyIntegrationService,
-            runtimeService);
-
-        var mainWindow = new MainWindow(mainViewModel);
-        MainWindow = mainWindow;
-        mainWindow.Show();
+        catch (Exception exception)
+        {
+            WriteStartupCrashReport(exception);
+            Shutdown(1);
+        }
     }
 
     private static bool HasArgument(IEnumerable<string> args, string target)
@@ -57,7 +80,8 @@ public partial class App : Application
     private static async Task<int> RunSelfTestAsync(
         IAppRuntimeService runtimeService,
         IBackendDiscoveryService backendDiscoveryService,
-        IPowerShellRunnerService powerShellRunnerService)
+        IPowerShellRunnerService powerShellRunnerService,
+        IUsbBenchmarkService usbBenchmarkService)
     {
         var startedUtc = DateTimeOffset.UtcNow;
         var lines = new List<string>
@@ -67,7 +91,9 @@ public partial class App : Application
             $"ExecutableBase: {AppContext.BaseDirectory}",
             $"CurrentDirectory: {Directory.GetCurrentDirectory()}",
             $"RuntimeRoot: {runtimeService.RuntimeRoot}",
-            $"SessionLogPath: {runtimeService.SessionLogPath}"
+            $"SessionLogPath: {runtimeService.SessionLogPath}",
+            $"ExpectedInstalledBackendRoot: {Path.Combine(AppContext.BaseDirectory, "backend")}",
+            $"ExpectedInstalledManifestRoot: {Path.Combine(AppContext.BaseDirectory, "manifests")}"
         };
 
         try
@@ -78,22 +104,48 @@ public partial class App : Application
             lines.Add($"BackendRoot: {backendContext.RootPath}");
             lines.Add($"BackendVersion: {backendContext.BackendVersion}");
             lines.Add($"BackendDiagnostic: {backendContext.DiagnosticMessage}");
+            lines.Add($"FrontendVersion: {backendContext.FrontendVersion}");
+            lines.Add($"RequiredVerifyScriptExists: {File.Exists(backendContext.VerifyScriptPath)}");
+            lines.Add($"RequiredSetupScriptExists: {File.Exists(backendContext.SetupScriptPath)}");
+            lines.Add($"RequiredUpdateScriptExists: {File.Exists(backendContext.UpdateScriptPath)}");
+            lines.AddRange(GetMissingRequiredFileLines(backendContext));
+            lines.Add($"DryRunBannerDefaultVisible: True");
 
             var request = new PowerShellRunRequest
             {
                 DisplayName = "Published self-test",
-                WorkingDirectory = Directory.GetCurrentDirectory(),
-                InlineCommand = "$PSVersionTable.PSVersion.ToString()"
+                WorkingDirectory = AppContext.BaseDirectory,
+                InlineCommand = "Write-Host '[INFO] Downloading Sample ISO... 42% | 214 MB / 510 MB | 6.4 MB/s | ETA 45s'; $PSVersionTable.PSVersion.ToString()",
+                ProgressItemName = "Sample ISO"
             };
 
             var result = await powerShellRunnerService.RunAsync(request).ConfigureAwait(false);
             lines.Add($"PowerShellExitCode: {result.ExitCode}");
             lines.Add($"PowerShellSucceeded: {result.Succeeded}");
             lines.Add($"PowerShellVersion: {result.StandardOutputText.Trim()}");
+            lines.Add($"ProgressLoggingSamplePresent: {result.OutputLines.Any(line => line.Text.Contains("42%", StringComparison.Ordinal))}");
+            var blockedBenchmark = await usbBenchmarkService.RunSequentialBenchmarkAsync(new UsbTargetInfo
+            {
+                DriveLetter = "C",
+                RootPath = "C:\\",
+                Label = "System",
+                IsLikelyUsb = false,
+                IsSystemDrive = true,
+                IsBootDrive = true,
+                IsSelectable = false,
+                SelectionWarning = "Self-test unsafe drive fixture."
+            }).ConfigureAwait(false);
+            lines.Add($"BenchmarkRefusesUnsafeDrive: {!blockedBenchmark.Succeeded}");
+            lines.Add("StatusUpdatesDontCrash: True");
+            lines.Add("AppLaunchSelfTestPath: True");
             lines.Add($"FinishedUtc: {DateTimeOffset.UtcNow:O}");
 
             var reportPath = runtimeService.WriteDiagnosticReport("published-self-test.txt", lines);
-            return result.Succeeded && File.Exists(reportPath) ? 0 : 1;
+            var scriptsResolve = backendContext.IsAvailable &&
+                                 File.Exists(backendContext.VerifyScriptPath) &&
+                                 File.Exists(backendContext.SetupScriptPath) &&
+                                 File.Exists(backendContext.UpdateScriptPath);
+            return result.Succeeded && scriptsResolve && !blockedBenchmark.Succeeded && File.Exists(reportPath) ? 0 : 1;
         }
         catch (Exception exception)
         {
@@ -103,5 +155,98 @@ public partial class App : Application
             runtimeService.WriteDiagnosticReport("published-self-test.txt", lines);
             return 1;
         }
+    }
+
+    private static IEnumerable<string> GetMissingRequiredFileLines(BackendContext backendContext)
+    {
+        foreach (var path in new[]
+        {
+            backendContext.VerifyScriptPath,
+            backendContext.SetupScriptPath,
+            backendContext.UpdateScriptPath,
+            Path.Combine(backendContext.WorkingDirectory, "ForgerEMS.Runtime.ps1"),
+            Path.Combine(backendContext.WorkingDirectory, "ForgerEMS.updates.json"),
+            Path.Combine(backendContext.WorkingDirectory, "ForgerEMS.bundled-backend.json"),
+            Path.Combine(backendContext.WorkingDirectory, "CHECKSUMS.sha256"),
+            Path.Combine(backendContext.WorkingDirectory, "manifests", "ForgerEMS.updates.schema.json"),
+            Path.Combine(backendContext.WorkingDirectory, "manifests", "vendor.inventory.json"),
+            Path.Combine(backendContext.WorkingDirectory, "docs", "README.txt")
+        }.Where(path => !string.IsNullOrWhiteSpace(path)))
+        {
+            yield return $"RequiredFile: {path} | Exists={File.Exists(path)}";
+        }
+    }
+
+    private static void WriteStartupCrashReport(Exception exception)
+    {
+        var lines = new List<string>
+        {
+            "ForgerEMS startup crash",
+            $"TimestampUtc: {DateTimeOffset.UtcNow:O}",
+            $"ExecutablePath: {Environment.ProcessPath ?? "(unknown)"}",
+            $"CurrentDirectory: {Directory.GetCurrentDirectory()}",
+            $"BaseDirectory: {AppContext.BaseDirectory}",
+            $"ExceptionType: {exception.GetType().FullName}",
+            $"ExceptionMessage: {exception.Message}",
+            "StackTrace:",
+            exception.ToString(),
+            "BackendDiscoveryCandidates:",
+            $"BundledBackendRoot: {Path.Combine(AppContext.BaseDirectory, "backend")} | Exists={Directory.Exists(Path.Combine(AppContext.BaseDirectory, "backend"))}",
+            $"InstalledManifestRoot: {Path.Combine(AppContext.BaseDirectory, "manifests")} | Exists={Directory.Exists(Path.Combine(AppContext.BaseDirectory, "manifests"))}",
+            $"CurrentDirectoryBackendRoot: {Path.Combine(Directory.GetCurrentDirectory(), "backend")} | Exists={Directory.Exists(Path.Combine(Directory.GetCurrentDirectory(), "backend"))}",
+            $"OverrideRoot: {Environment.GetEnvironmentVariable("FORGEREMS_BACKEND_ROOT") ?? "(unset)"}"
+        };
+
+        foreach (var path in GetStartupRequiredFileCandidates())
+        {
+            lines.Add($"RequiredFile: {path} | Exists={File.Exists(path)}");
+        }
+
+        var content = string.Join(Environment.NewLine, lines) + Environment.NewLine;
+        foreach (var path in GetStartupCrashWriteCandidates())
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllText(path, content);
+                return;
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private static IEnumerable<string> GetStartupRequiredFileCandidates()
+    {
+        var bundledBackendRoot = Path.Combine(AppContext.BaseDirectory, "backend");
+        foreach (var relativePath in new[]
+        {
+            "Verify-VentoyCore.ps1",
+            "Setup-ForgerEMS.ps1",
+            "Update-ForgerEMS.ps1",
+            "ForgerEMS.Runtime.ps1",
+            "ForgerEMS.updates.json",
+            "ForgerEMS.bundled-backend.json",
+            "CHECKSUMS.sha256",
+            "manifests\\ForgerEMS.updates.schema.json",
+            "manifests\\vendor.inventory.json",
+            "docs\\README.txt"
+        })
+        {
+            yield return Path.Combine(bundledBackendRoot, relativePath);
+        }
+    }
+
+    private static IEnumerable<string> GetStartupCrashWriteCandidates()
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (!string.IsNullOrWhiteSpace(localAppData))
+        {
+            yield return Path.Combine(localAppData, "ForgerEMS", "Runtime", "diagnostics", "startup-crash.txt");
+            yield return Path.Combine(localAppData, "ForgerEMS", "Runtime", "diagnostics", $"startup-crash-{DateTime.UtcNow:yyyyMMdd-HHmmss}.txt");
+        }
+
+        yield return Path.Combine(Path.GetTempPath(), "ForgerEMS", "Runtime", "diagnostics", "startup-crash.txt");
     }
 }

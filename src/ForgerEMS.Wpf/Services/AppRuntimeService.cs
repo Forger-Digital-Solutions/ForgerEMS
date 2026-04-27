@@ -122,14 +122,40 @@ public sealed class AppRuntimeService : IAppRuntimeService
         EnsureInitialized();
 
         var safeFileName = string.IsNullOrWhiteSpace(fileName) ? "forgerems-diagnostic.txt" : fileName;
-        var path = Path.Combine(DiagnosticsRoot, safeFileName);
         var content = string.Join(Environment.NewLine, lines) + Environment.NewLine;
 
         lock (_sync)
         {
-            File.WriteAllText(path, content, Utf8NoBom);
+            foreach (var path in GetDiagnosticWriteCandidates(safeFileName))
+            {
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                    File.WriteAllText(path, content, Utf8NoBom);
+                    return path;
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
+                catch (IOException)
+                {
+                }
+            }
         }
 
-        return path;
+        throw new IOException("ForgerEMS could not write a diagnostic report to any writable diagnostics location.");
+    }
+
+    private IEnumerable<string> GetDiagnosticWriteCandidates(string safeFileName)
+    {
+        yield return Path.Combine(DiagnosticsRoot, safeFileName);
+
+        var stampedFileName =
+            $"{Path.GetFileNameWithoutExtension(safeFileName)}-{DateTime.UtcNow:yyyyMMdd-HHmmss}{Path.GetExtension(safeFileName)}";
+
+        yield return Path.Combine(DiagnosticsRoot, stampedFileName);
+
+        var tempRoot = Path.Combine(Path.GetTempPath(), "ForgerEMS", "Runtime", "diagnostics");
+        yield return Path.Combine(tempRoot, stampedFileName);
     }
 }

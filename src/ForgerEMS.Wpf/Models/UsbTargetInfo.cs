@@ -30,9 +30,9 @@ public sealed class UsbTargetInfo
 
     public string DeviceModel { get; init; } = string.Empty;
 
-    public string ReadSpeedDisplay { get; init; } = "Not benchmarked";
+    public string ReadSpeedDisplay { get; init; } = "Not tested";
 
-    public string WriteSpeedDisplay { get; init; } = "Not benchmarked";
+    public string WriteSpeedDisplay { get; init; } = "Not tested";
 
     public string PartitionType { get; init; } = string.Empty;
 
@@ -89,9 +89,9 @@ public sealed class UsbTargetInfo
 
     public string BusTypeDisplay => string.IsNullOrWhiteSpace(BusType) ? "Unknown" : BusType;
 
-    public string ReadSpeedDisplayNormalized => string.IsNullOrWhiteSpace(ReadSpeedDisplay) ? "Not benchmarked" : ReadSpeedDisplay;
+    public string ReadSpeedDisplayNormalized => string.IsNullOrWhiteSpace(ReadSpeedDisplay) ? "Not tested" : ReadSpeedDisplay;
 
-    public string WriteSpeedDisplayNormalized => string.IsNullOrWhiteSpace(WriteSpeedDisplay) ? "Not benchmarked" : WriteSpeedDisplay;
+    public string WriteSpeedDisplayNormalized => string.IsNullOrWhiteSpace(WriteSpeedDisplay) ? "Not tested" : WriteSpeedDisplay;
 
     public string SelectionStatusText =>
         !IsSelectable
@@ -119,10 +119,7 @@ public sealed class UsbTargetInfo
             : PartitionType;
 
     public bool ShouldBlockExecution =>
-        !IsSelectable ||
-        IsEfiSystemPartition ||
-        IsUndersizedPartition ||
-        (TotalBytes > 0 && TotalBytes < MinimumTargetBytes);
+        UsbTargetSafety.GetExecutionBlockReason(this) is not null;
 
     public string SelectionWarningDisplay =>
         string.IsNullOrWhiteSpace(SelectionWarning)

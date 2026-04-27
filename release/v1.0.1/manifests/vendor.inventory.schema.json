@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://forgerems.local/schemas/vendor.inventory.schema.json",
+  "title": "ForgerEMS Ventoy Core Vendor Inventory",
+  "type": "object",
+  "required": [
+    "inventoryVersion",
+    "items"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "inventoryVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "coreVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "buildTimestampUtc": {
+      "type": "string",
+      "minLength": 1
+    },
+    "releaseType": {
+      "type": "string",
+      "enum": [
+        "dev",
+        "candidate",
+        "stable"
+      ]
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "path",
+          "sourceUrl",
+          "version",
+          "managed",
+          "checksum",
+          "verified",
+          "source_trust"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sourceUrl": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1
+          },
+          "managed": {
+            "type": "boolean"
+          },
+          "checksum": {
+            "type": "string"
+          },
+          "verified": {
+            "type": "boolean"
+          },
+          "source_trust": {
+            "type": "string",
+            "enum": [
+              "official",
+              "community",
+              "manual"
+            ]
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

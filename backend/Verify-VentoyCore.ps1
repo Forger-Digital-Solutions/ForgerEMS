@@ -1092,6 +1092,31 @@ function New-RunDirectory {
     return $dir
 }
 
+function New-VerificationDriveRoot {
+    param([Parameter(Mandatory)][string]$BackingRoot)
+
+    $driveRoot = [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($BackingRoot))
+    if ($driveRoot.TrimEnd('\') -ine "C:") {
+        return $BackingRoot
+    }
+
+    foreach ($letter in "Z","Y","X","W","V","U","T") {
+        if (-not (Test-Path -LiteralPath ($letter + ":\"))) {
+            $substTarget = [IO.Path]::GetFullPath($BackingRoot)
+            $result = & subst.exe ($letter + ":") $substTarget 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                $script:VerificationSubstDrive = ($letter + ":")
+                Write-Status ("Verification USB target scratch drive: " + $script:VerificationSubstDrive + " -> " + $substTarget) "INFO"
+                return ($letter + ":\")
+            }
+
+            throw "Could not create verification scratch drive for self-test: $result"
+        }
+    }
+
+    throw "No free drive letter was available for verification scratch drive."
+}
+
 function Invoke-PublicScript {
     param(
         [Parameter(Mandatory)][string]$ScriptPath,
@@ -1342,6 +1367,7 @@ $updateScript = Join-Path $PSScriptRoot "Update-ForgerEMS.ps1"
 
 Ensure-Dir -Path $VerifyRoot
 Ensure-Dir -Path $runRoot
+$usbTestRoot = New-VerificationDriveRoot -BackingRoot $runRoot
 
 Write-Status ("Ventoy core: {0} {1} ({2})" -f $versionInfo.Name, $versionInfo.Version, $versionInfo.BuildTimestampUtc) "INFO"
 Write-Status ("Release: " + $versionInfo.ReleaseType) "INFO"
@@ -1425,7 +1451,7 @@ if ($signaturePath -and -not $RevalidateManagedDownloads) {
 
 if (-not $RevalidateManagedDownloads) {
     Run-Test -Name "setup-wrapper-seeds-manifest" -Body {
-        $root = New-RunDirectory -BaseRoot $runRoot -Name "setup-wrapper-seed"
+        $root = New-RunDirectory -BaseRoot $usbTestRoot -Name "setup-wrapper-seed"
         $result = Invoke-PublicScript `
             -ScriptPath $setupScript `
             -Arguments @("-UsbRoot", $root, "-OwnerName", "Verify", "-SeedManifest", "-LayoutOnly") `
@@ -1447,11 +1473,11 @@ if (-not $RevalidateManagedDownloads) {
         )
 
         foreach ($expectedRelativePath in @(
-            "README.txt",
+            "README.md",
             "ForgerEMS.updates.json",
-            "Docs\ForgerEMS-Download-Catalog.txt",
-            "Docs\ForgerEMS-Managed-Download-Maintenance.txt",
-            "Docs\ForgerEMS-Link-Inventory.csv",
+            "_docs\ForgerEMS-Download-Catalog.txt",
+            "_docs\ForgerEMS-Managed-Download-Maintenance.txt",
+            "_docs\ForgerEMS-Link-Inventory.csv",
             "Drivers\README.txt",
             "MediCat.USB\DOWNLOAD - MediCat.url",
             "ISO\Linux\DOWNLOAD - Fedora Workstation.url",
@@ -1464,7 +1490,12 @@ if (-not $RevalidateManagedDownloads) {
 
         foreach ($unexpectedRelativePath in @(
             "IfScriptFails(ManualSetup)",
-            "ForgerTools"
+            "ForgerTools",
+            "README.txt",
+            "Docs",
+            "_archive",
+            "_downloads",
+            "_reports"
         ) + $suppressedShortcutRelativePaths) {
             $unexpectedPath = Join-Path $root $unexpectedRelativePath
             Assert-Condition -Condition (-not (Test-Path -LiteralPath $unexpectedPath)) -Message "Legacy layout artifact should not be created: $unexpectedPath"
@@ -1478,7 +1509,7 @@ if (-not $RevalidateManagedDownloads) {
     }
 
     Run-Test -Name "legacy-wrapper-whatif-is-dry" -Body {
-        $root = New-RunDirectory -BaseRoot $runRoot -Name "legacy-wrapper-preview"
+        $root = New-RunDirectory -BaseRoot $usbTestRoot -Name "legacy-wrapper-preview"
         $result = Invoke-PublicScript `
             -ScriptPath $legacySetupScript `
             -Arguments @("-UsbRoot", $root, "-OwnerName", "Verify", "-WhatIf") `
@@ -1489,7 +1520,7 @@ if (-not $RevalidateManagedDownloads) {
     }
 
     Run-Test -Name "updater-falls-back-to-bundled-manifest" -Body {
-        $root = New-RunDirectory -BaseRoot $runRoot -Name "update-fallback-preview"
+        $root = New-RunDirectory -BaseRoot $usbTestRoot -Name "update-fallback-preview"
         $result = Invoke-PublicScript `
             -ScriptPath $updateScript `
             -Arguments @("-UsbRoot", $root, "-WhatIf") `
@@ -1501,7 +1532,7 @@ if (-not $RevalidateManagedDownloads) {
     }
 
     Run-Test -Name "updater-cleans-active-managed-shadow-placeholder" -Body {
-        $root = New-RunDirectory -BaseRoot $runRoot -Name "updater-cleans-shadow-placeholder"
+        $root = New-RunDirectory -BaseRoot $usbTestRoot -Name "updater-cleans-shadow-placeholder"
         $linuxRoot = Join-Path $root "ISO\Linux"
         Ensure-Dir -Path $linuxRoot
 
@@ -1565,7 +1596,7 @@ if (-not $RevalidateManagedDownloads) {
     }
 
     Run-Test -Name "manifest-path-escape-is-rejected" -Body {
-        $root = New-RunDirectory -BaseRoot $runRoot -Name "path-safety"
+        $root = New-RunDirectory -BaseRoot $usbTestRoot -Name "path-safety"
         $manifestUnderTestPath = Join-Path $root "escape.json"
 
         $manifestContent = @'
@@ -1802,6 +1833,10 @@ if ($script:ManagedRevalidationLatestRoot) {
 }
 
 $failedCount = @($results | Where-Object { $_.Status -eq "FAIL" }).Count
+
+if ($script:VerificationSubstDrive) {
+    & subst.exe $script:VerificationSubstDrive /D 2>$null
+}
 
 if ($failedCount -gt 0) {
     Write-Status "Ventoy core verification failed." "ERROR"

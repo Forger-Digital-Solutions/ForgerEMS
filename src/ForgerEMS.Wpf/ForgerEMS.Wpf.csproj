@@ -13,15 +13,20 @@
     <Description>Native WPF controller for the ForgerEMS PowerShell backend.</Description>
     <Authors>Forger Digital Solutions</Authors>
     <ApplicationIcon>Assets\ForgerEMS.ico</ApplicationIcon>
-    <Version>1.0.0</Version>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
-    <InformationalVersion>1.0.0</InformationalVersion>
+    <Version>1.0.1</Version>
+    <AssemblyVersion>1.0.1.0</AssemblyVersion>
+    <FileVersion>1.0.1.0</FileVersion>
+    <InformationalVersion>1.0.1</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <DebugType>embedded</DebugType>
     <PublishTrimmed>false</PublishTrimmed>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <DefaultItemExcludes>$(DefaultItemExcludes);bin\**;obj\**;.artifacts\**</DefaultItemExcludes>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\ForgerEMS.ico" />
+    <Resource Include="Assets\ForgerEMS_Icon.png" />
+  </ItemGroup>
 
 </Project>

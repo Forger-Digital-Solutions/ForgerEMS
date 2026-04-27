@@ -68,11 +68,8 @@ Setup-ForgerEMS.ps1 can:
 - create ISO folders for Windows, Linux, and recovery tools
 - create portable tool folders by category
 - create driver folders at the USB root
-- create working folders:
-    _downloads
-    _archive
-    _logs
-    _reports
+- create _logs and _docs when setup runs
+- create managed workflow folders only when downloads/updates need them
 - add DOWNLOAD shortcuts (.url) to official/reputable pages
 - keep active-managed page companions separate from placeholder/manual/review-first shortcuts
 - write inventory/readme/helper files
@@ -90,7 +87,7 @@ The setup script does NOT:
 IMPORTANT FIRST-TIME STEP
 ====================================================
 
-Install Ventoy to the USB BEFORE loading your toolkit.
+Select the USB target in the ForgerEMS app, then prepare or convert the USB to Ventoy from inside the app. The app launches the official Ventoy flow for the selected target.
 
 Ventoy Download:
 https://www.ventoy.net/en/download.html
@@ -102,8 +99,9 @@ IMPORTANT:
 Installing Ventoy formats the USB drive.
 
 That means:
-1) install Ventoy first
-2) then copy your toolkit/scripts/files onto the USB
+1) prepare or convert the USB to Ventoy inside ForgerEMS
+2) download or update the toolkit inside ForgerEMS
+3) then copy any personal ISOs/tools onto the USB
 3) then run the setup/layout script
 4) then add your ISOs and portable tools
 
@@ -175,11 +173,8 @@ Drivers\
 
 Optional / Working Folders
   MediCat.USB\
-  _downloads\
-  _archive\
   _logs\
-  _reports\
-  Docs\
+  _docs\
 
 ====================================================
 WHY DRIVERS ARE KEPT AT ROOT
@@ -268,11 +263,8 @@ Managed/updateable content in this Ventoy core:
 
 - files explicitly listed in ForgerEMS.updates.json
 - generated DOWNLOAD and INFO shortcuts
-- generated README, inventory, and helper notes
-- updater workflow folders:
-    _downloads
-    _archive
-    _logs
+- generated README.md, inventory, and helper notes
+- update workflow folders when downloads/archives are actually used
 
 Manual/unmanaged content unless a source workflow is
 added later:
@@ -280,6 +272,8 @@ added later:
 - portable third-party tools copied into Tools\Portable
 - offline driver packs copied into Drivers
 - MediCat.USB and similar large community bundles
+- 64GB or larger is recommended for complete downloads because Medicat.USB is large
+- 32GB can work for minimal or base toolkit setups
 
 Do not assume bundled vendor content is fully
 maintainable just because it is stored in this
@@ -343,21 +337,21 @@ Optional alternate root example:
 RECOMMENDED WORKFLOW
 ====================================================
 
-1) Install Ventoy to the USB
-2) Copy the ForgerEMS scripts/files onto the USB
-3) Run Setup-ForgerEMS.ps1
-4) Seed the manifest if needed
-5) Copy your known-good ISOs into ISO folders
-6) Add portable apps / drivers / Forger tools
-7) Run Update-ForgerEMS.ps1 later for on-demand maintenance
-8) Keep logs, reports, and archived versions on-drive
+1) Select the USB target in ForgerEMS
+2) Prepare or convert the USB to Ventoy inside the app
+3) Download or update the toolkit inside the app
+4) Copy your known-good ISOs into ISO folders
+5) Add portable apps, drivers, or bench-specific tools
+6) Run Download / Update Toolkit later for maintenance
+7) Keep logs and bench notes on-drive
 
 ====================================================
 SAFETY NOTES
 ====================================================
 
 - Always confirm the correct USB drive letter before running scripts.
-- Install Ventoy before copying your final toolkit layout.
+- C:\ is permanently blocked and must never be targeted.
+- Prepare/convert the USB to Ventoy before copying your final toolkit layout.
 - Re-running the setup/layout script is safe.
 - The setup/layout script does NOT format the USB.
 - Ventoy installation DOES format the USB.

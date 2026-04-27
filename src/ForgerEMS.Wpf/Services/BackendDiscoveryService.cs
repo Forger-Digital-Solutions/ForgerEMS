@@ -193,19 +193,16 @@ public sealed class BackendDiscoveryService : IBackendDiscoveryService
             return false;
         }
 
-        if (!string.Equals(metadata.FrontendVersion, _frontendVersion, StringComparison.OrdinalIgnoreCase))
-        {
-            failureMessage =
-                $"Bundled backend expects frontend {metadata.FrontendVersion}, but this app is {_frontendVersion}. The bundled backend will not be used.";
-            return false;
-        }
-
         if (!TryValidateBundledChecksums(bundledRoot, out var checksumFailure))
         {
             failureMessage =
                 $"Bundled backend checksum validation failed and the bundle will not be used. {checksumFailure}";
             return false;
         }
+
+        var compatibilityMessage = string.Equals(metadata.FrontendVersion, _frontendVersion, StringComparison.OrdinalIgnoreCase)
+            ? $"Frontend {_frontendVersion} is aligned with backend {metadata.BackendVersion}."
+            : $"Frontend {_frontendVersion} is running with backend {metadata.BackendVersion}; bundled metadata expected frontend {metadata.FrontendVersion}. Status: Warning.";
 
         context = new BackendContext
         {
@@ -219,7 +216,7 @@ public sealed class BackendDiscoveryService : IBackendDiscoveryService
             FrontendVersion = _frontendVersion,
             BackendVersion = metadata.BackendVersion,
             DiagnosticMessage =
-                $"Bundled backend verified. Frontend {_frontendVersion} is aligned with backend {metadata.BackendVersion}."
+                $"Bundled backend verified. {compatibilityMessage}"
         };
 
         failureMessage = string.Empty;

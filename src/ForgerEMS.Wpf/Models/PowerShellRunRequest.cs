@@ -14,6 +14,8 @@ public sealed class PowerShellRunRequest
     public string? InlineCommand { get; init; }
 
     public IReadOnlyList<string> Arguments { get; init; } = Array.Empty<string>();
+
+    public string? ProgressItemName { get; init; }
 }
 
 public sealed class PowerShellRunResult

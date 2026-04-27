@@ -5,7 +5,8 @@ public enum ScriptActionType
     VerifyBackend = 0,
     SetupUsb = 1,
     UpdateUsb = 2,
-    RevalidateManagedDownloads = 3
+    RevalidateManagedDownloads = 3,
+    RenameUsb = 4
 }
 
 public sealed class ScriptExecutionResult

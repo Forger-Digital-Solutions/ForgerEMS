@@ -81,6 +81,9 @@ Status note:
 
 - `Windows 11 Download Page`
 - `Windows 10 Download Page`
+- `CrystalDiskMark Download Page`
+- `Samsung Magician Download Page`
+- `WD Dashboard Download Page`
 - `MediCat Download Page`
 - `Sergei Strelec WinPE Info`
 - `Ultimate Boot CD Download Page`

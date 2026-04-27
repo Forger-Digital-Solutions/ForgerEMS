@@ -1,0 +1,2 @@
+release/v1.0.1/app/*.exe filter=lfs diff=lfs merge=lfs -text
+release/v1.0.1/installer/*.exe filter=lfs diff=lfs merge=lfs -text

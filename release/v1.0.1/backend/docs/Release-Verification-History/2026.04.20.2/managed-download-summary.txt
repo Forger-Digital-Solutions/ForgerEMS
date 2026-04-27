@@ -1,0 +1,19 @@
+ForgerEMS managed-download summary
+================================
+Generated: 2026-04-23 09:07:51
+Active managed items: 16
+Fragility: high 6 | medium 7 | low 3
+Checksum posture: pinned-only 6 | pinned+remote 9 | remote-only 1
+Status: OK 10 | OK-LIMITED 6 | DRIFT 0
+Borderline: BlueScreenView 1.55 (x64 zip); Linux Mint 22.3 Cinnamon (64-bit); CrystalDiskInfo 9.8.0 (standard zip)
+Inspect first next cycle: [1] BlueScreenView 1.55 (x64 zip); [2] Rufus 4.13 Portable (x64); [3] Ventoy 1.1.11 (Windows package); [4] SystemRescue 13.00 (amd64); [5] GParted Live 1.8.1-3 (amd64)
+Top fragility slice (ranks 1-7): [1] BlueScreenView 1.55 (x64 zip); [2] Rufus 4.13 Portable (x64); [3] Ventoy 1.1.11 (Windows package); [4] SystemRescue 13.00 (amd64); [5] GParted Live 1.8.1-3 (amd64); [6] Clonezilla Live 3.3.1-35 (amd64); [7] Linux Mint 22.3 Cinnamon (64-bit)
+Top fragility issues: none
+Release-prep gate: PASS
+Archive snapshot: C:\Users\Daddy_FDS\Desktop\ForgerDigitalSolutions\ForgerEMS_App\repo\.verify\managed-download-revalidation\20260423_090751
+Latest snapshot: C:\Users\Daddy_FDS\Desktop\ForgerDigitalSolutions\ForgerEMS_App\repo\.verify\managed-download-revalidation\latest
+
+Status meanings:
+- OK -> live URL plus remote checksum source resolved
+- OK-LIMITED -> live URL resolved, but checksum confirmation still depends on the pinned manifest hash
+- DRIFT -> URL/checksum source drift needs operator review before release use

@@ -291,11 +291,16 @@ public sealed class UsbDetectionService : IUsbDetectionService
                         $isPreferredUsbTarget = $hasVentoyCompanionEfiPartition -and $diskHasLargeDataPartition -and -not $isEfiSystemPartition -and $partitionSizeBytes -ge 10GB
 
                         $isLikelyUsb = ($logicalDisk.DriveType -eq 2) -or ($busType -eq 'USB') -or ($pnpDeviceId -match 'USBSTOR|VID_[0-9A-F]{4}')
+                        $isProtectedSystemDrive = ($driveLetter -ieq 'C')
                         if (-not $isLikelyUsb) {
                             continue
                         }
 
-                        if ($isEfiSystemPartition -or $isUndersizedPartition) {
+                        if ($isProtectedSystemDrive) {
+                            $isSelectable = $false
+                            $warning = 'Blocked protected Windows system drive. C:\ can never be used by ForgerEMS.'
+                        }
+                        elseif ($isEfiSystemPartition -or $isUndersizedPartition) {
                             $isSelectable = $false
                             $warning = 'Blocked EFI/boot partition excluded from targeting.'
                         }
@@ -362,8 +367,8 @@ public sealed class UsbDetectionService : IUsbDetectionService
                                 IsLikelyUsb      = $true
                                 DeviceBrand      = $deviceBrand
                                 DeviceModel      = $deviceModel
-                                ReadSpeedDisplay = 'Not benchmarked'
-                                WriteSpeedDisplay = 'Not benchmarked'
+                                ReadSpeedDisplay = 'Not tested'
+                                WriteSpeedDisplay = 'Not tested'
                                 PartitionType    = $partitionType
                                 IsSystemDrive    = $isSystemDrive
                                 IsBootDrive      = $isBootDrive
@@ -476,8 +481,8 @@ public sealed class UsbDetectionService : IUsbDetectionService
             IsLikelyUsb = GetBoolean(element, "IsLikelyUsb"),
             DeviceBrand = GetString(element, "DeviceBrand"),
             DeviceModel = GetString(element, "DeviceModel"),
-            ReadSpeedDisplay = GetString(element, "ReadSpeedDisplay", "Not benchmarked"),
-            WriteSpeedDisplay = GetString(element, "WriteSpeedDisplay", "Not benchmarked"),
+            ReadSpeedDisplay = GetString(element, "ReadSpeedDisplay", "Not tested"),
+            WriteSpeedDisplay = GetString(element, "WriteSpeedDisplay", "Not tested"),
             PartitionType = GetString(element, "PartitionType"),
             IsSystemDrive = GetBoolean(element, "IsSystemDrive"),
             IsBootDrive = GetBoolean(element, "IsBootDrive"),
@@ -532,8 +537,8 @@ public sealed class UsbDetectionService : IUsbDetectionService
                 IsLikelyUsb = true,
                 DeviceBrand = string.Empty,
                 DeviceModel = string.Empty,
-                ReadSpeedDisplay = "Not benchmarked",
-                WriteSpeedDisplay = "Not benchmarked",
+                ReadSpeedDisplay = "Not tested",
+                WriteSpeedDisplay = "Not tested",
                 PartitionType = string.Empty,
                 IsSystemDrive = false,
                 IsBootDrive = false,

@@ -108,7 +108,7 @@ $script:Summary = [ordered]@{
 function Write-Log {
     param(
         [Parameter(Mandatory)][string]$Message,
-        [ValidateSet("INFO","OK","WARN","ERROR")][string]$Level = "INFO"
+        [ValidateSet("INIT","INFO","OK","WARN","ERROR","ACTION","COMPLETE")][string]$Level = "INFO"
     )
 
     $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
@@ -119,6 +119,9 @@ function Write-Log {
         "OK"    { Write-Host $line -ForegroundColor Green }
         "WARN"  { Write-Host $line -ForegroundColor Yellow }
         "ERROR" { Write-Host $line -ForegroundColor Red }
+        "ACTION" { Write-Host $line -ForegroundColor Yellow }
+        "INIT" { Write-Host $line -ForegroundColor Cyan }
+        "COMPLETE" { Write-Host $line -ForegroundColor Green }
     }
 
     if ($script:LogFile -and -not $WhatIfPreference) {
@@ -588,7 +591,8 @@ function Invoke-HttpClientDownload {
         [Parameter(Mandatory)][string]$Url,
         [Parameter(Mandatory)][string]$OutFile,
         [int]$TimeoutSec = 180,
-        [string]$UserAgent = "ForgerEMS-Updater/3.1"
+        [string]$UserAgent = "ForgerEMS-Updater/3.1",
+        [string]$ItemName = "payload"
     )
 
     Add-Type -AssemblyName System.Net.Http | Out-Null
@@ -613,9 +617,62 @@ function Invoke-HttpClientDownload {
         $response = $client.GetAsync($Url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
         $null = $response.EnsureSuccessStatusCode()
 
+        $totalBytes = if ($response.Content.Headers.ContentLength.HasValue) { [int64]$response.Content.Headers.ContentLength.Value } else { [int64]0 }
         $responseStream = $response.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
-        $fileStream = [IO.File]::Open($OutFile, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::None)
-        $responseStream.CopyTo($fileStream)
+        $fileStream = New-Object System.IO.FileStream($OutFile, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::None, 1048576, [IO.FileOptions]::SequentialScan)
+        $buffer = New-Object byte[] 1048576
+        $downloadedBytes = [int64]0
+        $lastLogBytes = [int64]0
+        $lastLogUtc = [DateTime]::UtcNow
+        $lastProgressUtc = [DateTime]::UtcNow
+        $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+        while (($read = $responseStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+            $fileStream.Write($buffer, 0, $read)
+            $downloadedBytes += [int64]$read
+
+            $nowUtc = [DateTime]::UtcNow
+            if (($nowUtc - $lastLogUtc).TotalSeconds -ge 2 -or ($totalBytes -gt 0 -and $downloadedBytes -ge $totalBytes)) {
+                $elapsedSeconds = [Math]::Max($stopwatch.Elapsed.TotalSeconds, 0.001)
+                $speedMbps = ($downloadedBytes / 1MB) / $elapsedSeconds
+                $downloadedMb = [Math]::Round($downloadedBytes / 1MB, 0)
+
+                if ($totalBytes -gt 0) {
+                    $totalMb = [Math]::Round($totalBytes / 1MB, 0)
+                    $percent = [Math]::Min(100, [Math]::Round(($downloadedBytes / [double]$totalBytes) * 100, 1))
+                    $remainingBytes = [Math]::Max(0, $totalBytes - $downloadedBytes)
+                    $etaSeconds = if ($speedMbps -gt 0) { [int][Math]::Round(($remainingBytes / 1MB) / $speedMbps) } else { 0 }
+                    $eta = if ($etaSeconds -ge 3600) {
+                        '{0}h {1}m {2}s' -f [int]($etaSeconds / 3600), [int](($etaSeconds % 3600) / 60), [int]($etaSeconds % 60)
+                    }
+                    elseif ($etaSeconds -ge 60) {
+                        '{0}m {1}s' -f [int]($etaSeconds / 60), [int]($etaSeconds % 60)
+                    }
+                    else {
+                        '{0}s' -f $etaSeconds
+                    }
+
+                    Write-Log ("Downloading {0}... {1}% | {2} MB / {3} MB | {4:0.0} MB/s | ETA {5}" -f $ItemName, $percent, $downloadedMb, $totalMb, $speedMbps, $eta) "INFO"
+                }
+                else {
+                    Write-Log ("Downloading {0}... {1} MB downloaded | {2:0.0} MB/s" -f $ItemName, $downloadedMb, $speedMbps) "INFO"
+                }
+
+                if ($downloadedBytes -gt $lastLogBytes) {
+                    $lastProgressUtc = $nowUtc
+                    $lastLogBytes = $downloadedBytes
+                }
+                elseif (($nowUtc - $lastProgressUtc).TotalSeconds -ge 30) {
+                    Write-Log "Download appears stalled; retrying may be required if no progress resumes." "WARN"
+                    $lastProgressUtc = $nowUtc
+                }
+
+                $lastLogUtc = $nowUtc
+            }
+        }
+
+        $fileStream.Flush($true)
+        $stopwatch.Stop()
 
         return [PSCustomObject]@{
             Method      = "HttpClient"
@@ -764,7 +821,8 @@ function Download-File {
         [Parameter(Mandatory)][string]$OutFile,
         [int]$TimeoutSec = 180,
         [string]$UserAgent = "ForgerEMS-Updater/3.1",
-        [int]$Retries = 3
+        [int]$Retries = 3,
+        [string]$ItemName = "payload"
     )
 
     $headers = @{ "User-Agent" = $UserAgent }
@@ -783,7 +841,7 @@ function Download-File {
                 @{
                     Name   = "HttpClient"
                     Action = {
-                        Invoke-HttpClientDownload -Url $Url -OutFile $OutFile -TimeoutSec $TimeoutSec -UserAgent $UserAgent
+                        Invoke-HttpClientDownload -Url $Url -OutFile $OutFile -TimeoutSec $TimeoutSec -UserAgent $UserAgent -ItemName $ItemName
                     }
                 },
                 @{
@@ -837,6 +895,7 @@ function Download-File {
                     $downloadReasonPhrase = if ($downloadMetadataRecord -and $downloadMetadataRecord.PSObject.Properties["ReasonPhrase"]) { Get-NormalizedDisplayText -Value $downloadMetadataRecord.ReasonPhrase } else { "" }
                     $downloadFinalUri = if ($downloadMetadataRecord -and $downloadMetadataRecord.PSObject.Properties["FinalUri"]) { Get-NormalizedDisplayText -Value $downloadMetadataRecord.FinalUri } else { "" }
 
+                    Write-Log "Download complete: $ItemName" "OK"
                     Write-Log "Download completed via $($downloadMethod.Name): $OutFile ($sizeBytes bytes)" "OK"
                     if (-not [string]::IsNullOrWhiteSpace($downloadStatusCode)) {
                         Write-Log (("Download HTTP status via $($downloadMethod.Name): $downloadStatusCode $downloadReasonPhrase").TrimEnd()) "INFO"
@@ -901,6 +960,9 @@ function Download-File {
         catch {
             Write-Log "Download attempt $attempt failed for $Url :: $(Get-ExceptionDiagnostic -ErrorRecord $_)" "WARN"
             if ($attempt -eq $Retries) { throw }
+            $nextAttempt = $attempt + 1
+            Write-Log "Download appears stalled; retrying..." "WARN"
+            Write-Log "Retry attempt $nextAttempt/$Retries for $ItemName" "ACTION"
             Start-Sleep -Seconds ([Math]::Min(5 * $attempt, 15))
         }
     }
@@ -1141,11 +1203,26 @@ function Resolve-SelectedUsbRoot {
         $driveRoot = Get-PathDriveRoot -Path $resolvedPath
         if ($driveRoot -and $resolvedPath -ne $driveRoot) {
             Write-Host ("{0} '{1}' is inside the release bundle. Using USB root '{2}' instead." -f $Source, $resolvedPath, $driveRoot) -ForegroundColor Yellow
+            Assert-UsbRootIsSafe -Root $driveRoot
             return $driveRoot
         }
     }
 
+    Assert-UsbRootIsSafe -Root $resolvedPath
     return $resolvedPath
+}
+
+function Assert-UsbRootIsSafe {
+    param([Parameter(Mandatory)][string]$Root)
+
+    $driveRoot = [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($Root))
+    if ([string]::IsNullOrWhiteSpace($driveRoot)) {
+        throw "Could not resolve a drive root for selected USB target '$Root'."
+    }
+
+    if ($driveRoot.TrimEnd('\') -ieq "C:") {
+        throw "C:\ is the protected Windows system drive and can never be used by ForgerEMS."
+    }
 }
 
 function Resolve-RootChildPath {
@@ -1795,7 +1872,7 @@ foreach ($item in $orderedItems) {
 
     try {
         Write-Log "Download start: $name" "INFO"
-        $downloadResult = Download-File -Url $url -OutFile $tmpPath -TimeoutSec $itemTimeout -UserAgent $userAgent -Retries $retries
+        $downloadResult = Download-File -Url $url -OutFile $tmpPath -TimeoutSec $itemTimeout -UserAgent $userAgent -Retries $retries -ItemName $name
         if ($downloadResult) {
             if (-not [string]::IsNullOrWhiteSpace([string]$downloadResult.AttemptSummary)) {
                 Write-Log "Downloader methods attempted: $($downloadResult.AttemptSummary)" "INFO"

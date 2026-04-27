@@ -35,6 +35,8 @@ public sealed class MainViewModel : ObservableObject
     private readonly IUserPromptService _userPromptService;
     private readonly IVentoyIntegrationService _ventoyIntegrationService;
     private readonly IAppRuntimeService _appRuntimeService;
+    private readonly IUsbBenchmarkService _usbBenchmarkService;
+    private readonly Dictionary<string, UsbBenchmarkResult> _benchmarkResultsByRoot = new(StringComparer.OrdinalIgnoreCase);
 
     private BackendContext _backendContext = BackendContext.Unavailable("Backend discovery has not run yet.");
     private UsbTargetInfo? _selectedUsbTarget;
@@ -44,8 +46,16 @@ public sealed class MainViewModel : ObservableObject
     private bool _autoScrollLogs = true;
     private bool _suppressSelectionRefresh;
     private int _ventoyStatusRequestId;
+    private int _benchmarkRequestId;
+    private string _usbOwnerName = string.Empty;
     private string _statusText = "Starting up";
     private string _statusDetail = "Discovering the backend and checking for likely USB targets.";
+    private string _currentTaskState = "WORKING";
+    private string _currentTaskText = "Verifying backend";
+    private double _currentProgressValue;
+    private bool _isProgressIndeterminate;
+    private Visibility _progressVisibility = Visibility.Collapsed;
+    private Visibility _dryRunBannerVisibility = Visibility.Visible;
     private Brush _statusBackground = RunningBackground;
     private Brush _statusBorderBrush = RunningBorder;
     private Brush _statusForeground = RunningForeground;
@@ -78,7 +88,8 @@ public sealed class MainViewModel : ObservableObject
         IScriptStatusParser scriptStatusParser,
         IUserPromptService userPromptService,
         IVentoyIntegrationService ventoyIntegrationService,
-        IAppRuntimeService appRuntimeService)
+        IAppRuntimeService appRuntimeService,
+        IUsbBenchmarkService usbBenchmarkService)
     {
         _backendDiscoveryService = backendDiscoveryService;
         _powerShellRunnerService = powerShellRunnerService;
@@ -88,6 +99,7 @@ public sealed class MainViewModel : ObservableObject
         _userPromptService = userPromptService;
         _ventoyIntegrationService = ventoyIntegrationService;
         _appRuntimeService = appRuntimeService;
+        _usbBenchmarkService = usbBenchmarkService;
 
         RefreshAllCommand = new AsyncRelayCommand(RefreshAllAsync, () => !IsBusy);
         RefreshUsbTargetsCommand = new AsyncRelayCommand(RefreshUsbTargetsAsync, () => !IsBusy);
@@ -95,6 +107,7 @@ public sealed class MainViewModel : ObservableObject
         RevalidateManagedDownloadsCommand = new AsyncRelayCommand(RunRevalidateManagedDownloadsAsync, CanRunBackendOnlyActions);
         SetupUsbCommand = new AsyncRelayCommand(RunSetupUsbAsync, CanRunTargetedActions);
         UpdateUsbCommand = new AsyncRelayCommand(RunUpdateUsbAsync, CanRunTargetedActions);
+        RenameUsbCommand = new AsyncRelayCommand(RunRenameUsbAsync, CanRunTargetedActions);
         InstallOrUpdateVentoyCommand = new AsyncRelayCommand(RunInstallOrUpdateVentoyAsync, CanRunTargetedActions);
         CopyLogsCommand = new RelayCommand(CopyLogs, () => !string.IsNullOrWhiteSpace(LogsText));
         ClearLogsCommand = new RelayCommand(ClearLogs, () => Logs.Count > 0);
@@ -118,6 +131,8 @@ public sealed class MainViewModel : ObservableObject
     public AsyncRelayCommand SetupUsbCommand { get; }
 
     public AsyncRelayCommand UpdateUsbCommand { get; }
+
+    public AsyncRelayCommand RenameUsbCommand { get; }
 
     public AsyncRelayCommand InstallOrUpdateVentoyCommand { get; }
 
@@ -144,15 +159,32 @@ public sealed class MainViewModel : ObservableObject
                 if (!_suppressSelectionRefresh)
                 {
                     _ = RefreshVentoyStatusSafeAsync();
+                    _ = AutoBenchmarkSelectedUsbSafeAsync();
                 }
             }
         }
     }
 
+    public string UsbOwnerName
+    {
+        get => _usbOwnerName;
+        set => SetProperty(ref _usbOwnerName, value);
+    }
+
     public bool UseDryRun
     {
         get => _useDryRun;
-        set => SetProperty(ref _useDryRun, value);
+        set
+        {
+            if (SetProperty(ref _useDryRun, value))
+            {
+                DryRunBannerVisibility = value ? Visibility.Visible : Visibility.Collapsed;
+                if (value)
+                {
+                    AppendLog(new LogLine(DateTimeOffset.Now, "[WARN] Dry-run mode enabled. No USB changes will be written.", LogSeverity.Warning));
+                }
+            }
+        }
     }
 
     public bool AutoScrollLogs
@@ -211,6 +243,8 @@ public sealed class MainViewModel : ObservableObject
                 parts.Add($"Backend {_backendContext.BackendVersion}");
             }
 
+            parts.Add($"Status: {GetBackendCompatibilityStatus()}");
+
             return string.Join(" | ", parts);
         }
     }
@@ -225,6 +259,42 @@ public sealed class MainViewModel : ObservableObject
     {
         get => _statusDetail;
         private set => SetProperty(ref _statusDetail, value);
+    }
+
+    public string CurrentTaskState
+    {
+        get => _currentTaskState;
+        private set => SetProperty(ref _currentTaskState, value);
+    }
+
+    public string CurrentTaskText
+    {
+        get => _currentTaskText;
+        private set => SetProperty(ref _currentTaskText, value);
+    }
+
+    public double CurrentProgressValue
+    {
+        get => _currentProgressValue;
+        private set => SetProperty(ref _currentProgressValue, value);
+    }
+
+    public bool IsProgressIndeterminate
+    {
+        get => _isProgressIndeterminate;
+        private set => SetProperty(ref _isProgressIndeterminate, value);
+    }
+
+    public Visibility ProgressVisibility
+    {
+        get => _progressVisibility;
+        private set => SetProperty(ref _progressVisibility, value);
+    }
+
+    public Visibility DryRunBannerVisibility
+    {
+        get => _dryRunBannerVisibility;
+        private set => SetProperty(ref _dryRunBannerVisibility, value);
     }
 
     public Brush StatusBackground
@@ -386,7 +456,7 @@ public sealed class MainViewModel : ObservableObject
         return !_isBusy &&
                _backendContext.IsAvailable &&
                SelectedUsbTarget is not null &&
-               GetTargetExecutionBlockReason(SelectedUsbTarget) is null;
+               UsbTargetSafety.GetExecutionBlockReason(SelectedUsbTarget) is null;
     }
 
     private async Task RefreshAllAsync()
@@ -430,13 +500,14 @@ public sealed class MainViewModel : ObservableObject
     private async Task RefreshUsbTargetsAsync()
     {
         var previousSelection = SelectedUsbTarget?.RootPath;
+        _benchmarkResultsByRoot.Clear();
         var detectionResult = await _usbDetectionService.GetUsbTargetsAsync();
         var targets = detectionResult.Targets;
 
         UsbTargets.Clear();
         foreach (var target in targets)
         {
-            UsbTargets.Add(target);
+            UsbTargets.Add(ApplyCachedBenchmarkResult(target));
         }
 
         _suppressSelectionRefresh = true;
@@ -469,6 +540,7 @@ public sealed class MainViewModel : ObservableObject
         }
 
         await RefreshVentoyStatusAsync();
+        _ = AutoBenchmarkSelectedUsbSafeAsync();
     }
 
     private async Task RunVerifyAsync()
@@ -492,7 +564,8 @@ public sealed class MainViewModel : ObservableObject
                 DisplayName = "Revalidate managed downloads",
                 WorkingDirectory = _backendContext.WorkingDirectory,
                 ScriptPath = _backendContext.VerifyScriptPath,
-                Arguments = ["-RevalidateManagedDownloads"]
+                Arguments = ["-RevalidateManagedDownloads"],
+                ProgressItemName = "managed download revalidation"
             });
     }
 
@@ -521,6 +594,12 @@ public sealed class MainViewModel : ObservableObject
             "-NonInteractive"
         };
 
+        if (!string.IsNullOrWhiteSpace(UsbOwnerName))
+        {
+            arguments.Add("-OwnerName");
+            arguments.Add(UsbOwnerName.Trim());
+        }
+
         if (UseDryRun)
         {
             arguments.Add("-WhatIf");
@@ -537,7 +616,8 @@ public sealed class MainViewModel : ObservableObject
                 DisplayName = UseDryRun ? "Setup USB (dry-run)" : "Setup USB + managed downloads",
                 WorkingDirectory = _backendContext.WorkingDirectory,
                 ScriptPath = _backendContext.SetupScriptPath,
-                Arguments = arguments
+                Arguments = arguments,
+                ProgressItemName = UseDryRun ? null : "managed downloads"
             });
     }
 
@@ -576,19 +656,65 @@ public sealed class MainViewModel : ObservableObject
                 DisplayName = UseDryRun ? "Update USB (dry-run)" : "Update USB",
                 WorkingDirectory = _backendContext.WorkingDirectory,
                 ScriptPath = _backendContext.UpdateScriptPath,
-                Arguments = arguments
+                Arguments = arguments,
+                ProgressItemName = UseDryRun ? null : "managed downloads"
             });
+    }
+
+    private async Task RunRenameUsbAsync()
+    {
+        if (!TryGetValidatedSelectedTarget("Rename USB", out var selectedUsbTarget))
+        {
+            return;
+        }
+
+        var currentLabel = selectedUsbTarget.LabelDisplay == "(no label)" ? string.Empty : selectedUsbTarget.LabelDisplay;
+        var newLabel = _userPromptService.PromptText(
+            "Rename USB",
+            $"Enter a new label for {selectedUsbTarget.RootPath}. Keep it short and recognizable.",
+            currentLabel);
+
+        if (newLabel is null)
+        {
+            return;
+        }
+
+        newLabel = newLabel.Trim();
+        if (!TryValidateVolumeLabel(newLabel, out var validationError))
+        {
+            _userPromptService.ShowMessage("Rename USB", validationError, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (!ConfirmTargetedAction(
+                "Rename USB",
+                selectedUsbTarget,
+                $"This will rename only the selected USB volume from '{selectedUsbTarget.LabelDisplay}' to '{newLabel}'. It will not format or benchmark the drive."))
+        {
+            return;
+        }
+
+        await RunScriptAsync(
+            ScriptActionType.RenameUsb,
+            new PowerShellRunRequest
+            {
+                DisplayName = "Rename USB",
+                WorkingDirectory = AppContext.BaseDirectory,
+                InlineCommand = BuildRenameUsbCommand(selectedUsbTarget.RootPath, newLabel)
+            });
+
+        await RefreshUsbTargetsAsync();
     }
 
     private async Task RunInstallOrUpdateVentoyAsync()
     {
-        if (!TryGetValidatedSelectedTarget("Install/Update Ventoy", out var selectedUsbTarget))
+        if (!TryGetValidatedSelectedTarget("Install / Update Ventoy", out var selectedUsbTarget))
         {
             return;
         }
 
         if (!ConfirmTargetedAction(
-                "Install/Update Ventoy",
+                "Install / Update Ventoy",
                 selectedUsbTarget,
                 "This downloads the official Ventoy package from the manifest-defined source, verifies the pinned SHA-256, extracts it to a local operator cache, and launches Ventoy2Disk. The actual install/update still happens manually inside Ventoy2Disk and may repartition the selected USB."))
         {
@@ -596,9 +722,13 @@ public sealed class MainViewModel : ObservableObject
         }
 
         ClearLogs();
-        LastCommandText = "Install/Update Ventoy -> official package + Ventoy2Disk";
-        AppendLog(new LogLine(DateTimeOffset.Now, $"Working directory: {_backendContext.WorkingDirectory}", LogSeverity.Info));
-        AppendLog(new LogLine(DateTimeOffset.Now, $"Target USB: {selectedUsbTarget.RootPath} ({selectedUsbTarget.LabelDisplay})", LogSeverity.Info));
+        LastCommandText = "Install / Update Ventoy -> official package + Ventoy2Disk";
+        var startedAt = DateTimeOffset.Now;
+        AppendLifecycleStart("Install / Update Ventoy", selectedUsbTarget);
+        AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] Working directory: {_backendContext.WorkingDirectory}", LogSeverity.Info));
+        AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] Target USB: {selectedUsbTarget.RootPath} ({selectedUsbTarget.LabelDisplay})", LogSeverity.Info));
+        AppendLog(new LogLine(DateTimeOffset.Now, "[WARN] Ventoy install/update may modify partitions", LogSeverity.Warning));
+        AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Preparing USB for Ventoy...", LogSeverity.Info));
         AppendLog(new LogLine(DateTimeOffset.Now, VentoyPackageText, LogSeverity.Info));
 
         SetStatus(
@@ -616,6 +746,8 @@ public sealed class MainViewModel : ObservableObject
 
             if (result.Succeeded)
             {
+                AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Ventoy install/update complete", LogSeverity.Success));
+                AppendLifecycleComplete("Install / Update Ventoy", startedAt);
                 SetStatus(
                     result.Summary,
                     result.Details,
@@ -625,6 +757,7 @@ public sealed class MainViewModel : ObservableObject
             }
             else
             {
+                AppendLifecycleFailure("Install / Update Ventoy", result.Details);
                 SetStatus(
                     result.Summary,
                     result.Details,
@@ -636,6 +769,7 @@ public sealed class MainViewModel : ObservableObject
         catch (Exception exception)
         {
             AppendLog(new LogLine(DateTimeOffset.Now, exception.Message, LogSeverity.Error, isErrorStream: true));
+            AppendLifecycleFailure("Install / Update Ventoy", exception.Message);
             SetStatus(
                 "Ventoy package preparation failed",
                 exception.Message,
@@ -646,6 +780,85 @@ public sealed class MainViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+            ResetProgressSoon();
+        }
+    }
+
+    private async Task AutoBenchmarkSelectedUsbSafeAsync()
+    {
+        var target = SelectedUsbTarget;
+        var requestId = ++_benchmarkRequestId;
+
+        if (target is null)
+        {
+            return;
+        }
+
+        if (_benchmarkResultsByRoot.ContainsKey(GetBenchmarkCacheKey(target.RootPath)))
+        {
+            return;
+        }
+
+        if (!UsbTargetSafety.IsSafeForBenchmark(target, out var blockReason))
+        {
+            ApplyBenchmarkResult(target, new UsbBenchmarkResult
+            {
+                Succeeded = false,
+                Summary = "Benchmark skipped",
+                Details = blockReason,
+                ReadSpeedDisplay = "Skipped (unsafe)",
+                WriteSpeedDisplay = "Skipped (unsafe)"
+            });
+            return;
+        }
+
+        RaiseCommandStates();
+        ApplyBenchmarkResult(target, new UsbBenchmarkResult
+        {
+            Succeeded = false,
+            Summary = "Benchmark testing",
+            Details = "USB speed test is running.",
+            ReadSpeedDisplay = "Testing...",
+            WriteSpeedDisplay = "Testing..."
+        });
+
+        try
+        {
+            var result = await _usbBenchmarkService.RunSequentialBenchmarkAsync(target);
+            if (requestId != _benchmarkRequestId)
+            {
+                return;
+            }
+
+            ApplyBenchmarkResult(target, result);
+            if (!result.Succeeded && result.Summary.Contains("failed", StringComparison.OrdinalIgnoreCase))
+            {
+                AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Automatic USB speed check failed for {target.RootPath}.", LogSeverity.Warning));
+            }
+        }
+        catch (Exception exception)
+        {
+            if (requestId != _benchmarkRequestId)
+            {
+                return;
+            }
+
+            ApplyBenchmarkResult(target, new UsbBenchmarkResult
+            {
+                Succeeded = false,
+                Summary = "Benchmark failed",
+                Details = exception.Message,
+                ReadSpeedDisplay = "Failed",
+                WriteSpeedDisplay = "Failed"
+            });
+            AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Automatic USB speed check failed for {target.RootPath}.", LogSeverity.Warning));
+        }
+        finally
+        {
+            if (requestId == _benchmarkRequestId)
+            {
+                RaiseCommandStates();
+            }
         }
     }
 
@@ -665,10 +878,17 @@ public sealed class MainViewModel : ObservableObject
         ClearLogs();
         LastCommandText = $"{request.DisplayName} -> {Path.GetFileName(request.ScriptPath ?? "inline command")}";
 
-        AppendLog(new LogLine(DateTimeOffset.Now, $"Working directory: {request.WorkingDirectory}", LogSeverity.Info));
+        var startedAt = DateTimeOffset.Now;
+        AppendLifecycleStart(request.DisplayName, SelectedUsbTarget);
+        if (UseDryRun && request.Arguments.Any(argument => string.Equals(argument, "-WhatIf", StringComparison.OrdinalIgnoreCase)))
+        {
+            AppendLog(new LogLine(DateTimeOffset.Now, "[WARN] Dry-run mode enabled. No USB changes will be written.", LogSeverity.Warning));
+        }
+
+        AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] Working directory: {request.WorkingDirectory}", LogSeverity.Info));
         if (!string.IsNullOrWhiteSpace(request.ScriptPath))
         {
-            AppendLog(new LogLine(DateTimeOffset.Now, $"Script: {request.ScriptPath}", LogSeverity.Info));
+            AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] Script: {request.ScriptPath}", LogSeverity.Info));
         }
 
         SetStatus(
@@ -695,9 +915,11 @@ public sealed class MainViewModel : ObservableObject
                     parsed.HasWarnings ? WarningBackground : ReadyBackground,
                     parsed.HasWarnings ? WarningBorder : ReadyBorder,
                     parsed.HasWarnings ? WarningForeground : ReadyForeground);
+                AppendLifecycleComplete(request.DisplayName, startedAt);
             }
             else
             {
+                AppendLifecycleFailure(request.DisplayName, parsed.Summary);
                 SetStatus(
                     parsed.Summary,
                     parsed.Details,
@@ -709,6 +931,7 @@ public sealed class MainViewModel : ObservableObject
         catch (Exception exception)
         {
             AppendLog(new LogLine(DateTimeOffset.Now, exception.Message, LogSeverity.Error, isErrorStream: true));
+            AppendLifecycleFailure(request.DisplayName, exception.Message);
             SetStatus(
                 $"{request.DisplayName} failed to start",
                 exception.Message,
@@ -719,6 +942,7 @@ public sealed class MainViewModel : ObservableObject
         finally
         {
             IsBusy = false;
+            ResetProgressSoon();
         }
     }
 
@@ -790,7 +1014,7 @@ public sealed class MainViewModel : ObservableObject
 
     private bool ConfirmTargetedAction(string actionName, UsbTargetInfo target, string actionWarning)
     {
-        var executionBlockReason = GetTargetExecutionBlockReason(target);
+        var executionBlockReason = UsbTargetSafety.GetExecutionBlockReason(target);
         if (!string.IsNullOrWhiteSpace(executionBlockReason))
         {
             SetStatus(
@@ -825,7 +1049,7 @@ public sealed class MainViewModel : ObservableObject
             return false;
         }
 
-        var executionBlockReason = GetTargetExecutionBlockReason(SelectedUsbTarget);
+        var executionBlockReason = UsbTargetSafety.GetExecutionBlockReason(SelectedUsbTarget);
         if (string.IsNullOrWhiteSpace(executionBlockReason))
         {
             target = SelectedUsbTarget;
@@ -842,39 +1066,6 @@ public sealed class MainViewModel : ObservableObject
         AppendLog(new LogLine(DateTimeOffset.Now, $"{actionName} blocked: {executionBlockReason}", LogSeverity.Error, isErrorStream: true));
         _userPromptService.ShowMessage("USB target blocked", executionBlockReason, MessageBoxImage.Error);
         return false;
-    }
-
-    private static string? GetTargetExecutionBlockReason(UsbTargetInfo? target)
-    {
-        if (target is null)
-        {
-            return "Select the main USB storage partition before running this action.";
-        }
-
-        var hasVentoyEfiLabel = target.Label.Contains("VTOYEFI", StringComparison.OrdinalIgnoreCase);
-        var isTooSmall = target.TotalBytes > 0 && target.TotalBytes < UsbTargetInfo.MinimumTargetBytes;
-
-        if (hasVentoyEfiLabel || target.IsEfiSystemPartition || target.IsUndersizedPartition || isTooSmall)
-        {
-            return
-                "You selected a boot partition, not the main USB storage." + Environment.NewLine + Environment.NewLine +
-                $"Target: {target.RootPath} ({target.LabelDisplay})" + Environment.NewLine +
-                $"Size: {target.DisplayTotalBytes}" + Environment.NewLine +
-                $"Filesystem: {target.FileSystem}" + Environment.NewLine +
-                $"IsBoot: {target.IsBootDrive}" + Environment.NewLine +
-                $"IsSystem: {target.IsSystemDrive}" + Environment.NewLine +
-                $"Partition type: {target.PartitionTypeDisplay}" + Environment.NewLine +
-                "Select the largest main USB data partition instead.";
-        }
-
-        if (!target.IsSelectable)
-        {
-            return string.IsNullOrWhiteSpace(target.SelectionWarningDisplay)
-                ? "This USB target is blocked and cannot be used for Setup USB, Update USB, or Ventoy actions."
-                : target.SelectionWarningDisplay;
-        }
-
-        return null;
     }
 
     private void ApplyVentoyStatus(VentoyStatusInfo status)
@@ -934,7 +1125,7 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
 
-        var executionBlockReason = GetTargetExecutionBlockReason(SelectedUsbTarget);
+        var executionBlockReason = UsbTargetSafety.GetExecutionBlockReason(SelectedUsbTarget);
         if (!string.IsNullOrWhiteSpace(executionBlockReason))
         {
             TargetWarningText = executionBlockReason;
@@ -946,13 +1137,13 @@ public sealed class MainViewModel : ObservableObject
         if (!SelectedUsbTarget.IsRemovableMedia)
         {
             TargetWarningText = SelectedUsbTarget.SelectionWarningDisplay;
-            ActionWarningText = "Selected target is a fixed USB disk. Treat Setup USB, Update USB, and Install/Update Ventoy as destructive operations and confirm the drive letter carefully.";
+            ActionWarningText = "Selected target is a fixed USB disk. Treat Setup USB, Update USB, and Install / Update Ventoy as destructive operations and confirm the drive letter carefully.";
             SetTargetWarningVisuals(WarningBackground, WarningBorder, WarningForeground);
             return;
         }
 
         TargetWarningText = SelectedUsbTarget.SelectionWarningDisplay;
-        ActionWarningText = "Setup USB, Update USB, and Install/Update Ventoy can change the selected USB. Confirm the drive letter and label before continuing.";
+        ActionWarningText = "Setup USB, Update USB, and Install / Update Ventoy can change the selected USB. Confirm the drive letter and label before continuing.";
         SetTargetWarningVisuals(WarningBackground, WarningBorder, WarningForeground);
     }
 
@@ -964,8 +1155,223 @@ public sealed class MainViewModel : ObservableObject
                 ? LogSeverity.Warning
                 : LogSeverity.Info;
 
-            AppendLog(new LogLine(DateTimeOffset.Now, diagnostic, severity));
+            AppendLog(new LogLine(DateTimeOffset.Now, NormalizeLogPrefix(diagnostic, severity), severity));
         }
+    }
+
+    private void AppendLifecycleStart(string actionName, UsbTargetInfo? target)
+    {
+        AppendLog(new LogLine(DateTimeOffset.Now, $"[INIT] ForgerEMS action started: {actionName}", LogSeverity.Info));
+        AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] Frontend version: {_backendContext.FrontendVersion}", LogSeverity.Info));
+        AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] Backend version: {GetBackendVersionDisplay()}", LogSeverity.Info));
+        AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] Backend compatibility: {GetBackendCompatibilityStatus()}", LogSeverity.Info));
+        if (target is not null)
+        {
+            AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] Target drive: {target.RootPath} {target.LabelDisplay} | {target.DisplayTotalBytes} | {target.DriveType} | {target.BusTypeDisplay}", LogSeverity.Info));
+        }
+    }
+
+    private void AppendLifecycleComplete(string actionName, DateTimeOffset startedAt)
+    {
+        AppendLog(new LogLine(DateTimeOffset.Now, $"[COMPLETE] {actionName} completed in {FormatDuration(DateTimeOffset.Now - startedAt)}", LogSeverity.Success));
+    }
+
+    private void AppendLifecycleFailure(string actionName, string reason)
+    {
+        AppendLog(new LogLine(DateTimeOffset.Now, $"[ERROR] {actionName} failed: {reason}", LogSeverity.Error, isErrorStream: true));
+        AppendLog(new LogLine(DateTimeOffset.Now, "[ACTION] Review log, verify network, and retry.", LogSeverity.Warning));
+    }
+
+    private string GetBackendVersionDisplay()
+    {
+        return string.IsNullOrWhiteSpace(_backendContext.BackendVersion)
+            ? "not detected"
+            : _backendContext.BackendVersion;
+    }
+
+    private string GetBackendCompatibilityStatus()
+    {
+        if (!_backendContext.IsAvailable)
+        {
+            return "Error";
+        }
+
+        if (string.IsNullOrWhiteSpace(_backendContext.BackendVersion))
+        {
+            return "Warning";
+        }
+
+        if (_backendContext.DiagnosticMessage.Contains("Status: Warning", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Warning";
+        }
+
+        return "Compatible";
+    }
+
+    private void ApplyBenchmarkResult(UsbTargetInfo target, UsbBenchmarkResult result)
+    {
+        _benchmarkResultsByRoot[GetBenchmarkCacheKey(target.RootPath)] = result;
+        var replacement = WithBenchmarkResult(target, result);
+
+        var index = UsbTargets.IndexOf(target);
+        if (index < 0)
+        {
+            index = UsbTargets
+                .Select((item, itemIndex) => new { item, itemIndex })
+                .FirstOrDefault(candidate => string.Equals(candidate.item.RootPath, target.RootPath, StringComparison.OrdinalIgnoreCase))
+                ?.itemIndex ?? -1;
+        }
+
+        if (index >= 0)
+        {
+            UsbTargets[index] = replacement;
+            SetSelectedUsbTargetWithoutRefresh(replacement);
+        }
+        else if (SelectedUsbTarget is not null &&
+                 string.Equals(SelectedUsbTarget.RootPath, target.RootPath, StringComparison.OrdinalIgnoreCase))
+        {
+            SetSelectedUsbTargetWithoutRefresh(replacement);
+        }
+    }
+
+    private void SetSelectedUsbTargetWithoutRefresh(UsbTargetInfo target)
+    {
+        _suppressSelectionRefresh = true;
+        try
+        {
+            SelectedUsbTarget = target;
+        }
+        finally
+        {
+            _suppressSelectionRefresh = false;
+        }
+    }
+
+    private UsbTargetInfo ApplyCachedBenchmarkResult(UsbTargetInfo target)
+    {
+        return _benchmarkResultsByRoot.TryGetValue(GetBenchmarkCacheKey(target.RootPath), out var result)
+            ? WithBenchmarkResult(target, result)
+            : target;
+    }
+
+    private static UsbTargetInfo WithBenchmarkResult(UsbTargetInfo target, UsbBenchmarkResult result)
+    {
+        return new UsbTargetInfo
+        {
+            DriveLetter = target.DriveLetter,
+            RootPath = target.RootPath,
+            Label = target.Label,
+            FileSystem = target.FileSystem,
+            TotalBytes = target.TotalBytes,
+            FreeBytes = target.FreeBytes,
+            DriveType = target.DriveType,
+            BusType = target.BusType,
+            IsLikelyUsb = target.IsLikelyUsb,
+            DeviceBrand = target.DeviceBrand,
+            DeviceModel = target.DeviceModel,
+            ReadSpeedDisplay = result.ReadSpeedDisplay,
+            WriteSpeedDisplay = result.WriteSpeedDisplay,
+            PartitionType = target.PartitionType,
+            IsSystemDrive = target.IsSystemDrive,
+            IsBootDrive = target.IsBootDrive,
+            IsRemovableMedia = target.IsRemovableMedia,
+            IsEfiSystemPartition = target.IsEfiSystemPartition,
+            IsUndersizedPartition = target.IsUndersizedPartition,
+            HasVentoyCompanionEfiPartition = target.HasVentoyCompanionEfiPartition,
+            IsLargeDataPartition = target.IsLargeDataPartition,
+            IsPreferredUsbTarget = target.IsPreferredUsbTarget,
+            IsSelectable = target.IsSelectable,
+            SelectionWarning = target.SelectionWarning,
+            ClassificationDetails = target.ClassificationDetails
+        };
+    }
+
+    private static string GetBenchmarkCacheKey(string rootPath)
+    {
+        return string.IsNullOrWhiteSpace(rootPath)
+            ? string.Empty
+            : rootPath.Trim().TrimEnd('\\').ToUpperInvariant();
+    }
+
+    private static string NormalizeLogPrefix(string text, LogSeverity severity)
+    {
+        var trimmed = text.Trim();
+        if (trimmed.StartsWith("[", StringComparison.Ordinal))
+        {
+            return trimmed;
+        }
+
+        return severity switch
+        {
+            LogSeverity.Success => "[OK] " + trimmed,
+            LogSeverity.Warning => "[WARN] " + trimmed,
+            LogSeverity.Error => "[ERROR] " + trimmed,
+            _ => "[INFO] " + trimmed
+        };
+    }
+
+    private static string FormatDuration(TimeSpan duration)
+    {
+        if (duration.TotalHours >= 1)
+        {
+            return $"{(int)duration.TotalHours}h {duration.Minutes}m {duration.Seconds}s";
+        }
+
+        if (duration.TotalMinutes >= 1)
+        {
+            return $"{(int)duration.TotalMinutes}m {duration.Seconds}s";
+        }
+
+        return $"{Math.Max(0, (int)Math.Round(duration.TotalSeconds))}s";
+    }
+
+    private static bool TryValidateVolumeLabel(string label, out string error)
+    {
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            error = "Drive label cannot be blank.";
+            return false;
+        }
+
+        if (label.Length > 32)
+        {
+            error = "Drive label must be 32 characters or fewer.";
+            return false;
+        }
+
+        var invalidCharacters = new[] { '\\', '/', ':', '*', '?', '"', '<', '>', '|', ';' };
+        if (label.IndexOfAny(invalidCharacters) >= 0 || label.Any(char.IsControl))
+        {
+            error = "Drive label contains characters Windows does not allow in volume labels.";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
+    }
+
+    private static string BuildRenameUsbCommand(string rootPath, string newLabel)
+    {
+        return $$"""
+            $ErrorActionPreference = 'Stop'
+            $root = {{ToSingleQuotedPowerShellLiteral(rootPath)}}
+            $newLabel = {{ToSingleQuotedPowerShellLiteral(newLabel)}}
+            $driveLetter = ([System.IO.Path]::GetPathRoot($root)).TrimEnd('\', ':')
+            if ([string]::IsNullOrWhiteSpace($driveLetter)) {
+                throw 'Could not resolve a drive letter for the selected USB target.'
+            }
+
+            Write-Host ('[INFO] Renaming USB volume ' + $driveLetter + ':\ to "' + $newLabel + '"')
+            $volume = Get-Volume -DriveLetter $driveLetter -ErrorAction Stop
+            Set-Volume -DriveLetter $driveLetter -NewFileSystemLabel $newLabel -ErrorAction Stop
+            Write-Host ('[OK] USB volume renamed: ' + $driveLetter + ':\ -> ' + $newLabel)
+            """;
+    }
+
+    private static string ToSingleQuotedPowerShellLiteral(string value)
+    {
+        return "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'";
     }
 
     private void ShowAbout()
@@ -973,7 +1379,7 @@ public sealed class MainViewModel : ObservableObject
         _userPromptService.ShowMessage(
             "About ForgerEMS",
             "ForgerEMS is a native Windows controller for the existing PowerShell backend.\n\n" +
-            "It discovers a bundled backend for installed mode, or falls back to repo mode and external release-bundle mode, letting an operator verify the backend, set up or update a USB, revalidate managed downloads, inspect live logs, and surface managed-download status without rewriting backend rules in C#.",
+            "It discovers a bundled backend for installed mode, or falls back to repo mode and external release-bundle mode, letting an operator verify the backend, prepare or convert a selected USB to Ventoy, download or update the toolkit, inspect live logs, and surface managed-download status without rewriting backend rules in C#.",
             MessageBoxImage.Information);
     }
 
@@ -982,12 +1388,14 @@ public sealed class MainViewModel : ObservableObject
         _userPromptService.ShowMessage(
             "ForgerEMS FAQ",
             "1. Verify uses the existing backend verification script.\n" +
-            "2. Setup USB and Update USB call the backend setup/update scripts only.\n" +
-            "3. Dry-run applies where the backend supports -WhatIf.\n" +
-            "4. Installed mode prefers the bundled backend under the app folder.\n" +
-            "5. Repo mode and external release-bundle mode still work for advanced operators.\n" +
-            "6. Managed-download summaries combine the live manifest snapshot with the newest revalidation snapshot when one is available.\n" +
-            "7. Ventoy install/update still happens manually inside the official Ventoy2Disk tool, even when launched from this app.",
+            "2. Select a USB target, then prepare or convert it to Ventoy inside the app.\n" +
+            "3. Setup USB and Download / Update Toolkit call the backend setup/update scripts only.\n" +
+            "4. Use 64GB or larger for complete downloads because Medicat.USB is large; 32GB can work for minimal or base setups.\n" +
+            "5. Dry-run applies where the backend supports -WhatIf.\n" +
+            "6. Installed mode prefers the bundled backend under the app folder.\n" +
+            "7. Repo mode and external release-bundle mode still work for advanced operators.\n" +
+            "8. Managed-download summaries combine the live manifest snapshot with the newest revalidation snapshot when one is available.\n" +
+            "9. Ventoy install/update still happens manually inside the official Ventoy2Disk tool after ForgerEMS prepares and launches it.",
             MessageBoxImage.Information);
     }
 
@@ -1038,6 +1446,7 @@ public sealed class MainViewModel : ObservableObject
         RevalidateManagedDownloadsCommand.RaiseCanExecuteChanged();
         SetupUsbCommand.RaiseCanExecuteChanged();
         UpdateUsbCommand.RaiseCanExecuteChanged();
+        RenameUsbCommand.RaiseCanExecuteChanged();
         InstallOrUpdateVentoyCommand.RaiseCanExecuteChanged();
         CopyLogsCommand.RaiseCanExecuteChanged();
         ClearLogsCommand.RaiseCanExecuteChanged();
@@ -1047,6 +1456,7 @@ public sealed class MainViewModel : ObservableObject
     {
         Application.Current.Dispatcher.Invoke(() =>
         {
+            ApplyProgressFromLog(line.Text);
             Logs.Add(line);
 
             if (Logs.Count > 600)
@@ -1099,5 +1509,58 @@ public sealed class MainViewModel : ObservableObject
         StatusBackground = background;
         StatusBorderBrush = borderBrush;
         StatusForeground = foreground;
+
+        CurrentTaskText = text;
+        var currentTaskState =
+            ReferenceEquals(background, ErrorBackground) ? "ERROR" :
+            ReferenceEquals(background, WarningBackground) ? "WARNING" :
+            ReferenceEquals(background, ReadyBackground) && text.Contains("complete", StringComparison.OrdinalIgnoreCase) ? "COMPLETE" :
+            ReferenceEquals(background, ReadyBackground) ? "READY" :
+            "WORKING";
+        CurrentTaskState = currentTaskState;
+
+        if (currentTaskState == "WORKING")
+        {
+            SetProgress(CurrentProgressValue, indeterminate: true, visible: true);
+        }
+        else
+        {
+            ResetProgressSoon();
+        }
+    }
+
+    private void SetProgress(double value, bool indeterminate, bool visible = true)
+    {
+        CurrentProgressValue = Math.Clamp(value, 0, 100);
+        IsProgressIndeterminate = indeterminate;
+        ProgressVisibility = visible ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void ResetProgressSoon()
+    {
+        SetProgress(0, false, visible: false);
+    }
+
+    private void ApplyProgressFromLog(string text)
+    {
+        var percentMatch = System.Text.RegularExpressions.Regex.Match(text, @"(?<percent>\d{1,3}(?:\.\d+)?)%");
+        if (percentMatch.Success &&
+            double.TryParse(percentMatch.Groups["percent"].Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var percent))
+        {
+            SetProgress(percent, indeterminate: false);
+            if (text.Contains("Downloading", StringComparison.OrdinalIgnoreCase))
+            {
+                CurrentTaskState = "WORKING";
+                CurrentTaskText = text;
+            }
+            return;
+        }
+
+        if (text.Contains("Downloading", StringComparison.OrdinalIgnoreCase))
+        {
+            SetProgress(0, indeterminate: true);
+            CurrentTaskState = "WORKING";
+            CurrentTaskText = text;
+        }
     }
 }

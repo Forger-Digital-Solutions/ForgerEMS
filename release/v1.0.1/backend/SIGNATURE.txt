@@ -1,0 +1,11 @@
+# ForgerEMS Ventoy Core integrity seal
+# This is an integrity catalog signature, not a cryptographic publisher signature.
+SignatureType: checksum-catalog-sha256
+Algorithm: SHA256
+CoreVersion: 2026.04.20.2
+BuildTimestampUtc: 2026-04-20T21:27:43Z
+ReleaseType: stable
+SignedFile: CHECKSUMS.sha256
+SignedFileSha256: 0d7f96255763f905d0c2b41123c4432734f28a2a25609886d560a24aa6ead7af
+ManifestFile: ForgerEMS.updates.json
+ManifestSha256: 63967a67c4a645f198cbf6a0d07948582dec2f21feaec1167bc0f11f6def7904
