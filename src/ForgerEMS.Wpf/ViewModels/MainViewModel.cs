@@ -132,7 +132,7 @@ public sealed class MainViewModel : ObservableObject
     private Brush _toolkitStatusForeground = RunningForeground;
     private readonly List<ToolkitHealthItemView> _allToolkitHealthItems = [];
     private string _copilotInput = string.Empty;
-    private string _copilotContextText = "Run a system scan and select a USB target to load Copilot context.";
+    private string _copilotContextText = "Run a system scan and select a USB target to load Kyra context.";
     private string _selectedCopilotMode = "Offline Only";
     private bool _useLatestSystemScanContext = true;
     private bool _isCopilotGenerating;
@@ -1350,13 +1350,13 @@ public sealed class MainViewModel : ObservableObject
         CopilotInput = string.Empty;
         ApplyCopilotOnlineIndicator(response);
         SaveCopilotSettings();
-        AppendLog(new LogLine(DateTimeOffset.Now, response.UsedOnlineData ? "[INFO] Copilot answered with sanitized online provider data." : "[INFO] Copilot answered from local/offline fallback context.", LogSeverity.Info));
+        AppendLog(new LogLine(DateTimeOffset.Now, response.UsedOnlineData ? "[INFO] Kyra answered with sanitized online provider data." : "[INFO] Kyra answered from local/offline fallback context.", LogSeverity.Info));
     }
 
     private void StopCopilotGeneration()
     {
         _copilotGenerationCancellation?.Cancel();
-        AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Copilot stop requested.", LogSeverity.Info));
+        AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Kyra stop requested.", LogSeverity.Info));
     }
 
     private void UseLatestSystemScanContextNow()
@@ -1364,7 +1364,7 @@ public sealed class MainViewModel : ObservableObject
         UseLatestSystemScanContext = true;
         LoadSystemIntelligenceReport();
         RefreshCopilotContextText();
-        AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Copilot context refreshed from latest local System Intelligence report.", LogSeverity.Success));
+        AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Kyra context refreshed from latest local System Intelligence report.", LogSeverity.Success));
     }
 
     private void ClearCopilotHistoryAndCache()
@@ -1386,10 +1386,10 @@ public sealed class MainViewModel : ObservableObject
         }
         catch (Exception exception)
         {
-            AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Copilot cache cleanup skipped: {exception.Message}", LogSeverity.Warning));
+            AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Kyra cache cleanup skipped: {exception.Message}", LogSeverity.Warning));
         }
 
-        AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Copilot history/cache cleared.", LogSeverity.Success));
+        AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Kyra history/cache cleared.", LogSeverity.Success));
     }
 
     private void OpenToolkitUsbReports()

@@ -870,7 +870,7 @@ public sealed class CopilotService : ICopilotService
 
             return new CopilotResponse
             {
-                Text = "Copilot could not get a provider response and offline fallback is disabled. Re-enable offline fallback or check provider settings.",
+                Text = "Kyra could not get a provider response and offline fallback is disabled. Re-enable offline fallback or check provider settings.",
                 OnlineStatus = "Error state - no fallback available.",
                 ProviderNotes = notes
             };
@@ -879,7 +879,7 @@ public sealed class CopilotService : ICopilotService
         {
             return new CopilotResponse
             {
-                Text = "Copilot generation was stopped.",
+                Text = "Kyra generation was stopped.",
                 OnlineStatus = "Stopped",
                 ProviderNotes = ["Request cancelled by operator."]
             };
@@ -888,9 +888,9 @@ public sealed class CopilotService : ICopilotService
         {
             return new CopilotResponse
             {
-                Text = "Copilot hit an internal error and fell back safely. Try again after refreshing the System Intelligence scan.",
+                Text = "Kyra hit an internal error and fell back safely. Try again after refreshing the System Intelligence scan.",
                 OnlineStatus = "Error state - safe fallback",
-                ProviderNotes = [$"Internal Copilot error: {exception.Message}"]
+                ProviderNotes = [$"Internal Kyra error: {exception.Message}"]
             };
         }
     }
@@ -1107,7 +1107,7 @@ public sealed class CopilotService : ICopilotService
         return new CopilotResponse
         {
             Text = string.IsNullOrWhiteSpace(result.UserMessage)
-                ? "Copilot could not produce a response."
+                ? "Kyra could not produce a response."
                 : result.UserMessage,
             UsedOnlineData = result.UsedOnlineData,
             OnlineStatus = status,

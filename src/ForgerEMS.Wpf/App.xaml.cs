@@ -164,9 +164,9 @@ public partial class App : Application
                     }
                 }
             }).ConfigureAwait(false);
-            lines.Add($"CopilotOfflineDoesNotUseOnline: {!offlineCopilot.UsedOnlineData}");
-            lines.Add($"CopilotOnlineFallbackDoesNotCrash: {!string.IsNullOrWhiteSpace(onlineFallbackCopilot.Text)}");
-            lines.Add($"CopilotProviderHooksAvailable: {copilotRegistry.Providers.Count}");
+            lines.Add($"KyraOfflineDoesNotUseOnline: {!offlineCopilot.UsedOnlineData}");
+            lines.Add($"KyraOnlineFallbackDoesNotCrash: {!string.IsNullOrWhiteSpace(onlineFallbackCopilot.Text)}");
+            lines.Add($"KyraProviderHooksAvailable: {copilotRegistry.Providers.Count}");
             lines.Add("StatusUpdatesDontCrash: True");
             lines.Add("AppLaunchSelfTestPath: True");
             lines.Add($"FinishedUtc: {DateTimeOffset.UtcNow:O}");

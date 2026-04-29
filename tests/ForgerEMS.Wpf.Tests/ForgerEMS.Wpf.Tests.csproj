@@ -20,4 +20,18 @@
     <ProjectReference Include="..\..\src\ForgerEMS.Wpf\ForgerEMS.Wpf.csproj" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(BuildingSolutionFile)' == 'true'">
+    <Reference Include="ForgerEMS">
+      <HintPath>..\..\src\ForgerEMS.Wpf\bin\$(Configuration)\net8.0-windows\ForgerEMS.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="BuildWpfReferenceForSolution" BeforeTargets="ResolveAssemblyReferences" Condition="'$(BuildingSolutionFile)' == 'true'">
+    <MSBuild
+      Projects="..\..\src\ForgerEMS.Wpf\ForgerEMS.Wpf.csproj"
+      Targets="Rebuild"
+      Properties="Configuration=$(Configuration);Platform=AnyCPU" />
+  </Target>
+
 </Project>
