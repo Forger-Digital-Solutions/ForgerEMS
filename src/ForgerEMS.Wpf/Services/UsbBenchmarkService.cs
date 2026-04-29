@@ -20,6 +20,8 @@ public sealed class UsbBenchmarkResult
 {
     public bool Succeeded { get; init; }
 
+    public string Status { get; init; } = "Not tested";
+
     public string Summary { get; init; } = string.Empty;
 
     public string Details { get; init; } = string.Empty;
@@ -27,6 +29,10 @@ public sealed class UsbBenchmarkResult
     public string WriteSpeedDisplay { get; init; } = "Not tested";
 
     public string ReadSpeedDisplay { get; init; } = "Not tested";
+
+    public int TestSizeMb { get; init; }
+
+    public DateTimeOffset? LastTestedAt { get; init; }
 
     public string Classification { get; init; } = string.Empty;
 }
@@ -51,10 +57,12 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
             return new UsbBenchmarkResult
             {
                 Succeeded = false,
+                Status = "Failed",
                 Summary = "Benchmark skipped",
                 Details = blockReason,
                 ReadSpeedDisplay = "Skipped (unsafe)",
-                WriteSpeedDisplay = "Skipped (unsafe)"
+                WriteSpeedDisplay = "Skipped (unsafe)",
+                LastTestedAt = DateTimeOffset.Now
             };
         }
 
@@ -64,10 +72,13 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
             return new UsbBenchmarkResult
             {
                 Succeeded = false,
+                Status = "Failed",
                 Summary = "Benchmark failed",
                 Details = $"The selected USB does not have enough free space for a {testSizeMb} MB sequential speed check plus safety margin.",
                 ReadSpeedDisplay = "Failed",
-                WriteSpeedDisplay = "Failed"
+                WriteSpeedDisplay = "Failed",
+                TestSizeMb = testSizeMb,
+                LastTestedAt = DateTimeOffset.Now
             };
         }
 
@@ -84,26 +95,51 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
             return new UsbBenchmarkResult
             {
                 Succeeded = false,
+                Status = "Failed",
                 Summary = "Benchmark failed",
                 Details = $"PowerShell exited with code {result.ExitCode}.",
                 ReadSpeedDisplay = "Failed",
-                WriteSpeedDisplay = "Failed"
+                WriteSpeedDisplay = "Failed",
+                TestSizeMb = testSizeMb,
+                LastTestedAt = DateTimeOffset.Now
             };
         }
 
-        var jsonLine = result.StandardOutputText.Trim().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)[^1];
+        var jsonLine = result.StandardOutputText
+            .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
+            .LastOrDefault(line => line.TrimStart().StartsWith("{", StringComparison.Ordinal));
+
+        if (string.IsNullOrWhiteSpace(jsonLine))
+        {
+            return new UsbBenchmarkResult
+            {
+                Succeeded = false,
+                Status = "Failed",
+                Summary = "Benchmark failed",
+                Details = "Benchmark completed without returning a parseable result payload.",
+                ReadSpeedDisplay = "Failed",
+                WriteSpeedDisplay = "Failed",
+                TestSizeMb = testSizeMb,
+                LastTestedAt = DateTimeOffset.Now
+            };
+        }
+
         using var document = JsonDocument.Parse(jsonLine);
         var writeSpeed = document.RootElement.GetProperty("WriteMbps").GetDouble();
         var readSpeed = document.RootElement.GetProperty("ReadMbps").GetDouble();
         var classification = document.RootElement.GetProperty("Classification").GetString() ?? "Unknown";
+        var finishedAt = DateTimeOffset.Now;
 
         return new UsbBenchmarkResult
         {
             Succeeded = true,
+            Status = "Complete",
             Summary = $"USB benchmark complete: {classification}",
             Details = $"{testSizeMb} MB sequential file speed check. Write {writeSpeed:0.0} MB/s, read {readSpeed:0.0} MB/s.",
             WriteSpeedDisplay = $"{writeSpeed.ToString("0.0", CultureInfo.InvariantCulture)} MB/s",
             ReadSpeedDisplay = $"{readSpeed.ToString("0.0", CultureInfo.InvariantCulture)} MB/s",
+            TestSizeMb = testSizeMb,
+            LastTestedAt = finishedAt,
             Classification = classification
         };
     }
@@ -115,12 +151,14 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
             $root = {{ToSingleQuotedPowerShellLiteral(rootPath)}}
             $sizeMb = {{testSizeMb}}
             $path = Join-Path $root ('.forgerems-benchmark-' + [guid]::NewGuid().ToString('N') + '.tmp')
+            Write-Host ('[INFO] USB benchmark queued for ' + $root + ' using ' + $sizeMb + ' MB test file.')
             $buffer = New-Object byte[] (4MB)
             $rng = [System.Random]::new(9173)
             $rng.NextBytes($buffer)
             $targetBytes = [int64]$sizeMb * 1MB
             $written = [int64]0
             try {
+                Write-Host ('[INFO] USB benchmark writing temporary file: ' + $path)
                 $writeWatch = [System.Diagnostics.Stopwatch]::StartNew()
                 $stream = [System.IO.File]::Open($path, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
                 try {
@@ -138,6 +176,7 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
                 $writeWatch.Stop()
                 $writeMbps = [Math]::Round(($targetBytes / 1MB) / [Math]::Max($writeWatch.Elapsed.TotalSeconds, 0.001), 1)
 
+                Write-Host ('[INFO] USB benchmark reading temporary file.')
                 $readBuffer = New-Object byte[] (4MB)
                 $readBytes = [int64]0
                 $readWatch = [System.Diagnostics.Stopwatch]::StartNew()
@@ -153,15 +192,27 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
                 $readWatch.Stop()
                 $readMbps = [Math]::Round(($readBytes / 1MB) / [Math]::Max($readWatch.Elapsed.TotalSeconds, 0.001), 1)
                 $classification = if ($writeMbps -lt 20) { 'Slow' } elseif ($writeMbps -le 60) { 'Usable' } else { 'Fast' }
+                Write-Host ('[OK] USB benchmark complete. Write ' + $writeMbps + ' MB/s, read ' + $readMbps + ' MB/s.')
                 [pscustomobject]@{
                     WriteMbps = $writeMbps
                     ReadMbps = $readMbps
+                    TestSizeMb = $sizeMb
                     Classification = $classification
                 } | ConvertTo-Json -Compress
             }
             finally {
-                Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+                Write-Host ('[INFO] Removing USB benchmark temporary file if present.')
+                try {
+                    if ([System.IO.File]::Exists($path)) {
+                        [System.IO.File]::Delete($path)
+                    }
+                    Write-Host '[OK] USB benchmark temporary file removed.'
+                }
+                catch {
+                    Write-Host ('[WARN] USB benchmark temporary file cleanup needs manual review: ' + $_.Exception.Message)
+                }
             }
+            exit 0
             """;
     }
 

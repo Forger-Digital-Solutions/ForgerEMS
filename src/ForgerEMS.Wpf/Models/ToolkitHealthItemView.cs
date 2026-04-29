@@ -1,0 +1,38 @@
+namespace VentoyToolkitSetup.Wpf.Models;
+
+public sealed class ToolkitHealthItemView
+{
+    public string Tool { get; init; } = string.Empty;
+
+    public string Category { get; init; } = string.Empty;
+
+    public string Status { get; init; } = string.Empty;
+
+    public string Type { get; init; } = string.Empty;
+
+    public string ExpectedPath { get; init; } = string.Empty;
+
+    public string ExpectedFoundPath { get; init; } = string.Empty;
+
+    public string MatchedPath { get; init; } = string.Empty;
+
+    public string Url { get; init; } = string.Empty;
+
+    public string ClassificationReason { get; init; } = string.Empty;
+
+    public string Version { get; init; } = string.Empty;
+
+    public string Verification { get; init; } = string.Empty;
+
+    public string Recommendation { get; init; } = string.Empty;
+
+    public string DetailText =>
+        $"{Tool} ({Category}){Environment.NewLine}" +
+        $"Status: {Status}{Environment.NewLine}" +
+        $"Type: {Type}{Environment.NewLine}" +
+        $"Expected path: {ExpectedPath}{Environment.NewLine}" +
+        $"Found path: {(string.IsNullOrWhiteSpace(MatchedPath) ? "UNKNOWN" : MatchedPath)}{Environment.NewLine}" +
+        $"Verification: {Verification}{Environment.NewLine}" +
+        $"Reason: {(string.IsNullOrWhiteSpace(ClassificationReason) ? "Report did not include a classification reason." : ClassificationReason)}{Environment.NewLine}" +
+        $"Next step: {Recommendation}";
+}

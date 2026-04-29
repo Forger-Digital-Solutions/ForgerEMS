@@ -34,6 +34,12 @@ public sealed class UsbTargetInfo
 
     public string WriteSpeedDisplay { get; init; } = "Not tested";
 
+    public string BenchmarkStatus { get; init; } = "Not tested";
+
+    public int BenchmarkTestSizeMb { get; init; }
+
+    public DateTimeOffset? BenchmarkLastTestedAt { get; init; }
+
     public string PartitionType { get; init; } = string.Empty;
 
     public bool IsSystemDrive { get; init; }
@@ -92,6 +98,12 @@ public sealed class UsbTargetInfo
     public string ReadSpeedDisplayNormalized => string.IsNullOrWhiteSpace(ReadSpeedDisplay) ? "Not tested" : ReadSpeedDisplay;
 
     public string WriteSpeedDisplayNormalized => string.IsNullOrWhiteSpace(WriteSpeedDisplay) ? "Not tested" : WriteSpeedDisplay;
+
+    public string BenchmarkStatusDisplay => string.IsNullOrWhiteSpace(BenchmarkStatus) ? "Not tested" : BenchmarkStatus;
+
+    public string BenchmarkTestSizeDisplay => BenchmarkTestSizeMb > 0 ? $"{BenchmarkTestSizeMb} MB" : "Not tested";
+
+    public string BenchmarkLastTestedDisplay => BenchmarkLastTestedAt.HasValue ? BenchmarkLastTestedAt.Value.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss") : "Never";
 
     public string SelectionStatusText =>
         !IsSelectable

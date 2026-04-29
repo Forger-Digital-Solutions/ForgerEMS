@@ -56,18 +56,19 @@ Build the WPF app:
 ```powershell
 dotnet restore .\ForgerEMS.sln
 dotnet build .\ForgerEMS.sln -c Release
+dotnet test .\ForgerEMS.sln -c Release
 ```
 
 Create a release staging folder without compiling the installer:
 
 ```powershell
-.\tools\build-release.ps1 -Version 1.0.0-beta.1 -DryRun
+.\tools\build-release.ps1 -Version 1.1.1-beta.1 -DryRun
 ```
 
 Create a full local installer release:
 
 ```powershell
-.\tools\build-release.ps1 -Version 1.0.0-beta.1
+.\tools\build-release.ps1 -Version 1.1.1-beta.1
 ```
 
 ## Release
@@ -75,10 +76,14 @@ Create a full local installer release:
 Release outputs are written to:
 
 ```text
-release/<version>/
+release/current/
+release/ventoy-core/<coreVersion>/
 ```
 
 The release script publishes the WPF app, builds a verified backend bundle, stages manifests, optionally compiles the Inno Setup installer, and writes SHA256 checksums for produced artifacts.
+
+`release/current` and `release/ventoy-core` are generated build outputs and should not be used as long-lived versioned snapshots in git history.
+Versioned installer/portable artifacts (for example `v1.1.1`) should be published through GitHub Releases from a tag.
 
 See [RELEASE_PROCESS.md](RELEASE_PROCESS.md) for the operator release checklist.
 

@@ -14,7 +14,7 @@ coverage/
 
 # Build and release outputs
 dist/
-release/
+release/**
 PreRelease/
 *.zip
 *.exe
@@ -45,6 +45,7 @@ portable/
 !.verify/
 !.verify/README.md
 .tmp/
+.cache/
 _archive/
 _downloads/
 _logs/
@@ -63,3 +64,5 @@ backend/legacy/VentoyToolkitSetup/IfScriptFails(ManualSetup)/
 *.temp
 *.bak
 *.orig
+
+# Release folders are generated local/CI outputs.

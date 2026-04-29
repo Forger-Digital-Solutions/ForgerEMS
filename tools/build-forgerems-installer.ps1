@@ -73,6 +73,18 @@ function Resolve-IsccPath {
     throw "ISCC.exe was not found. Install Inno Setup 6, then rerun this script."
 }
 
+function ConvertTo-WindowsVersion {
+    param([Parameter(Mandatory)][string]$Value)
+
+    $match = [regex]::Match($Value.Trim(), '^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?:\.(?<build>\d+))?')
+    if (-not $match.Success) {
+        throw "Version '$Value' must start with a semantic numeric core like 1.2.3."
+    }
+
+    $build = if ($match.Groups["build"].Success) { $match.Groups["build"].Value } else { "0" }
+    return "{0}.{1}.{2}.{3}" -f $match.Groups["major"].Value, $match.Groups["minor"].Value, $match.Groups["patch"].Value, $build
+}
+
 if (-not (Test-Path -LiteralPath $csprojPath)) {
     throw "Project file not found: $csprojPath"
 }
@@ -113,10 +125,13 @@ if (-not (Test-Path -LiteralPath (Join-Path $backendStageRoot "Verify-VentoyCore
 
 New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
 $isccPath = Resolve-IsccPath
+$appVersionInfo = ConvertTo-WindowsVersion -Value $Version
 
 Write-Host "Compiling installer with Inno Setup..." -ForegroundColor Cyan
 & $isccPath `
     "/DAppVersion=$Version" `
+    "/DAppVersionInfo=$appVersionInfo" `
+    ([string]::Concat("/DReleaseIdentifier=ForgerEMS v", $Version, " - Flip Intelligence Update")) `
     "/DPublishDir=$publishDir" `
     "/DBackendBundleDir=$backendStageRoot" `
     "/DOutputDir=$outputDir" `

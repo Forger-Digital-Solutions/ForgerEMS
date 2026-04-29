@@ -42,6 +42,8 @@ public partial class App : Application
             var userPromptService = new UserPromptService();
             var ventoyIntegrationService = new VentoyIntegrationService(powerShellRunnerService, runtimeService);
             var usbBenchmarkService = new UsbBenchmarkService(powerShellRunnerService);
+            var copilotProviderRegistry = new CopilotProviderRegistry();
+            var copilotService = new CopilotService(copilotProviderRegistry);
 
             if (HasArgument(e.Args, "--self-test"))
             {
@@ -59,7 +61,9 @@ public partial class App : Application
                 userPromptService,
                 ventoyIntegrationService,
                 runtimeService,
-                usbBenchmarkService);
+                usbBenchmarkService,
+                copilotService,
+                copilotProviderRegistry);
 
             var mainWindow = new MainWindow(mainViewModel);
             MainWindow = mainWindow;
@@ -108,8 +112,10 @@ public partial class App : Application
             lines.Add($"RequiredVerifyScriptExists: {File.Exists(backendContext.VerifyScriptPath)}");
             lines.Add($"RequiredSetupScriptExists: {File.Exists(backendContext.SetupScriptPath)}");
             lines.Add($"RequiredUpdateScriptExists: {File.Exists(backendContext.UpdateScriptPath)}");
+            lines.Add($"RequiredSystemIntelligenceScriptExists: {File.Exists(Path.Combine(backendContext.WorkingDirectory, "SystemIntelligence", "Invoke-ForgerEMSSystemScan.ps1")) || File.Exists(Path.Combine(backendContext.RootPath, "backend", "SystemIntelligence", "Invoke-ForgerEMSSystemScan.ps1"))}");
+            lines.Add($"RequiredToolkitManagerScriptExists: {File.Exists(Path.Combine(backendContext.WorkingDirectory, "ToolkitManager", "Get-ForgerEMSToolkitHealth.ps1")) || File.Exists(Path.Combine(backendContext.RootPath, "backend", "ToolkitManager", "Get-ForgerEMSToolkitHealth.ps1"))}");
             lines.AddRange(GetMissingRequiredFileLines(backendContext));
-            lines.Add($"DryRunBannerDefaultVisible: True");
+            lines.Add($"UsbBuilderDryRunUiRemoved: True");
 
             var request = new PowerShellRunRequest
             {
@@ -136,6 +142,31 @@ public partial class App : Application
                 SelectionWarning = "Self-test unsafe drive fixture."
             }).ConfigureAwait(false);
             lines.Add($"BenchmarkRefusesUnsafeDrive: {!blockedBenchmark.Succeeded}");
+
+            var copilotRegistry = new CopilotProviderRegistry();
+            var copilotService = new CopilotService(copilotRegistry);
+            var offlineCopilot = await copilotService.GenerateReplyAsync(new CopilotRequest
+            {
+                Prompt = "Best OS for this machine?",
+                SystemIntelligenceReportPath = Path.Combine(runtimeService.RuntimeRoot, "reports", "system-intelligence-latest.json"),
+                Configuration = new CopilotConfiguration { Mode = CopilotMode.OfflineOnly }
+            }).ConfigureAwait(false);
+            var onlineFallbackCopilot = await copilotService.GenerateReplyAsync(new CopilotRequest
+            {
+                Prompt = "What is this laptop worth?",
+                SystemIntelligenceReportPath = Path.Combine(runtimeService.RuntimeRoot, "reports", "system-intelligence-latest.json"),
+                Configuration = new CopilotConfiguration
+                {
+                    Mode = CopilotMode.OnlineAssisted,
+                    Providers =
+                    {
+                        ["ebay-sold-listings"] = new CopilotProviderConfiguration { IsEnabled = true }
+                    }
+                }
+            }).ConfigureAwait(false);
+            lines.Add($"CopilotOfflineDoesNotUseOnline: {!offlineCopilot.UsedOnlineData}");
+            lines.Add($"CopilotOnlineFallbackDoesNotCrash: {!string.IsNullOrWhiteSpace(onlineFallbackCopilot.Text)}");
+            lines.Add($"CopilotProviderHooksAvailable: {copilotRegistry.Providers.Count}");
             lines.Add("StatusUpdatesDontCrash: True");
             lines.Add("AppLaunchSelfTestPath: True");
             lines.Add($"FinishedUtc: {DateTimeOffset.UtcNow:O}");
@@ -145,7 +176,14 @@ public partial class App : Application
                                  File.Exists(backendContext.VerifyScriptPath) &&
                                  File.Exists(backendContext.SetupScriptPath) &&
                                  File.Exists(backendContext.UpdateScriptPath);
-            return result.Succeeded && scriptsResolve && !blockedBenchmark.Succeeded && File.Exists(reportPath) ? 0 : 1;
+            return result.Succeeded &&
+                   scriptsResolve &&
+                   !blockedBenchmark.Succeeded &&
+                   !offlineCopilot.UsedOnlineData &&
+                   !string.IsNullOrWhiteSpace(onlineFallbackCopilot.Text) &&
+                   File.Exists(reportPath)
+                ? 0
+                : 1;
         }
         catch (Exception exception)
         {
@@ -165,6 +203,8 @@ public partial class App : Application
             backendContext.SetupScriptPath,
             backendContext.UpdateScriptPath,
             Path.Combine(backendContext.WorkingDirectory, "ForgerEMS.Runtime.ps1"),
+            Path.Combine(backendContext.WorkingDirectory, "SystemIntelligence", "Invoke-ForgerEMSSystemScan.ps1"),
+            Path.Combine(backendContext.WorkingDirectory, "ToolkitManager", "Get-ForgerEMSToolkitHealth.ps1"),
             Path.Combine(backendContext.WorkingDirectory, "ForgerEMS.updates.json"),
             Path.Combine(backendContext.WorkingDirectory, "ForgerEMS.bundled-backend.json"),
             Path.Combine(backendContext.WorkingDirectory, "CHECKSUMS.sha256"),
@@ -226,6 +266,8 @@ public partial class App : Application
             "Setup-ForgerEMS.ps1",
             "Update-ForgerEMS.ps1",
             "ForgerEMS.Runtime.ps1",
+            "SystemIntelligence\\Invoke-ForgerEMSSystemScan.ps1",
+            "ToolkitManager\\Get-ForgerEMSToolkitHealth.ps1",
             "ForgerEMS.updates.json",
             "ForgerEMS.bundled-backend.json",
             "CHECKSUMS.sha256",

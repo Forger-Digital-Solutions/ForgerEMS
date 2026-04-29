@@ -3,21 +3,24 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Application.Resources>
         <LinearGradientBrush x:Key="WindowBackgroundBrush" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#FFF8F4EE" Offset="0" />
-            <GradientStop Color="#FFECE4D9" Offset="1" />
+            <GradientStop Color="#FF05070A" Offset="0" />
+            <GradientStop Color="#FF0B1220" Offset="1" />
         </LinearGradientBrush>
         <LinearGradientBrush x:Key="HeroBackgroundBrush" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#FF101826" Offset="0" />
-            <GradientStop Color="#FF1A2332" Offset="0.58" />
-            <GradientStop Color="#FF312113" Offset="1" />
+            <GradientStop Color="#CC07111F" Offset="0" />
+            <GradientStop Color="#B8142234" Offset="0.58" />
+            <GradientStop Color="#B823160B" Offset="1" />
         </LinearGradientBrush>
-        <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#FFFCFBF9" />
-        <SolidColorBrush x:Key="PanelBorderBrush" Color="#FFE1D5C8" />
+        <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#E607111D" />
+        <SolidColorBrush x:Key="PanelBorderBrush" Color="#8A67B7E8" />
         <SolidColorBrush x:Key="AccentBrush" Color="#FFB4531A" />
         <SolidColorBrush x:Key="AccentDeepBrush" Color="#FF8A3B12" />
         <SolidColorBrush x:Key="AccentSoftBrush" Color="#FFF3E1CF" />
         <SolidColorBrush x:Key="HeroTextBrush" Color="#FFF8F2E9" />
         <SolidColorBrush x:Key="HeroSubtextBrush" Color="#FFD5DCE6" />
-        <SolidColorBrush x:Key="SlateTextBrush" Color="#FF3E4D60" />
+        <SolidColorBrush x:Key="SlateTextBrush" Color="#FFD3E2F3" />
+        <SolidColorBrush x:Key="PanelTextBrush" Color="#FFF4F8FF" />
+        <SolidColorBrush x:Key="PanelMutedTextBrush" Color="#FFB8C8DA" />
+        <SolidColorBrush x:Key="PanelLabelBrush" Color="#FFFFC58F" />
     </Application.Resources>
 </Application>

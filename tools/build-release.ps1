@@ -5,7 +5,7 @@ Builds a complete ForgerEMS release staging folder.
 .DESCRIPTION
 Publishes the .NET 8 WPF app, builds and stages the PowerShell backend bundle,
 copies public manifests, optionally compiles the Inno Setup installer, and
-generates SHA256 checksums under release\<version>\.
+generates SHA256 checksums under release\current\.
 
 .PARAMETER Version
 Release version. Defaults to the WPF project <Version>.
@@ -149,11 +149,10 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
 
 $publishDir = Join-Path $distRoot "publish\$Runtime"
 $backendStageRoot = Join-Path $distRoot "backend-stage\backend"
-$releaseRoot = Join-Path $repoRoot ("release\{0}" -f $Version)
+$releaseRoot = Join-Path $repoRoot "release\current"
 $releaseAppRoot = Join-Path $releaseRoot "app"
-$releaseBackendRoot = Join-Path $releaseRoot "backend"
-$releaseManifestRoot = Join-Path $releaseRoot "manifests"
-$releaseInstallerRoot = Join-Path $releaseRoot "installer"
+$releaseBackendRoot = Join-Path $releaseAppRoot "backend"
+$releaseManifestRoot = Join-Path $releaseAppRoot "manifests"
 $checksumsPath = Join-Path $releaseRoot "CHECKSUMS.sha256"
 
 Write-Step "Release version: $Version"
@@ -195,7 +194,6 @@ Ensure-Dir -Path $releaseRoot
 Copy-CleanDirectory -Source $publishDir -Destination $releaseAppRoot
 Copy-CleanDirectory -Source $backendStageRoot -Destination $releaseBackendRoot
 Copy-CleanDirectory -Source $manifestRoot -Destination $releaseManifestRoot
-Ensure-Dir -Path $releaseInstallerRoot
 
 if ($DryRun -or $SkipInstaller) {
     Write-Step "Skipping installer compilation"
@@ -207,11 +205,17 @@ else {
     & $isccPath `
         "/DAppVersion=$Version" `
         "/DAppVersionInfo=$appVersionInfo" `
+        ([string]::Concat("/DReleaseIdentifier=ForgerEMS v", $Version, " - Flip Intelligence Update")) `
         "/DPublishDir=$publishDir" `
         "/DBackendBundleDir=$backendStageRoot" `
-        "/DOutputDir=$releaseInstallerRoot" `
+        "/DOutputDir=$releaseRoot" `
         $installerScript
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE." }
+
+    $versionedInstallerPath = Join-Path $releaseRoot ("ForgerEMS-Setup-v{0}.exe" -f $Version)
+    if (-not (Test-Path -LiteralPath $versionedInstallerPath)) {
+        throw "Expected installer output was not found: $versionedInstallerPath"
+    }
 }
 
 Write-Step "Writing release metadata"
@@ -219,6 +223,7 @@ $metadata = [ordered]@{
     product = "ForgerEMS"
     publisher = "Forger Digital Solutions"
     version = $Version
+    releaseIdentifier = ([string]::Concat("ForgerEMS v", $Version, " - Flip Intelligence Update"))
     channel = "Beta"
     backendVersion = $backendVersion
     runtime = $Runtime
@@ -231,4 +236,4 @@ $metadata | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $relea
 Write-Step "Generating SHA256 checksums"
 Write-Checksums -Root $releaseRoot -OutputPath $checksumsPath
 
-Write-Host "ForgerEMS release folder ready: $releaseRoot" -ForegroundColor Green
+Write-Host "ForgerEMS current release folder ready: $releaseRoot" -ForegroundColor Green

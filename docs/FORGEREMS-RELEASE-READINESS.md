@@ -1,7 +1,7 @@
 # ForgerEMS Release Readiness
 
 This document is the final operator-facing release prep pass for the native
-`ForgerEMS` frontend `v1.0.0`.
+`ForgerEMS` frontend `v1.1.1`.
 
 It focuses on:
 
@@ -18,7 +18,7 @@ installer updates.
 
 ### Install
 
-1. Launch `ForgerEMS-Setup-v1.0.0.exe`.
+1. Launch `ForgerEMS-Setup-v1.1.1.exe`.
 2. Confirm the installer requests elevation because it targets
    `%ProgramFiles%\ForgerEMS\`.
 3. Confirm the install completes without errors.
@@ -83,19 +83,19 @@ installer updates.
 
 Recommended version:
 
-- `1.0.0`
+- `1.1.1`
 
 Recommended Git tag:
 
-- `forgerems-v1.0.0`
+- `forgerems-v1.1.1`
 
 If you want a simpler tag style:
 
-- `v1.0.0`
+- `v1.1.1`
 
 Recommended default:
 
-- `forgerems-v1.0.0`
+- `forgerems-v1.1.1`
 
 Why:
 
@@ -106,14 +106,14 @@ Why:
 
 Recommended release title:
 
-- `ForgerEMS v1.0.0 - Windows MVP frontend`
+- `ForgerEMS v1.1.1 - Windows MVP frontend`
 
 ## Release Notes Draft
 
 Suggested release notes:
 
 ```markdown
-## ForgerEMS v1.0.0
+## ForgerEMS v1.1.1
 
 First public MVP release of the native Windows frontend for the existing
 ForgerEMS PowerShell backend.
@@ -133,7 +133,7 @@ ForgerEMS PowerShell backend.
 ### Included artifacts
 
 - portable package for `ForgerEMS.exe`
-- Windows installer: `ForgerEMS-Setup-v1.0.0.exe`
+- Windows installer: `ForgerEMS-Setup-v1.1.1.exe`
 - SHA-256 checksums
 
 ### Important limitations
@@ -150,8 +150,8 @@ ForgerEMS PowerShell backend.
 
 Recommended upload set for the first public release:
 
-- `ForgerEMS-v1.0.0-portable-win-x64.zip`
-- `ForgerEMS-Setup-v1.0.0.exe`
+- `ForgerEMS-v1.1.1-portable-win-x64.zip`
+- `ForgerEMS-Setup-v1.1.1.exe`
 - `SHA256SUMS.txt`
 
 Optional supporting upload:
@@ -239,7 +239,7 @@ Remaining known limitations before public release:
 
 ### Current direction
 
-Current `v1.0.0` path:
+Current `v1.1.1` path:
 
 - bundle a verified release-bundle backend alongside the installed app
 

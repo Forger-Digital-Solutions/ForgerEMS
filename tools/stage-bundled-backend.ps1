@@ -48,6 +48,8 @@ $rootFilesToCopy = @(
 )
 
 $directoriesToCopy = @(
+    "SystemIntelligence",
+    "ToolkitManager",
     "manifests",
     "docs",
     "tools"
