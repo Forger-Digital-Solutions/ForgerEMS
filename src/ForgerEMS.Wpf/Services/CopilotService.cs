@@ -128,6 +128,8 @@ public sealed class CopilotContext
     public SystemHealthEvaluation? HealthEvaluation { get; init; }
 
     public IReadOnlyList<string> Recommendations { get; init; } = Array.Empty<string>();
+
+    public PricingEstimate? PricingEstimate { get; init; }
 }
 
 public sealed class CopilotProviderRequest
@@ -1119,6 +1121,7 @@ public sealed class CopilotContextBuilder : ICopilotContextBuilder
 {
     private readonly SystemHealthEvaluator _healthEvaluator = new();
     private readonly RecommendationEngine _recommendationEngine = new();
+    private readonly PricingEngine _pricingEngine = new();
 
     public CopilotContext Build(CopilotRequest request)
     {
@@ -1129,6 +1132,7 @@ public sealed class CopilotContextBuilder : ICopilotContextBuilder
             : null;
         var health = _healthEvaluator.Evaluate(profile);
         var recommendations = _recommendationEngine.Generate(profile, health);
+        var pricingEstimate = _pricingEngine.Estimate(profile, health);
         var parts = new List<string>
         {
             PromptTemplates.GetSystemPrompt(promptMode),
@@ -1138,7 +1142,7 @@ public sealed class CopilotContextBuilder : ICopilotContextBuilder
 
         if (settings.UseLatestSystemScanContext)
         {
-            parts.Add(BuildSystemSummary(request.SystemIntelligenceReportPath, profile, health, recommendations, settings.RedactContextEnabled));
+            parts.Add(BuildSystemSummary(request.SystemIntelligenceReportPath, profile, health, recommendations, pricingEstimate, settings.RedactContextEnabled));
         }
 
         parts.Add(BuildUsbSummary(request.SelectedUsbTarget, settings.RedactContextEnabled));
@@ -1158,7 +1162,8 @@ public sealed class CopilotContextBuilder : ICopilotContextBuilder
             PromptMode = promptMode,
             SystemProfile = profile,
             HealthEvaluation = health,
-            Recommendations = recommendations
+            Recommendations = recommendations,
+            PricingEstimate = pricingEstimate
         };
     }
 
@@ -1211,6 +1216,7 @@ public sealed class CopilotContextBuilder : ICopilotContextBuilder
         SystemProfile? profile,
         SystemHealthEvaluation health,
         IReadOnlyList<string> recommendations,
+        PricingEstimate? pricingEstimate,
         bool redact)
     {
         if (string.IsNullOrWhiteSpace(reportPath) || !File.Exists(reportPath))
@@ -1249,6 +1255,12 @@ public sealed class CopilotContextBuilder : ICopilotContextBuilder
             $"Health score: {health.HealthScore}/100",
             $"Detected issues: {string.Join("; ", health.DetectedIssues.Take(8))}",
             $"Recommendations: {string.Join("; ", recommendations.Take(8))}",
+            pricingEstimate is null
+                ? "Pricing Engine v0: not available"
+                : $"Pricing Engine v0: ${pricingEstimate.LowEstimate:0} - ${pricingEstimate.HighEstimate:0}; confidence {pricingEstimate.ConfidenceScore:0.##}; action {FormatResaleAction(pricingEstimate.RecommendedAction)}; provider {pricingEstimate.ProviderName}; local estimate only {pricingEstimate.IsLocalEstimateOnly}",
+            pricingEstimate is null
+                ? string.Empty
+                : $"Pricing assumptions: {string.Join("; ", pricingEstimate.Assumptions.Take(8))}",
             $"Flip estimate: {profile.FlipValue.EstimatedResaleRange} ({profile.FlipValue.EstimateType}; {profile.FlipValue.ProviderStatus}; confidence {FormatNullable(profile.FlipValue.ConfidenceScore)})",
             $"Value drivers: {string.Join("; ", profile.FlipValue.ValueDrivers.Take(5))}",
             $"Value reducers: {string.Join("; ", profile.FlipValue.ValueReducers.Take(5))}",
@@ -1271,6 +1283,16 @@ public sealed class CopilotContextBuilder : ICopilotContextBuilder
     private static string FormatNullableBool(bool? value)
     {
         return value.HasValue ? value.Value.ToString() : "UNKNOWN";
+    }
+
+    private static string FormatResaleAction(ResaleAction action)
+    {
+        return action switch
+        {
+            ResaleAction.SellNow => "sell now",
+            ResaleAction.PartsOnly => "parts only",
+            _ => "upgrade first"
+        };
     }
 
     private static string BuildUsbSummary(UsbTargetInfo? target, bool redact)
@@ -1838,6 +1860,12 @@ public sealed class LocalRulesCopilotEngine
         var salePosture = health < 55
             ? "repair-first or parts/repair until the scan issues are fixed"
             : "worth preparing for resale if condition/photos/charger/activation check out";
+        var pricing = context.PricingEstimate;
+        if (pricing is not null)
+        {
+            return $"Short answer: this looks {FormatResaleAction(pricing.RecommendedAction)}. Pricing Engine v0 local estimate only: ${pricing.LowEstimate:0} - ${pricing.HighEstimate:0}. Confidence: {pricing.ConfidenceScore:0.##}. Health score: {health}/100. Assumptions: {JoinOrFallback(pricing.Assumptions.Take(5), "local hardware facts only")}. Next moves: {JoinOrFallback(context.Recommendations.Take(4), "clean, update, verify drivers, and photograph condition")}. No marketplace comps, scraping, or API prices were used.";
+        }
+
         return $"Short answer: this looks {salePosture}. Local estimate only: {profile.FlipValue.EstimatedResaleRange}; list around {profile.FlipValue.RecommendedListPrice}; quick-sale around {profile.FlipValue.QuickSalePrice}; parts/repair around {profile.FlipValue.PartsRepairPrice}. Confidence: {FormatConfidence(profile.FlipValue.ConfidenceScore)}. Health score: {health}/100. Pricing provider status: {profile.FlipValue.ProviderStatus}. Top reducers: {JoinOrFallback(profile.FlipValue.ValueReducers, "none from the local scan")}. Next moves: {JoinOrFallback(context.Recommendations.Take(4), "clean, update, verify drivers, and photograph condition")}.";
     }
 
@@ -1920,5 +1948,15 @@ public sealed class LocalRulesCopilotEngine
     private static string FormatConfidence(double? value)
     {
         return value.HasValue ? $"{value.Value:0.##}" : "UNKNOWN";
+    }
+
+    private static string FormatResaleAction(ResaleAction action)
+    {
+        return action switch
+        {
+            ResaleAction.SellNow => "sell now",
+            ResaleAction.PartsOnly => "parts only",
+            _ => "upgrade first"
+        };
     }
 }

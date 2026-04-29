@@ -55,7 +55,46 @@ public sealed class CopilotServiceTests
         Assert.Contains("Health score:", context.ContextText);
         Assert.Contains("Detected issues:", context.ContextText);
         Assert.Contains("Recommendations:", context.ContextText);
+        Assert.NotNull(context.PricingEstimate);
+        Assert.Contains("Pricing Engine v0:", context.ContextText);
         Assert.Contains(context.Recommendations, item => item.Contains("16 GB RAM", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void PricingEngineLocalHeuristicReturnsRangeActionAndAssumptions()
+    {
+        var reportPath = WriteTempSystemReport();
+        using var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(reportPath));
+        var profile = SystemProfileMapper.FromJson(document.RootElement);
+        var health = new SystemHealthEvaluator().Evaluate(profile);
+        var estimate = new PricingEngine().Estimate(profile, health);
+
+        Assert.NotNull(estimate);
+        Assert.True(estimate!.LowEstimate > 0);
+        Assert.True(estimate.HighEstimate > estimate.LowEstimate);
+        Assert.InRange(estimate.ConfidenceScore, 0.1, 0.85);
+        Assert.Equal(ResaleAction.UpgradeFirst, estimate.RecommendedAction);
+        Assert.True(estimate.IsLocalEstimateOnly);
+        Assert.Contains(estimate.Assumptions, assumption => assumption.Contains("No marketplace", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(estimate.Assumptions, assumption => assumption.Contains("CPU classified", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void PricingProviderStubsDoNotScrapeOrRequireConfiguration()
+    {
+        IPricingProvider[] providers =
+        [
+            new EbayPricingProvider(),
+            new MarketplacePricingProvider(),
+            new OfferUpPricingProvider()
+        ];
+
+        foreach (var provider in providers)
+        {
+            Assert.True(provider.IsOnlineProvider);
+            Assert.False(provider.EnabledByDefault);
+            Assert.False(provider.IsConfigured);
+        }
     }
 
     [Fact]
@@ -73,8 +112,9 @@ public sealed class CopilotServiceTests
 
         Assert.False(response.UsedOnlineData);
         Assert.Equal(CopilotProviderType.LocalOffline, response.ProviderType);
-        Assert.Contains("Local estimate only", response.Text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Pricing provider status", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Pricing Engine v0", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("local estimate only", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("No marketplace comps", response.Text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
