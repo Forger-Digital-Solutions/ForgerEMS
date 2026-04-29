@@ -47,6 +47,8 @@ public sealed class MainViewModel : ObservableObject
     private readonly string _benchmarkCachePath;
     private readonly string _copilotConfigPath;
     private CancellationTokenSource? _usbMonitorCancellation;
+    private CancellationTokenSource? _copilotGenerationCancellation;
+    private CopilotSettings _copilotSettings = new();
 
     private BackendContext _backendContext = BackendContext.Unavailable("Backend discovery has not run yet.");
     private UsbTargetInfo? _selectedUsbTarget;
@@ -132,6 +134,8 @@ public sealed class MainViewModel : ObservableObject
     private string _copilotInput = string.Empty;
     private string _copilotContextText = "Run a system scan and select a USB target to load Copilot context.";
     private string _selectedCopilotMode = "Offline Only";
+    private bool _useLatestSystemScanContext = true;
+    private bool _isCopilotGenerating;
     private string _copilotOnlineStatusText = "Offline Only - no data leaves this machine.";
     private Brush _copilotOnlineStatusBackground = ReadyBackground;
     private Brush _copilotOnlineStatusBorderBrush = ReadyBorder;
@@ -192,18 +196,20 @@ public sealed class MainViewModel : ObservableObject
         OpenUbuntuTerminalCommand = new AsyncRelayCommand(OpenUbuntuTerminalAsync, () => !IsBusy);
         CheckWslInstalledCommand = new AsyncRelayCommand(() => RunSafeExternalCommandAsync("Check WSL installed", "wsl.exe", "--status"), () => !IsBusy);
         ShowWslDistrosCommand = new AsyncRelayCommand(() => RunSafeExternalCommandAsync("Show WSL distros", "wsl.exe", "-l", "-v"), () => !IsBusy);
-        SendCopilotMessageCommand = new AsyncRelayCommand(SendCopilotMessageAsync, () => !string.IsNullOrWhiteSpace(CopilotInput));
-        AskCopilotValueCommand = new AsyncRelayCommand(() => AskCopilotAsync("What is this laptop worth?"));
-        AskCopilotUpgradeCommand = new AsyncRelayCommand(() => AskCopilotAsync("What should I upgrade before selling?"));
-        AskCopilotLagCommand = new AsyncRelayCommand(() => AskCopilotAsync("Why is my computer lagging?"));
-        AskCopilotOsCommand = new AsyncRelayCommand(() => AskCopilotAsync("Best OS for this machine?"));
-        AskCopilotUsbCommand = new AsyncRelayCommand(() => AskCopilotAsync("Best USB toolkit for this job?"));
-        AskCopilotWarningCommand = new AsyncRelayCommand(() => AskCopilotAsync("What does this warning mean?"));
+        SendCopilotMessageCommand = new AsyncRelayCommand(SendCopilotMessageAsync, () => !IsCopilotGenerating && !string.IsNullOrWhiteSpace(CopilotInput));
+        AskCopilotValueCommand = new AsyncRelayCommand(() => AskCopilotAsync("What is this laptop worth?"), () => !IsCopilotGenerating);
+        AskCopilotUpgradeCommand = new AsyncRelayCommand(() => AskCopilotAsync("What should I upgrade before selling?"), () => !IsCopilotGenerating);
+        AskCopilotLagCommand = new AsyncRelayCommand(() => AskCopilotAsync("Why is my computer lagging?"), () => !IsCopilotGenerating);
+        AskCopilotOsCommand = new AsyncRelayCommand(() => AskCopilotAsync("Best OS for this machine?"), () => !IsCopilotGenerating);
+        AskCopilotUsbCommand = new AsyncRelayCommand(() => AskCopilotAsync("Best USB toolkit for this job?"), () => !IsCopilotGenerating);
+        AskCopilotWarningCommand = new AsyncRelayCommand(() => AskCopilotAsync("What does this warning mean?"), () => !IsCopilotGenerating);
         ClearCopilotHistoryCommand = new RelayCommand(ClearCopilotHistoryAndCache);
+        StopCopilotGenerationCommand = new RelayCommand(StopCopilotGeneration, () => IsCopilotGenerating);
+        UseLatestSystemScanContextCommand = new RelayCommand(UseLatestSystemScanContextNow);
 
         CopilotMessages.Add(new CopilotChatMessage
         {
-            Role = "ForgerEMS Copilot",
+            Role = "Kyra",
             Text = "I work offline from the latest local System Intelligence report and selected USB state. No private data is sent anywhere."
         });
     }
@@ -295,6 +301,10 @@ public sealed class MainViewModel : ObservableObject
     public AsyncRelayCommand AskCopilotWarningCommand { get; }
 
     public RelayCommand ClearCopilotHistoryCommand { get; }
+
+    public RelayCommand StopCopilotGenerationCommand { get; }
+
+    public RelayCommand UseLatestSystemScanContextCommand { get; }
 
     public UsbTargetInfo? SelectedUsbTarget
     {
@@ -717,6 +727,38 @@ public sealed class MainViewModel : ObservableObject
     {
         get => _copilotContextText;
         private set => SetProperty(ref _copilotContextText, value);
+    }
+
+    public bool UseLatestSystemScanContext
+    {
+        get => _useLatestSystemScanContext;
+        set
+        {
+            if (SetProperty(ref _useLatestSystemScanContext, value))
+            {
+                RefreshCopilotContextText();
+                SaveCopilotSettings();
+            }
+        }
+    }
+
+    public bool IsCopilotGenerating
+    {
+        get => _isCopilotGenerating;
+        private set
+        {
+            if (SetProperty(ref _isCopilotGenerating, value))
+            {
+                SendCopilotMessageCommand.RaiseCanExecuteChanged();
+                AskCopilotValueCommand.RaiseCanExecuteChanged();
+                AskCopilotUpgradeCommand.RaiseCanExecuteChanged();
+                AskCopilotLagCommand.RaiseCanExecuteChanged();
+                AskCopilotOsCommand.RaiseCanExecuteChanged();
+                AskCopilotUsbCommand.RaiseCanExecuteChanged();
+                AskCopilotWarningCommand.RaiseCanExecuteChanged();
+                StopCopilotGenerationCommand.RaiseCanExecuteChanged();
+            }
+        }
     }
 
     public string SelectedCopilotMode
@@ -1267,17 +1309,32 @@ public sealed class MainViewModel : ObservableObject
         });
 
         var reportPath = Path.Combine(GetRuntimeReportsDirectory(), "system-intelligence-latest.json");
-        var response = await _copilotService.GenerateReplyAsync(new CopilotRequest
+        var toolkitReportPath = Path.Combine(GetRuntimeReportsDirectory(), "toolkit-health-latest.json");
+        CopilotResponse response;
+        _copilotGenerationCancellation?.Dispose();
+        _copilotGenerationCancellation = new CancellationTokenSource();
+        IsCopilotGenerating = true;
+        try
         {
-            Prompt = prompt,
-            SystemIntelligenceReportPath = reportPath,
-            SelectedUsbTarget = SelectedUsbTarget,
-            Configuration = BuildCopilotConfigurationFromUi()
-        });
+            response = await _copilotService.GenerateReplyAsync(new CopilotRequest
+            {
+                Prompt = prompt,
+                SystemIntelligenceReportPath = reportPath,
+                ToolkitHealthReportPath = toolkitReportPath,
+                AppVersion = GetType().Assembly.GetName().Version?.ToString() ?? "unknown",
+                RecentLogLines = Logs.Select(line => line.DisplayText).TakeLast(24).ToArray(),
+                SelectedUsbTarget = SelectedUsbTarget,
+                Settings = BuildCopilotSettingsFromUi()
+            }, _copilotGenerationCancellation.Token);
+        }
+        finally
+        {
+            IsCopilotGenerating = false;
+        }
 
         CopilotMessages.Add(new CopilotChatMessage
         {
-            Role = "ForgerEMS Copilot",
+            Role = "Kyra",
             Text = response.Text
         });
 
@@ -1285,7 +1342,7 @@ public sealed class MainViewModel : ObservableObject
         {
             CopilotMessages.Add(new CopilotChatMessage
             {
-                Role = "Copilot Providers",
+                Role = "Kyra Providers",
                 Text = string.Join(Environment.NewLine, response.ProviderNotes)
             });
         }
@@ -1296,13 +1353,27 @@ public sealed class MainViewModel : ObservableObject
         AppendLog(new LogLine(DateTimeOffset.Now, response.UsedOnlineData ? "[INFO] Copilot answered with sanitized online provider data." : "[INFO] Copilot answered from local/offline fallback context.", LogSeverity.Info));
     }
 
+    private void StopCopilotGeneration()
+    {
+        _copilotGenerationCancellation?.Cancel();
+        AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Copilot stop requested.", LogSeverity.Info));
+    }
+
+    private void UseLatestSystemScanContextNow()
+    {
+        UseLatestSystemScanContext = true;
+        LoadSystemIntelligenceReport();
+        RefreshCopilotContextText();
+        AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Copilot context refreshed from latest local System Intelligence report.", LogSeverity.Success));
+    }
+
     private void ClearCopilotHistoryAndCache()
     {
         CopilotMessages.Clear();
         CopilotMessages.Add(new CopilotChatMessage
         {
-            Role = "ForgerEMS Copilot",
-            Text = "Copilot history and local provider cache were cleared. Offline rules remain available."
+            Role = "Kyra",
+            Text = "Kyra history and local provider cache were cleared. Offline rules remain available."
         });
 
         try
@@ -2701,27 +2772,21 @@ public sealed class MainViewModel : ObservableObject
     private void LoadCopilotSettings()
     {
         CopilotProviderSettings.Clear();
-        var configuration = new CopilotConfiguration();
-        try
-        {
-            if (File.Exists(_copilotConfigPath))
-            {
-                configuration = JsonSerializer.Deserialize<CopilotConfiguration>(File.ReadAllText(_copilotConfigPath)) ?? new CopilotConfiguration();
-            }
-        }
-        catch
-        {
-            configuration = new CopilotConfiguration();
-        }
+        var settings = new CopilotSettingsStore(_copilotConfigPath, _copilotProviderRegistry).Load();
+        _copilotSettings = settings;
 
-        _selectedCopilotMode = ToModeDisplayName(configuration.Mode);
+        _selectedCopilotMode = ToModeDisplayName(settings.Mode);
+        _useLatestSystemScanContext = settings.UseLatestSystemScanContext;
         foreach (var provider in _copilotProviderRegistry.Providers)
         {
-            if (!configuration.Providers.TryGetValue(provider.Id, out var providerConfig))
+            if (!settings.Providers.TryGetValue(provider.Id, out var providerConfig))
             {
                 providerConfig = new CopilotProviderConfiguration
                 {
-                    IsEnabled = provider.EnabledByDefault
+                    IsEnabled = provider.EnabledByDefault,
+                    BaseUrl = provider.DefaultBaseUrl,
+                    ModelName = provider.DefaultModelName,
+                    ApiKeyEnvironmentVariable = provider.DefaultApiKeyEnvironmentVariable
                 };
             }
 
@@ -2732,7 +2797,7 @@ public sealed class MainViewModel : ObservableObject
                 Category = provider.Category,
                 Status = provider.StatusText,
                 IsEnabled = providerConfig.IsEnabled,
-                IsConfigured = provider.IsConfigured,
+                IsConfigured = provider.IsConfigured(providerConfig),
                 IsPaidProvider = provider.IsPaidProvider
             });
         }
@@ -2740,36 +2805,60 @@ public sealed class MainViewModel : ObservableObject
         UpdateCopilotOnlineIndicator();
     }
 
-    private CopilotConfiguration BuildCopilotConfigurationFromUi()
+    private CopilotSettings BuildCopilotSettingsFromUi()
     {
-        var configuration = new CopilotConfiguration
-        {
-            Mode = ToCopilotMode(SelectedCopilotMode),
-            AllowSensitiveOnlineData = false
-        };
+        var settings = _copilotSettings ?? new CopilotSettings();
+        settings.Mode = ToCopilotMode(SelectedCopilotMode);
+        settings.ProviderType = CopilotProviderType.LocalOffline;
+        settings.TimeoutSeconds = settings.TimeoutSeconds <= 0 ? 12 : settings.TimeoutSeconds;
+        settings.OfflineFallbackEnabled = true;
+        settings.RedactContextEnabled = true;
+        settings.MaxContextCharacters = settings.MaxContextCharacters <= 0 ? 6000 : settings.MaxContextCharacters;
+        settings.UseLatestSystemScanContext = UseLatestSystemScanContext;
 
         foreach (var provider in _copilotProviderRegistry.Providers)
         {
             var view = CopilotProviderSettings.FirstOrDefault(item => string.Equals(item.Id, provider.Id, StringComparison.OrdinalIgnoreCase));
-            configuration.Providers[provider.Id] = new CopilotProviderConfiguration
+            var isEnabled = view?.IsEnabled == true;
+            if (isEnabled && provider.ProviderType != CopilotProviderType.LocalOffline && settings.ProviderType == CopilotProviderType.LocalOffline)
             {
-                IsEnabled = view?.IsEnabled == true,
-                TimeoutSeconds = 8,
-                MaxRequestsPerMinute = 12
-            };
+                settings.ProviderType = provider.ProviderType;
+            }
+
+            if (!settings.Providers.TryGetValue(provider.Id, out var providerConfig))
+            {
+                providerConfig = new CopilotProviderConfiguration
+                {
+                    BaseUrl = provider.DefaultBaseUrl,
+                    ModelName = provider.DefaultModelName,
+                    ApiKeyEnvironmentVariable = provider.DefaultApiKeyEnvironmentVariable,
+                    TimeoutSeconds = settings.TimeoutSeconds,
+                    MaxRequestsPerMinute = 12,
+                    MaxRetries = provider.IsOnlineProvider ? 1 : 0
+                };
+                settings.Providers[provider.Id] = providerConfig;
+            }
+
+            providerConfig.IsEnabled = isEnabled;
+            providerConfig.BaseUrl = string.IsNullOrWhiteSpace(providerConfig.BaseUrl) ? provider.DefaultBaseUrl : providerConfig.BaseUrl;
+            providerConfig.ModelName = string.IsNullOrWhiteSpace(providerConfig.ModelName) ? provider.DefaultModelName : providerConfig.ModelName;
+            providerConfig.ApiKeyEnvironmentVariable = string.IsNullOrWhiteSpace(providerConfig.ApiKeyEnvironmentVariable)
+                ? provider.DefaultApiKeyEnvironmentVariable
+                : providerConfig.ApiKeyEnvironmentVariable;
+            providerConfig.TimeoutSeconds = providerConfig.TimeoutSeconds <= 0 ? settings.TimeoutSeconds : providerConfig.TimeoutSeconds;
+            providerConfig.MaxRequestsPerMinute = providerConfig.MaxRequestsPerMinute <= 0 ? 12 : providerConfig.MaxRequestsPerMinute;
+            providerConfig.MaxRetries = providerConfig.MaxRetries < 0 ? 0 : providerConfig.MaxRetries;
         }
 
-        return configuration;
+        _copilotSettings = settings;
+        return settings;
     }
 
     private void SaveCopilotSettings()
     {
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_copilotConfigPath)!);
-            File.WriteAllText(
-                _copilotConfigPath,
-                JsonSerializer.Serialize(BuildCopilotConfigurationFromUi(), new JsonSerializerOptions { WriteIndented = true }));
+            new CopilotSettingsStore(_copilotConfigPath, _copilotProviderRegistry).Save(BuildCopilotSettingsFromUi());
         }
         catch
         {
@@ -2790,9 +2879,12 @@ public sealed class MainViewModel : ObservableObject
         }
 
         var enabledConfigured = CopilotProviderSettings.Any(item => item.IsEnabled && item.IsConfigured);
-        CopilotOnlineStatusText = enabledConfigured
-            ? "Online lookup enabled - sanitized provider context only."
-            : "Online lookup enabled - no configured providers yet; offline fallback active.";
+        var localOllamaEnabled = CopilotProviderSettings.Any(item => item.IsEnabled && string.Equals(item.Id, "ollama-local", StringComparison.OrdinalIgnoreCase));
+        CopilotOnlineStatusText = localOllamaEnabled
+            ? "Local Ollama selected - reachability checked on send; offline fallback active."
+            : enabledConfigured
+                ? "Online lookup enabled - sanitized provider context only."
+                : "Online lookup enabled - no configured providers yet; offline fallback active.";
         CopilotOnlineStatusBackground = enabledConfigured ? WarningBackground : RunningBackground;
         CopilotOnlineStatusBorderBrush = enabledConfigured ? WarningBorder : RunningBorder;
         CopilotOnlineStatusForeground = enabledConfigured ? WarningForeground : RunningForeground;
@@ -2801,6 +2893,14 @@ public sealed class MainViewModel : ObservableObject
     private void ApplyCopilotOnlineIndicator(CopilotResponse response)
     {
         CopilotOnlineStatusText = response.OnlineStatus;
+        if (response.OnlineStatus.Contains("Error", StringComparison.OrdinalIgnoreCase))
+        {
+            CopilotOnlineStatusBackground = ErrorBackground;
+            CopilotOnlineStatusBorderBrush = ErrorBorder;
+            CopilotOnlineStatusForeground = ErrorForeground;
+            return;
+        }
+
         if (response.UsedOnlineData)
         {
             CopilotOnlineStatusBackground = WarningBackground;
@@ -3291,6 +3391,7 @@ public sealed class MainViewModel : ObservableObject
         CopyLogsCommand.RaiseCanExecuteChanged();
         ClearLogsCommand.RaiseCanExecuteChanged();
         SendCopilotMessageCommand.RaiseCanExecuteChanged();
+        StopCopilotGenerationCommand.RaiseCanExecuteChanged();
     }
 
     private void AppendLog(LogLine line)

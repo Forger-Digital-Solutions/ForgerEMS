@@ -149,13 +149,13 @@ public partial class App : Application
             {
                 Prompt = "Best OS for this machine?",
                 SystemIntelligenceReportPath = Path.Combine(runtimeService.RuntimeRoot, "reports", "system-intelligence-latest.json"),
-                Configuration = new CopilotConfiguration { Mode = CopilotMode.OfflineOnly }
+                Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
             }).ConfigureAwait(false);
             var onlineFallbackCopilot = await copilotService.GenerateReplyAsync(new CopilotRequest
             {
                 Prompt = "What is this laptop worth?",
                 SystemIntelligenceReportPath = Path.Combine(runtimeService.RuntimeRoot, "reports", "system-intelligence-latest.json"),
-                Configuration = new CopilotConfiguration
+                Settings = new CopilotSettings
                 {
                     Mode = CopilotMode.OnlineAssisted,
                     Providers =

@@ -1055,7 +1055,7 @@
                     <Button x:Name="NavUsbButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="0" Click="OnSidebarNavigateClick" Content="▣  USB Builder" />
                     <Button x:Name="NavSystemButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="1" Click="OnSidebarNavigateClick" Content="◎  System Intelligence" />
                     <Button x:Name="NavToolkitButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="2" Click="OnSidebarNavigateClick" Content="▤  Toolkit Manager" />
-                    <Button x:Name="NavCopilotButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="3" Click="OnSidebarNavigateClick" Content="◇  ForgerEMS Copilot" />
+                    <Button x:Name="NavCopilotButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="3" Click="OnSidebarNavigateClick" Content="◇  Kyra" />
                     <Button x:Name="NavDiagnosticsButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="4" Click="OnSidebarNavigateClick" Content="⚙  Diagnostics" />
                     <Button x:Name="NavSettingsButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="5" Click="OnSidebarNavigateClick" Content="☰  Settings" />
                 </StackPanel>
@@ -1742,9 +1742,19 @@
                         </StackPanel>
                     </TabItem>
 
-                    <TabItem Header="◇  ForgerEMS Copilot">
+                    <TabItem Header="◇  Kyra">
                         <StackPanel Margin="24,0,24,0" MaxWidth="1040" HorizontalAlignment="Left">
-                            <GroupBox Header="ForgerEMS Copilot">
+                            <GroupBox>
+                                <GroupBox.Header>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Image Width="28"
+                                               Height="28"
+                                               Margin="0,0,8,0"
+                                               Source="Assets/Kyra.png"
+                                               Stretch="UniformToFill" />
+                                        <TextBlock VerticalAlignment="Center" Text="Kyra" />
+                                    </StackPanel>
+                                </GroupBox.Header>
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
@@ -1792,12 +1802,17 @@
                                                            Text="{Binding CopilotOnlineStatusText}"
                                                            TextWrapping="Wrap" />
                                             </Border>
-                                            <Button Grid.Column="3"
-                                                    Width="150"
-                                                    Margin="12,0,0,0"
-                                                    Style="{StaticResource SecondaryButtonStyle}"
-                                                    Content="Clear History"
-                                                    Command="{Binding ClearCopilotHistoryCommand}" />
+                                            <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="12,0,0,0">
+                                                <Button Width="126"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Clear Chat"
+                                                        Command="{Binding ClearCopilotHistoryCommand}" />
+                                                <Button Width="132"
+                                                        Margin="8,0,0,0"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Stop Generating"
+                                                        Command="{Binding StopCopilotGenerationCommand}" />
+                                            </StackPanel>
                                         </Grid>
                                     </Border>
 
@@ -1809,9 +1824,27 @@
                                             BorderThickness="1"
                                             CornerRadius="10">
                                         <StackPanel>
-                                            <TextBlock FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource PanelLabelBrush}"
-                                                       Text="Local Context" />
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource PanelLabelBrush}"
+                                                           Text="Local Context" />
+                                                <CheckBox Grid.Column="1"
+                                                          Margin="0,0,12,0"
+                                                          VerticalAlignment="Center"
+                                                          IsChecked="{Binding UseLatestSystemScanContext, Mode=TwoWay}"
+                                                          Content="Latest scan" />
+                                                <Button Grid.Column="2"
+                                                        Width="190"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Use Latest System Scan"
+                                                        Command="{Binding UseLatestSystemScanContextCommand}" />
+                                            </Grid>
                                             <TextBlock Margin="0,6,0,0"
                                                        FontFamily="Consolas"
                                                        FontSize="12"

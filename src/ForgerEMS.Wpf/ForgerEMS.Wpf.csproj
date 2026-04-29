@@ -28,6 +28,7 @@
     <Resource Include="Assets\ForgerEMS.ico" />
     <Resource Include="Assets\ForgerEMS_Icon.png" />
     <Resource Include="Assets\ForgerEMS_CommandCenterBackground.png" />
+    <Resource Include="Assets\Kyra.png" />
   </ItemGroup>
 
 </Project>
