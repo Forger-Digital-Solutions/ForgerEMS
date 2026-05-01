@@ -104,7 +104,7 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
         {
             while (!process.HasExited && !cancellationToken.IsCancellationRequested)
             {
-                await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromSeconds(12), cancellationToken).ConfigureAwait(false);
 
                 if (process.HasExited || cancellationToken.IsCancellationRequested)
                 {
@@ -116,7 +116,7 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
                     continue;
                 }
 
-                if (DateTimeOffset.UtcNow - lastOutputUtc >= TimeSpan.FromSeconds(5))
+                if (DateTimeOffset.UtcNow - lastOutputUtc >= TimeSpan.FromSeconds(12))
                 {
                     PublishLine($"[INFO] Downloading {request.ProgressItemName}... working (no progress data)", isErrorStream: false);
                 }
@@ -133,10 +133,7 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
         {
         }
 
-        if (cancellationToken.IsCancellationRequested)
-        {
-            throw new OperationCanceledException(cancellationToken);
-        }
+        cancellationToken.ThrowIfCancellationRequested();
 
         return new PowerShellRunResult
         {

@@ -163,7 +163,7 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
         };
     }
 
-    private async Task<ManifestVentoyPackage?> TryLoadPackageAsync(BackendContext backendContext, CancellationToken cancellationToken)
+    private static async Task<ManifestVentoyPackage?> TryLoadPackageAsync(BackendContext backendContext, CancellationToken cancellationToken)
     {
         if (!backendContext.IsAvailable)
         {

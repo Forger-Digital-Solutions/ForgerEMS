@@ -369,6 +369,9 @@ public sealed class UsbDetectionService : IUsbDetectionService
                                 DeviceModel      = $deviceModel
                                 ReadSpeedDisplay = 'Not tested'
                                 WriteSpeedDisplay = 'Not tested'
+                                BenchmarkStatus = 'Queued'
+                                BenchmarkTestSizeMb = 0
+                                BenchmarkLastTestedAt = $null
                                 PartitionType    = $partitionType
                                 IsSystemDrive    = $isSystemDrive
                                 IsBootDrive      = $isBootDrive
@@ -483,6 +486,9 @@ public sealed class UsbDetectionService : IUsbDetectionService
             DeviceModel = GetString(element, "DeviceModel"),
             ReadSpeedDisplay = GetString(element, "ReadSpeedDisplay", "Not tested"),
             WriteSpeedDisplay = GetString(element, "WriteSpeedDisplay", "Not tested"),
+            BenchmarkStatus = GetString(element, "BenchmarkStatus", "Queued"),
+            BenchmarkTestSizeMb = GetInt32(element, "BenchmarkTestSizeMb"),
+            BenchmarkLastTestedAt = GetDateTimeOffset(element, "BenchmarkLastTestedAt"),
             PartitionType = GetString(element, "PartitionType"),
             IsSystemDrive = GetBoolean(element, "IsSystemDrive"),
             IsBootDrive = GetBoolean(element, "IsBootDrive"),
@@ -539,6 +545,9 @@ public sealed class UsbDetectionService : IUsbDetectionService
                 DeviceModel = string.Empty,
                 ReadSpeedDisplay = "Not tested",
                 WriteSpeedDisplay = "Not tested",
+                BenchmarkStatus = "Queued",
+                BenchmarkTestSizeMb = 0,
+                BenchmarkLastTestedAt = null,
                 PartitionType = string.Empty,
                 IsSystemDrive = false,
                 IsBootDrive = false,
@@ -580,6 +589,22 @@ public sealed class UsbDetectionService : IUsbDetectionService
         return element.TryGetProperty(propertyName, out var property) && property.TryGetInt64(out var value)
             ? value
             : defaultValue;
+    }
+
+    private static int GetInt32(JsonElement element, string propertyName, int defaultValue = 0)
+    {
+        return element.TryGetProperty(propertyName, out var property) && property.TryGetInt32(out var value)
+            ? value
+            : defaultValue;
+    }
+
+    private static DateTimeOffset? GetDateTimeOffset(JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var property) &&
+               property.ValueKind == JsonValueKind.String &&
+               DateTimeOffset.TryParse(property.GetString(), out var value)
+            ? value
+            : null;
     }
 
     private static bool GetBoolean(JsonElement element, string propertyName, bool defaultValue = false)

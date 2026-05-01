@@ -30,6 +30,9 @@ jobs:
       - name: Build
         run: dotnet build .\ForgerEMS.sln -c Release --no-restore
 
+      - name: Test
+        run: dotnet test .\ForgerEMS.sln -c Release --no-build
+
       - name: Validate manifests
         run: |
           Get-Content .\manifests\ForgerEMS.updates.json -Raw | ConvertFrom-Json | Out-Null

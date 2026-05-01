@@ -58,13 +58,13 @@ Installer note:
 
 ## Versioning
 
-Current version:
+Current version example:
 
-- `1.0.0`
+- `1.1.1`
 
 Installer output name:
 
-- `ForgerEMS-Setup-v1.0.0.exe`
+- `ForgerEMS-Setup-v1.1.1.exe`
 
 Upgrade behavior:
 
@@ -136,8 +136,11 @@ What the script does:
 Expected installer output:
 
 ```text
-dist\installer\ForgerEMS-Setup-v1.0.0.exe
+dist\installer\ForgerEMS-Setup-v1.1.1.exe
 ```
+
+Release staging output from `build-release.ps1` is generated under `release\current\`.
+Treat this folder as local/CI output, not a versioned repo snapshot.
 
 ## Updating The Version Later
 
@@ -149,10 +152,12 @@ When you move to a new version:
 3. build the installer with:
 
    ```powershell
-   .\tools\build-forgerems-installer.ps1 -Version 1.0.1
+   .\tools\build-forgerems-installer.ps1 -Version 1.1.1
    ```
 
 4. if desired, update any docs that explicitly mention the installer file name
+
+Versioned distribution artifacts (for example `ForgerEMS-Setup-v1.1.1.exe`) should be attached to a GitHub Release for the matching tag, rather than committed under `release\vX.Y.Z\`.
 
 The `AppId` should stay the same so upgrades keep working.
 

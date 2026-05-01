@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Markup;
 using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services;
 using VentoyToolkitSetup.Wpf.ViewModels;
@@ -12,27 +15,23 @@ namespace VentoyToolkitSetup.Wpf;
 
 public partial class App : Application
 {
+
     protected override async void OnStartup(StartupEventArgs e)
     {
-        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
-        {
-            if (args.ExceptionObject is Exception exception)
-            {
-                WriteStartupCrashReport(exception);
-            }
-        };
-
-        DispatcherUnhandledException += (_, args) =>
-        {
-            WriteStartupCrashReport(args.Exception);
-        };
+        RegisterStartupExceptionHandlers();
 
         try
         {
+            AppendStartupLog("App starting");
+            AppendStartupLog($"ExecutablePath: {GetExecutablePath()}");
+            AppendStartupLog($"ExecutableBase: {GetExecutableBaseDirectory()}");
+            AppendStartupLog($"CurrentDirectory: {Directory.GetCurrentDirectory()}");
+
             base.OnStartup(e);
 
             var runtimeService = new AppRuntimeService();
             runtimeService.EnsureInitialized();
+            AppendStartupLog("Config loaded");
 
             var backendDiscoveryService = new BackendDiscoveryService();
             var powerShellRunnerService = new PowerShellRunnerService();
@@ -42,6 +41,9 @@ public partial class App : Application
             var userPromptService = new UserPromptService();
             var ventoyIntegrationService = new VentoyIntegrationService(powerShellRunnerService, runtimeService);
             var usbBenchmarkService = new UsbBenchmarkService(powerShellRunnerService);
+            var copilotProviderRegistry = new CopilotProviderRegistry();
+            var copilotService = new CopilotService(copilotProviderRegistry);
+            AppendStartupLog("Services initialized");
 
             if (HasArgument(e.Args, "--self-test"))
             {
@@ -59,17 +61,45 @@ public partial class App : Application
                 userPromptService,
                 ventoyIntegrationService,
                 runtimeService,
-                usbBenchmarkService);
+                usbBenchmarkService,
+                copilotService,
+                copilotProviderRegistry);
 
             var mainWindow = new MainWindow(mainViewModel);
+            AppendStartupLog("MainWindow constructed");
             MainWindow = mainWindow;
             mainWindow.Show();
+            AppendStartupLog("MainWindow shown");
         }
         catch (Exception exception)
         {
+            LogStartupException("Startup failed", exception);
             WriteStartupCrashReport(exception);
+            ShowLaunchFailureMessage(exception);
             Shutdown(1);
         }
+    }
+
+    private static void RegisterStartupExceptionHandlers()
+    {
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            if (args.ExceptionObject is Exception exception)
+            {
+                LogStartupException("Unhandled AppDomain exception", exception);
+                WriteStartupCrashReport(exception);
+            }
+            else
+            {
+                AppendStartupLog($"Unhandled AppDomain exception object: {args.ExceptionObject}");
+            }
+        };
+
+        Current.DispatcherUnhandledException += (_, args) =>
+        {
+            LogStartupException("Unhandled dispatcher exception", args.Exception);
+            WriteStartupCrashReport(args.Exception);
+        };
     }
 
     private static bool HasArgument(IEnumerable<string> args, string target)
@@ -78,22 +108,23 @@ public partial class App : Application
     }
 
     private static async Task<int> RunSelfTestAsync(
-        IAppRuntimeService runtimeService,
-        IBackendDiscoveryService backendDiscoveryService,
-        IPowerShellRunnerService powerShellRunnerService,
-        IUsbBenchmarkService usbBenchmarkService)
+        AppRuntimeService runtimeService,
+        BackendDiscoveryService backendDiscoveryService,
+        PowerShellRunnerService powerShellRunnerService,
+        UsbBenchmarkService usbBenchmarkService)
     {
         var startedUtc = DateTimeOffset.UtcNow;
+        var executableBase = GetExecutableBaseDirectory();
         var lines = new List<string>
         {
             "ForgerEMS self-test",
             $"StartedUtc: {startedUtc:O}",
-            $"ExecutableBase: {AppContext.BaseDirectory}",
+            $"ExecutableBase: {executableBase}",
             $"CurrentDirectory: {Directory.GetCurrentDirectory()}",
             $"RuntimeRoot: {runtimeService.RuntimeRoot}",
             $"SessionLogPath: {runtimeService.SessionLogPath}",
-            $"ExpectedInstalledBackendRoot: {Path.Combine(AppContext.BaseDirectory, "backend")}",
-            $"ExpectedInstalledManifestRoot: {Path.Combine(AppContext.BaseDirectory, "manifests")}"
+            $"ExpectedInstalledBackendRoot: {Path.Combine(executableBase, "backend")}",
+            $"ExpectedInstalledManifestRoot: {Path.Combine(executableBase, "manifests")}"
         };
 
         try
@@ -108,13 +139,15 @@ public partial class App : Application
             lines.Add($"RequiredVerifyScriptExists: {File.Exists(backendContext.VerifyScriptPath)}");
             lines.Add($"RequiredSetupScriptExists: {File.Exists(backendContext.SetupScriptPath)}");
             lines.Add($"RequiredUpdateScriptExists: {File.Exists(backendContext.UpdateScriptPath)}");
+            lines.Add($"RequiredSystemIntelligenceScriptExists: {File.Exists(Path.Combine(backendContext.WorkingDirectory, "SystemIntelligence", "Invoke-ForgerEMSSystemScan.ps1")) || File.Exists(Path.Combine(backendContext.RootPath, "backend", "SystemIntelligence", "Invoke-ForgerEMSSystemScan.ps1"))}");
+            lines.Add($"RequiredToolkitManagerScriptExists: {File.Exists(Path.Combine(backendContext.WorkingDirectory, "ToolkitManager", "Get-ForgerEMSToolkitHealth.ps1")) || File.Exists(Path.Combine(backendContext.RootPath, "backend", "ToolkitManager", "Get-ForgerEMSToolkitHealth.ps1"))}");
             lines.AddRange(GetMissingRequiredFileLines(backendContext));
-            lines.Add($"DryRunBannerDefaultVisible: True");
+            lines.Add($"UsbBuilderDryRunUiRemoved: True");
 
             var request = new PowerShellRunRequest
             {
                 DisplayName = "Published self-test",
-                WorkingDirectory = AppContext.BaseDirectory,
+                WorkingDirectory = executableBase,
                 InlineCommand = "Write-Host '[INFO] Downloading Sample ISO... 42% | 214 MB / 510 MB | 6.4 MB/s | ETA 45s'; $PSVersionTable.PSVersion.ToString()",
                 ProgressItemName = "Sample ISO"
             };
@@ -136,6 +169,31 @@ public partial class App : Application
                 SelectionWarning = "Self-test unsafe drive fixture."
             }).ConfigureAwait(false);
             lines.Add($"BenchmarkRefusesUnsafeDrive: {!blockedBenchmark.Succeeded}");
+
+            var copilotRegistry = new CopilotProviderRegistry();
+            var copilotService = new CopilotService(copilotRegistry);
+            var offlineCopilot = await copilotService.GenerateReplyAsync(new CopilotRequest
+            {
+                Prompt = "Best OS for this machine?",
+                SystemIntelligenceReportPath = Path.Combine(runtimeService.RuntimeRoot, "reports", "system-intelligence-latest.json"),
+                Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
+            }).ConfigureAwait(false);
+            var onlineFallbackCopilot = await copilotService.GenerateReplyAsync(new CopilotRequest
+            {
+                Prompt = "What is this laptop worth?",
+                SystemIntelligenceReportPath = Path.Combine(runtimeService.RuntimeRoot, "reports", "system-intelligence-latest.json"),
+                Settings = new CopilotSettings
+                {
+                    Mode = CopilotMode.OnlineAssisted,
+                    Providers =
+                    {
+                        ["ebay-sold-listings"] = new CopilotProviderConfiguration { IsEnabled = true }
+                    }
+                }
+            }).ConfigureAwait(false);
+            lines.Add($"KyraOfflineDoesNotUseOnline: {!offlineCopilot.UsedOnlineData}");
+            lines.Add($"KyraOnlineFallbackDoesNotCrash: {!string.IsNullOrWhiteSpace(onlineFallbackCopilot.Text)}");
+            lines.Add($"KyraProviderHooksAvailable: {copilotRegistry.Providers.Count}");
             lines.Add("StatusUpdatesDontCrash: True");
             lines.Add("AppLaunchSelfTestPath: True");
             lines.Add($"FinishedUtc: {DateTimeOffset.UtcNow:O}");
@@ -145,7 +203,14 @@ public partial class App : Application
                                  File.Exists(backendContext.VerifyScriptPath) &&
                                  File.Exists(backendContext.SetupScriptPath) &&
                                  File.Exists(backendContext.UpdateScriptPath);
-            return result.Succeeded && scriptsResolve && !blockedBenchmark.Succeeded && File.Exists(reportPath) ? 0 : 1;
+            return result.Succeeded &&
+                   scriptsResolve &&
+                   !blockedBenchmark.Succeeded &&
+                   !offlineCopilot.UsedOnlineData &&
+                   !string.IsNullOrWhiteSpace(onlineFallbackCopilot.Text) &&
+                   File.Exists(reportPath)
+                ? 0
+                : 1;
         }
         catch (Exception exception)
         {
@@ -165,6 +230,8 @@ public partial class App : Application
             backendContext.SetupScriptPath,
             backendContext.UpdateScriptPath,
             Path.Combine(backendContext.WorkingDirectory, "ForgerEMS.Runtime.ps1"),
+            Path.Combine(backendContext.WorkingDirectory, "SystemIntelligence", "Invoke-ForgerEMSSystemScan.ps1"),
+            Path.Combine(backendContext.WorkingDirectory, "ToolkitManager", "Get-ForgerEMSToolkitHealth.ps1"),
             Path.Combine(backendContext.WorkingDirectory, "ForgerEMS.updates.json"),
             Path.Combine(backendContext.WorkingDirectory, "ForgerEMS.bundled-backend.json"),
             Path.Combine(backendContext.WorkingDirectory, "CHECKSUMS.sha256"),
@@ -179,20 +246,25 @@ public partial class App : Application
 
     private static void WriteStartupCrashReport(Exception exception)
     {
+        var executableBase = GetExecutableBaseDirectory();
         var lines = new List<string>
         {
             "ForgerEMS startup crash",
             $"TimestampUtc: {DateTimeOffset.UtcNow:O}",
-            $"ExecutablePath: {Environment.ProcessPath ?? "(unknown)"}",
+            $"ExecutablePath: {GetExecutablePath()}",
             $"CurrentDirectory: {Directory.GetCurrentDirectory()}",
             $"BaseDirectory: {AppContext.BaseDirectory}",
+            $"ExecutableBase: {executableBase}",
+            $"StartupLogPath: {GetStartupLogPath()}",
             $"ExceptionType: {exception.GetType().FullName}",
             $"ExceptionMessage: {exception.Message}",
+            "XamlDetail:",
+            FormatXamlParseDetail(exception),
             "StackTrace:",
             exception.ToString(),
             "BackendDiscoveryCandidates:",
-            $"BundledBackendRoot: {Path.Combine(AppContext.BaseDirectory, "backend")} | Exists={Directory.Exists(Path.Combine(AppContext.BaseDirectory, "backend"))}",
-            $"InstalledManifestRoot: {Path.Combine(AppContext.BaseDirectory, "manifests")} | Exists={Directory.Exists(Path.Combine(AppContext.BaseDirectory, "manifests"))}",
+            $"BundledBackendRoot: {Path.Combine(executableBase, "backend")} | Exists={Directory.Exists(Path.Combine(executableBase, "backend"))}",
+            $"InstalledManifestRoot: {Path.Combine(executableBase, "manifests")} | Exists={Directory.Exists(Path.Combine(executableBase, "manifests"))}",
             $"CurrentDirectoryBackendRoot: {Path.Combine(Directory.GetCurrentDirectory(), "backend")} | Exists={Directory.Exists(Path.Combine(Directory.GetCurrentDirectory(), "backend"))}",
             $"OverrideRoot: {Environment.GetEnvironmentVariable("FORGEREMS_BACKEND_ROOT") ?? "(unset)"}"
         };
@@ -219,13 +291,15 @@ public partial class App : Application
 
     private static IEnumerable<string> GetStartupRequiredFileCandidates()
     {
-        var bundledBackendRoot = Path.Combine(AppContext.BaseDirectory, "backend");
+        var bundledBackendRoot = Path.Combine(GetExecutableBaseDirectory(), "backend");
         foreach (var relativePath in new[]
         {
             "Verify-VentoyCore.ps1",
             "Setup-ForgerEMS.ps1",
             "Update-ForgerEMS.ps1",
             "ForgerEMS.Runtime.ps1",
+            "SystemIntelligence\\Invoke-ForgerEMSSystemScan.ps1",
+            "ToolkitManager\\Get-ForgerEMSToolkitHealth.ps1",
             "ForgerEMS.updates.json",
             "ForgerEMS.bundled-backend.json",
             "CHECKSUMS.sha256",
@@ -248,5 +322,94 @@ public partial class App : Application
         }
 
         yield return Path.Combine(Path.GetTempPath(), "ForgerEMS", "Runtime", "diagnostics", "startup-crash.txt");
+    }
+
+    private static void LogStartupException(string stage, Exception exception)
+    {
+        AppendStartupLog($"{stage}: {exception.GetType().FullName}: {exception.Message}");
+        var detail = FormatXamlParseDetail(exception);
+        if (!string.IsNullOrWhiteSpace(detail))
+        {
+            AppendStartupLog(detail.TrimEnd());
+        }
+
+        AppendStartupLog(exception.ToString());
+    }
+
+    /// <summary>
+    /// Adds line/position and inner exception detail for XAML load failures (e.g. missing StaticResource keys).
+    /// </summary>
+    private static string FormatXamlParseDetail(Exception exception)
+    {
+        if (exception is not XamlParseException xaml)
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder();
+        builder.AppendLine(FormattableString.Invariant($"XamlParseException.LineNumber: {xaml.LineNumber}"));
+        builder.AppendLine(FormattableString.Invariant($"XamlParseException.LinePosition: {xaml.LinePosition}"));
+        if (xaml.BaseUri is not null)
+        {
+            builder.AppendLine(FormattableString.Invariant($"XamlParseException.BaseUri: {xaml.BaseUri}"));
+        }
+
+        builder.AppendLine(FormattableString.Invariant($"XamlParseException.Message: {xaml.Message}"));
+        if (xaml.InnerException is not null)
+        {
+            builder.AppendLine(FormattableString.Invariant(
+                $"XamlParseException.InnerException: {xaml.InnerException.GetType().FullName}: {xaml.InnerException.Message}"));
+        }
+
+        var root = xaml.GetBaseException();
+        builder.AppendLine(FormattableString.Invariant($"BaseException: {root.GetType().FullName}: {root.Message}"));
+        return builder.ToString();
+    }
+
+    private static void AppendStartupLog(string message) => StartupDiagnosticLog.AppendLine(message);
+
+    private static string GetStartupLogPath() => StartupDiagnosticLog.GetStartupLogPath();
+
+    private static void ShowLaunchFailureMessage(Exception exception)
+    {
+        try
+        {
+            MessageBox.Show(
+                $"{exception.Message}{Environment.NewLine}{Environment.NewLine}Log file:{Environment.NewLine}{GetStartupLogPath()}",
+                "ForgerEMS failed to launch",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        catch
+        {
+        }
+    }
+
+    private static string GetExecutablePath()
+    {
+        try
+        {
+            var mainModulePath = Process.GetCurrentProcess().MainModule?.FileName;
+            if (!string.IsNullOrWhiteSpace(mainModulePath))
+            {
+                return mainModulePath;
+            }
+        }
+        catch
+        {
+        }
+
+        return Environment.ProcessPath ?? "(unknown)";
+    }
+
+    private static string GetExecutableBaseDirectory()
+    {
+        var executablePath = GetExecutablePath();
+        if (!string.IsNullOrWhiteSpace(executablePath) && File.Exists(executablePath))
+        {
+            return Path.GetDirectoryName(executablePath) ?? AppContext.BaseDirectory;
+        }
+
+        return AppContext.BaseDirectory;
     }
 }

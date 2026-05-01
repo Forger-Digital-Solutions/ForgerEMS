@@ -5,7 +5,7 @@ Builds a complete ForgerEMS release staging folder.
 .DESCRIPTION
 Publishes the .NET 8 WPF app, builds and stages the PowerShell backend bundle,
 copies public manifests, optionally compiles the Inno Setup installer, and
-generates SHA256 checksums under release\<version>\.
+generates SHA256 checksums under release\current\.
 
 .PARAMETER Version
 Release version. Defaults to the WPF project <Version>.
@@ -149,12 +149,13 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
 
 $publishDir = Join-Path $distRoot "publish\$Runtime"
 $backendStageRoot = Join-Path $distRoot "backend-stage\backend"
-$releaseRoot = Join-Path $repoRoot ("release\{0}" -f $Version)
+$releaseRoot = Join-Path $repoRoot "release\current"
 $releaseAppRoot = Join-Path $releaseRoot "app"
-$releaseBackendRoot = Join-Path $releaseRoot "backend"
-$releaseManifestRoot = Join-Path $releaseRoot "manifests"
-$releaseInstallerRoot = Join-Path $releaseRoot "installer"
+$releaseBackendRoot = Join-Path $releaseAppRoot "backend"
+$releaseManifestRoot = Join-Path $releaseAppRoot "manifests"
 $checksumsPath = Join-Path $releaseRoot "CHECKSUMS.sha256"
+$installerOutputDir = Join-Path $distRoot "installer"
+$releaseIdentifierLabel = [string]::Concat("ForgerEMS Beta v", $Version, " ", [char]0x2014, " Whole-App Intelligence Preview")
 
 Write-Step "Release version: $Version"
 Write-Step "Restoring solution"
@@ -195,23 +196,31 @@ Ensure-Dir -Path $releaseRoot
 Copy-CleanDirectory -Source $publishDir -Destination $releaseAppRoot
 Copy-CleanDirectory -Source $backendStageRoot -Destination $releaseBackendRoot
 Copy-CleanDirectory -Source $manifestRoot -Destination $releaseManifestRoot
-Ensure-Dir -Path $releaseInstallerRoot
 
 if ($DryRun -or $SkipInstaller) {
     Write-Step "Skipping installer compilation"
 }
 else {
     Write-Step "Compiling installer"
+    Ensure-Dir -Path $installerOutputDir
     $isccPath = Resolve-IsccPath -ExplicitPath $InnoCompilerPath
     $appVersionInfo = ConvertTo-WindowsVersion -Value $Version
     & $isccPath `
         "/DAppVersion=$Version" `
         "/DAppVersionInfo=$appVersionInfo" `
+        ("/DReleaseIdentifier=$releaseIdentifierLabel") `
         "/DPublishDir=$publishDir" `
         "/DBackendBundleDir=$backendStageRoot" `
-        "/DOutputDir=$releaseInstallerRoot" `
+        "/DOutputDir=$installerOutputDir" `
         $installerScript
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE." }
+
+    $versionedInstallerPath = Join-Path $installerOutputDir ("ForgerEMS-Setup-v{0}.exe" -f $Version)
+    if (-not (Test-Path -LiteralPath $versionedInstallerPath)) {
+        throw "Expected installer output was not found: $versionedInstallerPath"
+    }
+
+    Copy-Item -LiteralPath $versionedInstallerPath -Destination (Join-Path $releaseRoot (Split-Path -Leaf $versionedInstallerPath)) -Force
 }
 
 Write-Step "Writing release metadata"
@@ -219,6 +228,7 @@ $metadata = [ordered]@{
     product = "ForgerEMS"
     publisher = "Forger Digital Solutions"
     version = $Version
+    releaseIdentifier = $releaseIdentifierLabel
     channel = "Beta"
     backendVersion = $backendVersion
     runtime = $Runtime
@@ -228,7 +238,13 @@ $metadata = [ordered]@{
 }
 $metadata | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $releaseRoot "release.json") -Encoding UTF8
 
+Write-Step "Copying beta readme if present"
+$betaReadmePath = Join-Path $distRoot ("beta\README-BETA-v{0}.txt" -f $Version)
+if (Test-Path -LiteralPath $betaReadmePath) {
+    Copy-Item -LiteralPath $betaReadmePath -Destination (Join-Path $releaseRoot (Split-Path -Leaf $betaReadmePath)) -Force
+}
+
 Write-Step "Generating SHA256 checksums"
 Write-Checksums -Root $releaseRoot -OutputPath $checksumsPath
 
-Write-Host "ForgerEMS release folder ready: $releaseRoot" -ForegroundColor Green
+Write-Host "ForgerEMS current release folder ready: $releaseRoot" -ForegroundColor Green

@@ -120,10 +120,10 @@ public sealed class ManagedDownloadSummaryService : IManagedDownloadSummaryServi
             var builder = new StringBuilder();
             builder.AppendLine("Managed-download manifest snapshot");
             builder.AppendLine("================================");
-            builder.AppendLine($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
-            builder.AppendLine($"Manifest: {manifestPath}");
-            builder.AppendLine($"Managed auto-download items: {managedItems.Count}");
-            builder.AppendLine($"Seeded placeholder/info shortcuts: {placeholderItems.Count}");
+            builder.AppendLine(FormattableString.Invariant($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC"));
+            builder.AppendLine(FormattableString.Invariant($"Manifest: {manifestPath}"));
+            builder.AppendLine(FormattableString.Invariant($"Managed auto-download items: {managedItems.Count}"));
+            builder.AppendLine(FormattableString.Invariant($"Seeded placeholder/info shortcuts: {placeholderItems.Count}"));
             builder.AppendLine();
             builder.AppendLine("Managed categories");
             builder.AppendLine("------------------");
@@ -132,7 +132,7 @@ public sealed class ManagedDownloadSummaryService : IManagedDownloadSummaryServi
                          .GroupBy(item => GetCategoryKey(item.Destination), StringComparer.OrdinalIgnoreCase)
                          .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase))
             {
-                builder.AppendLine($"- {category.Key}: {string.Join("; ", category.Select(item => item.Name))}");
+                builder.AppendLine(FormattableString.Invariant($"- {category.Key}: {string.Join("; ", category.Select(item => item.Name))}"));
             }
 
             builder.AppendLine();
@@ -191,9 +191,9 @@ public sealed class ManagedDownloadSummaryService : IManagedDownloadSummaryServi
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var paths = new List<string>();
 
-        if (!string.IsNullOrWhiteSpace(backendContext.PrimaryManagedSummaryPath))
+        if (!string.IsNullOrWhiteSpace(BackendContext.PrimaryManagedSummaryPath))
         {
-            paths.Add(backendContext.PrimaryManagedSummaryPath);
+            paths.Add(BackendContext.PrimaryManagedSummaryPath);
         }
 
         if (Directory.Exists(backendContext.ReleaseVerificationHistoryRoot))

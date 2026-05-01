@@ -6,7 +6,9 @@ public enum ScriptActionType
     SetupUsb = 1,
     UpdateUsb = 2,
     RevalidateManagedDownloads = 3,
-    RenameUsb = 4
+    RenameUsb = 4,
+    SystemIntelligence = 5,
+    ToolkitHealth = 6
 }
 
 public sealed class ScriptExecutionResult

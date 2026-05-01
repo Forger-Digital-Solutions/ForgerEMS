@@ -6,6 +6,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
     <AssemblyName>ForgerEMS</AssemblyName>
     <Product>ForgerEMS</Product>
     <Company>Forger Digital Solutions</Company>
@@ -13,10 +15,10 @@
     <Description>Native WPF controller for the ForgerEMS PowerShell backend.</Description>
     <Authors>Forger Digital Solutions</Authors>
     <ApplicationIcon>Assets\ForgerEMS.ico</ApplicationIcon>
-    <Version>1.0.1</Version>
-    <AssemblyVersion>1.0.1.0</AssemblyVersion>
-    <FileVersion>1.0.1.0</FileVersion>
-    <InformationalVersion>1.0.1</InformationalVersion>
+    <Version>1.1.4</Version>
+    <AssemblyVersion>1.1.4.0</AssemblyVersion>
+    <FileVersion>1.1.4.0</FileVersion>
+    <InformationalVersion>1.1.4</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <DebugType>embedded</DebugType>
     <PublishTrimmed>false</PublishTrimmed>
@@ -25,8 +27,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="ForgerEMS.Wpf.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Resource Include="Assets\ForgerEMS.ico" />
     <Resource Include="Assets\ForgerEMS_Icon.png" />
+    <Resource Include="Assets\ForgerEMS_CommandCenterBackground.png" />
+    <Resource Include="Assets\Kyra.png" />
+    <Resource Include="Assets\KyraAdvancedBackground.png" />
   </ItemGroup>
 
 </Project>

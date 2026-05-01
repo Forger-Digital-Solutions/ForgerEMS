@@ -4,12 +4,18 @@
 #define MyAppId "{{9B46E50F-0EF6-4E37-92BB-13C29D43F20B}"
 
 #ifndef AppVersion
-  #define AppVersion "1.0.1"
+  #define AppVersion "1.1.4"
 #endif
 
 #ifndef AppVersionInfo
-  #define AppVersionInfo "1.0.1.0"
+  #define AppVersionInfo "1.1.4.0"
 #endif
+
+#ifndef ReleaseIdentifier
+  #define ReleaseIdentifier "ForgerEMS Beta v1.1.4 - Whole-App Intelligence Preview"
+#endif
+
+#define MyAppIconName "ForgerEMS-v" + AppVersion + "-transparent.ico"
 
 #ifndef PublishDir
   #define PublishDir "..\src\ForgerEMS.Wpf\bin\Release\net8.0-windows\win-x64\publish"
@@ -43,12 +49,12 @@ SolidCompression=yes
 OutputDir={#OutputDir}
 OutputBaseFilename=ForgerEMS-Setup-v{#AppVersion}
 SetupIconFile=..\src\ForgerEMS.Wpf\Assets\ForgerEMS.ico
-UninstallDisplayIcon={app}\{#MyAppExeName}
+UninstallDisplayIcon={app}\{#MyAppIconName}
 VersionInfoVersion={#AppVersionInfo}
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoProductName={#MyAppName}
 VersionInfoProductVersion={#AppVersionInfo}
-VersionInfoDescription={#MyAppName} installer
+VersionInfoDescription={#ReleaseIdentifier} installer
 SetupLogging=yes
 AllowNoIcons=yes
 UsePreviousAppDir=yes
@@ -62,6 +68,12 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [InstallDelete]
+Type: files; Name: "{autodesktop}\ForgerEMS.lnk"
+Type: files; Name: "{commondesktop}\ForgerEMS.lnk"
+Type: files; Name: "{autoprograms}\ForgerEMS.lnk"
+Type: files; Name: "{commonprograms}\ForgerEMS.lnk"
+Type: files; Name: "{app}\ForgerEMS.ico"
+Type: files; Name: "{app}\ForgerEMS-v*.ico"
 Type: filesandordirs; Name: "{app}\backend"
 Type: filesandordirs; Name: "{app}\manifests"
 Type: filesandordirs; Name: "{app}\docs"
@@ -79,19 +91,37 @@ Type: files; Name: "{app}\SIGNATURE.txt"
 
 [Files]
 Source: "{#PublishDir}\ForgerEMS.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\src\ForgerEMS.Wpf\Assets\ForgerEMS.ico"; DestDir: "{app}"; DestName: "ForgerEMS.ico"; Flags: ignoreversion
+Source: "..\src\ForgerEMS.Wpf\Assets\ForgerEMS.ico"; DestDir: "{app}"; DestName: "{#MyAppIconName}"; Flags: ignoreversion
 Source: "{#BackendBundleDir}\*"; DestDir: "{app}\backend"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\manifests\*"; DestDir: "{app}\manifests"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\installer\ForgerEMS-Installed-README.txt"; DestDir: "{app}\docs"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\ForgerEMS"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\ForgerEMS.ico"
-Name: "{autodesktop}\ForgerEMS"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\ForgerEMS.ico"; Tasks: desktopicon
+Name: "{autoprograms}\ForgerEMS"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#MyAppIconName}"
+Name: "{autodesktop}\ForgerEMS"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#MyAppIconName}"; Check: ShouldCreateDesktopIcon
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch ForgerEMS"; Flags: nowait postinstall skipifsilent unchecked
 
+[Code]
+var
+  HadDesktopIcon: Boolean;
+
+function InitializeSetup(): Boolean;
+begin
+  HadDesktopIcon :=
+    FileExists(ExpandConstant('{autodesktop}\ForgerEMS.lnk')) or
+    FileExists(ExpandConstant('{commondesktop}\ForgerEMS.lnk'));
+  Result := True;
+end;
+
+function ShouldCreateDesktopIcon(): Boolean;
+begin
+  Result := HadDesktopIcon or WizardIsTaskSelected('desktopicon');
+end;
+
 [UninstallDelete]
+Type: files; Name: "{app}\ForgerEMS-v*.ico"
 Type: filesandordirs; Name: "{app}\backend"
 Type: filesandordirs; Name: "{app}\manifests"
 Type: filesandordirs; Name: "{app}\docs"
