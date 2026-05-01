@@ -6,6 +6,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$script:SystemIntelligenceLogPath = $null
+$script:SystemIntelligenceLogFailed = $false
 
 function Write-ScanLog {
     param(
@@ -13,7 +15,22 @@ function Write-ScanLog {
         [ValidateSet("INFO", "OK", "WARN", "ERROR")][string]$Level = "INFO"
     )
 
-    Write-Host ("[{0}] {1}" -f $Level, $Message)
+    $line = "[{0}] {1:yyyy-MM-dd HH:mm:ss} {2}" -f $Level, (Get-Date), $Message
+    Write-Host $line
+    if (-not $script:SystemIntelligenceLogFailed -and -not [string]::IsNullOrWhiteSpace($script:SystemIntelligenceLogPath)) {
+        try {
+            $logDirectory = Split-Path -Parent $script:SystemIntelligenceLogPath
+            if (-not [string]::IsNullOrWhiteSpace($logDirectory)) {
+                New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
+            }
+
+            Add-Content -LiteralPath $script:SystemIntelligenceLogPath -Value $line -Encoding UTF8
+        }
+        catch {
+            $script:SystemIntelligenceLogFailed = $true
+            Write-Host ("[WARN] Failed to write System Intelligence log: {0}" -f $_.Exception.Message)
+        }
+    }
 }
 
 function Invoke-Optional {
@@ -26,7 +43,249 @@ function Invoke-Optional {
         return & $ScriptBlock
     }
     catch {
+        Write-ScanLog ("Optional provider failed: {0}" -f $_.Exception.Message) "WARN"
         return $Default
+    }
+}
+
+function New-ProviderField {
+    param(
+        [object]$Value,
+        [string]$Status,
+        [string]$Source,
+        [string]$Reason,
+        [string]$FriendlyDisplayText
+    )
+
+    [ordered]@{
+        value = $Value
+        status = $Status
+        source = $Source
+        reason = $Reason
+        friendlyDisplayText = $FriendlyDisplayText
+    }
+}
+
+function Get-FirmwareTypeDisplay {
+    $firmwareType = Invoke-Optional {
+        (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control" -Name PEFirmwareType -ErrorAction Stop).PEFirmwareType
+    }
+
+    switch ([int]$firmwareType) {
+        1 { return "Legacy BIOS" }
+        2 { return "UEFI" }
+        default { return "Unknown firmware mode" }
+    }
+}
+
+function Get-SecureBootInfo {
+    Write-ScanLog "Checking Secure Boot state."
+    try {
+        $value = Confirm-SecureBootUEFI -ErrorAction Stop
+        if ($value) {
+            return New-ProviderField -Value $true -Status "READY" -Source "Confirm-SecureBootUEFI" -Reason "" -FriendlyDisplayText "Enabled"
+        }
+
+        return New-ProviderField -Value $false -Status "WARNING" -Source "Confirm-SecureBootUEFI" -Reason "Secure Boot is disabled in firmware." -FriendlyDisplayText "Disabled"
+    }
+    catch {
+        $firmware = Get-FirmwareTypeDisplay
+        $message = $_.Exception.Message
+        if ($firmware -eq "Legacy BIOS" -or $message -match "Cmdlet not supported|not supported") {
+            return New-ProviderField -Value $null -Status "UNKNOWN" -Source "Confirm-SecureBootUEFI + registry" -Reason "Secure Boot requires UEFI firmware." -FriendlyDisplayText "Unsupported / Legacy BIOS"
+        }
+
+        return New-ProviderField -Value $null -Status "UNKNOWN" -Source "Confirm-SecureBootUEFI + registry" -Reason $message -FriendlyDisplayText "Unknown - requires admin or unavailable"
+    }
+}
+
+function Get-TpmInfo {
+    Write-ScanLog "Checking TPM state."
+    try {
+        $value = Get-Tpm -ErrorAction Stop
+        $friendly = if (-not $value.TpmPresent) {
+            "TPM not detected"
+        }
+        elseif ($value.TpmReady) {
+            "TPM ready for Windows 11"
+        }
+        elseif (-not $value.TpmEnabled) {
+            "TPM disabled in firmware"
+        }
+        else {
+            "TPM present but not ready"
+        }
+
+        $status = if ($value.TpmPresent -and $value.TpmReady) { "READY" } elseif ($value.TpmPresent) { "WARNING" } else { "CRITICAL" }
+        return [ordered]@{
+            present = [bool]$value.TpmPresent
+            enabled = [bool]$value.TpmEnabled
+            activated = [bool]$value.TpmActivated
+            ready = [bool]$value.TpmReady
+            manufacturer = [string]$value.ManufacturerIdTxt
+            version = [string]$value.ManufacturerVersion
+            status = $status
+            source = "Get-Tpm"
+            reason = if ($status -eq "READY") { "" } else { "TPM is not fully ready for Windows security features." }
+            friendlyDisplayText = $friendly
+        }
+    }
+    catch {
+        $fallback = Invoke-Optional {
+            Get-CimInstance -Namespace "root\CIMV2\Security\MicrosoftTpm" -ClassName Win32_Tpm -ErrorAction Stop | Select-Object -First 1
+        }
+        if ($null -ne $fallback) {
+            $enabled = [bool]($fallback.IsEnabled_InitialValue)
+            $activated = [bool]($fallback.IsActivated_InitialValue)
+            $ready = $enabled -and $activated
+            return [ordered]@{
+                present = $true
+                enabled = $enabled
+                activated = $activated
+                ready = $ready
+                manufacturer = [string]$fallback.ManufacturerId
+                version = [string]$fallback.ManufacturerVersion
+                status = if ($ready) { "READY" } else { "WARNING" }
+                source = "Win32_Tpm"
+                reason = if ($ready) { "" } else { "TPM exists but is not enabled and activated." }
+                friendlyDisplayText = if ($ready) { "TPM ready for Windows 11" } elseif (-not $enabled) { "TPM disabled in firmware" } else { "TPM present but not ready" }
+            }
+        }
+
+        return [ordered]@{
+            present = $null
+            enabled = $null
+            activated = $null
+            ready = $null
+            manufacturer = ""
+            version = ""
+            status = "UNKNOWN"
+            source = "Get-Tpm + Win32_Tpm"
+            reason = $_.Exception.Message
+            friendlyDisplayText = "TPM status unavailable"
+        }
+    }
+}
+
+function Get-LicenseDisplay {
+    param($LicenseProduct, $OperatingSystem)
+
+    $osName = if ($null -ne $OperatingSystem) { [string]$OperatingSystem.Caption } else { "Windows" }
+    if ($null -eq $LicenseProduct) {
+        return [ordered]@{
+            channel = "Unknown license channel"
+            rawDescription = "Not reported"
+            status = "UNKNOWN"
+            friendlyDisplayText = ("{0} - license channel unavailable" -f $osName)
+        }
+    }
+
+    $raw = [string]$LicenseProduct.Description
+    $channel = switch -Regex ($raw) {
+        "OEM_DM" { "OEM digital license"; break }
+        "OEM" { "OEM license"; break }
+        "RETAIL" { "Retail license"; break }
+        "VOLUME_KMSCLIENT|VOLUME_KMS" { "Volume/KMS client"; break }
+        "VOLUME_MAK" { "Volume/MAK license"; break }
+        default { "License channel reported by Windows" }
+    }
+
+    [ordered]@{
+        channel = $channel
+        rawDescription = $raw
+        status = [string]$LicenseProduct.LicenseStatus
+        friendlyDisplayText = ("{0} - {1}" -f $osName, $channel)
+    }
+}
+
+function Test-VirtualNetworkAdapter {
+    param(
+        [string]$Name,
+        [string]$Description
+    )
+
+    $combined = ("{0} {1}" -f $Name, $Description)
+    return $combined -match "(?i)virtual|hyper-v|virtualbox|vmware|vpn|tap|wintun|wireguard|tailscale|zerotier|loopback|host-only|bluetooth"
+}
+
+function Get-GpuType {
+    param([string]$Name)
+
+    if ($Name -match "(?i)intel|uhd|iris|vega\s+\d|radeon\(tm\)\s+graphics|amd radeon graphics") {
+        return "Integrated"
+    }
+
+    if ($Name -match "(?i)nvidia|geforce|rtx|gtx|quadro|radeon\s+(rx|pro)|arc") {
+        return "Dedicated"
+    }
+
+    return "Unknown"
+}
+
+function Get-WifiState {
+    param([string]$NetshText)
+
+    if ([string]::IsNullOrWhiteSpace($NetshText)) {
+        return [ordered]@{
+            connected = $false
+            signalPercent = $null
+            friendlyDisplayText = "Wi-Fi not connected"
+            source = "netsh wlan show interfaces"
+        }
+    }
+
+    $state = if ($NetshText -match "^\s*State\s+:\s+(.+)$") { $Matches[1].Trim() } else { "" }
+    if ($state -notmatch "(?i)connected") {
+        return [ordered]@{
+            connected = $false
+            signalPercent = $null
+            friendlyDisplayText = "Wi-Fi not connected"
+            source = "netsh wlan show interfaces"
+        }
+    }
+
+    $signal = if ($NetshText -match "Signal\s+:\s+([0-9]+)%") { [int]$Matches[1] } else { $null }
+    return [ordered]@{
+        connected = $true
+        signalPercent = $signal
+        friendlyDisplayText = if ($null -ne $signal) { "Wi-Fi connected - {0}% signal" -f $signal } else { "Wi-Fi connected - signal unavailable" }
+        source = "netsh wlan show interfaces"
+    }
+}
+
+function Get-BatteryReportData {
+    Write-ScanLog "Checking powercfg battery report fallback."
+    $reportPath = Join-Path ([IO.Path]::GetTempPath()) "forgerems-battery.html"
+    try {
+        powercfg /batteryreport /output $reportPath /duration 1 | Out-Null
+        if (-not (Test-Path -LiteralPath $reportPath)) {
+            return $null
+        }
+
+        $html = Get-Content -LiteralPath $reportPath -Raw -ErrorAction Stop
+        $design = $null
+        $full = $null
+        $cycle = $null
+        if ($html -match "(?is)DESIGN CAPACITY.*?([0-9][0-9,\.]*)\s*mWh") {
+            $design = [double](($Matches[1] -replace ",", ""))
+        }
+        if ($html -match "(?is)FULL CHARGE CAPACITY.*?([0-9][0-9,\.]*)\s*mWh") {
+            $full = [double](($Matches[1] -replace ",", ""))
+        }
+        if ($html -match "(?is)CYCLE COUNT.*?([0-9][0-9,\.]*)") {
+            $cycle = [int](($Matches[1] -replace ",", ""))
+        }
+
+        return [ordered]@{
+            designCapacity = $design
+            fullChargeCapacity = $full
+            cycleCount = $cycle
+            source = "powercfg /batteryreport"
+        }
+    }
+    catch {
+        Write-ScanLog ("Battery report fallback failed: {0}" -f $_.Exception.Message) "WARN"
+        return $null
     }
 }
 
@@ -34,6 +293,7 @@ function ConvertTo-StatusRank {
     param([string]$Status)
 
     switch ($Status) {
+        "CRITICAL" { return 5 }
         "WARNING" { return 4 }
         "WATCH" { return 3 }
         "UNKNOWN" { return 2 }
@@ -118,32 +378,32 @@ function Convert-BytesToGigabytes {
 function Get-PricingProviders {
     return @(
         [ordered]@{
-            name = "eBay sold listings"
-            key = "ebaySoldListings"
+            name = "eBay active comps"
+            key = "ebayActiveComps"
             configured = $false
             status = "Pricing provider not configured"
-            notes = "Provider interface reserved for future API-backed sold-listing comps."
+            notes = "Official API path only. Active comps can be supported when configured; sold comps are not configured in this beta."
         },
         [ordered]@{
             name = "OfferUp"
             key = "offerUp"
             configured = $false
             status = "Pricing provider not configured"
-            notes = "Provider interface reserved for future local marketplace comps."
+            notes = "Manual/future source only in this beta."
         },
         [ordered]@{
             name = "Facebook Marketplace"
             key = "facebookMarketplace"
             configured = $false
             status = "Pricing provider not configured"
-            notes = "Provider interface reserved for future marketplace comps."
+            notes = "Manual/future source only in this beta."
         },
         [ordered]@{
             name = "Generic web price provider"
             key = "genericWeb"
             configured = $false
             status = "Pricing provider not configured"
-            notes = "Optional future online provider hook. Disabled by default."
+            notes = "Optional future online provider hook. Disabled by default; offline estimator remains primary."
         }
     )
 }
@@ -285,6 +545,21 @@ function New-FlipValueReport {
         suggestedListingTitle = $title
         suggestedListingDescription = "Local ForgerEMS estimate only. Include exact condition, photos, battery/storage health, charger status, Windows activation state, and any defects. Marketplace comps are not configured yet."
         suggestedUpgradeRecommendations = @($upgradeRecommendations)
+        missingInfoNeeded = @(
+            "Cosmetic condition",
+            "Screen condition",
+            "Keyboard/trackpad condition",
+            "Hinge condition",
+            "Charger included",
+            "Known defects/damage"
+        )
+        listingPhotoChecklist = @(
+            "Front/lid and exterior corners",
+            "Keyboard + touchpad close-up",
+            "Screen on with no dead pixels",
+            "System specs screen",
+            "Ports and charger"
+        )
         pricingProviders = @(Get-PricingProviders)
     }
 }
@@ -318,11 +593,14 @@ function Format-TimeSpanValue {
     return ("{0}d {1}h {2}m" -f [int]$Value.TotalDays, $Value.Hours, $Value.Minutes)
 }
 
+$localAppData = [Environment]::GetFolderPath("LocalApplicationData")
+if ([string]::IsNullOrWhiteSpace($localAppData)) {
+    $localAppData = [IO.Path]::GetTempPath()
+}
+
+$script:SystemIntelligenceLogPath = Join-Path $localAppData "ForgerEMS\logs\system-intelligence.log"
+
 if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
-    $localAppData = [Environment]::GetFolderPath("LocalApplicationData")
-    if ([string]::IsNullOrWhiteSpace($localAppData)) {
-        $localAppData = [IO.Path]::GetTempPath()
-    }
 
     $OutputDirectory = Join-Path $localAppData "ForgerEMS\Runtime\reports"
 }
@@ -339,8 +617,8 @@ Write-ScanLog "Collecting OS, CPU, RAM, GPU, disk, battery, network, and securit
 $computerSystem = Invoke-Optional { Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction Stop }
 $operatingSystem = Invoke-Optional { Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop }
 $bios = Invoke-Optional { Get-CimInstance -ClassName Win32_BIOS -ErrorAction Stop }
-$tpm = Invoke-Optional { Get-Tpm -ErrorAction Stop }
-$secureBoot = Invoke-Optional { Confirm-SecureBootUEFI -ErrorAction Stop }
+$tpmInfo = Get-TpmInfo
+$secureBootInfo = Get-SecureBootInfo
 $processor = Invoke-Optional { Get-CimInstance -ClassName Win32_Processor -ErrorAction Stop | Select-Object -First 1 }
 $gpus = @(Invoke-Optional { Get-CimInstance -ClassName Win32_VideoController -ErrorAction Stop } @())
 $batteries = @(Invoke-Optional { Get-CimInstance -ClassName Win32_Battery -ErrorAction Stop } @())
@@ -362,6 +640,8 @@ $licenseProduct = Invoke-Optional {
         Select-Object -First 1
 }
 $wifiInterfaceText = Invoke-Optional { netsh wlan show interfaces 2>$null | Out-String } ""
+$wifiState = Get-WifiState -NetshText $wifiInterfaceText
+$batteryReportFallback = Get-BatteryReportData
 
 $lastBoot = Invoke-Optional {
     if ($null -ne $operatingSystem -and $null -ne $operatingSystem.LastBootUpTime) {
@@ -391,7 +671,17 @@ $totalMemoryBytes = if ($null -ne $computerSystem) { [double]$computerSystem.Tot
 $freeMemoryBytes = if ($null -ne $operatingSystem) { [double]$operatingSystem.FreePhysicalMemory * 1KB } else { $null }
 $usedMemoryBytes = if ($null -ne $totalMemoryBytes -and $null -ne $freeMemoryBytes) { $totalMemoryBytes - $freeMemoryBytes } else { $null }
 $usedMemoryPercent = if ($null -ne $totalMemoryBytes -and $totalMemoryBytes -gt 0 -and $null -ne $usedMemoryBytes) { [math]::Round(($usedMemoryBytes / $totalMemoryBytes) * 100, 1) } else { $null }
-$memorySpeeds = @($memoryModules | Where-Object { $_.Speed } | ForEach-Object { $_.Speed } | Select-Object -Unique)
+$memoryRatedSpeeds = @($memoryModules | Where-Object { $_.Speed } | ForEach-Object { [int]$_.Speed } | Select-Object -Unique | Sort-Object)
+$memoryConfiguredSpeeds = @($memoryModules | Where-Object { $_.ConfiguredClockSpeed } | ForEach-Object { [int]$_.ConfiguredClockSpeed } | Select-Object -Unique | Sort-Object)
+$memoryTypeCode = @($memoryModules | Where-Object { $_.SMBIOSMemoryType } | Select-Object -First 1).SMBIOSMemoryType
+$memoryType = switch ([int]$memoryTypeCode) {
+    20 { "DDR" }
+    21 { "DDR2" }
+    24 { "DDR3" }
+    26 { "DDR4" }
+    34 { "DDR5" }
+    default { "RAM" }
+}
 $memorySlotsTotal = @($memoryArrays | Where-Object { $_.MemoryDevices } | Select-Object -First 1).MemoryDevices
 $memorySlotsUsed = @($memoryModules | Where-Object { $_.Capacity -gt 0 }).Count
 $memorySlotsFree = if ($null -ne $memorySlotsTotal -and [int]$memorySlotsTotal -ge $memorySlotsUsed) { [int]$memorySlotsTotal - $memorySlotsUsed } else { $null }
@@ -404,6 +694,20 @@ elseif ($memorySlotsUsed -gt 0) {
 else {
     "RAM upgrade path could not be detected."
 }
+$memoryConfiguredDisplay = if ($memoryConfiguredSpeeds.Count -gt 0) { (($memoryConfiguredSpeeds | ForEach-Object { "{0} MT/s" -f $_ }) -join ", ") } else { "Configured speed not reported" }
+$memoryRatedDisplay = if ($memoryRatedSpeeds.Count -gt 0) { (($memoryRatedSpeeds | ForEach-Object { "{0} MT/s" -f $_ }) -join ", ") } else { "Module rated speed not reported" }
+$memoryInstalledDisplay = if ($null -ne $totalMemoryBytes -and $totalMemoryBytes -gt 0) { "{0} {1}" -f (Format-Bytes -Bytes $totalMemoryBytes), $memoryType } else { "Installed RAM not reported" }
+$memorySlotsDisplay = if ($null -ne $memorySlotsTotal -and $memorySlotsTotal -gt 0) { "Slots: {0}/{1} used" -f $memorySlotsUsed, $memorySlotsTotal } else { "Slot count not reported" }
+$memoryModuleReports = @($memoryModules | ForEach-Object {
+    [ordered]@{
+        bankLabel = [string]$_.BankLabel
+        capacity = Format-Bytes -Bytes ([double]$_.Capacity)
+        configuredSpeed = if ($_.ConfiguredClockSpeed) { "{0} MT/s" -f $_.ConfiguredClockSpeed } else { "Configured speed not reported" }
+        ratedSpeed = if ($_.Speed) { "{0} MT/s" -f $_.Speed } else { "Module rated speed not reported" }
+        manufacturer = if ([string]::IsNullOrWhiteSpace([string]$_.Manufacturer)) { "Manufacturer not reported" } else { [string]$_.Manufacturer }
+        partNumber = if ([string]::IsNullOrWhiteSpace([string]$_.PartNumber)) { "Part number not reported" } else { ([string]$_.PartNumber).Trim() }
+    }
+})
 $ramStatus = "UNKNOWN"
 if ($null -ne $totalMemoryBytes -and $totalMemoryBytes -gt 0 -and $null -ne $freeMemoryBytes) {
     $freePercent = [math]::Round(($freeMemoryBytes / $totalMemoryBytes) * 100, 1)
@@ -424,11 +728,11 @@ $osStatus = if ($null -eq $operatingSystem) { "UNKNOWN" } else { "READY" }
 if ($osStatus -eq "UNKNOWN") {
     Add-Recommendation -Recommendations $recommendations -Text "OS inventory could not be read. Run the scan from an elevated Windows PowerShell session if details are missing."
 }
-if ($secureBoot -eq $false) {
+if ($secureBootInfo.value -eq $false) {
     Add-Recommendation -Recommendations $recommendations -Text "Secure Boot is disabled. Confirm this is intentional before trusting boot-chain security."
     Add-UniqueText -Items $obviousProblems -Text "Secure Boot is disabled."
 }
-if ($null -ne $tpm -and (-not $tpm.TpmPresent -or -not $tpm.TpmReady)) {
+if ($tpmInfo.present -eq $false -or ($tpmInfo.present -eq $true -and $tpmInfo.ready -ne $true)) {
     Add-Recommendation -Recommendations $recommendations -Text "TPM is missing or not ready. Review device security and BitLocker readiness."
     Add-UniqueText -Items $obviousProblems -Text "TPM is missing or not ready."
 }
@@ -482,13 +786,17 @@ foreach ($disk in $physicalDisks) {
         interfaceType = [string]$disk.BusType
         mediaType = [string]$disk.MediaType
         size = Format-Bytes -Bytes ([double]$disk.Size)
-        health = $health
+        health = if ([string]::IsNullOrWhiteSpace($health)) { "Health not reported" } else { $health }
+        healthDisplay = if ([string]::IsNullOrWhiteSpace($health)) { "Health not reported by Windows storage stack" } else { $health }
         operationalStatus = $operational
         temperatureC = $temperature
+        temperatureDisplay = if ($null -ne $temperature) { "{0} C" -f $temperature } else { "Temp unavailable - drive does not expose sensor through Windows storage stack." }
         wearPercent = $wear
+        wearDisplay = if ($null -ne $wear) { "{0}%" -f $wear } else { "Wear unavailable - drive does not expose life counter through Windows storage stack." }
         readErrorsTotal = $readErrors
         writeErrorsTotal = $writeErrors
         status = $diskStatus
+        reason = if ($null -eq $temperature -or $null -eq $wear) { "Some reliability counters are not exposed by this drive or driver." } else { "" }
     }
 }
 
@@ -530,13 +838,24 @@ foreach ($battery in $batteries) {
     if ($null -eq $designCapacity -and $batteryStaticData.Count -gt 0) {
         $designCapacity = ($batteryStaticData | Select-Object -First 1).DesignedCapacity
     }
+    if (($null -eq $designCapacity -or [double]$designCapacity -le 0) -and $null -ne $batteryReportFallback) {
+        $designCapacity = $batteryReportFallback.designCapacity
+    }
     if ($null -eq $fullChargeCapacity -and $batteryFullChargedCapacity.Count -gt 0) {
         $fullChargeCapacity = ($batteryFullChargedCapacity | Select-Object -First 1).FullChargedCapacity
+    }
+    if (($null -eq $fullChargeCapacity -or [double]$fullChargeCapacity -le 0) -and $null -ne $batteryReportFallback) {
+        $fullChargeCapacity = $batteryReportFallback.fullChargeCapacity
     }
     $cycleCount = if ($battery.PSObject.Properties.Name -contains "CycleCount") { $battery.CycleCount } else { $null }
     if ($null -eq $cycleCount -and $batteryCycleCount.Count -gt 0) {
         $cycleCount = ($batteryCycleCount | Select-Object -First 1).CycleCount
     }
+    if (($null -eq $cycleCount -or [int]$cycleCount -le 0) -and $null -ne $batteryReportFallback) {
+        $cycleCount = $batteryReportFallback.cycleCount
+    }
+    if ($null -ne $designCapacity -and [double]$designCapacity -le 0) { $designCapacity = $null }
+    if ($null -ne $fullChargeCapacity -and [double]$fullChargeCapacity -le 0) { $fullChargeCapacity = $null }
     $wearPercent = if ($null -ne $designCapacity -and [double]$designCapacity -gt 0 -and $null -ne $fullChargeCapacity) {
         [math]::Round((1 - ([double]$fullChargeCapacity / [double]$designCapacity)) * 100, 1)
     }
@@ -562,12 +881,18 @@ foreach ($battery in $batteries) {
         name = [string]$battery.Name
         estimatedChargeRemaining = $charge
         designCapacity = $designCapacity
+        designCapacityDisplay = if ($null -ne $designCapacity) { "{0:N0} mWh" -f [double]$designCapacity } else { "Design capacity not reported" }
         fullChargeCapacity = $fullChargeCapacity
+        fullChargeCapacityDisplay = if ($null -ne $fullChargeCapacity) { "{0:N0} mWh" -f [double]$fullChargeCapacity } else { "Full charge capacity not reported" }
         wearPercent = $wearPercent
+        wearDisplay = if ($null -ne $wearPercent) { "{0}%" -f $wearPercent } elseif ($null -eq $designCapacity) { "Wear unavailable - design capacity not reported" } else { "Wear unavailable - full charge capacity not reported" }
         cycleCount = $cycleCount
+        cycleCountDisplay = if ($null -ne $cycleCount) { [string]$cycleCount } else { "Cycle count not reported" }
         acConnected = if ($null -ne $battery.BatteryStatus) { $battery.BatteryStatus -in @(2, 6, 7, 8, 9) } else { $null }
         batteryStatusCode = $battery.BatteryStatus
         status = $batteryStatus
+        healthDisplay = if ($batteryStatus -eq "READY") { "Battery health looks acceptable" } elseif ($null -ne $wearPercent) { "Battery wear is {0}%" -f $wearPercent } else { "Battery health limited - capacity data unavailable" }
+        source = if ($null -ne $batteryReportFallback) { "Win32_Battery + WMI + powercfg" } else { "Win32_Battery + WMI" }
     }
 }
 $batteryOverallStatus = if ($batteryReports.Count -eq 0) { "UNKNOWN" } else { Get-WorstStatus -Statuses @($batteryReports | ForEach-Object { $_.status }) }
@@ -577,9 +902,11 @@ $networkStatus = if ($networkAdapters.Count -gt 0) { "READY" } else { "WATCH" }
 if ($networkAdapters.Count -eq 0) {
     Add-Recommendation -Recommendations $recommendations -Text "No active IP-enabled network adapter was detected."
 }
-$wifiSignal = $null
-if (-not [string]::IsNullOrWhiteSpace($wifiInterfaceText) -and $wifiInterfaceText -match "Signal\s+:\s+([0-9]+)%") {
-    $wifiSignal = [int]$Matches[1]
+$defaultRouteRaw = Invoke-Optional {
+    Get-NetRoute -DestinationPrefix "0.0.0.0/0" -ErrorAction Stop |
+        Where-Object { $_.NextHop -and $_.NextHop -ne "0.0.0.0" } |
+        Sort-Object RouteMetric |
+        Select-Object -First 1
 }
 $networkReport = @($networkAdapters | ForEach-Object {
     $configAdapter = $_
@@ -593,7 +920,11 @@ $networkReport = @($networkAdapters | ForEach-Object {
         Select-Object -First 1
     $hasApipa = @($ipAddresses | Where-Object { $_ -like "169.254.*" }).Count -gt 0
     $hasGateway = @($gateways | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }).Count -gt 0
-    if ($hasApipa -or -not $hasGateway) {
+    $name = if ($matchingNetAdapter) { [string]$matchingNetAdapter.Name } else { [string]$_.Description }
+    $description = [string]$_.Description
+    $isVirtual = Test-VirtualNetworkAdapter -Name $name -Description $description
+    $isDefaultRoute = $null -ne $defaultRouteRaw -and $matchingNetAdapter -and [int]$matchingNetAdapter.ifIndex -eq [int]$defaultRouteRaw.ifIndex
+    if ((-not $isVirtual) -and ($isDefaultRoute -or $hasGateway) -and ($hasApipa -or -not $hasGateway)) {
         $script:networkStatus = if ($script:networkStatus -eq "READY") { "WATCH" } else { $script:networkStatus }
         if ($hasApipa) {
             Add-Recommendation -Recommendations $recommendations -Text ("Adapter '{0}' has an APIPA address. Check DHCP, cable, Wi-Fi association, or static IP settings." -f $_.Description)
@@ -606,8 +937,8 @@ $networkReport = @($networkAdapters | ForEach-Object {
     }
 
     [ordered]@{
-        description = [string]$_.Description
-        name = if ($matchingNetAdapter) { [string]$matchingNetAdapter.Name } else { [string]$_.Description }
+        description = $description
+        name = $name
         macAddress = [string]$_.MACAddress
         linkSpeed = if ($matchingNetAdapter) { [string]$matchingNetAdapter.LinkSpeed } else { "" }
         driverInterface = if ($matchingNetAdapter) { [string]$matchingNetAdapter.InterfaceDescription } else { "" }
@@ -617,14 +948,42 @@ $networkReport = @($networkAdapters | ForEach-Object {
         dnsServers = @($_.DNSServerSearchOrder)
         apipaDetected = $hasApipa
         gatewayPresent = $hasGateway
-        wifiSignalPercent = $wifiSignal
+        isVirtual = $isVirtual
+        isDefaultRoute = $isDefaultRoute
+        adapterRole = if ($isVirtual) { "Virtual adapter" } elseif ($description -match "(?i)wi-fi|wireless|wlan|802\.11") { "Wi-Fi" } else { "Physical adapter" }
+        wifiSignalPercent = if ($description -match "(?i)wi-fi|wireless|wlan|802\.11" -and $wifiState.connected) { $wifiState.signalPercent } else { $null }
+        wifiDisplay = if ($description -match "(?i)wi-fi|wireless|wlan|802\.11") { $wifiState.friendlyDisplayText } else { "Not a Wi-Fi adapter" }
     }
 })
+$physicalNetworkReport = @($networkReport | Where-Object { -not $_.isVirtual })
+$virtualNetworkReport = @($networkReport | Where-Object { $_.isVirtual })
+$defaultRouteAdapter = if ($null -ne $defaultRouteRaw) {
+    $networkReport | Where-Object { $_.isDefaultRoute } | Select-Object -First 1
+}
+else {
+    $null
+}
 $internetCheck = Invoke-Optional { Test-NetConnection -ComputerName "1.1.1.1" -Port 443 -InformationLevel Quiet -WarningAction SilentlyContinue -ErrorAction Stop } $false
 if (-not $internetCheck) {
     $networkStatus = if ($networkStatus -eq "READY") { "WATCH" } else { $networkStatus }
     Add-Recommendation -Recommendations $recommendations -Text "Internet connectivity check did not pass against 1.1.1.1:443. Confirm network before downloads."
     Add-UniqueText -Items $obviousProblems -Text "Internet connectivity check failed."
+}
+$internetDisplay = if ($internetCheck) { "Internet: Working" } else { "Internet: Check failed" }
+$defaultRouteDisplay = if ($null -ne $defaultRouteAdapter) {
+    "Default route: {0}" -f $defaultRouteAdapter.name
+}
+elseif ($null -ne $defaultRouteRaw) {
+    "Default route: interface {0}" -f $defaultRouteRaw.ifIndex
+}
+else {
+    "Default route: not detected"
+}
+$virtualIgnoredDisplay = if ($virtualNetworkReport.Count -gt 0) {
+    "Virtual adapters ignored: {0}" -f (($virtualNetworkReport | Select-Object -ExpandProperty name) -join ", ")
+}
+else {
+    "Virtual adapters ignored: none"
 }
 
 Write-ScanLog "Checking Defender and registered antivirus state."
@@ -660,6 +1019,20 @@ if ($firewallEnabled -eq $false) {
     Add-Recommendation -Recommendations $recommendations -Text "One or more Windows Firewall profiles are disabled."
     Add-UniqueText -Items $obviousProblems -Text "One or more Windows Firewall profiles are disabled."
 }
+$manageBdeStatusText = $null
+$bitLockerUnavailableReason = ""
+if ($bitLockerVolumes.Count -eq 0) {
+    $manageBdeStatusText = Invoke-Optional { manage-bde -status $env:SystemDrive 2>&1 | Out-String } ""
+    if ([string]::IsNullOrWhiteSpace($manageBdeStatusText)) {
+        $bitLockerUnavailableReason = "Unavailable - requires admin, unsupported Windows edition, or BitLocker command not present."
+    }
+    elseif ($manageBdeStatusText -match "(?i)access is denied|administrator") {
+        $bitLockerUnavailableReason = "Unavailable - requires admin."
+    }
+    elseif ($manageBdeStatusText -match "(?i)not recognized|not found") {
+        $bitLockerUnavailableReason = "Unavailable on this Windows edition."
+    }
+}
 $bitLockerReport = @($bitLockerVolumes | ForEach-Object {
     [ordered]@{
         mountPoint = [string]$_.MountPoint
@@ -668,6 +1041,30 @@ $bitLockerReport = @($bitLockerVolumes | ForEach-Object {
         encryptionPercentage = $_.EncryptionPercentage
     }
 })
+$bitLockerSummary = if ($bitLockerReport.Count -gt 0) {
+    $osVolume = $bitLockerReport | Where-Object { $_.mountPoint -eq $env:SystemDrive } | Select-Object -First 1
+    if ($null -eq $osVolume) {
+        New-ProviderField -Value "Unknown" -Status "UNKNOWN" -Source "Get-BitLockerVolume" -Reason "OS volume was not returned by BitLocker provider." -FriendlyDisplayText "BitLocker status unavailable for OS volume"
+    }
+    elseif ([string]$osVolume.protectionStatus -match "On") {
+        New-ProviderField -Value "Enabled" -Status "READY" -Source "Get-BitLockerVolume" -Reason "" -FriendlyDisplayText "Enabled"
+    }
+    elseif ([string]$osVolume.volumeStatus -match "Suspended") {
+        New-ProviderField -Value "Suspended" -Status "WARNING" -Source "Get-BitLockerVolume" -Reason "OS volume protection is suspended." -FriendlyDisplayText "Suspended"
+    }
+    else {
+        New-ProviderField -Value "Disabled" -Status "WATCH" -Source "Get-BitLockerVolume" -Reason "OS volume protection is not enabled." -FriendlyDisplayText "Disabled"
+    }
+}
+elseif ($manageBdeStatusText -match "(?i)Protection Status:\s+Protection On") {
+    New-ProviderField -Value "Enabled" -Status "READY" -Source "manage-bde" -Reason "" -FriendlyDisplayText "Enabled"
+}
+elseif ($manageBdeStatusText -match "(?i)Protection Status:\s+Protection Off") {
+    New-ProviderField -Value "Disabled" -Status "WATCH" -Source "manage-bde" -Reason "OS volume protection is not enabled." -FriendlyDisplayText "Disabled"
+}
+else {
+    New-ProviderField -Value $null -Status "UNKNOWN" -Source "Get-BitLockerVolume + manage-bde" -Reason $bitLockerUnavailableReason -FriendlyDisplayText ("Unavailable - {0}" -f ($(if ([string]::IsNullOrWhiteSpace($bitLockerUnavailableReason)) { "reason not reported by Windows" } else { $bitLockerUnavailableReason -replace "^Unavailable - ", "" })))
+}
 $osBitLocker = $bitLockerVolumes | Where-Object { $_.MountPoint -eq $env:SystemDrive } | Select-Object -First 1
 if ($null -ne $osBitLocker -and [string]$osBitLocker.ProtectionStatus -notmatch "On") {
     $securityStatus = if ($securityStatus -eq "WARNING") { "WARNING" } else { "WATCH" }
@@ -683,6 +1080,7 @@ $securityReport = [ordered]@{
     firewallProfiles = @($firewallProfiles | ForEach-Object { [ordered]@{ name = [string]$_.Name; enabled = [bool]$_.Enabled } })
     avProducts = @($avProducts | ForEach-Object { [string]$_.displayName })
     bitLockerVolumes = $bitLockerReport
+    bitLockerSummary = $bitLockerSummary
     status = $securityStatus
 }
 
@@ -693,8 +1091,10 @@ if ($recommendations.Count -eq 0) {
 $cpuStatus = if ($null -eq $processor) { "UNKNOWN" } else { "READY" }
 $overallStatus = Get-WorstStatus -Statuses @($osStatus, $cpuStatus, $ramStatus, $gpuStatus, $diskOverallStatus, $networkStatus, $securityStatus)
 $serviceTag = if ($null -ne $bios) { [string]$bios.SerialNumber } else { "" }
-$windowsLicenseChannel = if ($null -ne $licenseProduct) { [string]$licenseProduct.Description } else { "UNKNOWN" }
-$windowsLicenseStatus = if ($null -ne $licenseProduct) { [string]$licenseProduct.LicenseStatus } else { "UNKNOWN" }
+$serviceTagRedacted = if ([string]::IsNullOrWhiteSpace($serviceTag)) { "" } else { "REDACTED" }
+$licenseInfo = Get-LicenseDisplay -LicenseProduct $licenseProduct -OperatingSystem $operatingSystem
+$windowsLicenseChannel = $licenseInfo.channel
+$windowsLicenseStatus = $licenseInfo.status
 $displayReport = @($displays | ForEach-Object {
     [ordered]@{
         name = [string]$_.Name
@@ -730,25 +1130,28 @@ $flipValue = New-FlipValueReport `
 $report = [ordered]@{
     schemaVersion = 1
     product = "ForgerEMS"
-    releaseIdentifier = ([string]::Concat("ForgerEMS v1.1.1 ", [char]0x2013, " Flip Intelligence Update"))
+    releaseIdentifier = ([string]::Concat("ForgerEMS Beta v1.1.4 ", [char]0x2014, " Whole-App Intelligence Preview"))
     generatedUtc = (Get-Date).ToUniversalTime().ToString("o")
     overallStatus = $overallStatus
     summary = [ordered]@{
         computerName = $env:COMPUTERNAME
         manufacturer = if ($null -ne $computerSystem) { [string]$computerSystem.Manufacturer } else { "Unknown" }
         model = if ($null -ne $computerSystem) { [string]$computerSystem.Model } else { "Unknown" }
-        serviceTag = $serviceTag
-        serialNumber = $serviceTag
+        serviceTag = $serviceTagRedacted
+        serialNumber = $serviceTagRedacted
         os = if ($null -ne $operatingSystem) { ("{0} {1}" -f $operatingSystem.Caption, $operatingSystem.Version).Trim() } else { "Unknown OS" }
         osBuild = if ($null -ne $operatingSystem) { [string]$operatingSystem.BuildNumber } else { "UNKNOWN" }
         osArchitecture = if ($null -ne $operatingSystem) { [string]$operatingSystem.OSArchitecture } else { "UNKNOWN" }
         windowsLicenseChannel = $windowsLicenseChannel
         windowsLicenseStatus = $windowsLicenseStatus
+        windowsLicense = $licenseInfo
         bios = if ($null -ne $bios) { ("{0} {1}" -f $bios.Manufacturer, $bios.SMBIOSBIOSVersion).Trim() } else { "UNKNOWN" }
         biosDate = if ($null -ne $bios) { Format-DateValue -Value $bios.ReleaseDate } else { "UNKNOWN" }
-        secureBoot = if ($null -ne $secureBoot) { [bool]$secureBoot } else { $null }
-        tpmPresent = if ($null -ne $tpm) { [bool]$tpm.TpmPresent } else { $null }
-        tpmReady = if ($null -ne $tpm) { [bool]$tpm.TpmReady } else { $null }
+        secureBoot = if ($null -ne $secureBootInfo.value) { [bool]$secureBootInfo.value } else { $null }
+        secureBootInfo = $secureBootInfo
+        tpmPresent = if ($null -ne $tpmInfo.present) { [bool]$tpmInfo.present } else { $null }
+        tpmReady = if ($null -ne $tpmInfo.ready) { [bool]$tpmInfo.ready } else { $null }
+        tpmInfo = $tpmInfo
         lastBoot = if ($null -ne $lastBoot) { $lastBoot.ToString("yyyy-MM-dd HH:mm:ss") } else { "UNKNOWN" }
         uptime = if ($null -ne $uptime) { Format-TimeSpanValue -Value $uptime } else { "UNKNOWN" }
         cpu = Get-ProcessorName -Processor $processor
@@ -760,13 +1163,18 @@ $report = [ordered]@{
         ramFree = Format-Bytes -Bytes $freeMemoryBytes
         ramUsed = Format-Bytes -Bytes $usedMemoryBytes
         ramUsedPercent = $usedMemoryPercent
-        ramSpeed = if ($memorySpeeds.Count -gt 0) { (($memorySpeeds | ForEach-Object { "{0} MHz" -f $_ }) -join ", ") } else { "UNKNOWN" }
+        ramSpeed = $memoryConfiguredDisplay
+        ramInstalledDisplay = $memoryInstalledDisplay
+        ramConfiguredSpeedDisplay = $memoryConfiguredDisplay
+        ramModuleRatedSpeedDisplay = $memoryRatedDisplay
+        ramSlotsDisplay = $memorySlotsDisplay
+        ramModules = $memoryModuleReports
         ramSlotsTotal = $memorySlotsTotal
         ramSlotsUsed = $memorySlotsUsed
         ramSlotsFree = $memorySlotsFree
         ramUpgradePath = $memoryUpgradePath
         ramStatus = $ramStatus
-        gpus = @($gpus | ForEach-Object { [ordered]@{ name = [string]$_.Name; driverVersion = [string]$_.DriverVersion } })
+        gpus = @($gpus | ForEach-Object { [ordered]@{ name = [string]$_.Name; type = Get-GpuType -Name ([string]$_.Name); driverVersion = [string]$_.DriverVersion } })
         gpuStatus = $gpuStatus
     }
     disks = $diskReports
@@ -780,6 +1188,17 @@ $report = [ordered]@{
     network = [ordered]@{
         status = $networkStatus
         internetCheck = [bool]$internetCheck
+        internetDisplay = $internetDisplay
+        defaultRoute = [ordered]@{
+            friendlyDisplayText = $defaultRouteDisplay
+            ifIndex = if ($null -ne $defaultRouteRaw) { $defaultRouteRaw.ifIndex } else { $null }
+            nextHop = if ($null -ne $defaultRouteRaw) { [string]$defaultRouteRaw.NextHop } else { "" }
+            adapterName = if ($null -ne $defaultRouteAdapter) { [string]$defaultRouteAdapter.name } else { "" }
+        }
+        wifi = $wifiState
+        physicalAdapters = $physicalNetworkReport
+        virtualAdapters = $virtualNetworkReport
+        virtualAdaptersIgnored = $virtualIgnoredDisplay
         adapters = $networkReport
     }
     security = $securityReport
@@ -804,18 +1223,18 @@ $markdown = New-Object System.Collections.Generic.List[string]
 [void]$markdown.Add("## System Summary")
 [void]$markdown.Add(("- Computer: {0}" -f $report.summary.computerName))
 [void]$markdown.Add(("- Model: {0} {1}" -f $report.summary.manufacturer, $report.summary.model))
-[void]$markdown.Add(("- Service tag / serial: {0}" -f $report.summary.serviceTag))
+[void]$markdown.Add("- Service tag / serial: REDACTED (stored session-local only when available)")
 [void]$markdown.Add(("- OS: {0}" -f $report.summary.os))
 [void]$markdown.Add(("- OS build: {0}" -f $report.summary.osBuild))
-[void]$markdown.Add(("- Windows license channel: {0}" -f $report.summary.windowsLicenseChannel))
+[void]$markdown.Add(("- Windows license: {0}" -f $report.summary.windowsLicense.friendlyDisplayText))
 [void]$markdown.Add(("- BIOS: {0}, date {1}" -f $report.summary.bios, $report.summary.biosDate))
-[void]$markdown.Add(("- Secure Boot: {0}" -f $report.summary.secureBoot))
-[void]$markdown.Add(("- TPM Present/Ready: {0}/{1}" -f $report.summary.tpmPresent, $report.summary.tpmReady))
+[void]$markdown.Add(("- Secure Boot: {0}" -f $report.summary.secureBootInfo.friendlyDisplayText))
+[void]$markdown.Add(("- TPM: {0}" -f $report.summary.tpmInfo.friendlyDisplayText))
 [void]$markdown.Add(("- Last boot: {0}" -f $report.summary.lastBoot))
 [void]$markdown.Add(("- Uptime: {0}" -f $report.summary.uptime))
 [void]$markdown.Add(("- CPU: {0}, {1} cores / {2} threads, base {3} MHz, max {4} MHz" -f $report.summary.cpu, $report.summary.cpuCores, $report.summary.cpuLogicalProcessors, $report.summary.cpuBaseClockMhz, $report.summary.cpuMaxClockMhz))
-[void]$markdown.Add(("- RAM: {0} total, {1} free, {2}% used, speed {3}, slots {4}/{5}, upgrade path: {6} ({7})" -f $report.summary.ramTotal, $report.summary.ramFree, $report.summary.ramUsedPercent, $report.summary.ramSpeed, $report.summary.ramSlotsUsed, $report.summary.ramSlotsTotal, $report.summary.ramUpgradePath, $report.summary.ramStatus))
-[void]$markdown.Add(("- GPU: {0}" -f (($report.summary.gpus | ForEach-Object { ("{0} driver {1}" -f $_.name, $_.driverVersion) }) -join "; ")))
+[void]$markdown.Add(("- RAM: {0}; configured {1}; rated {2}; {3}; upgrade path: {4} ({5})" -f $report.summary.ramInstalledDisplay, $report.summary.ramConfiguredSpeedDisplay, $report.summary.ramModuleRatedSpeedDisplay, $report.summary.ramSlotsDisplay, $report.summary.ramUpgradePath, $report.summary.ramStatus))
+[void]$markdown.Add(("- GPU: {0}" -f (($report.summary.gpus | ForEach-Object { ("{0}: {1} driver {2}" -f $_.type, $_.name, $_.driverVersion) }) -join "; ")))
 [void]$markdown.Add("")
 [void]$markdown.Add("## Flip Value")
 [void]$markdown.Add(("- Estimated resale range: {0}" -f $report.flipValue.estimatedResaleRange))
@@ -849,7 +1268,7 @@ foreach ($provider in $report.flipValue.pricingProviders) {
 [void]$markdown.Add("")
 [void]$markdown.Add("## Disk Health")
 foreach ($disk in $diskReports) {
-    [void]$markdown.Add(("- {0}: {1}, {2}, {3}, {4}, temp {5} C, wear {6}%, status {7}" -f $disk.name, $disk.interfaceType, $disk.mediaType, $disk.size, $disk.health, $disk.temperatureC, $disk.wearPercent, $disk.status))
+    [void]$markdown.Add(("- {0}: {1}, {2}, {3}, {4}, temp {5}, wear {6}, status {7}" -f $disk.name, $disk.interfaceType, $disk.mediaType, $disk.size, $disk.healthDisplay, $disk.temperatureDisplay, $disk.wearDisplay, $disk.status))
 }
 if ($diskReports.Count -eq 0) {
     [void]$markdown.Add("- No physical disk health data available.")
@@ -861,7 +1280,7 @@ foreach ($volume in $volumeReports) {
 [void]$markdown.Add("## Battery")
 if ($batteryReports.Count -gt 0) {
     foreach ($battery in $batteryReports) {
-        [void]$markdown.Add(("- {0}: {1}% charge, wear {2}%, cycle count {3}, AC connected {4}, status {5}" -f $battery.name, $battery.estimatedChargeRemaining, $battery.wearPercent, $battery.cycleCount, $battery.acConnected, $battery.status))
+        [void]$markdown.Add(("- {0}: {1}% charge, design {2}, full {3}, wear {4}, cycle count {5}, AC connected {6}, status {7}" -f $battery.name, $battery.estimatedChargeRemaining, $battery.designCapacityDisplay, $battery.fullChargeCapacityDisplay, $battery.wearDisplay, $battery.cycleCountDisplay, $battery.acConnected, $battery.status))
     }
 }
 else {
@@ -880,9 +1299,11 @@ else {
 [void]$markdown.Add("")
 [void]$markdown.Add("## Network")
 foreach ($adapter in $networkReport) {
-    [void]$markdown.Add(("- {0}: {1}; link {2}; IP {3}; gateway {4}; DNS {5}; Wi-Fi signal {6}%; APIPA {7}" -f $adapter.name, $adapter.description, $adapter.linkSpeed, (($adapter.ipAddresses | Where-Object { $_ }) -join ", "), (($adapter.gateways | Where-Object { $_ }) -join ", "), (($adapter.dnsServers | Where-Object { $_ }) -join ", "), $adapter.wifiSignalPercent, $adapter.apipaDetected))
+    [void]$markdown.Add(("- {0}: {1}; role {2}; link {3}; IP {4}; gateway {5}; DNS {6}; Wi-Fi {7}; APIPA {8}" -f $adapter.name, $adapter.description, $adapter.adapterRole, $adapter.linkSpeed, (($adapter.ipAddresses | Where-Object { $_ }) -join ", "), (($adapter.gateways | Where-Object { $_ }) -join ", "), (($adapter.dnsServers | Where-Object { $_ }) -join ", "), $adapter.wifiDisplay, $adapter.apipaDetected))
 }
 [void]$markdown.Add(("- Internet check: {0}" -f $internetCheck))
+[void]$markdown.Add(("- {0}" -f $defaultRouteDisplay))
+[void]$markdown.Add(("- {0}" -f $virtualIgnoredDisplay))
 if ($networkReport.Count -eq 0) {
     [void]$markdown.Add("- No active IP-enabled adapter detected.")
 }
@@ -895,6 +1316,9 @@ if ($networkReport.Count -eq 0) {
 [void]$markdown.Add(("- Registered AV: {0}" -f (($securityReport.avProducts | Where-Object { $_ }) -join "; ")))
 foreach ($volume in $securityReport.bitLockerVolumes) {
     [void]$markdown.Add(("- BitLocker {0}: {1}, protection {2}, {3}% encrypted" -f $volume.mountPoint, $volume.volumeStatus, $volume.protectionStatus, $volume.encryptionPercentage))
+}
+if ($securityReport.bitLockerVolumes.Count -eq 0) {
+    [void]$markdown.Add(("- BitLocker: {0}" -f $securityReport.bitLockerSummary.friendlyDisplayText))
 }
 [void]$markdown.Add("")
 [void]$markdown.Add("## Obvious Problems")
