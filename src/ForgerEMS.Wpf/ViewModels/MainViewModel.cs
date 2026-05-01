@@ -5688,145 +5688,44 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         OnPropertyChanged(nameof(LastUpdateCheckDisplayText));
 
-        var installedNorm = ReleaseVersionParser.NormalizeLabel(AppReleaseInfo.Version);
+        var state = UpdateCheckUiPresenter.Map(result, manual, AppReleaseInfo.Version);
 
-        if (result.Succeeded && !string.IsNullOrWhiteSpace(result.LatestVersionLabel))
+        AppUpdateStateDisplay = state.StatusText;
+
+        if (state.LatestChannelSummary is not null)
         {
-            _appUpdateLatestChannelText = $"Latest release: v{ReleaseVersionParser.NormalizeLabel(result.LatestVersionLabel)}";
-        }
-        else if (result.Succeeded)
-        {
-            _appUpdateLatestChannelText = "Latest release: —";
+            _appUpdateLatestChannelText = state.LatestChannelSummary;
         }
 
         OnPropertyChanged(nameof(AppUpdateSettingsLatestSummary));
 
-        if (!result.Succeeded)
+        AppUpdateBannerVisibility = state.BannerVisibility;
+        if (state.BannerTitle is not null)
         {
-            _pendingInstallerUrl = string.Empty;
-            _pendingReleaseNotesUrl = string.Empty;
-            _pendingVersionLabel = string.Empty;
-
-            AppUpdateStateDisplay = result.FailureKind switch
-            {
-                UpdateCheckFailureKind.Network => "Update check: offline or network issue.",
-                UpdateCheckFailureKind.Timeout => "Update check timed out. Try again later.",
-                UpdateCheckFailureKind.ReleaseEndpointNotFound => "Update check: GitHub release endpoint not found.",
-                UpdateCheckFailureKind.AccessDeniedOrRateLimited => "Update check: access denied or rate limited.",
-                UpdateCheckFailureKind.ReleaseMetadataInvalid => "Update check: invalid release metadata.",
-                UpdateCheckFailureKind.Cancelled => "Update check was cancelled.",
-                UpdateCheckFailureKind.HttpError => "Update check: GitHub returned an error.",
-                _ => string.IsNullOrWhiteSpace(result.ErrorMessage) ? "Update check failed." : result.ErrorMessage!
-            };
-
-            if (manual)
-            {
-                AppUpdateBannerVisibility = Visibility.Visible;
-                AppUpdateBannerTitle = "Update check failed";
-                AppUpdateBannerDetail = result.ErrorMessage ?? result.DiagnosticDetail ?? "Unknown error.";
-                AppUpdateDiagnosticsHintVisibility = Visibility.Visible;
-            }
-            else
-            {
-                AppUpdateBannerVisibility = Visibility.Collapsed;
-                AppUpdateDiagnosticsHintVisibility = Visibility.Collapsed;
-            }
-
-            if (!string.IsNullOrWhiteSpace(result.DiagnosticDetail))
-            {
-                AppendLog(new LogLine(
-                    DateTimeOffset.Now,
-                    $"[Update] {result.FailureKind}: {result.DiagnosticDetail}",
-                    LogSeverity.Warning,
-                    channel: LiveLogChannel.Diagnostics));
-            }
-
-            AppUpdateDownloadButtonVisibility = Visibility.Collapsed;
-            AppUpdateIgnoreButtonVisibility = Visibility.Collapsed;
-            AppUpdateViewReleaseNotesVisibility = Visibility.Collapsed;
-            AppUpdateDownloadInstallerCommand.RaiseCanExecuteChanged();
-            return;
+            AppUpdateBannerTitle = state.BannerTitle;
         }
 
-        AppUpdateDiagnosticsHintVisibility = Visibility.Collapsed;
-
-        if (result.Outcome == UpdateCheckOutcome.UpdateAvailable && result.UpdateAvailable)
+        if (state.BannerDetail is not null)
         {
-            AppUpdateStateDisplay = $"Update available: v{ReleaseVersionParser.NormalizeLabel(result.LatestVersionLabel)}";
-            _pendingReleaseNotesUrl = result.ReleaseNotesUrl;
-            _pendingInstallerUrl = result.InstallerDownloadUrl ?? string.Empty;
-            _pendingVersionLabel = result.LatestVersionLabel;
-
-            var safeReleasePage = Uri.TryCreate(result.ReleaseNotesUrl, UriKind.Absolute, out var notesUri) &&
-                                  string.Equals(notesUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
-                                  string.Equals(notesUri.Host, "github.com", StringComparison.OrdinalIgnoreCase);
-
-            AppUpdateBannerVisibility = Visibility.Visible;
-            AppUpdateBannerTitle = UpdateNotificationTextBuilder.BuildHeadline(result.LatestVersionLabel);
-            var extras = new List<string>();
-            if (!string.IsNullOrWhiteSpace(result.InstallerAssetName))
-            {
-                extras.Add($"Installer asset: {result.InstallerAssetName}");
-            }
-
-            if (!result.HasActionableInstaller)
-            {
-                extras.Add("No verified .exe installer URL on this release — open release notes or retry after publishing.");
-            }
-
-            AppUpdateBannerDetail = extras.Count == 0 ? string.Empty : string.Join(Environment.NewLine, extras);
-            AppUpdateDownloadButtonVisibility = result.HasActionableInstaller ? Visibility.Visible : Visibility.Collapsed;
-            AppUpdateIgnoreButtonVisibility = Visibility.Visible;
-            AppUpdateViewReleaseNotesVisibility = safeReleasePage ? Visibility.Visible : Visibility.Collapsed;
-            AppUpdateDownloadInstallerCommand.RaiseCanExecuteChanged();
-            return;
+            AppUpdateBannerDetail = state.BannerDetail;
         }
 
-        _pendingInstallerUrl = string.Empty;
-        _pendingReleaseNotesUrl = string.Empty;
-        _pendingVersionLabel = string.Empty;
+        AppUpdateDiagnosticsHintVisibility = state.DiagnosticsHintVisibility;
+        AppUpdateDownloadButtonVisibility = state.DownloadButtonVisibility;
+        AppUpdateIgnoreButtonVisibility = state.IgnoreButtonVisibility;
+        AppUpdateViewReleaseNotesVisibility = state.ReleaseNotesVisibility;
 
-        AppUpdateDownloadButtonVisibility = Visibility.Collapsed;
-        AppUpdateIgnoreButtonVisibility = Visibility.Collapsed;
-        AppUpdateViewReleaseNotesVisibility = Visibility.Collapsed;
+        _pendingInstallerUrl = state.PendingInstallerUrl;
+        _pendingReleaseNotesUrl = state.PendingReleaseNotesUrl;
+        _pendingVersionLabel = state.PendingVersionLabel;
 
-        AppUpdateBannerVisibility = Visibility.Collapsed;
-        AppUpdateDiagnosticsHintVisibility = Visibility.Collapsed;
-
-        switch (result.Outcome)
+        if (!string.IsNullOrWhiteSpace(state.SafeDiagnosticText))
         {
-            case UpdateCheckOutcome.NoPublishedRelease:
-                AppUpdateStateDisplay = result.ErrorMessage ?? "No public release found.";
-                _appUpdateLatestChannelText = "Latest release: —";
-                OnPropertyChanged(nameof(AppUpdateSettingsLatestSummary));
-                break;
-            case UpdateCheckOutcome.IgnoredVersion:
-                AppUpdateStateDisplay = result.ErrorMessage ?? UpdateCheckDisplay.FormatIgnoredVersion(ReleaseVersionParser.NormalizeLabel(result.LatestVersionLabel));
-                break;
-            case UpdateCheckOutcome.AlreadyLatest:
-                AppUpdateStateDisplay = UpdateCheckDisplay.FormatInstalledAlreadyLatest(installedNorm);
-                break;
-            case UpdateCheckOutcome.InstalledNewerThanLatestPublic:
-                AppUpdateStateDisplay = UpdateCheckDisplay.FormatInstalledNewerThanPublic(
-                    installedNorm,
-                    ReleaseVersionParser.NormalizeLabel(result.LatestVersionLabel));
-                break;
-            case UpdateCheckOutcome.None:
-                AppUpdateStateDisplay = !string.IsNullOrWhiteSpace(result.ErrorMessage)
-                    ? result.ErrorMessage!
-                    : "Update check completed with no comparable version.";
-                if (string.IsNullOrWhiteSpace(result.LatestVersionLabel))
-                {
-                    _appUpdateLatestChannelText = "Latest release: —";
-                    OnPropertyChanged(nameof(AppUpdateSettingsLatestSummary));
-                }
-
-                break;
-            default:
-                AppUpdateStateDisplay = !string.IsNullOrWhiteSpace(result.ErrorMessage)
-                    ? result.ErrorMessage!
-                    : UpdateCheckDisplay.FormatInstalledAlreadyLatest(installedNorm);
-                break;
+            AppendLog(new LogLine(
+                DateTimeOffset.Now,
+                state.SafeDiagnosticText,
+                LogSeverity.Warning,
+                channel: LiveLogChannel.Diagnostics));
         }
 
         AppUpdateDownloadInstallerCommand.RaiseCanExecuteChanged();
