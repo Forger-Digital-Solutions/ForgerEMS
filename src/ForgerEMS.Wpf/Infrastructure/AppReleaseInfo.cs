@@ -2,9 +2,9 @@ namespace VentoyToolkitSetup.Wpf.Infrastructure;
 
 internal static class AppReleaseInfo
 {
-    public const string Version = "1.1.1";
-    public const string DisplayVersion = "v1.1.1";
-    public const string ReleaseIdentifier = "ForgerEMS v1.1.1 - Flip Intelligence Update";
+    public const string Version = "1.1.4";
+    public const string DisplayVersion = "v1.1.4 (Beta)";
+    public const string ReleaseIdentifier = "ForgerEMS Beta v1.1.4 \u2014 Whole-App Intelligence Preview";
 }
 
 internal static class FeatureFlags
