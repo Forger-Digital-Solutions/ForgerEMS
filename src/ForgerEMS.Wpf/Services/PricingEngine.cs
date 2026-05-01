@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 
@@ -306,13 +307,13 @@ public sealed class LocalHeuristicPricingProvider : IPricingProvider
         if (intel.Success)
         {
             var model = intel.Groups["model"].Value;
-            return model.Length == 5 ? int.Parse(model[..2]) : int.Parse(model[..1]);
+            return model.Length == 5 ? int.Parse(model[..2], CultureInfo.InvariantCulture) : int.Parse(model[..1], CultureInfo.InvariantCulture);
         }
 
         var ryzen = Regex.Match(cpuName, @"(?i)ryzen\s+[3579]\s+(?<model>\d{4})");
         if (ryzen.Success)
         {
-            return int.Parse(ryzen.Groups["model"].Value[..1]);
+            return int.Parse(ryzen.Groups["model"].Value[..1], CultureInfo.InvariantCulture);
         }
 
         return null;
