@@ -101,6 +101,8 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
     $Version = Get-ProjectVersion -ProjectPath $csprojPath
 }
 
+$releaseIdentifierLabel = [string]::Concat("ForgerEMS Beta v", $Version, " ", [char]0x2014, " Whole-App Intelligence Preview")
+
 if (-not $SkipPublish) {
     Write-Host "Publishing ForgerEMS..." -ForegroundColor Cyan
     dotnet publish $csprojPath -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:Version=$Version /p:InformationalVersion=$Version
@@ -131,7 +133,7 @@ Write-Host "Compiling installer with Inno Setup..." -ForegroundColor Cyan
 & $isccPath `
     "/DAppVersion=$Version" `
     "/DAppVersionInfo=$appVersionInfo" `
-    ([string]::Concat("/DReleaseIdentifier=ForgerEMS v", $Version, " - Flip Intelligence Update")) `
+    ("/DReleaseIdentifier=$releaseIdentifierLabel") `
     "/DPublishDir=$publishDir" `
     "/DBackendBundleDir=$backendStageRoot" `
     "/DOutputDir=$outputDir" `

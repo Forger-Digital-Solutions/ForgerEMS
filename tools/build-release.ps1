@@ -154,6 +154,8 @@ $releaseAppRoot = Join-Path $releaseRoot "app"
 $releaseBackendRoot = Join-Path $releaseAppRoot "backend"
 $releaseManifestRoot = Join-Path $releaseAppRoot "manifests"
 $checksumsPath = Join-Path $releaseRoot "CHECKSUMS.sha256"
+$installerOutputDir = Join-Path $distRoot "installer"
+$releaseIdentifierLabel = [string]::Concat("ForgerEMS Beta v", $Version, " ", [char]0x2014, " Whole-App Intelligence Preview")
 
 Write-Step "Release version: $Version"
 Write-Step "Restoring solution"
@@ -200,22 +202,25 @@ if ($DryRun -or $SkipInstaller) {
 }
 else {
     Write-Step "Compiling installer"
+    Ensure-Dir -Path $installerOutputDir
     $isccPath = Resolve-IsccPath -ExplicitPath $InnoCompilerPath
     $appVersionInfo = ConvertTo-WindowsVersion -Value $Version
     & $isccPath `
         "/DAppVersion=$Version" `
         "/DAppVersionInfo=$appVersionInfo" `
-        ([string]::Concat("/DReleaseIdentifier=ForgerEMS v", $Version, " - Flip Intelligence Update")) `
+        ("/DReleaseIdentifier=$releaseIdentifierLabel") `
         "/DPublishDir=$publishDir" `
         "/DBackendBundleDir=$backendStageRoot" `
-        "/DOutputDir=$releaseRoot" `
+        "/DOutputDir=$installerOutputDir" `
         $installerScript
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE." }
 
-    $versionedInstallerPath = Join-Path $releaseRoot ("ForgerEMS-Setup-v{0}.exe" -f $Version)
+    $versionedInstallerPath = Join-Path $installerOutputDir ("ForgerEMS-Setup-v{0}.exe" -f $Version)
     if (-not (Test-Path -LiteralPath $versionedInstallerPath)) {
         throw "Expected installer output was not found: $versionedInstallerPath"
     }
+
+    Copy-Item -LiteralPath $versionedInstallerPath -Destination (Join-Path $releaseRoot (Split-Path -Leaf $versionedInstallerPath)) -Force
 }
 
 Write-Step "Writing release metadata"
@@ -223,7 +228,7 @@ $metadata = [ordered]@{
     product = "ForgerEMS"
     publisher = "Forger Digital Solutions"
     version = $Version
-    releaseIdentifier = ([string]::Concat("ForgerEMS v", $Version, " - Flip Intelligence Update"))
+    releaseIdentifier = $releaseIdentifierLabel
     channel = "Beta"
     backendVersion = $backendVersion
     runtime = $Runtime
@@ -232,6 +237,12 @@ $metadata = [ordered]@{
     generatedUtc = (Get-Date).ToUniversalTime().ToString("o")
 }
 $metadata | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $releaseRoot "release.json") -Encoding UTF8
+
+Write-Step "Copying beta readme if present"
+$betaReadmePath = Join-Path $distRoot ("beta\README-BETA-v{0}.txt" -f $Version)
+if (Test-Path -LiteralPath $betaReadmePath) {
+    Copy-Item -LiteralPath $betaReadmePath -Destination (Join-Path $releaseRoot (Split-Path -Leaf $betaReadmePath)) -Force
+}
 
 Write-Step "Generating SHA256 checksums"
 Write-Checksums -Root $releaseRoot -OutputPath $checksumsPath
