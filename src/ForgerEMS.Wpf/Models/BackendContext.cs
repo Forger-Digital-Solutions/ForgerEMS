@@ -42,7 +42,7 @@ public sealed class BackendContext
             _ => "Backend unavailable"
         };
 
-    public string PrimaryManagedSummaryPath =>
+    public static string PrimaryManagedSummaryPath =>
         Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "ForgerEMS",

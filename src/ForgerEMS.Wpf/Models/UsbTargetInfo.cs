@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 
 namespace VentoyToolkitSetup.Wpf.Models;
 
@@ -103,7 +104,45 @@ public sealed class UsbTargetInfo
 
     public string BenchmarkTestSizeDisplay => BenchmarkTestSizeMb > 0 ? $"{BenchmarkTestSizeMb} MB" : "Not tested";
 
-    public string BenchmarkLastTestedDisplay => BenchmarkLastTestedAt.HasValue ? BenchmarkLastTestedAt.Value.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss") : "Never";
+    public string BenchmarkLastTestedDisplay => BenchmarkLastTestedAt.HasValue ? BenchmarkLastTestedAt.Value.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture) : "Never";
+
+    public string SafetyStatusText =>
+        !IsSelectable || ShouldBlockExecution
+            ? "BLOCKED"
+            : !IsRemovableMedia || IsSystemDrive || IsBootDrive
+                ? "WARNING"
+                : "SAFE";
+
+    public string SafetyReasonText
+    {
+        get
+        {
+            var blockReason = UsbTargetSafety.GetExecutionBlockReason(this);
+            if (!string.IsNullOrWhiteSpace(blockReason))
+            {
+                return blockReason.Replace(Environment.NewLine, " ", StringComparison.Ordinal);
+            }
+
+            if (!IsSelectable)
+            {
+                return SelectionWarningDisplay;
+            }
+
+            if (IsEfiSystemPartition || IsUndersizedPartition)
+            {
+                return "Blocked: small EFI/VTOYEFI or utility partition";
+            }
+
+            if (!IsRemovableMedia || IsSystemDrive || IsBootDrive)
+            {
+                return "Warning: fixed/system disk metadata detected. Confirm the drive letter before destructive actions.";
+            }
+
+            return IsLargeDataPartition || IsPreferredUsbTarget
+                ? "Safe removable data partition"
+                : "Safe removable USB target";
+        }
+    }
 
     public string SelectionStatusText =>
         !IsSelectable

@@ -107,7 +107,7 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
 
         var jsonLine = result.StandardOutputText
             .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
-            .LastOrDefault(line => line.TrimStart().StartsWith("{", StringComparison.Ordinal));
+            .LastOrDefault(line => line.TrimStart().StartsWith('{'));
 
         if (string.IsNullOrWhiteSpace(jsonLine))
         {

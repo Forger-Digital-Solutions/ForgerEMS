@@ -143,12 +143,7 @@
             </Style.Triggers>
         </Style>
 
-        <Style x:Key="SecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Background" Value="#D8FFF7ED" />
-            <Setter Property="BorderBrush" Value="#FFD7B18E" />
-            <Setter Property="Foreground" Value="#FF7C3315" />
-        </Style>
-
+        <!-- FooterButtonStyle must appear before SecondaryButtonStyle: StaticResource cannot forward-reference. -->
         <Style x:Key="FooterButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
             <Setter Property="Margin" Value="0,0,10,0" />
             <Setter Property="Padding" Value="12,8" />
@@ -156,6 +151,26 @@
             <Setter Property="Background" Value="#CC0B1220" />
             <Setter Property="BorderBrush" Value="{DynamicResource PanelBorderBrush}" />
             <Setter Property="Foreground" Value="{DynamicResource PanelTextBrush}" />
+        </Style>
+
+        <Style x:Key="SecondaryButtonStyle" TargetType="Button" BasedOn="{StaticResource FooterButtonStyle}">
+            <Setter Property="Margin" Value="0,0,0,10" />
+            <Setter Property="Padding" Value="14,10" />
+            <Setter Property="MinHeight" Value="40" />
+            <Setter Property="Background" Value="#D90F1724" />
+            <Setter Property="BorderBrush" Value="#8867B7E8" />
+            <Setter Property="Foreground" Value="#FFE8F0FF" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#E6162436" />
+                    <Setter Property="BorderBrush" Value="#FFFFB86B" />
+                    <Setter Property="Foreground" Value="#FFFFFFFF" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#CC1A2433" />
+                    <Setter Property="BorderBrush" Value="#FFFFC56D" />
+                </Trigger>
+            </Style.Triggers>
         </Style>
 
         <Style TargetType="TextBox">
@@ -173,6 +188,12 @@
             <Setter Property="Padding" Value="8,6" />
             <Setter Property="Background" Value="#FFF4F1EA" />
             <Setter Property="Foreground" Value="#FF111111" />
+            <Style.Resources>
+                <SolidColorBrush x:Key="{x:Static SystemColors.WindowBrushKey}" Color="#FF152535" />
+                <SolidColorBrush x:Key="{x:Static SystemColors.WindowTextBrushKey}" Color="#FF111111" />
+                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#FFFFB86B" />
+                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#FF111111" />
+            </Style.Resources>
         </Style>
 
         <Style TargetType="ComboBoxItem">
@@ -181,32 +202,163 @@
             <Setter Property="Foreground" Value="#FF111111" />
         </Style>
 
+        <!-- Closed state uses light surface + dark text so selection is never white-on-white (ToggleButton default was overriding). -->
         <Style x:Key="ReadableComboBoxStyle" TargetType="ComboBox">
+            <Style.Resources>
+                <SolidColorBrush x:Key="{x:Static SystemColors.WindowBrushKey}" Color="#FF152535" />
+                <SolidColorBrush x:Key="{x:Static SystemColors.WindowTextBrushKey}" Color="#FFE8F0FF" />
+                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#FFFFB86B" />
+                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#FF111111" />
+                <SolidColorBrush x:Key="{x:Static SystemColors.ControlTextBrushKey}" Color="#FF0F1720" />
+            </Style.Resources>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="MaxDropDownHeight" Value="320" />
             <Setter Property="BorderBrush" Value="#FFD7B18E" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="8,5" />
-            <Setter Property="Background" Value="#F4F1EA" />
-            <Setter Property="Foreground" Value="#FF111111" />
+            <Setter Property="Padding" Value="10,7,10,7" />
+            <Setter Property="Background" Value="#FFFDF8F3" />
+            <Setter Property="Foreground" Value="#FF0F1720" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid SnapsToDevicePixels="True">
+                            <Border x:Name="MainBorder"
+                                    CornerRadius="4"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}" />
+                            <ToggleButton x:Name="ToggleButton"
+                                          HorizontalAlignment="Stretch"
+                                          VerticalAlignment="Stretch"
+                                          Background="Transparent"
+                                          BorderThickness="0"
+                                          ClickMode="Press"
+                                          Focusable="False"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border Background="Transparent" />
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <Grid Margin="{TemplateBinding Padding}" IsHitTestVisible="False">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="20" />
+                                </Grid.ColumnDefinitions>
+                                <ContentPresenter x:Name="ContentSite"
+                                                  Grid.Column="0"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                                  RecognizesAccessKey="True"
+                                                  Content="{TemplateBinding SelectionBoxItem}"
+                                                  ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
+                                                  ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                                  ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                                  TextElement.Foreground="{TemplateBinding Foreground}" />
+                                <Path Grid.Column="1"
+                                      Data="M0,1.5 L5,6.5 L10,1.5"
+                                      Stroke="{TemplateBinding Foreground}"
+                                      StrokeThickness="1.35"
+                                      Stretch="Uniform"
+                                      Width="11"
+                                      Height="7"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      Fill="Transparent" />
+                            </Grid>
+                            <Popup x:Name="PART_Popup"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   Placement="Bottom"
+                                   PlacementTarget="{Binding ElementName=MainBorder}"
+                                   PopupAnimation="Fade">
+                                <Border MinWidth="{Binding ActualWidth, ElementName=MainBorder}"
+                                        MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                        Margin="0,3,0,0"
+                                        Padding="2,4"
+                                        Background="#FF152535"
+                                        BorderBrush="#FFD7B18E"
+                                        BorderThickness="1"
+                                        CornerRadius="4"
+                                        SnapsToDevicePixels="True">
+                                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                                        <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" />
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.62" />
+                            </Trigger>
+                            <Trigger Property="HasItems" Value="False">
+                                <Setter TargetName="ToggleButton" Property="IsEnabled" Value="False" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style x:Key="ReadableComboBoxItemStyle" TargetType="ComboBoxItem">
-            <Setter Property="Padding" Value="8,6" />
-            <Setter Property="Background" Value="#FFF4F1EA" />
-            <Setter Property="Foreground" Value="#FF111111" />
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#FFE8F0FF" />
             <Style.Triggers>
                 <Trigger Property="IsHighlighted" Value="True">
-                    <Setter Property="Background" Value="#FFE2C7AC" />
-                    <Setter Property="Foreground" Value="#FF111111" />
+                    <Setter Property="Background" Value="#334BA3C9" />
+                    <Setter Property="Foreground" Value="#FFFFFFFF" />
                 </Trigger>
                 <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#FFFFE7C2" />
+                    <Setter Property="Background" Value="#E6FFB86B" />
                     <Setter Property="Foreground" Value="#FF111111" />
                 </Trigger>
                 <Trigger Property="IsEnabled" Value="False">
                     <Setter Property="Opacity" Value="0.55" />
-                    <Setter Property="Foreground" Value="#FF4B5563" />
+                    <Setter Property="Foreground" Value="#FFB8C8DA" />
                 </Trigger>
             </Style.Triggers>
+        </Style>
+
+        <Style x:Key="UsbTargetComboBoxStyle" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+            <Setter Property="Background" Value="#F4F1EA" />
+            <Setter Property="Foreground" Value="#FF111111" />
+            <Style.Resources>
+                <SolidColorBrush x:Key="{x:Static SystemColors.WindowBrushKey}" Color="#FFFDFBF7" />
+                <SolidColorBrush x:Key="{x:Static SystemColors.WindowTextBrushKey}" Color="#FF111111" />
+                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#FFFFE7C2" />
+                <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#FF111111" />
+            </Style.Resources>
+        </Style>
+
+        <Style x:Key="KyraChatInputTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="Background" Value="#E6081018" />
+            <Setter Property="Foreground" Value="#FFF4F8FF" />
+            <Setter Property="BorderBrush" Value="#8867B7E8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="12,10" />
+            <Setter Property="CaretBrush" Value="#FFFFDAB8" />
+            <Style.Triggers>
+                <Trigger Property="IsKeyboardFocused" Value="True">
+                    <Setter Property="BorderBrush" Value="#FFFFB86B" />
+                    <Setter Property="Background" Value="#F0101824" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.65" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="CopilotChatScrollViewerStyle" TargetType="ScrollViewer">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Padding" Value="0,0,4,0" />
+            <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
         </Style>
 
         <Style TargetType="CheckBox">
@@ -295,13 +447,13 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="TabBorder" Property="Background" Value="#F01A2433" />
-                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="#FFFFB86B" />
+                                <Setter TargetName="TabBorder" Property="Background" Value="#FF243447" />
+                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="#FFFFC56D" />
                                 <Setter TargetName="ActiveLine" Property="Background" Value="#FFFFB86B" />
-                                <Setter Property="Foreground" Value="#FFFFE7C2" />
+                                <Setter Property="Foreground" Value="#FFFFFFFF" />
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="#AA67E8F9" />
+                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="#CC67E8F9" />
                                 <Setter Property="Foreground" Value="#FFFFFFFF" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
@@ -400,11 +552,12 @@
                CacheMode="BitmapCache" />
 
         <Canvas x:Name="TraceLightCanvas"
-                Panel.ZIndex="2"
+                Panel.ZIndex="5"
+                Background="Transparent"
                 ClipToBounds="True"
                 IsHitTestVisible="False" />
 
-        <Rectangle Panel.ZIndex="3" Opacity="0.2" IsHitTestVisible="False">
+        <Rectangle Panel.ZIndex="2" Opacity="0.2" IsHitTestVisible="False">
             <Rectangle.Fill>
                 <DrawingBrush TileMode="Tile"
                               Viewport="0,0,48,48"
@@ -451,7 +604,10 @@
                  Opacity="0.3"
                  IsHitTestVisible="False"
                  CacheMode="BitmapCache">
-            <Canvas Width="1180" Height="720">
+            <Canvas x:Name="CircuitTraceCanvas"
+                    Width="1180"
+                    Height="720"
+                    Background="Transparent">
                 <Path Data="M292,172 C380,176 474,214 540,272 M345,545 C435,492 498,402 552,305 M236,224 L310,224 M392,522 L448,522"
                       Stroke="#B038BDF8"
                       Style="{StaticResource CircuitBaseTraceStyle}" />
@@ -530,7 +686,8 @@
                     </Ellipse.RenderTransform>
                 </Ellipse>
 
-                <Grid Canvas.Left="526"
+                <Grid x:Name="TargetUsbPulseNode"
+                      Canvas.Left="526"
                       Canvas.Top="358"
                       Width="128"
                       Height="132"
@@ -938,7 +1095,7 @@
         </Viewbox>
 
         <Rectangle x:Name="BackgroundReadabilityVeil"
-                   Panel.ZIndex="5"
+                   Panel.ZIndex="3"
                    Opacity="0.62"
                    IsHitTestVisible="False"
                    CacheMode="BitmapCache">
@@ -949,19 +1106,24 @@
 
         <Grid Margin="16" Panel.ZIndex="10">
         <Grid.RowDefinitions>
-            <RowDefinition Height="56" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
         <Border Grid.Row="0"
                 Margin="0,0,0,10"
                 Padding="12,8"
-                Height="52"
+                MinHeight="52"
                 Background="#E6090F18"
                 BorderBrush="#FF394659"
                 BorderThickness="1"
                 CornerRadius="8">
             <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
@@ -978,13 +1140,15 @@
                         Background="#FF111827"
                         BorderBrush="#FFCF8C5C"
                         BorderThickness="1.2"
-                        CornerRadius="7">
+                        CornerRadius="7"
+                        Grid.Row="0">
                     <Image Margin="3"
                            Source="Assets/ForgerEMS_Icon.png"
                            Stretch="Uniform" />
                 </Border>
 
                 <TextBlock Grid.Column="1"
+                           Grid.Row="0"
                            Margin="0,0,18,0"
                            VerticalAlignment="Center"
                            FontSize="21"
@@ -995,6 +1159,7 @@
                            TextWrapping="NoWrap" />
 
                 <TextBlock Grid.Column="2"
+                           Grid.Row="0"
                            Margin="0,0,18,0"
                            VerticalAlignment="Center"
                            FontSize="13"
@@ -1005,6 +1170,7 @@
                            TextWrapping="NoWrap" />
 
                 <Border Grid.Column="3"
+                        Grid.Row="0"
                         Margin="0,0,12,0"
                         Padding="10,4"
                         VerticalAlignment="Center"
@@ -1020,6 +1186,7 @@
                 </Border>
 
                 <TextBlock Grid.Column="4"
+                           Grid.Row="0"
                            Margin="0,0,14,0"
                            VerticalAlignment="Center"
                            FontSize="12"
@@ -1030,16 +1197,88 @@
                            TextWrapping="NoWrap" />
 
                 <TextBlock Grid.Column="5"
+                           Grid.Row="0"
                            VerticalAlignment="Center"
                            FontSize="12"
                            FontWeight="SemiBold"
                            Foreground="#FFD9B392"
                            Text="{Binding AppVersionText}"
                            TextWrapping="NoWrap" />
+                <StackPanel Grid.Row="1"
+                            Grid.Column="0"
+                            Grid.ColumnSpan="6"
+                            Margin="0,4,0,0">
+                    <TextBlock FontSize="11"
+                               Foreground="#FFE8F0FF"
+                               TextWrapping="Wrap">
+                        <Run FontWeight="SemiBold" Text="Beta issue? Send logs/screenshots to " />
+                        <Hyperlink NavigateUri="{Binding SupportMailtoUri, Mode=OneWay}"
+                                   RequestNavigate="SupportMailto_OnRequestNavigate"
+                                   Foreground="#FFFFDAB8"
+                                   TextDecorations="Underline">
+                            <Run FontWeight="Bold"
+                                 Foreground="#FFFFDAB8"
+                                 Text="{Binding SupportEmailAddress, Mode=OneWay}" />
+                        </Hyperlink>
+                    </TextBlock>
+                    <TextBlock Margin="0,2,0,0"
+                               FontSize="10.5"
+                               Foreground="#99B8CCE8"
+                               TextWrapping="Wrap"
+                               Text="{Binding SupportEmailDoNotSecretsText, Mode=OneWay}" />
+                </StackPanel>
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1">
+        <Border Grid.Row="1"
+                Margin="0,0,0,10"
+                Padding="12,10"
+                Visibility="{Binding AppUpdateBannerVisibility}"
+                Background="#1A0F1724"
+                BorderBrush="#FFFFB86B"
+                BorderThickness="1"
+                CornerRadius="8">
+            <StackPanel>
+                <TextBlock FontWeight="Bold"
+                           FontSize="13"
+                           Foreground="#FFFFE8CC"
+                           TextWrapping="Wrap"
+                           Text="{Binding AppUpdateBannerTitle}" />
+                <TextBlock Margin="0,6,0,0"
+                           FontSize="11.5"
+                           Foreground="#FFE8F0FF"
+                           TextWrapping="Wrap"
+                           Text="{Binding AppUpdateBannerDetail}" />
+                <TextBlock Margin="0,6,0,0"
+                           FontSize="10.5"
+                           Foreground="#99B8CCE8"
+                           TextWrapping="Wrap"
+                           Text="{Binding AppUpdateStateDisplay}" />
+                <WrapPanel Margin="0,10,0,0">
+                    <Button MinWidth="138"
+                            Margin="0,0,8,6"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Content="View release notes"
+                            Command="{Binding AppUpdateViewReleaseNotesCommand}" />
+                    <Button MinWidth="128"
+                            Margin="0,0,8,6"
+                            Content="Download update"
+                            Command="{Binding AppUpdateDownloadInstallerCommand}" />
+                    <Button MinWidth="118"
+                            Margin="0,0,8,6"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Content="Remind me later"
+                            Command="{Binding AppUpdateRemindLaterCommand}" />
+                    <Button MinWidth="124"
+                            Margin="0,0,8,6"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Content="Ignore this version"
+                            Command="{Binding AppUpdateIgnoreVersionCommand}" />
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="300" />
                 <ColumnDefinition Width="*" MinWidth="640" />
@@ -1069,26 +1308,13 @@
                         BorderThickness="1"
                         CornerRadius="10">
                     <DockPanel LastChildFill="True">
-                        <Grid DockPanel.Dock="Top" Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock VerticalAlignment="Center"
-                                       FontFamily="Bahnschrift SemiCondensed"
-                                       FontSize="14"
-                                       FontWeight="SemiBold"
-                                       Foreground="#FFFFDAB8"
-                                       Text="Live Logs" />
-                            <ToggleButton x:Name="LogPanelToggle"
-                                          Grid.Column="1"
-                                          Width="74"
-                                          Padding="8,4"
-                                          IsChecked="True"
-                                          Content="Hide"
-                                          Checked="OnLogPanelToggleChanged"
-                                          Unchecked="OnLogPanelToggleChanged" />
-                        </Grid>
+                        <TextBlock DockPanel.Dock="Top"
+                                   Margin="0,0,0,8"
+                                   FontFamily="Bahnschrift SemiCondensed"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   Foreground="#FFFFDAB8"
+                                   Text="Live Logs" />
 
                         <StackPanel DockPanel.Dock="Bottom" Margin="0,10,0,0">
                             <Button Margin="0,0,0,8"
@@ -1097,23 +1323,23 @@
                                     Style="{StaticResource SecondaryButtonStyle}"
                                     Content="View Full Logs"
                                     Click="OnShowFullLogsClick" />
-                            <UniformGrid Columns="2">
-                                <Button Margin="0,0,6,0"
-                                        Padding="8,6"
-                                        MinHeight="32"
-                                        Style="{StaticResource FooterButtonStyle}"
-                                        Content="Copy"
-                                        Command="{Binding CopyLogsCommand}" />
-                                <Button Margin="6,0,0,0"
-                                        Padding="8,6"
-                                        MinHeight="32"
-                                        Style="{StaticResource FooterButtonStyle}"
-                                        Content="Clear"
-                                        Command="{Binding ClearLogsCommand}" />
-                            </UniformGrid>
+                            <TextBlock FontSize="10.5"
+                                       Foreground="#8899AABB"
+                                       Text="© 2026 Forger Digital Solutions"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Margin="0,2,0,0"
+                                       FontSize="10.5"
+                                       Foreground="#8899AABB"
+                                       Text="Beta issue? ForgerDigitalSolutions@outlook.com"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Margin="0,2,0,0"
+                                       FontSize="10.5"
+                                       Foreground="#8899AABB"
+                                       Text="No API keys/passwords/private documents."
+                                       TextWrapping="Wrap" />
                         </StackPanel>
 
-                        <StackPanel x:Name="LiveLogPreview">
+                        <StackPanel>
                             <TextBlock Margin="0,0,0,8"
                                        FontFamily="Consolas"
                                        FontSize="11.5"
@@ -1121,16 +1347,44 @@
                                        Foreground="#FFE0E8F4"
                                        Text="{Binding LogStatusLineText}"
                                        TextWrapping="Wrap" />
-                            <Border Padding="10"
-                                    Background="#CC050911"
+                            <Border Margin="0,0,0,8"
+                                    Padding="8"
+                                    Visibility="{Binding ProgressVisibility}"
+                                    Background="#B80A101A"
+                                    BorderBrush="#6657C7E8"
+                                    BorderThickness="1"
+                                    CornerRadius="8">
+                                <StackPanel>
+                                    <ProgressBar Height="8"
+                                                 Minimum="0"
+                                                 Maximum="100"
+                                                 Value="{Binding CurrentProgressValue, Mode=OneWay}"
+                                                 IsIndeterminate="{Binding IsProgressIndeterminate}" />
+                                    <UniformGrid Margin="0,7,0,0" Columns="2">
+                                        <TextBlock FontSize="10.5" Foreground="#FFE0E8F4" Text="{Binding UsbProgressStageText}" TextWrapping="Wrap" />
+                                        <TextBlock FontSize="10.5" Foreground="#FFE0E8F4" Text="{Binding UsbProgressItemText}" TextWrapping="Wrap" />
+                                        <TextBlock FontSize="10.5" Foreground="#FFE0E8F4" Text="{Binding UsbProgressPercentText}" TextWrapping="Wrap" />
+                                        <TextBlock FontSize="10.5" Foreground="#FFE0E8F4" Text="{Binding UsbProgressTransferText}" TextWrapping="Wrap" />
+                                        <TextBlock FontSize="10.5" Foreground="#FFE0E8F4" Text="{Binding UsbProgressSpeedText}" TextWrapping="Wrap" />
+                                        <TextBlock FontSize="10.5" Foreground="#FFD9B392" Text="{Binding UsbProgressHeartbeatText}" TextWrapping="Wrap" />
+                                    </UniformGrid>
+                                </StackPanel>
+                            </Border>
+                            <Border MinHeight="120"
+                                    Padding="8"
+                                    Background="#E6050911"
                                     BorderBrush="#4457C7E8"
                                     BorderThickness="1"
                                     CornerRadius="8">
-                                <TextBlock FontFamily="Consolas"
-                                           FontSize="11"
-                                           Foreground="#FFDDE7F4"
-                                           Text="{Binding RecentLogsText}"
-                                           TextWrapping="Wrap" />
+                                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                              HorizontalScrollBarVisibility="Disabled"
+                                              MaxHeight="220">
+                                    <TextBlock FontFamily="Consolas"
+                                               FontSize="10.5"
+                                               Foreground="#FFC9D7EA"
+                                               Text="{Binding RecentLogsText, Mode=OneWay}"
+                                               TextWrapping="Wrap" />
+                                </ScrollViewer>
                             </Border>
                         </StackPanel>
                     </DockPanel>
@@ -1186,8 +1440,7 @@
                                           ItemsSource="{Binding UsbTargets}"
                                           SelectedItem="{Binding SelectedUsbTarget}"
                                           IsEnabled="{Binding IsIdle}"
-                                          Background="#F4F1EA"
-                                          Foreground="#FF111111"
+                                          Style="{StaticResource UsbTargetComboBoxStyle}"
                                           ItemContainerStyle="{StaticResource UsbTargetComboItemStyle}">
                                     <ComboBox.ItemTemplate>
                                         <DataTemplate>
@@ -1239,6 +1492,8 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
 
                                 <TextBlock Grid.Row="0" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Drive" />
@@ -1256,29 +1511,35 @@
                                 <TextBlock Grid.Row="4" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="File system" />
                                 <TextBlock Grid.Row="4" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.FileSystem, TargetNullValue=—}" />
 
-                                <TextBlock Grid.Row="5" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Drive type" />
-                                <TextBlock Grid.Row="5" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.SelectionStatusText, TargetNullValue=—}" />
+                                <TextBlock Grid.Row="5" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Safety" />
+                                <TextBlock Grid.Row="5" Grid.Column="1" FontWeight="Bold" Foreground="{Binding TargetWarningForeground}" Text="{Binding SelectedUsbTarget.SafetyStatusText, TargetNullValue=—}" />
 
-                                <TextBlock Grid.Row="6" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Bus type" />
-                                <TextBlock Grid.Row="6" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.BusTypeDisplay, TargetNullValue=—}" />
+                                <TextBlock Grid.Row="6" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Reason" />
+                                <TextBlock Grid.Row="6" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.SafetyReasonText, TargetNullValue=—}" TextWrapping="Wrap" />
 
-                                <TextBlock Grid.Row="7" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Device" />
-                                <TextBlock Grid.Row="7" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.DeviceIdentityDisplay, TargetNullValue=—}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="7" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Drive type" />
+                                <TextBlock Grid.Row="7" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.SelectionStatusText, TargetNullValue=—}" />
 
-                                <TextBlock Grid.Row="8" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Read speed" />
-                                <TextBlock Grid.Row="8" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.ReadSpeedDisplayNormalized, TargetNullValue=Not benchmarked}" />
+                                <TextBlock Grid.Row="8" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Bus type" />
+                                <TextBlock Grid.Row="8" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.BusTypeDisplay, TargetNullValue=—}" />
 
-                                <TextBlock Grid.Row="9" Margin="0,0,14,0" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Write speed" />
-                                <TextBlock Grid.Row="9" Grid.Column="1" Margin="0,0,0,8" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.WriteSpeedDisplayNormalized, TargetNullValue=Not benchmarked}" />
+                                <TextBlock Grid.Row="9" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Device" />
+                                <TextBlock Grid.Row="9" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.DeviceIdentityDisplay, TargetNullValue=—}" TextWrapping="Wrap" />
 
-                                <TextBlock Grid.Row="10" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Benchmark" />
-                                <TextBlock Grid.Row="10" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.BenchmarkStatusDisplay, TargetNullValue=Queued}" />
+                                <TextBlock Grid.Row="10" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Read speed" />
+                                <TextBlock Grid.Row="10" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.ReadSpeedDisplayNormalized, TargetNullValue=Not benchmarked}" />
 
-                                <TextBlock Grid.Row="11" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Test size" />
-                                <TextBlock Grid.Row="11" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.BenchmarkTestSizeDisplay, TargetNullValue=Not tested}" />
+                                <TextBlock Grid.Row="11" Margin="0,0,14,0" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Write speed" />
+                                <TextBlock Grid.Row="11" Grid.Column="1" Margin="0,0,0,8" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.WriteSpeedDisplayNormalized, TargetNullValue=Not benchmarked}" />
 
-                                <TextBlock Grid.Row="12" Margin="0,0,14,0" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Last tested" />
-                                <TextBlock Grid.Row="12" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.BenchmarkLastTestedDisplay, TargetNullValue=Never}" />
+                                <TextBlock Grid.Row="12" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Benchmark" />
+                                <TextBlock Grid.Row="12" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.BenchmarkStatusDisplay, TargetNullValue=Queued}" />
+
+                                <TextBlock Grid.Row="13" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Test size" />
+                                <TextBlock Grid.Row="13" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.BenchmarkTestSizeDisplay, TargetNullValue=Not tested}" />
+
+                                <TextBlock Grid.Row="14" Margin="0,0,14,0" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Last tested" />
+                                <TextBlock Grid.Row="14" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.BenchmarkLastTestedDisplay, TargetNullValue=Never}" />
                             </Grid>
 
                             <Border Padding="12"
@@ -1743,39 +2004,65 @@
                     </TabItem>
 
                     <TabItem Header="◇  Kyra">
-                        <StackPanel Margin="24,0,24,0" MaxWidth="1040" HorizontalAlignment="Left">
-                            <GroupBox>
+                        <Grid Margin="24,8,24,16" MaxWidth="1040" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                            <Image Panel.ZIndex="0"
+                                   Width="260"
+                                   Height="260"
+                                   Margin="0,0,-16,0"
+                                   HorizontalAlignment="Right"
+                                   VerticalAlignment="Bottom"
+                                   Opacity="0.12"
+                                   Source="Assets/Kyra.png"
+                                   Stretch="Uniform"
+                                   IsHitTestVisible="False"
+                                   RenderOptions.BitmapScalingMode="Fant" />
+                            <GroupBox Panel.ZIndex="1" VerticalAlignment="Stretch">
                                 <GroupBox.Header>
                                     <StackPanel Orientation="Horizontal">
-                                        <Image Width="28"
-                                               Height="28"
+                                        <Image Width="40"
+                                               Height="40"
                                                Margin="0,0,8,0"
                                                Source="Assets/Kyra.png"
-                                               Stretch="UniformToFill" />
-                                        <TextBlock VerticalAlignment="Center" Text="Kyra" />
+                                               Stretch="Uniform"
+                                               RenderOptions.BitmapScalingMode="Fant" />
+                                        <TextBlock VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource PanelTextBrush}"
+                                                   FontWeight="SemiBold"
+                                                   Text="Kyra" />
                                     </StackPanel>
                                 </GroupBox.Header>
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="360" />
+                                        <RowDefinition Height="*" MinHeight="260" />
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
 
                                     <Border Grid.Row="0"
-                                            Margin="0,0,0,12"
-                                            Padding="12"
+                                            Margin="0,0,0,10"
+                                            Padding="10"
                                             Background="#B80A101A"
                                             BorderBrush="{DynamicResource PanelBorderBrush}"
                                             BorderThickness="1"
                                             CornerRadius="10">
-                                        <Grid>
+                                        <DockPanel LastChildFill="True">
+                                            <Image DockPanel.Dock="Right"
+                                                   Width="56"
+                                                   Height="56"
+                                                   Margin="8,0,0,0"
+                                                   VerticalAlignment="Center"
+                                                   Opacity="1"
+                                                   Source="Assets/Kyra.png"
+                                                   Stretch="Uniform"
+                                                   IsHitTestVisible="False"
+                                                   RenderOptions.BitmapScalingMode="Fant" />
+                                            <StackPanel>
+                                            <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="220" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
@@ -1786,6 +2073,7 @@
                                                        Foreground="{DynamicResource PanelLabelBrush}"
                                                        Text="Mode" />
                                             <ComboBox Grid.Column="1"
+                                                      Width="188"
                                                       ItemsSource="{Binding CopilotModeOptions}"
                                                       SelectedItem="{Binding SelectedCopilotMode}"
                                                       Style="{StaticResource ReadableComboBoxStyle}"
@@ -1793,161 +2081,167 @@
                                             <Border Grid.Column="2"
                                                     Margin="12,0,0,0"
                                                     Padding="10,4"
-                                                    Background="{Binding CopilotOnlineStatusBackground}"
-                                                    BorderBrush="{Binding CopilotOnlineStatusBorderBrush}"
+                                                    Background="#FFE8FAEF"
+                                                    BorderBrush="#FF86EFAC"
                                                     BorderThickness="1"
                                                     CornerRadius="999">
-                                                <TextBlock FontWeight="SemiBold"
-                                                           Foreground="{Binding CopilotOnlineStatusForeground}"
-                                                           Text="{Binding CopilotOnlineStatusText}"
-                                                           TextWrapping="Wrap" />
+                                                <TextBlock FontSize="12"
+                                                           FontWeight="Bold"
+                                                           Foreground="#FF14532D"
+                                                           Text="{Binding CopilotProviderBadgeText}"
+                                                           TextWrapping="NoWrap" />
                                             </Border>
-                                            <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="12,0,0,0">
-                                                <Button Width="126"
-                                                        Style="{StaticResource SecondaryButtonStyle}"
-                                                        Content="Clear Chat"
-                                                        Command="{Binding ClearCopilotHistoryCommand}" />
-                                                <Button Width="132"
-                                                        Margin="8,0,0,0"
-                                                        Style="{StaticResource SecondaryButtonStyle}"
-                                                        Content="Stop Generating"
-                                                        Command="{Binding StopCopilotGenerationCommand}" />
+                                            <Border Grid.Column="3"
+                                                    Margin="8,0,0,0"
+                                                    Padding="10,4"
+                                                    Background="#FFFFF7ED"
+                                                    BorderBrush="#FFFBBF24"
+                                                    BorderThickness="1"
+                                                    CornerRadius="999">
+                                                <TextBlock FontSize="12"
+                                                           FontWeight="Bold"
+                                                           Foreground="#FF7C2D12"
+                                                           Text="{Binding CopilotPrivacyBadgeText}"
+                                                           TextWrapping="NoWrap" />
+                                            </Border>
+                                            <TextBlock Grid.Column="4"
+                                                       Margin="12,0,12,0"
+                                                       VerticalAlignment="Center"
+                                                       FontSize="11.5"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                       Text="{Binding CopilotActiveProviderText, Mode=OneWay}"
+                                                       TextWrapping="Wrap" />
+                                            <Button Grid.Column="5"
+                                                    MinWidth="104"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Content="Advanced…"
+                                                    Command="{Binding OpenKyraAdvancedSettingsCommand}" />
+                                            </Grid>
+                                            <TextBlock Margin="0,8,0,0"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                       Text="{Binding CopilotRoutingPolicyText, Mode=OneWay}"
+                                                       TextWrapping="Wrap"
+                                                       Visibility="{Binding CopilotRoutingPolicyVisibility}" />
                                             </StackPanel>
-                                        </Grid>
+                                        </DockPanel>
                                     </Border>
 
                                     <Border Grid.Row="1"
-                                            Margin="0,0,0,12"
-                                            Padding="12"
-                                            Background="#B80A101A"
-                                            BorderBrush="{DynamicResource PanelBorderBrush}"
-                                            BorderThickness="1"
-                                            CornerRadius="10">
-                                        <StackPanel>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0"
-                                                           FontWeight="SemiBold"
-                                                           Foreground="{DynamicResource PanelLabelBrush}"
-                                                           Text="Local Context" />
-                                                <CheckBox Grid.Column="1"
-                                                          Margin="0,0,12,0"
-                                                          VerticalAlignment="Center"
-                                                          IsChecked="{Binding UseLatestSystemScanContext, Mode=TwoWay}"
-                                                          Content="Latest scan" />
-                                                <Button Grid.Column="2"
-                                                        Width="190"
-                                                        Style="{StaticResource SecondaryButtonStyle}"
-                                                        Content="Use Latest System Scan"
-                                                        Command="{Binding UseLatestSystemScanContextCommand}" />
-                                            </Grid>
-                                            <TextBlock Margin="0,6,0,0"
-                                                       FontFamily="Consolas"
-                                                       FontSize="12"
-                                                       Foreground="{DynamicResource PanelTextBrush}"
-                                                       Text="{Binding CopilotContextText}"
-                                                       TextWrapping="Wrap" />
-                                        </StackPanel>
-                                    </Border>
-
-                                    <Border Grid.Row="2"
-                                            Margin="0,0,0,12"
-                                            Padding="12"
-                                            Background="#B80A101A"
-                                            BorderBrush="{DynamicResource PanelBorderBrush}"
-                                            BorderThickness="1"
-                                            CornerRadius="10">
-                                        <StackPanel>
-                                            <TextBlock Margin="0,0,0,8"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource PanelLabelBrush}"
-                                                       Text="Provider Hooks" />
-                                            <ItemsControl ItemsSource="{Binding CopilotProviderSettings}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <CheckBox Margin="0,0,0,6"
-                                                                  IsChecked="{Binding IsEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
-                                                            <StackPanel>
-                                                                <TextBlock FontWeight="SemiBold"
-                                                                           Foreground="{DynamicResource PanelTextBrush}"
-                                                                           Text="{Binding DisplayName}" />
-                                                                <TextBlock Margin="0,2,0,0"
-                                                                           FontSize="11.5"
-                                                                           Foreground="{DynamicResource PanelMutedTextBrush}"
-                                                                           Text="{Binding DetailText}"
-                                                                           TextWrapping="Wrap" />
-                                                            </StackPanel>
-                                                        </CheckBox>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </StackPanel>
-                                    </Border>
-
-                                    <WrapPanel Grid.Row="3" Margin="0,0,0,12">
-                                        <Button MinWidth="166" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="What is this laptop worth?" Command="{Binding AskCopilotValueCommand}" />
-                                        <Button MinWidth="206" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="What should I upgrade before selling?" Command="{Binding AskCopilotUpgradeCommand}" />
-                                        <Button MinWidth="174" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Why is my computer lagging?" Command="{Binding AskCopilotLagCommand}" />
-                                        <Button MinWidth="164" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Best OS for this machine?" Command="{Binding AskCopilotOsCommand}" />
-                                        <Button MinWidth="184" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Best USB toolkit for this job?" Command="{Binding AskCopilotUsbCommand}" />
-                                        <Button MinWidth="168" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="What does this warning mean?" Command="{Binding AskCopilotWarningCommand}" />
-                                    </WrapPanel>
-
-                                    <Border Grid.Row="4"
+                                            MinHeight="260"
                                             Padding="12"
                                             Background="#CC050911"
                                             BorderBrush="#4457C7E8"
                                             BorderThickness="1"
                                             CornerRadius="10">
-                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                            <ItemsControl ItemsSource="{Binding CopilotMessages}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <Border Margin="0,0,0,10"
-                                                                Padding="10"
-                                                                Background="#B80A101A"
-                                                                BorderBrush="{DynamicResource PanelBorderBrush}"
-                                                                BorderThickness="1"
-                                                                CornerRadius="8">
-                                                            <StackPanel>
-                                                                <TextBlock FontWeight="SemiBold"
-                                                                           Foreground="{DynamicResource PanelLabelBrush}"
-                                                                           Text="{Binding Role}" />
-                                                                <TextBlock Margin="0,5,0,0"
-                                                                           Foreground="{DynamicResource PanelTextBrush}"
-                                                                           Text="{Binding Text}"
-                                                                           TextWrapping="Wrap" />
-                                                            </StackPanel>
-                                                        </Border>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </ScrollViewer>
+                                        <DockPanel LastChildFill="True">
+                                            <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                                                <Button MinWidth="132" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Diagnose this PC" Command="{Binding AskCopilotLagCommand}" />
+                                                <Button MinWidth="202" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="What should I upgrade before selling?" Command="{Binding AskCopilotUpgradeCommand}" />
+                                                <Button MinWidth="156" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="What is this laptop worth?" Command="{Binding AskCopilotValueCommand}" />
+                                                <Button MinWidth="150" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Best OS for this machine?" Command="{Binding AskCopilotOsCommand}" />
+                                                <Button MinWidth="142" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Build me a repair USB" Command="{Binding AskCopilotUsbCommand}" />
+                                                <Button MinWidth="136" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Explain this warning" Command="{Binding AskCopilotWarningCommand}" />
+                                            </WrapPanel>
+                                            <TextBlock DockPanel.Dock="Bottom"
+                                                       Margin="0,8,0,0"
+                                                       Visibility="{Binding CopilotThinkingVisibility}"
+                                                       FontSize="12"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="#FFFFDAB8"
+                                                       Text="Kyra is thinking..." />
+                                            <ScrollViewer x:Name="CopilotChatScrollViewer"
+                                                          VerticalScrollBarVisibility="Auto"
+                                                          Style="{StaticResource CopilotChatScrollViewerStyle}">
+                                                <ItemsControl ItemsSource="{Binding CopilotMessages}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Border Margin="0,0,0,10"
+                                                                    Padding="12"
+                                                                    Background="#B80A101A"
+                                                                    BorderBrush="{DynamicResource PanelBorderBrush}"
+                                                                    BorderThickness="1"
+                                                                    CornerRadius="8">
+                                                                <StackPanel>
+                                                                    <Grid>
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="*" />
+                                                                            <ColumnDefinition Width="Auto" />
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock FontWeight="SemiBold"
+                                                                                   Foreground="{DynamicResource PanelLabelBrush}"
+                                                                                   Text="{Binding Role}" />
+                                                                        <Button Grid.Column="1"
+                                                                                Width="70"
+                                                                                Padding="6,3"
+                                                                                Visibility="{Binding CopyVisibility}"
+                                                                                Style="{StaticResource FooterButtonStyle}"
+                                                                                Content="Copy"
+                                                                                Click="OnCopyCopilotResponseClick" />
+                                                                    </Grid>
+                                                                    <TextBlock Margin="0,6,0,0"
+                                                                               Foreground="{DynamicResource PanelTextBrush}"
+                                                                               Text="{Binding Text}"
+                                                                               TextWrapping="Wrap" />
+                                                                    <TextBlock Margin="0,6,0,0"
+                                                                               FontSize="11"
+                                                                               Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                                               Text="{Binding SourceLabel}" />
+                                                                </StackPanel>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </ScrollViewer>
+                                        </DockPanel>
                                     </Border>
 
-                                    <Grid Grid.Row="5" Margin="0,12,0,0">
+                                    <Grid Grid.Row="2" Margin="0,12,0,0">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBox Grid.Column="0"
-                                                 MinHeight="42"
-                                                 Text="{Binding CopilotInput, UpdateSourceTrigger=PropertyChanged}"
-                                                 TextWrapping="Wrap"
-                                                 AcceptsReturn="True" />
+                                        <Grid Grid.Column="0">
+                                            <TextBox MinHeight="42"
+                                                     Style="{StaticResource KyraChatInputTextBoxStyle}"
+                                                     Text="{Binding CopilotInput, UpdateSourceTrigger=PropertyChanged}"
+                                                     TextWrapping="Wrap"
+                                                     AcceptsReturn="True"
+                                                     ToolTip="Ask Kyra about this PC, USB builds, resale value, OS choice, or troubleshooting..."
+                                                     PreviewKeyDown="OnCopilotInputPreviewKeyDown" />
+                                            <TextBlock Margin="14,0,14,0"
+                                                       VerticalAlignment="Center"
+                                                       IsHitTestVisible="False"
+                                                       Foreground="#99E0E8F5"
+                                                       Text="Ask Kyra about this PC, USB builds, resale value, OS choice, or troubleshooting..."
+                                                       TextWrapping="Wrap"
+                                                       Visibility="{Binding CopilotInputPlaceholderVisibility}" />
+                                        </Grid>
                                         <Button Grid.Column="1"
                                                 Width="110"
                                                 Margin="10,0,0,0"
                                                 Content="Send"
                                                 Command="{Binding SendCopilotMessageCommand}" />
+                                        <Button Grid.Column="2"
+                                                Width="104"
+                                                Margin="8,0,0,0"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Content="Clear Chat"
+                                                Command="{Binding ClearCopilotHistoryCommand}" />
+                                        <Button Grid.Column="3"
+                                                Width="126"
+                                                Margin="8,0,0,0"
+                                                Visibility="{Binding StopCopilotGenerationVisibility}"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Content="Stop"
+                                                Command="{Binding StopCopilotGenerationCommand}" />
                                     </Grid>
                                 </Grid>
                             </GroupBox>
-                        </StackPanel>
+                        </Grid>
                     </TabItem>
 
                     <TabItem Header="⚙  Diagnostics">
@@ -2023,6 +2317,252 @@
                                                        TextWrapping="Wrap" />
                                         </StackPanel>
                                     </Border>
+
+                                    <GroupBox Margin="0,14,0,0" Header="WSL / Ubuntu command runner (beta)">
+                                        <StackPanel>
+                                            <TextBlock FontSize="12"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       Text="{Binding WslRunnerSummaryText}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,10,0,0"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                       TextWrapping="Wrap"
+                                                       Text="Only run commands you understand. Some commands can change files or packages. Nothing here is elevated. Full interactive terminal support is future work." />
+                                            <WrapPanel Margin="0,10,0,0">
+                                                <Button MinWidth="150"
+                                                        Margin="0,0,8,8"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="wsl --list --verbose"
+                                                        Command="{Binding RunWslHostListVerboseRunnerCommand}" />
+                                                <Button MinWidth="120"
+                                                        Margin="0,0,8,8"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="wsl --status"
+                                                        Command="{Binding RunWslHostStatusRunnerCommand}" />
+                                                <Button MinWidth="88"
+                                                        Margin="0,0,8,8"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="uname -a"
+                                                        Command="{Binding InsertWslRunnerPresetCommand}"
+                                                        CommandParameter="uname -a" />
+                                                <Button MinWidth="88"
+                                                        Margin="0,0,8,8"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="df -h"
+                                                        Command="{Binding InsertWslRunnerPresetCommand}"
+                                                        CommandParameter="df -h" />
+                                                <Button MinWidth="88"
+                                                        Margin="0,0,8,8"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="lsblk"
+                                                        Command="{Binding InsertWslRunnerPresetCommand}"
+                                                        CommandParameter="lsblk" />
+                                                <Button MinWidth="88"
+                                                        Margin="0,0,8,8"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="ip addr"
+                                                        Command="{Binding InsertWslRunnerPresetCommand}"
+                                                        CommandParameter="ip addr" />
+                                                <Button MinWidth="110"
+                                                        Margin="0,0,8,8"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="lsb_release -a"
+                                                        Command="{Binding InsertWslRunnerPresetCommand}"
+                                                        CommandParameter="lsb_release -a" />
+                                            </WrapPanel>
+                                            <TextBox Margin="0,0,0,8"
+                                                     MinHeight="32"
+                                                     FontFamily="Consolas"
+                                                     FontSize="12"
+                                                     Padding="8,6"
+                                                     Background="#FF0E1624"
+                                                     Foreground="{DynamicResource PanelTextBrush}"
+                                                     BorderBrush="{DynamicResource PanelBorderBrush}"
+                                                     TextWrapping="Wrap"
+                                                     AcceptsReturn="False"
+                                                     VerticalContentAlignment="Center"
+                                                     Text="{Binding WslRunnerCommandInput, UpdateSourceTrigger=PropertyChanged}" />
+                                            <StackPanel Orientation="Horizontal">
+                                                <Button MinWidth="88"
+                                                        Margin="0,0,8,0"
+                                                        Content="Run"
+                                                        Command="{Binding RunWslRunnerCommand}" />
+                                                <Button MinWidth="88"
+                                                        Margin="0,0,8,0"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Stop"
+                                                        Command="{Binding StopWslRunnerCommand}" />
+                                                <Button MinWidth="88"
+                                                        Margin="0,0,8,0"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Copy"
+                                                        Command="{Binding CopyWslRunnerOutputCommand}" />
+                                                <Button MinWidth="88"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Clear"
+                                                        Command="{Binding ClearWslRunnerOutputCommand}" />
+                                            </StackPanel>
+                                            <TextBox Margin="0,10,0,0"
+                                                     MinHeight="140"
+                                                     MaxHeight="260"
+                                                     FontFamily="Consolas"
+                                                     FontSize="11"
+                                                     Padding="8"
+                                                     IsReadOnly="True"
+                                                     VerticalScrollBarVisibility="Auto"
+                                                     HorizontalScrollBarVisibility="Auto"
+                                                     TextWrapping="Wrap"
+                                                     Background="#FF070B12"
+                                                     Foreground="#FFE8F0FF"
+                                                     BorderBrush="{DynamicResource PanelBorderBrush}"
+                                                     Text="{Binding WslRunnerOutputText, Mode=OneWay}" />
+                                        </StackPanel>
+                                    </GroupBox>
+
+                                    <GroupBox Margin="0,14,0,0" Header="Link / Download Safety Checker (beta)">
+                                        <StackPanel>
+                                            <TextBlock FontSize="12"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       TextWrapping="Wrap"
+                                                       Text="ForgerEMS can flag obvious risks, but it cannot guarantee a download is safe. Do not run unknown tools on your main machine. Nothing here auto-executes downloads." />
+                                            <TextBox Margin="0,10,0,8"
+                                                     MinHeight="32"
+                                                     FontFamily="Consolas"
+                                                     FontSize="12"
+                                                     Padding="8,6"
+                                                     Background="#FF0E1624"
+                                                     Foreground="{DynamicResource PanelTextBrush}"
+                                                     BorderBrush="{DynamicResource PanelBorderBrush}"
+                                                     TextWrapping="Wrap"
+                                                     AcceptsReturn="False"
+                                                     Text="{Binding LinkSafetyUrlInput, UpdateSourceTrigger=PropertyChanged}" />
+                                            <WrapPanel Margin="0,0,0,8">
+                                                <Button MinWidth="120"
+                                                        Margin="0,0,8,8"
+                                                        Content="Analyze URL"
+                                                        Command="{Binding AnalyzeLinkSafetyCommand}" />
+                                                <Button MinWidth="150"
+                                                        Margin="0,0,8,8"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="HTTPS HEAD (optional)"
+                                                        Command="{Binding FetchLinkSafetyHeadersCommand}" />
+                                                <Button MinWidth="210"
+                                                        Margin="0,0,8,8"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Download to quarantine (no run)"
+                                                        Command="{Binding DownloadLinkToQuarantineCommand}" />
+                                            </WrapPanel>
+                                            <TextBox MinHeight="120"
+                                                     MaxHeight="220"
+                                                     FontFamily="Consolas"
+                                                     FontSize="11"
+                                                     Padding="8"
+                                                     IsReadOnly="True"
+                                                     VerticalScrollBarVisibility="Auto"
+                                                     TextWrapping="Wrap"
+                                                     Background="#FF070B12"
+                                                     Foreground="#FFE8F0FF"
+                                                     BorderBrush="{DynamicResource PanelBorderBrush}"
+                                                     Text="{Binding LinkSafetyResultText, Mode=OneWay}" />
+                                        </StackPanel>
+                                    </GroupBox>
+
+                                    <GroupBox Margin="0,14,0,0" Header="Downloaded file / EXE safety (read-only)">
+                                        <StackPanel>
+                                            <TextBlock FontSize="12"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       TextWrapping="Wrap"
+                                                       Text="ForgerEMS can flag obvious risks and compute hashes, but it cannot guarantee a file is safe. Do not run unknown tools on your main machine. The selected file is never executed." />
+                                            <WrapPanel Margin="0,10,0,8">
+                                                <Button MinWidth="160"
+                                                        Margin="0,0,8,8"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Pick file…"
+                                                        Command="{Binding BrowseLocalFileSafetyCommand}" />
+                                                <Button MinWidth="120"
+                                                        Margin="0,0,8,8"
+                                                        Content="Analyze file"
+                                                        Command="{Binding AnalyzeLocalFileSafetyCommand}" />
+                                                <Button MinWidth="118"
+                                                        Margin="0,0,8,8"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Copy SHA256"
+                                                        Command="{Binding CopyLocalFileSafetyShaCommand}" />
+                                                <Button MinWidth="108"
+                                                        Margin="0,0,8,8"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Copy report"
+                                                        Command="{Binding CopyLocalFileSafetyReportCommand}" />
+                                                <Button MinWidth="168"
+                                                        Margin="0,0,8,8"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Open quarantine folder"
+                                                        Command="{Binding OpenLocalSafetyQuarantineFolderCommand}" />
+                                                <Button MinWidth="210"
+                                                        Margin="0,0,8,8"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Copy file to quarantine (no run)"
+                                                        Command="{Binding CopyLocalFileToQuarantineCommand}" />
+                                            </WrapPanel>
+                                            <TextBox Margin="0,0,0,8"
+                                                     MinHeight="32"
+                                                     FontFamily="Consolas"
+                                                     FontSize="12"
+                                                     Padding="8,6"
+                                                     Background="#FF0E1624"
+                                                     Foreground="{DynamicResource PanelTextBrush}"
+                                                     BorderBrush="{DynamicResource PanelBorderBrush}"
+                                                     TextWrapping="Wrap"
+                                                     AcceptsReturn="False"
+                                                     Text="{Binding LocalFileSafetyPath, UpdateSourceTrigger=PropertyChanged}" />
+                                            <TextBox MinHeight="120"
+                                                     MaxHeight="220"
+                                                     FontFamily="Consolas"
+                                                     FontSize="11"
+                                                     Padding="8"
+                                                     IsReadOnly="True"
+                                                     VerticalScrollBarVisibility="Auto"
+                                                     TextWrapping="Wrap"
+                                                     Background="#FF070B12"
+                                                     Foreground="#FFE8F0FF"
+                                                     BorderBrush="{DynamicResource PanelBorderBrush}"
+                                                     Text="{Binding LocalFileSafetyResultText, Mode=OneWay}" />
+                                        </StackPanel>
+                                    </GroupBox>
+
+                                    <GroupBox Margin="0,14,0,0" Header="Sandbox / VM check — future">
+                                        <StackPanel>
+                                            <TextBlock FontSize="12"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       TextWrapping="Wrap"
+                                                       Text="{Binding WindowsSandboxStatusText}" />
+                                            <TextBlock Margin="0,10,0,0"
+                                                       FontSize="12"
+                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                       TextWrapping="Wrap"
+                                                       Text="ForgerEMS will not run unknown files on your host PC. A future version may integrate optional isolated VM workflows when explicitly configured by the operator. Until then, copy suspicious installers into Windows Sandbox, Hyper-V, VMware, or VirtualBox manually and inspect them there." />
+                                        </StackPanel>
+                                    </GroupBox>
+
+                                    <Border Margin="0,14,0,0"
+                                            Padding="12"
+                                            Background="#CC0B1220"
+                                            BorderBrush="{DynamicResource PanelBorderBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="8">
+                                        <StackPanel>
+                                            <TextBlock FontSize="12"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource PanelLabelBrush}"
+                                                       Text="What to do next" />
+                                            <TextBlock Margin="0,8,0,0"
+                                                       FontSize="12"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       TextWrapping="Wrap"
+                                                       Text="If backend status shows a problem: use Refresh Backend Context, confirm the installed app folder still contains backend\ and manifests\, then re-run from a clean release build. If USB or toolkit steps fail: copy logs from the footer, open the Runtime logs folder under %LOCALAPPDATA%\ForgerEMS\Runtime\logs, and include screenshots with your report. For scan or resale questions, run System Intelligence first, then ask Kyra in Offline Local mode." />
+                                        </StackPanel>
+                                    </Border>
                                 </StackPanel>
                             </GroupBox>
                         </StackPanel>
@@ -2037,6 +2577,42 @@
                                                Foreground="{DynamicResource PanelMutedTextBrush}"
                                                Text="Visuals"
                                                TextWrapping="Wrap" />
+
+                                    <Border Margin="0,0,0,14"
+                                            Padding="12"
+                                            Visibility="{Binding BetaTesterEntitlementVisibility}"
+                                            Background="#FFFFE7C2"
+                                            BorderBrush="#FFFFB86B"
+                                            BorderThickness="1"
+                                            CornerRadius="8">
+                                        <TextBlock Foreground="#FF111111"
+                                                   FontWeight="Bold"
+                                                   Text="Beta Tester: Pro access unlocked during beta"
+                                                   TextWrapping="Wrap" />
+                                    </Border>
+
+                                    <GroupBox Margin="0,0,0,14" Header="App updates">
+                                        <StackPanel>
+                                            <CheckBox IsChecked="{Binding CheckForUpdatesAutomatically, Mode=TwoWay}"
+                                                      Content="Check for updates automatically (on by default for beta)" />
+                                            <TextBlock Margin="0,8,0,0"
+                                                       FontSize="11.5"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       Text="{Binding LastUpdateCheckDisplayText}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,6,0,0"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                       Text="Source: public GitHub Releases (Forger-Digital-Solutions/ForgerEMS). ForgerEMS never downloads or installs updates unless you click Download. Offline failures are handled quietly."
+                                                       TextWrapping="Wrap" />
+                                            <Button Margin="0,10,0,0"
+                                                    MinWidth="120"
+                                                    HorizontalAlignment="Left"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Content="Check for updates now"
+                                                    Command="{Binding CheckForUpdatesNowCommand}" />
+                                        </StackPanel>
+                                    </GroupBox>
 
                                     <Grid Margin="0,0,0,14">
                                         <Grid.ColumnDefinitions>
@@ -2114,13 +2690,59 @@
 
         </Grid>
 
+        <Grid x:Name="BetaWelcomeOverlay"
+              Panel.ZIndex="45"
+              Visibility="{Binding BetaWelcomeVisibility}"
+              Background="#C9000000">
+            <Border Width="620"
+                    MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Window}}"
+                    Padding="22"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Background="#F0080D14"
+                    BorderBrush="#FFFFB86B"
+                    BorderThickness="1.2"
+                    CornerRadius="12">
+                <StackPanel>
+                    <TextBlock FontFamily="Bahnschrift SemiCondensed"
+                               FontSize="22"
+                               FontWeight="Bold"
+                               Foreground="#FFFFDAB8"
+                               Text="ForgerEMS v1.1.1-beta.1" />
+                    <TextBlock Margin="0,8,0,14"
+                               Foreground="#FFE0E8F4"
+                               Text="This is an unsigned beta build for human testing. Confirm the USB target carefully before running setup, update, or Ventoy actions."
+                               TextWrapping="Wrap" />
+                    <TextBlock Foreground="#FFE0E8F4"
+                               TextWrapping="Wrap"
+                               Text="Start by picking a USB, confirming the safe data partition, building or updating the toolkit, and reporting anything confusing or broken with logs and screenshots." />
+                    <WrapPanel Margin="0,18,0,0">
+                        <Button MinWidth="150"
+                                Margin="0,0,10,0"
+                                Content="Start USB Builder"
+                                Click="OnStartUsbBuilderFromBetaWelcomeClick" />
+                        <Button MinWidth="140"
+                                Margin="0,0,10,0"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Content="Open Logs Folder"
+                                Click="OnOpenLogsFromBetaWelcomeClick" />
+                        <Button MinWidth="140"
+                                Margin="0"
+                                Style="{StaticResource FooterButtonStyle}"
+                                Content="Don't show again"
+                                Click="OnDismissBetaWelcomeClick" />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+
         <Grid x:Name="FullLogsOverlay"
               Panel.ZIndex="40"
               Visibility="Collapsed"
               Background="#B8000000">
-            <Border Width="920"
+            <Border Width="960"
                     MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Window}}"
-                    Height="620"
+                    Height="640"
                     MaxHeight="{Binding ActualHeight, RelativeSource={RelativeSource AncestorType=Window}}"
                     Padding="18"
                     HorizontalAlignment="Center"
@@ -2130,52 +2752,74 @@
                     BorderThickness="1"
                     CornerRadius="12">
                 <DockPanel LastChildFill="True">
-                    <Grid DockPanel.Dock="Top" Margin="0,0,0,14">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock VerticalAlignment="Center"
-                                   FontFamily="Bahnschrift SemiCondensed"
-                                   FontSize="18"
-                                   FontWeight="Bold"
-                                   Foreground="#FFFFDAB8"
-                                   Text="Full Logs" />
-                        <ComboBox Grid.Column="1"
-                                  Width="128"
-                                  Margin="12,0,0,0"
-                                  ItemsSource="{Binding LogLevelFilterOptions}"
-                                  SelectedItem="{Binding SelectedLogLevelFilter}"
-                                  Style="{StaticResource ReadableComboBoxStyle}"
-                                  ItemContainerStyle="{StaticResource ReadableComboBoxItemStyle}" />
-                        <CheckBox Grid.Column="2"
-                                  Margin="12,0"
-                                  VerticalAlignment="Center"
-                                  IsChecked="{Binding AutoScrollLogs}"
-                                  Content="Auto-scroll" />
-                        <Button Grid.Column="3"
-                                Width="86"
-                                Margin="0,0,8,0"
-                                Style="{StaticResource SecondaryButtonStyle}"
-                                Content="Copy"
-                                Command="{Binding CopyLogsCommand}" />
-                        <Button Grid.Column="4"
-                                Width="86"
-                                Margin="0,0,8,0"
-                                Style="{StaticResource SecondaryButtonStyle}"
-                                Content="Clear"
-                                Command="{Binding ClearLogsCommand}" />
-                        <Button Grid.Column="5"
-                                Width="86"
-                                Margin="0"
-                                Style="{StaticResource FooterButtonStyle}"
-                                Content="Close"
-                                Click="OnCloseFullLogsClick" />
-                    </Grid>
+                    <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock VerticalAlignment="Center"
+                                       FontFamily="Bahnschrift SemiCondensed"
+                                       FontSize="18"
+                                       FontWeight="Bold"
+                                       Foreground="#FFFFDAB8"
+                                       Text="Full Logs" />
+                            <ComboBox Grid.Column="1"
+                                      Width="128"
+                                      Margin="12,0,0,0"
+                                      ItemsSource="{Binding LogLevelFilterOptions}"
+                                      SelectedItem="{Binding SelectedLogLevelFilter}"
+                                      Style="{StaticResource ReadableComboBoxStyle}"
+                                      ItemContainerStyle="{StaticResource ReadableComboBoxItemStyle}" />
+                            <CheckBox Grid.Column="2"
+                                      Margin="12,0"
+                                      VerticalAlignment="Center"
+                                      IsChecked="{Binding AutoScrollLogs}"
+                                      Content="Auto-scroll" />
+                            <Button Grid.Column="3"
+                                    MinWidth="92"
+                                    Margin="0,0,8,0"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Content="Copy logs"
+                                    Command="{Binding CopyLogsCommand}" />
+                            <Button Grid.Column="4"
+                                    MinWidth="92"
+                                    Margin="0,0,8,0"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Content="Clear logs"
+                                    Command="{Binding ClearLogsCommand}" />
+                            <Button Grid.Column="5"
+                                    MinWidth="86"
+                                    Margin="0"
+                                    Style="{StaticResource FooterButtonStyle}"
+                                    Content="Close"
+                                    Click="OnCloseFullLogsClick" />
+                        </Grid>
+                        <WrapPanel ItemHeight="34" ItemWidth="Auto">
+                            <Button Margin="0,0,8,8"
+                                    MinWidth="148"
+                                    Padding="10,6"
+                                    Style="{StaticResource FooterButtonStyle}"
+                                    Content="Copy support email"
+                                    Command="{Binding CopySupportEmailCommand}" />
+                            <Button Margin="0,0,8,8"
+                                    MinWidth="156"
+                                    Padding="10,6"
+                                    Style="{StaticResource FooterButtonStyle}"
+                                    Content="Open support email…"
+                                    Command="{Binding OpenSupportEmailCommand}" />
+                            <Button Margin="0,0,8,8"
+                                    MinWidth="188"
+                                    Padding="10,6"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Content="Copy beta report template"
+                                    Command="{Binding CopyBetaReportTemplateCommand}" />
+                        </WrapPanel>
+                    </StackPanel>
 
                     <TextBox x:Name="LogTextBox"
                              Background="#E6050911"

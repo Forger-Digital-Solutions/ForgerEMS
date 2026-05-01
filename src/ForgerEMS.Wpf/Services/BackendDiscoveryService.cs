@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -67,6 +68,11 @@ public sealed class BackendDiscoveryService : IBackendDiscoveryService
         "manifests\\vendor.inventory.schema.json"
     ];
 
+    private static readonly JsonSerializerOptions MetadataJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     private readonly string _frontendVersion;
 
     public BackendDiscoveryService(string? frontendVersion = null)
@@ -93,7 +99,8 @@ public sealed class BackendDiscoveryService : IBackendDiscoveryService
             diagnostics.Add($"Advanced override did not resolve a valid backend from '{overrideRoot}'.");
         }
 
-        var bundledRoot = Path.Combine(AppContext.BaseDirectory, BundledBackendFolderName);
+        var executableBaseDirectory = GetExecutableBaseDirectory();
+        var bundledRoot = Path.Combine(executableBaseDirectory, BundledBackendFolderName);
         if (Directory.Exists(bundledRoot))
         {
             if (TryCreateBundledBackendContext(bundledRoot, out var bundledContext, out var bundledFailure))
@@ -104,7 +111,7 @@ public sealed class BackendDiscoveryService : IBackendDiscoveryService
             diagnostics.Add(bundledFailure);
         }
 
-        var searchedRoots = GetCandidateRoots([Directory.GetCurrentDirectory(), AppContext.BaseDirectory]).ToList();
+        var searchedRoots = GetCandidateRoots([Directory.GetCurrentDirectory(), executableBaseDirectory, AppContext.BaseDirectory]).ToList();
         var discoveredContext = TryDiscoverAcrossRoots(searchedRoots, string.Empty, diagnostics);
         if (discoveredContext is not null)
         {
@@ -176,12 +183,7 @@ public sealed class BackendDiscoveryService : IBackendDiscoveryService
         var metadataPath = Path.Combine(bundledRoot, BundledBackendMetadataFileName);
         try
         {
-            metadata = JsonSerializer.Deserialize<BundledBackendMetadata>(
-                File.ReadAllText(metadataPath),
-                new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                });
+            metadata = JsonSerializer.Deserialize<BundledBackendMetadata>(File.ReadAllText(metadataPath), MetadataJsonOptions);
         }
         catch (Exception exception)
         {
@@ -315,6 +317,23 @@ public sealed class BackendDiscoveryService : IBackendDiscoveryService
         }
 
         return Environment.GetEnvironmentVariable(BackendOverrideEnvironmentVariable) ?? string.Empty;
+    }
+
+    private static string GetExecutableBaseDirectory()
+    {
+        try
+        {
+            var mainModulePath = Process.GetCurrentProcess().MainModule?.FileName;
+            if (!string.IsNullOrWhiteSpace(mainModulePath) && File.Exists(mainModulePath))
+            {
+                return Path.GetDirectoryName(mainModulePath) ?? AppContext.BaseDirectory;
+            }
+        }
+        catch
+        {
+        }
+
+        return AppContext.BaseDirectory;
     }
 
     private static IEnumerable<string> GetCandidateRoots(IEnumerable<string?> seeds)

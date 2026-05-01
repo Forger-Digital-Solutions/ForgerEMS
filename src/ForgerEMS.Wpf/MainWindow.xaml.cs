@@ -1,6 +1,9 @@
 using System.ComponentModel;
+using System.Collections.Specialized;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Navigation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -35,7 +38,20 @@ public partial class MainWindow : Window
         new([new(0.29, 0.84), new(0.40, 0.73), new(0.48, 0.58)]),
         new([new(0.50, 0.86), new(0.50, 0.70), new(0.50, 0.56)]),
         new([new(0.11, 0.34), new(0.25, 0.34), new(0.37, 0.43)]),
-        new([new(0.89, 0.63), new(0.77, 0.63), new(0.62, 0.55)])
+        new([new(0.89, 0.63), new(0.77, 0.63), new(0.62, 0.55)]),
+        new([new(0.18, 0.18), new(0.18, 0.36), new(0.32, 0.36), new(0.32, 0.52)]),
+        new([new(0.82, 0.18), new(0.82, 0.34), new(0.68, 0.34), new(0.68, 0.50)]),
+        new([new(0.42, 0.12), new(0.58, 0.12), new(0.58, 0.28), new(0.42, 0.28)]),
+        new([new(0.14, 0.58), new(0.30, 0.58), new(0.30, 0.72), new(0.46, 0.72)]),
+        new([new(0.86, 0.40), new(0.86, 0.54), new(0.72, 0.54), new(0.72, 0.68)]),
+        new([new(0.36, 0.62), new(0.52, 0.62), new(0.52, 0.76), new(0.66, 0.76)]),
+        new([new(0.50, 0.18), new(0.62, 0.24), new(0.62, 0.38), new(0.50, 0.44)]),
+        new([new(0.24, 0.26), new(0.36, 0.32), new(0.36, 0.46), new(0.24, 0.52)]),
+        new([new(0.64, 0.30), new(0.76, 0.36), new(0.76, 0.50), new(0.64, 0.56)]),
+        new([new(0.08, 0.48), new(0.20, 0.48), new(0.20, 0.62), new(0.32, 0.62)]),
+        new([new(0.92, 0.28), new(0.92, 0.42), new(0.80, 0.42), new(0.80, 0.56)]),
+        new([new(0.46, 0.34), new(0.54, 0.40), new(0.54, 0.50), new(0.46, 0.56)]),
+        new([new(0.30, 0.66), new(0.42, 0.60), new(0.54, 0.66), new(0.66, 0.60)])
     ];
     private MainViewModel? _currentViewModel;
     private readonly DispatcherTimer _logScrollTimer;
@@ -45,6 +61,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         CenterWindowForLaunch();
+        KeepAnimatedBackgroundParticleOnly();
         FreezeBackgroundFreezables(CircuitBackgroundLayer);
 
         _backgroundAnimationTimer = new DispatcherTimer
@@ -64,6 +81,7 @@ public partial class MainWindow : Window
         _logScrollTimer.Tick += OnLogScrollTimerTick;
 
         Loaded += OnLoaded;
+        Closed += OnClosed;
         DataContextChanged += OnDataContextChanged;
         AttachToViewModel(viewModel);
     }
@@ -124,12 +142,20 @@ public partial class MainWindow : Window
         AttachToViewModel(e.NewValue as MainViewModel);
     }
 
+    private void OnClosed(object? sender, EventArgs e)
+    {
+        DetachFromViewModel(_currentViewModel);
+        _currentViewModel?.Dispose();
+    }
+
     private void AttachToViewModel(MainViewModel? viewModel)
     {
         _currentViewModel = viewModel;
         if (_currentViewModel is not null)
         {
             _currentViewModel.PropertyChanged += OnViewModelPropertyChanged;
+            _currentViewModel.CopilotMessages.CollectionChanged += OnCopilotMessagesChanged;
+            _currentViewModel.OpenKyraAdvancedSettingsAction = OpenKyraAdvancedSettingsWindow;
             UpdateCircuitBackgroundActivity();
             UpdateManagedPackageGlow();
         }
@@ -140,6 +166,8 @@ public partial class MainWindow : Window
         if (viewModel is not null)
         {
             viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            viewModel.CopilotMessages.CollectionChanged -= OnCopilotMessagesChanged;
+            viewModel.OpenKyraAdvancedSettingsAction = null;
         }
     }
 
@@ -172,6 +200,34 @@ public partial class MainWindow : Window
         {
             UpdateManagedPackageGlow();
             UpdateActiveToolFlow();
+        }
+    }
+
+    private void OnCopilotMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        Dispatcher.BeginInvoke(() => CopilotChatScrollViewer?.ScrollToEnd(), DispatcherPriority.Background);
+    }
+
+    private void OnCopilotInputPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+        {
+            return;
+        }
+
+        if (DataContext is MainViewModel viewModel && viewModel.SendCopilotMessageCommand.CanExecute(null))
+        {
+            e.Handled = true;
+            viewModel.SendCopilotMessageCommand.Execute(null);
+        }
+    }
+
+    private void OnCopyCopilotResponseClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: VentoyToolkitSetup.Wpf.Models.CopilotChatMessage message } &&
+            !string.IsNullOrWhiteSpace(message.Text))
+        {
+            Clipboard.SetText(message.Text);
         }
     }
 
@@ -225,16 +281,19 @@ public partial class MainWindow : Window
         MainContentScrollViewer.ScrollToVerticalOffset(MainContentScrollViewer.VerticalOffset + offsetDelta);
     }
 
-    private void OnLogPanelToggleChanged(object sender, RoutedEventArgs e)
+    private void OpenKyraAdvancedSettingsWindow()
     {
-        if (LogPanelToggle is null || LiveLogPreview is null)
+        if (DataContext is not MainViewModel vm)
         {
             return;
         }
 
-        var expanded = LogPanelToggle.IsChecked == true;
-        LiveLogPreview.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
-        LogPanelToggle.Content = expanded ? "Hide" : "Show";
+        var dialog = new KyraAdvancedSettingsWindow
+        {
+            Owner = this,
+            DataContext = vm
+        };
+        dialog.ShowDialog();
     }
 
     private void OnSidebarNavigateClick(object sender, RoutedEventArgs e)
@@ -277,9 +336,9 @@ public partial class MainWindow : Window
         for (var index = 0; index < navButtons.Length; index++)
         {
             var selected = index == MainTabControl.SelectedIndex;
-            navButtons[index].Background = new SolidColorBrush(selected ? Color.FromRgb(255, 231, 194) : Color.FromArgb(204, 10, 16, 26));
-            navButtons[index].BorderBrush = new SolidColorBrush(selected ? Color.FromRgb(255, 184, 107) : Color.FromArgb(102, 87, 199, 232));
-            navButtons[index].Foreground = new SolidColorBrush(selected ? Color.FromRgb(17, 17, 17) : Color.FromRgb(215, 222, 232));
+            navButtons[index].Background = new SolidColorBrush(selected ? Color.FromRgb(255, 224, 178) : Color.FromArgb(204, 10, 16, 26));
+            navButtons[index].BorderBrush = new SolidColorBrush(selected ? Color.FromRgb(255, 159, 67) : Color.FromArgb(102, 87, 199, 232));
+            navButtons[index].Foreground = new SolidColorBrush(selected ? Color.FromRgb(8, 8, 12) : Color.FromRgb(232, 240, 255));
         }
     }
 
@@ -292,6 +351,43 @@ public partial class MainWindow : Window
     private void OnCloseFullLogsClick(object sender, RoutedEventArgs e)
     {
         FullLogsOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    private void SupportMailto_OnRequestNavigate(object sender, RequestNavigateEventArgs e)
+    {
+        e.Handled = true;
+        try
+        {
+            Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
+        }
+        catch
+        {
+        }
+    }
+
+    private void OnStartUsbBuilderFromBetaWelcomeClick(object sender, RoutedEventArgs e)
+    {
+        MainTabControl.SelectedIndex = 0;
+        if (DataContext is MainViewModel viewModel)
+        {
+            viewModel.DismissBetaWelcome();
+        }
+    }
+
+    private void OnOpenLogsFromBetaWelcomeClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel viewModel && viewModel.OpenLogsFolderCommand.CanExecute(null))
+        {
+            viewModel.OpenLogsFolderCommand.Execute(null);
+        }
+    }
+
+    private void OnDismissBetaWelcomeClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel viewModel)
+        {
+            viewModel.DismissBetaWelcome();
+        }
     }
 
     private void UpdateCircuitBackgroundActivity()
@@ -446,6 +542,34 @@ public partial class MainWindow : Window
         ApplyPackageGroupDetail(MedicatPackageGroup);
         ApplyPackageGroupDetail(UsbBuildersPackageGroup);
         ResetToolNodePulse();
+        KeepAnimatedBackgroundParticleOnly();
+    }
+
+    private void KeepAnimatedBackgroundParticleOnly()
+    {
+        CircuitBackgroundLayer.IsHitTestVisible = false;
+        TraceLightCanvas.IsHitTestVisible = false;
+        TraceLightCanvas.Background = Brushes.Transparent;
+
+        foreach (UIElement child in CircuitTraceCanvas.Children)
+        {
+            child.Visibility = IsAnimatedTraceElement(child)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+    }
+
+    private bool IsAnimatedTraceElement(UIElement element)
+    {
+        return ReferenceEquals(element, OsToVentoyPulse) ||
+               ReferenceEquals(element, RecoveryToVentoyPulse) ||
+               ReferenceEquals(element, DiagnosticsToVentoyPulse) ||
+               ReferenceEquals(element, WindowsToolsToVentoyPulse) ||
+               ReferenceEquals(element, MedicatToVentoyPulse) ||
+               ReferenceEquals(element, VentoyToUsbPulse) ||
+               ReferenceEquals(element, UsbBuildersToVentoyPulse) ||
+               ReferenceEquals(element, TargetPulseRing) ||
+               ReferenceEquals(element, TargetUsbPulseNode);
     }
 
     private double GetBackgroundLayerOpacity(bool animated)
@@ -497,9 +621,9 @@ public partial class MainWindow : Window
 
         return _backgroundDetail switch
         {
-            BackgroundDetailLevel.Low => 10,
-            BackgroundDetailLevel.High => 36,
-            _ => 22
+            BackgroundDetailLevel.Low => 16,
+            BackgroundDetailLevel.High => 48,
+            _ => 32
         };
     }
 
@@ -547,8 +671,8 @@ public partial class MainWindow : Window
 
         for (var index = 0; index < particleCount; index++)
         {
-            var route = _traceRoutes[_traceRandom.Next(_traceRoutes.Length)];
-            var color = colors[_traceRandom.Next(colors.Length)];
+            var route = _traceRoutes[index % _traceRoutes.Length];
+            var color = colors[index % colors.Length];
             var brush = new SolidColorBrush(color);
             brush.Freeze();
 
@@ -751,7 +875,7 @@ public partial class MainWindow : Window
             "ui-settings.txt");
     }
 
-    private void ResetPackageGroupGlow(IEnumerable<PackageGroupVisual> packageGroups)
+    private static void ResetPackageGroupGlow(IEnumerable<PackageGroupVisual> packageGroups)
     {
         foreach (var packageGroup in packageGroups)
         {

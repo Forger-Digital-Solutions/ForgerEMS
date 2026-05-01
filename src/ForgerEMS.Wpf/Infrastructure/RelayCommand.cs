@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using VentoyToolkitSetup.Wpf.Services;
 
 namespace VentoyToolkitSetup.Wpf.Infrastructure;
 
@@ -64,7 +65,15 @@ public sealed class AsyncRelayCommand : ICommand
 
         try
         {
-            await _executeAsync();
+            await _executeAsync().ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            StartupDiagnosticLog.AppendLine("AsyncRelayCommand: OperationCanceledException (suppressed; command cancelled).");
+        }
+        catch (Exception exception)
+        {
+            StartupDiagnosticLog.AppendException("AsyncRelayCommand.Execute", exception);
         }
         finally
         {
@@ -76,5 +85,49 @@ public sealed class AsyncRelayCommand : ICommand
     public void RaiseCanExecuteChanged()
     {
         CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+    }
+}
+
+public sealed class RelayCommand<T> : ICommand
+{
+    private readonly Action<T?> _execute;
+    private readonly Predicate<T?>? _canExecute;
+
+    public RelayCommand(Action<T?> execute, Predicate<T?>? canExecute = null)
+    {
+        _execute = execute;
+        _canExecute = canExecute;
+    }
+
+    public event EventHandler? CanExecuteChanged;
+
+    public bool CanExecute(object? parameter)
+    {
+        return _canExecute?.Invoke(ConvertParameter(parameter)) ?? true;
+    }
+
+    public void Execute(object? parameter)
+    {
+        _execute(ConvertParameter(parameter));
+    }
+
+    public void RaiseCanExecuteChanged()
+    {
+        CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private static T? ConvertParameter(object? parameter)
+    {
+        if (parameter is null && default(T) is null)
+        {
+            return default;
+        }
+
+        if (parameter is T typed)
+        {
+            return typed;
+        }
+
+        return default;
     }
 }
