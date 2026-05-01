@@ -12,6 +12,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using VentoyToolkitSetup.Wpf.Infrastructure;
 using VentoyToolkitSetup.Wpf.Models;
+using VentoyToolkitSetup.Wpf.Services.KyraTools;
 
 namespace VentoyToolkitSetup.Wpf.Services;
 
@@ -137,6 +138,12 @@ public enum KyraIntent
     GeneralTechQuestion,
     ForgerEMSQuestion,
     LiveOnlineQuestion,
+    Weather,
+    News,
+    CryptoPrice,
+    StockPrice,
+    Sports,
+    CodeAssist,
     Unknown
 }
 
@@ -235,6 +242,12 @@ public sealed class CopilotSettings
 
     public bool PreferFreeProviderForGeneralChat { get; set; } = true;
 
+    /// <summary>When true (default), online providers are tried before falling back to Local Kyra when mode allows.</summary>
+    public bool ApiFirstRouting { get; set; } = true;
+
+    /// <summary>Optional on-disk preferences (non-sensitive); user toggle.</summary>
+    public bool KyraPersistentMemoryEnabled { get; set; }
+
     public Dictionary<string, CopilotProviderConfiguration> Providers { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
@@ -276,6 +289,15 @@ public sealed class CopilotRequest
     public UsbTargetInfo? SelectedUsbTarget { get; init; }
 
     public CopilotSettings Settings { get; init; } = new();
+
+    /// <summary>When false, Kyra routing detail notes are omitted from the chat response (still used internally).</summary>
+    public bool VerboseDiagnosticNotes { get; init; }
+
+    /// <summary>Sanitized memory hint from optional local Kyra memory store.</summary>
+    public string? KyraMemorySummaryForPrompt { get; init; }
+
+    /// <summary>Optional UI status line (non-sensitive). Caller should marshal to UI thread.</summary>
+    public Action<string>? KyraActivityStatusCallback { get; init; }
 }
 
 public sealed class CopilotResponse
@@ -295,6 +317,8 @@ public sealed class CopilotResponse
     public string SourceLabel { get; init; } = "Answered by Local Kyra";
 
     public bool FallbackUsed { get; init; }
+
+    public IReadOnlyList<KyraActionSuggestion> ActionSuggestions { get; init; } = Array.Empty<KyraActionSuggestion>();
 }
 
 public sealed class CopilotContext
@@ -320,6 +344,9 @@ public sealed class CopilotContext
     public IReadOnlyList<string> Recommendations { get; init; } = Array.Empty<string>();
 
     public PricingEstimate? PricingEstimate { get; init; }
+
+    /// <summary>Optional block from Kyra tool adapters; merged into online provider prompts via <see cref="KyraPrivacyGate"/>.</summary>
+    public string? ProviderRealtimeAugmentation { get; init; }
 }
 
 public sealed class CopilotProviderRequest
@@ -454,7 +481,42 @@ public static class KyraIntentRouter
         }
 
         var text = prompt.ToLowerInvariant();
-        if (ContainsAny(text, "weather", "forecast", "current", "today", "latest news", "live price", "stock price", "right now"))
+        if (KyraCodeSnippetDetector.LooksLikeCodeSnippet(prompt))
+        {
+            return KyraIntent.CodeAssist;
+        }
+
+        if (ContainsAny(text, "weather", "forecast", "humidity", "precipitation", "celsius", "fahrenheit") &&
+            !ContainsAny(text, "ssd", "storage health", "forecast upgrade"))
+        {
+            return KyraIntent.Weather;
+        }
+
+        if (ContainsAny(text, "headline", "breaking news", "in the news", "news today", "current events") ||
+            (text.Contains("news", StringComparison.OrdinalIgnoreCase) &&
+             !ContainsAny(text, "usb", "ventoy", "toolkit", "driver")))
+        {
+            return KyraIntent.News;
+        }
+
+        if (ContainsAny(text, "bitcoin", "ethereum", "btc", "eth", "dogecoin", "solana", "crypto price", "altcoin"))
+        {
+            return KyraIntent.CryptoPrice;
+        }
+
+        if (ContainsAny(text, "stock", "ticker", "nasdaq", "nyse", "s&p", "share price", "equity") &&
+            !ContainsAny(text, "usb stick", "thumb drive", "ventoy"))
+        {
+            return KyraIntent.StockPrice;
+        }
+
+        if (ContainsAny(text, "nfl", "nba", "mlb", "nhl", "soccer score", "super bowl", "world cup", "final score", "playoff"))
+        {
+            return KyraIntent.Sports;
+        }
+
+        if (ContainsAny(text, "right now", "live price", "at this moment") &&
+            ContainsAny(text, "price", "market", "exchange rate"))
         {
             return KyraIntent.LiveOnlineQuestion;
         }
@@ -892,6 +954,12 @@ public static class KyraProviderRouter
         }
 
         return context.Intent is KyraIntent.LiveOnlineQuestion
+                or KyraIntent.Weather
+                or KyraIntent.News
+                or KyraIntent.CryptoPrice
+                or KyraIntent.StockPrice
+                or KyraIntent.Sports
+                or KyraIntent.CodeAssist
                 or KyraIntent.ResaleValue
                 or KyraIntent.UpgradeAdvice
                 or KyraIntent.PerformanceLag
@@ -1002,7 +1070,8 @@ public static class KyraProviderRouter
 
     private static KyraModelCapability GetCapability(ICopilotProvider provider, KyraIntent intent)
     {
-        if (intent is KyraIntent.GeneralTechQuestion or KyraIntent.LiveOnlineQuestion)
+        if (intent is KyraIntent.GeneralTechQuestion or KyraIntent.LiveOnlineQuestion or KyraIntent.Weather
+            or KyraIntent.News or KyraIntent.CryptoPrice or KyraIntent.StockPrice or KyraIntent.Sports)
         {
             return provider.Id switch
             {
@@ -1012,14 +1081,14 @@ public static class KyraProviderRouter
             };
         }
 
+        if (intent is KyraIntent.CodeAssist or KyraIntent.ForgerEMSQuestion or KyraIntent.DriverIssue)
+        {
+            return KyraModelCapability.CodeHelp;
+        }
+
         if (intent is KyraIntent.ResaleValue or KyraIntent.UpgradeAdvice)
         {
             return KyraModelCapability.DeepReasoning;
-        }
-
-        if (intent is KyraIntent.ForgerEMSQuestion or KyraIntent.DriverIssue)
-        {
-            return KyraModelCapability.CodeHelp;
         }
 
         return KyraModelCapability.WritingPolish;
@@ -1198,9 +1267,13 @@ public static class KyraPrivacyGate
 {
     public static CopilotContext BuildProviderContext(CopilotContext context, bool allowSystemContextSharing)
     {
+        var aug = BuildRealtimeAugmentationSection(context.ProviderRealtimeAugmentation);
         if (allowSystemContextSharing)
         {
             var sanitizedBlock = BuildSanitizedProviderSummary(context);
+            var body = string.IsNullOrEmpty(aug)
+                ? $"{sanitizedBlock}{Environment.NewLine}{Environment.NewLine}{context.UserQuestion}"
+                : $"{sanitizedBlock}{Environment.NewLine}{Environment.NewLine}{aug}{Environment.NewLine}{Environment.NewLine}{context.UserQuestion}";
             return new CopilotContext
             {
                 UserQuestion = context.UserQuestion,
@@ -1208,11 +1281,14 @@ public static class KyraPrivacyGate
                 Intent = context.Intent,
                 PreviousIntent = context.PreviousIntent,
                 SystemContext = context.SystemContext,
-                ContextText = $"{sanitizedBlock}{Environment.NewLine}{Environment.NewLine}{context.UserQuestion}",
+                ContextText = body,
                 ConversationHistory = context.ConversationHistory
             };
         }
 
+        var privacyBody = string.IsNullOrEmpty(aug)
+            ? context.UserQuestion
+            : $"{aug}{Environment.NewLine}{Environment.NewLine}{context.UserQuestion}";
         return new CopilotContext
         {
             UserQuestion = context.UserQuestion,
@@ -1220,9 +1296,20 @@ public static class KyraPrivacyGate
             Intent = context.Intent,
             PreviousIntent = context.PreviousIntent,
             SystemContext = new SystemContext(),
-            ContextText = context.UserQuestion,
+            ContextText = privacyBody,
             ConversationHistory = context.ConversationHistory
         };
+    }
+
+    private static string BuildRealtimeAugmentationSection(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return string.Empty;
+        }
+
+        var safe = KyraSystemContextSanitizer.SanitizeForExternalProviders(raw.Trim());
+        return "Real-time tool context (informational; verify figures and sources):" + Environment.NewLine + safe;
     }
 
     /// <summary>
@@ -1276,7 +1363,7 @@ public static class KyraPrivacyGate
             $"Recommendations: {string.Join("; ", recs)}" + Environment.NewLine +
             $"Warnings: {string.Join("; ", problems)}";
 
-        return CopilotRedactor.Redact(block, enabled: true);
+        return KyraSystemContextSanitizer.SanitizeForExternalProviders(CopilotRedactor.Redact(block, enabled: true));
     }
 
     private static string FormatNullableBool(bool? value) => value.HasValue ? value.Value.ToString() : "UNKNOWN";
@@ -2088,6 +2175,7 @@ public sealed class CopilotService : ICopilotService
 {
     private readonly ICopilotProviderRegistry _providerRegistry;
     private readonly ICopilotContextBuilder _contextBuilder;
+    private readonly KyraToolRegistry _toolRegistry = new();
     private readonly Dictionary<string, Queue<DateTimeOffset>> _providerRequests = new(StringComparer.OrdinalIgnoreCase);
     private readonly KyraProviderUsageTracker _usageTracker = new();
     private readonly KyraResponseCache _responseCache = new();
@@ -2114,12 +2202,42 @@ public sealed class CopilotService : ICopilotService
             var settings = request.Settings ?? new CopilotSettings();
             EnsureProviderDefaults(settings);
             UseOnlineAI = settings.Mode is CopilotMode.OnlineAssisted or CopilotMode.HybridAuto or CopilotMode.OnlineWhenAvailable;
-            var context = AttachConversationMemory(_contextBuilder.Build(request));
+            string? lastReported = null;
+            void Report(string message)
+            {
+                if (string.Equals(lastReported, message, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                lastReported = message;
+                try
+                {
+                    request.KyraActivityStatusCallback?.Invoke(message);
+                }
+                catch
+                {
+                }
+            }
+
+            Report("Checking system context…");
+            var built = _contextBuilder.Build(request);
+            Report("Sanitizing context…");
+            Report("Checking configured tool…");
+            var toolAugmentation = await _toolRegistry.BuildAugmentationAsync(
+                new KyraToolExecutionRequest
+                {
+                    Intent = built.Intent,
+                    Prompt = request.Prompt,
+                    Context = built,
+                    Settings = settings
+                },
+                cancellationToken).ConfigureAwait(false);
+            var context = AttachConversationMemory(AttachToolAugmentation(built, toolAugmentation, settings));
             var memoryState = _memory.GetState();
             _lastSystemContext = context.SystemContext;
             var notes = new List<string> { $"Intent detected: {context.Intent}", $"Previous intent: {memoryState.LastIntent}" };
             var localProvider = _providerRegistry.FindByType(CopilotProviderType.LocalOffline) ?? new LocalOfflineCopilotProvider();
-            var localResult = await RunProviderSafeAsync(localProvider, request, settings, context, notes, cancellationToken).ConfigureAwait(false);
             var executionPlan = KyraOrchestrator.BuildExecutionPlan(
                 request,
                 settings,
@@ -2128,21 +2246,25 @@ public sealed class CopilotService : ICopilotService
                 provider => GetProviderConfig(settings, provider));
             var plan = executionPlan.ToolPlan;
             notes.Add($"Tool plan: {plan.ToolName}");
-            if (plan.StayLocalReason == KyraStayLocalReason.MachineContextPrivacy &&
-                settings.Mode is not CopilotMode.OfflineOnly and not CopilotMode.AskFirst)
+            if (request.VerboseDiagnosticNotes)
             {
-                notes.Add("Kyra routing: machine-specific with online context sharing OFF -> Local Kyra (System Intelligence)");
-            }
-            else if (plan.StayLocalReason == KyraStayLocalReason.DeviceToolkitRouting &&
-                     plan.ShouldUseLocalToolAnswer &&
-                     settings.Mode is not CopilotMode.OfflineOnly and not CopilotMode.AskFirst)
-            {
-                notes.Add("Kyra routing: local tool intent -> Local Kyra");
+                if (plan.StayLocalReason == KyraStayLocalReason.MachineContextPrivacy &&
+                    settings.Mode is not CopilotMode.OfflineOnly and not CopilotMode.AskFirst)
+                {
+                    notes.Add("Kyra routing: machine-specific with online context sharing OFF -> Local Kyra (System Intelligence)");
+                }
+                else if (plan.StayLocalReason == KyraStayLocalReason.DeviceToolkitRouting &&
+                         plan.ShouldUseLocalToolAnswer &&
+                         settings.Mode is not CopilotMode.OfflineOnly and not CopilotMode.AskFirst)
+                {
+                    notes.Add("Kyra routing: local tool intent -> Local Kyra");
+                }
             }
 
             if (_responseCache.TryGet(BuildCacheKey(request.Prompt), out var cached))
             {
-                return CompleteResponse(request, context, new CopilotResponse
+                Report("Formatting Kyra response…");
+                var hit = CompleteResponse(request, context, new CopilotResponse
                 {
                     Text = cached,
                     UsedOnlineData = false,
@@ -2152,40 +2274,156 @@ public sealed class CopilotService : ICopilotService
                     ResponseSource = KyraResponseSource.LocalKyra,
                     SourceLabel = "Answered by Local Kyra"
                 });
+                Report("Done.");
+                return hit;
             }
 
             if (settings.Mode is CopilotMode.OfflineOnly or CopilotMode.AskFirst || plan.ShouldUseLocalToolAnswer)
             {
+                Report("Using local fallback…");
+                var localResultEarly = await RunProviderSafeAsync(localProvider, request, settings, context, notes, cancellationToken).ConfigureAwait(false);
                 var offlineStatus = settings.Mode == CopilotMode.AskFirst
                     ? "Kyra Mode: Hybrid (Ask First) - currently local/offline until you explicitly enable an online lookup."
                     : "Kyra Mode: Offline Local - no data leaves this machine.";
                 var localResponse = ApplyLocalKyraSourceLabel(
-                    BuildResponse(localResult, localProvider, notes, offlineStatus),
+                    BuildResponse(localResultEarly, localProvider, notes, offlineStatus),
                     plan,
                     context,
                     request.Prompt,
                     settings);
 
-                return CompleteResponse(request, context, localResponse);
+                Report("Formatting Kyra response…");
+                var earlyDone = CompleteResponse(request, context, localResponse);
+                Report("Done.");
+                return earlyDone;
             }
 
             var candidates = executionPlan.Providers;
             if (candidates.Count == 0)
             {
                 notes.Add("Kyra routing: no API providers selected; answering with Local Kyra.");
+                Report("Using local fallback…");
+                var localResultEmpty = await RunProviderSafeAsync(localProvider, request, settings, context, notes, cancellationToken).ConfigureAwait(false);
                 var status = settings.Mode is CopilotMode.OnlineAssisted or CopilotMode.OnlineWhenAvailable
                     ? "No online provider is configured yet. Local Kyra is still available."
                     : "Kyra Mode: Free API Pool unavailable. Fallback: Local Kyra active.";
-                return CompleteResponse(
+                Report("Formatting Kyra response…");
+                var emptyProviders = CompleteResponse(
                     request,
                     context,
-                    ApplyLocalKyraSourceLabel(BuildResponse(localResult, localProvider, notes, status), plan, context, request.Prompt, settings));
+                    ApplyLocalKyraSourceLabel(BuildResponse(localResultEmpty, localProvider, notes, status), plan, context, request.Prompt, settings));
+                Report("Done.");
+                return emptyProviders;
             }
 
-            var freePoolAttemptFailed = false;
+            var apiFirst = settings.ApiFirstRouting && !plan.ShouldPolishWithProvider;
+
+            if (apiFirst)
+            {
+                var freePoolAttemptFailed = false;
+                for (var i = 0; i < candidates.Count; i++)
+                {
+                    var provider = candidates[i];
+                    Report(provider.IsOnlineProvider ? "Asking API provider…" : "Thinking locally…");
+                    var result = await RunProviderSafeAsync(provider, request, settings, context, notes, cancellationToken).ConfigureAwait(false);
+                    if (result.Succeeded)
+                    {
+                        if (KyraResponseCache.IsCacheablePrompt(request.Prompt))
+                        {
+                            _responseCache.Store(BuildCacheKey(request.Prompt), result.UserMessage);
+                        }
+
+                        var status = result.UsedOnlineData
+                            ? $"Kyra Mode: Free API Pool | Provider: {provider.DisplayName}"
+                            : $"Kyra Mode: Hybrid | Provider: {provider.DisplayName} (no internet data sent)";
+                        if (freePoolAttemptFailed &&
+                            provider.ProviderType is CopilotProviderType.OllamaLocal or CopilotProviderType.LmStudioLocal)
+                        {
+                            notes.Add("Kyra routing: API exhausted -> Local AI");
+                        }
+
+                        notes.Add($"Kyra routing: normal chat -> {provider.DisplayName}");
+                        var onlineResponse = BuildResponse(result, provider, notes, status);
+                        if (provider.IsOnlineProvider &&
+                            settings.AllowOnlineSystemContextSharing &&
+                            KyraMachineContextRouter.IsMachineAnchoredIntent(context.Intent, request.Prompt))
+                        {
+                            onlineResponse = WithSourceLabel(onlineResponse,
+                                $"Answered by {provider.DisplayName} (API) using sanitized System Intelligence context");
+                        }
+                        else if (provider.IsOnlineProvider && !string.IsNullOrWhiteSpace(toolAugmentation))
+                        {
+                            onlineResponse = WithSourceLabel(onlineResponse,
+                                $"Answered by {provider.DisplayName} (API) with real-time/tool context where available");
+                        }
+
+                        Report("Formatting Kyra response…");
+                        var apiOk = CompleteResponse(request, context, onlineResponse);
+                        Report("Done.");
+                        return apiOk;
+                    }
+
+                    if (provider.IsOnlineProvider)
+                    {
+                        freePoolAttemptFailed = true;
+                    }
+
+                    if (i < candidates.Count - 1)
+                    {
+                        notes.Add($"Kyra routing: provider failed ({provider.DisplayName}) -> trying next provider");
+                    }
+                }
+
+                if (settings.OfflineFallbackEnabled)
+                {
+                    notes.Add("Kyra routing: all AI unavailable -> Local Kyra");
+                    Report("Using local fallback…");
+                    var localFallback = await RunProviderSafeAsync(localProvider, request, settings, context, notes, cancellationToken).ConfigureAwait(false);
+                    var fb = localFallback.UserMessage?.Trim() ?? string.Empty;
+                    if (!fb.StartsWith("I couldn’t reach", StringComparison.OrdinalIgnoreCase) &&
+                        !fb.StartsWith("I couldn't reach", StringComparison.OrdinalIgnoreCase))
+                    {
+                        fb = "I couldn’t reach the online assistants right now, so I’m answering offline with Local Kyra.\n\n" + fb;
+                    }
+
+                    var wrappedLocal = new CopilotProviderResult
+                    {
+                        Succeeded = true,
+                        UsedOnlineData = false,
+                        UserMessage = fb
+                    };
+                    Report("Formatting Kyra response…");
+                    var fbResp = CompleteResponse(
+                        request,
+                        context,
+                        ApplyLocalKyraSourceLabel(
+                            BuildResponse(wrappedLocal, localProvider, notes, "Local Kyra fallback — online providers were unavailable."),
+                            plan,
+                            context,
+                            request.Prompt,
+                            settings));
+                    Report("Done.");
+                    return fbResp;
+                }
+
+                Report("Formatting Kyra response…");
+                var noFb = CompleteResponse(request, context, new CopilotResponse
+                {
+                    Text = "Kyra could not get a provider response and offline fallback is disabled. Re-enable offline fallback or check provider settings.",
+                    OnlineStatus = "Error state - no fallback available.",
+                    ProviderNotes = notes
+                });
+                Report("Done.");
+                return noFb;
+            }
+
+            Report("Thinking locally…");
+            var localResult = await RunProviderSafeAsync(localProvider, request, settings, context, notes, cancellationToken).ConfigureAwait(false);
+            var freePoolAttemptFailedLegacy = false;
             for (var i = 0; i < candidates.Count; i++)
             {
                 var provider = candidates[i];
+                Report(provider.IsOnlineProvider ? "Asking API provider…" : "Thinking locally…");
                 var result = await RunProviderSafeAsync(provider, request, settings, context, notes, cancellationToken).ConfigureAwait(false);
                 if (result.Succeeded)
                 {
@@ -2203,10 +2441,11 @@ public sealed class CopilotService : ICopilotService
                     {
                         _responseCache.Store(BuildCacheKey(request.Prompt), result.UserMessage);
                     }
+
                     var status = result.UsedOnlineData
                         ? $"Kyra Mode: Free API Pool | Provider: {provider.DisplayName}"
                         : $"Kyra Mode: Hybrid | Provider: {provider.DisplayName} (no internet data sent)";
-                    if (freePoolAttemptFailed &&
+                    if (freePoolAttemptFailedLegacy &&
                         provider.ProviderType is CopilotProviderType.OllamaLocal or CopilotProviderType.LmStudioLocal)
                     {
                         notes.Add("Kyra routing: API exhausted -> Local AI");
@@ -2222,12 +2461,15 @@ public sealed class CopilotService : ICopilotService
                             $"Answered by {provider.DisplayName} using sanitized System Intelligence context");
                     }
 
-                    return CompleteResponse(request, context, onlineResponse);
+                    Report("Formatting Kyra response…");
+                    var legacyOk = CompleteResponse(request, context, onlineResponse);
+                    Report("Done.");
+                    return legacyOk;
                 }
 
                 if (provider.IsOnlineProvider)
                 {
-                    freePoolAttemptFailed = true;
+                    freePoolAttemptFailedLegacy = true;
                 }
 
                 if (i < candidates.Count - 1)
@@ -2239,7 +2481,9 @@ public sealed class CopilotService : ICopilotService
             if (settings.OfflineFallbackEnabled)
             {
                 notes.Add("Kyra routing: all AI unavailable -> Local Kyra");
-                return CompleteResponse(
+                Report("Using local fallback…");
+                Report("Formatting Kyra response…");
+                var allFail = CompleteResponse(
                     request,
                     context,
                     ApplyLocalKyraSourceLabel(
@@ -2248,14 +2492,19 @@ public sealed class CopilotService : ICopilotService
                         context,
                         request.Prompt,
                         settings));
+                Report("Done.");
+                return allFail;
             }
 
-            return CompleteResponse(request, context, new CopilotResponse
+            Report("Formatting Kyra response…");
+            var errEnd = CompleteResponse(request, context, new CopilotResponse
             {
                 Text = "Kyra could not get a provider response and offline fallback is disabled. Re-enable offline fallback or check provider settings.",
                 OnlineStatus = "Error state - no fallback available.",
                 ProviderNotes = notes
             });
+            Report("Done.");
+            return errEnd;
         }
         catch (OperationCanceledException)
         {
@@ -2348,14 +2597,79 @@ public sealed class CopilotService : ICopilotService
             SystemProfile = context.SystemProfile,
             HealthEvaluation = context.HealthEvaluation,
             Recommendations = context.Recommendations,
-            PricingEstimate = context.PricingEstimate
+            PricingEstimate = context.PricingEstimate,
+            ProviderRealtimeAugmentation = context.ProviderRealtimeAugmentation
+        };
+    }
+
+    private static CopilotContext AttachToolAugmentation(CopilotContext context, string? augmentation, CopilotSettings settings)
+    {
+        if (string.IsNullOrWhiteSpace(augmentation))
+        {
+            return context;
+        }
+
+        var safe = KyraSystemContextSanitizer.SanitizeForExternalProviders(augmentation.Trim());
+        var block = Environment.NewLine + Environment.NewLine + "Real-time tool context (informational; verify figures):" + Environment.NewLine + safe;
+        var newText = context.ContextText + block;
+        if (settings.MaxContextCharacters > 0 && newText.Length > settings.MaxContextCharacters)
+        {
+            newText = newText[..settings.MaxContextCharacters] + Environment.NewLine + "[context trimmed]";
+        }
+
+        return new CopilotContext
+        {
+            UserQuestion = context.UserQuestion,
+            ContextText = newText,
+            PromptMode = context.PromptMode,
+            Intent = context.Intent,
+            PreviousIntent = context.PreviousIntent,
+            SystemContext = context.SystemContext,
+            ConversationHistory = context.ConversationHistory,
+            SystemProfile = context.SystemProfile,
+            HealthEvaluation = context.HealthEvaluation,
+            Recommendations = context.Recommendations,
+            PricingEstimate = context.PricingEstimate,
+            ProviderRealtimeAugmentation = safe
         };
     }
 
     private CopilotResponse CompleteResponse(CopilotRequest request, CopilotContext context, CopilotResponse response)
     {
         RecordConversationTurn(request.Prompt, response.Text, context.Intent);
-        return response;
+        var filteredNotes = FilterProviderNotesForDisplay(response.ProviderNotes, request.VerboseDiagnosticNotes);
+        if (filteredNotes.Count == response.ProviderNotes.Count)
+        {
+            return response;
+        }
+
+        return new CopilotResponse
+        {
+            Text = response.Text,
+            UsedOnlineData = response.UsedOnlineData,
+            OnlineStatus = response.OnlineStatus,
+            ProviderType = response.ProviderType,
+            ProviderNotes = filteredNotes,
+            ResponseSource = response.ResponseSource,
+            SourceLabel = response.SourceLabel,
+            FallbackUsed = response.FallbackUsed,
+            ActionSuggestions = response.ActionSuggestions
+        };
+    }
+
+    private static IReadOnlyList<string> FilterProviderNotesForDisplay(IReadOnlyList<string> notes, bool verbose)
+    {
+        if (verbose || notes.Count == 0)
+        {
+            return notes;
+        }
+
+        return notes
+            .Where(static note =>
+                note.StartsWith("Intent detected:", StringComparison.OrdinalIgnoreCase) ||
+                note.StartsWith("Previous intent:", StringComparison.OrdinalIgnoreCase) ||
+                note.StartsWith("Tool plan:", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
     }
 
     private CopilotChatMessage[] GetHistorySnapshot() => _memory.ToChatMessages();
@@ -2639,7 +2953,8 @@ public sealed class CopilotService : ICopilotService
             ProviderNotes = notes,
             ResponseSource = source,
             SourceLabel = usedFallback ? "Fallback: Local Kyra" : $"Answered by {provider.DisplayName}",
-            FallbackUsed = usedFallback
+            FallbackUsed = usedFallback,
+            ActionSuggestions = []
         };
     }
 
@@ -2653,7 +2968,8 @@ public sealed class CopilotService : ICopilotService
             ProviderNotes = response.ProviderNotes,
             ResponseSource = response.ResponseSource,
             SourceLabel = sourceLabel,
-            FallbackUsed = response.FallbackUsed
+            FallbackUsed = response.FallbackUsed,
+            ActionSuggestions = response.ActionSuggestions
         };
 
     private static CopilotResponse ApplyLocalKyraSourceLabel(
@@ -2714,6 +3030,25 @@ public sealed class CopilotService : ICopilotService
     {
         return prompt.Trim().ToLowerInvariant();
     }
+
+    /// <summary>Loads System Intelligence JSON for slash commands and host snapshots (same mapping as Kyra context).</summary>
+    public static SystemProfile? TryLoadSystemProfileFromReport(string? reportPath)
+    {
+        if (string.IsNullOrWhiteSpace(reportPath) || !File.Exists(reportPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(reportPath));
+            return SystemProfileMapper.FromJson(document.RootElement);
+        }
+        catch
+        {
+            return null;
+        }
+    }
 }
 
 public sealed class CopilotContextBuilder : ICopilotContextBuilder
@@ -2739,9 +3074,20 @@ public sealed class CopilotContextBuilder : ICopilotContextBuilder
             $"App version: {CopilotRedactor.Redact(request.AppVersion, settings.RedactContextEnabled)}"
         };
 
+        if (settings.KyraPersistentMemoryEnabled &&
+            !string.IsNullOrWhiteSpace(request.KyraMemorySummaryForPrompt))
+        {
+            parts.Add(KyraSystemContextSanitizer.SanitizeForExternalProviders(request.KyraMemorySummaryForPrompt.Trim()));
+        }
+
         if (settings.UseLatestSystemScanContext)
         {
             parts.Add(BuildSystemSummary(request.SystemIntelligenceReportPath, profile, health, recommendations, pricingEstimate, settings.RedactContextEnabled));
+            if (profile is not null)
+            {
+                var insight = KyraSystemAnalyzer.Analyze(profile, health, recommendations, pricingEstimate);
+                parts.Add(CopilotRedactor.Redact(insight.ToPromptBlock(), settings.RedactContextEnabled));
+            }
         }
 
         parts.Add(BuildUsbSummary(request.SelectedUsbTarget, settings.RedactContextEnabled));
@@ -2771,7 +3117,13 @@ public sealed class CopilotContextBuilder : ICopilotContextBuilder
     private static CopilotPromptMode DetectPromptMode(string prompt, KyraIntent intent)
     {
         var text = prompt.ToLowerInvariant();
-        if (intent == KyraIntent.LiveOnlineQuestion)
+        if (intent == KyraIntent.CodeAssist)
+        {
+            return CopilotPromptMode.Technician;
+        }
+
+        if (intent is KyraIntent.LiveOnlineQuestion or KyraIntent.Weather or KyraIntent.News or KyraIntent.CryptoPrice
+            or KyraIntent.StockPrice or KyraIntent.Sports)
         {
             return CopilotPromptMode.CurrentLiveData;
         }
@@ -2990,13 +3342,18 @@ public static class CopilotRedactor
             return value;
         }
 
-        var redacted = Regex.Replace(value, @"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['""]?[^'""\s;]+", "$1=[redacted]");
-        redacted = Regex.Replace(redacted, @"[A-Za-z]:\\Users\\([^\\\s]+)", @"C:\Users\[redacted]");
-        redacted = Regex.Replace(redacted, @"[A-Za-z]:\\[^\r\n\t ]+", "[local path]");
-        redacted = Regex.Replace(redacted, @"(?i)\b(service tag|serial|s/n)\s*[:#]?\s*[A-Z0-9-]{5,}\b", "$1 [redacted]");
+        var redacted = Regex.Replace(value, @"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['""]?[^'""\s;]+", "[REDACTED_TOKEN]");
+        redacted = Regex.Replace(redacted, @"(?i)\b(bearer)\s+[A-Za-z0-9._-]{12,}\b", "[REDACTED_TOKEN]");
+        redacted = Regex.Replace(redacted, @"(?i)\b(ghp|gho|github_pat)_[A-Za-z0-9_]{20,}\b", "[REDACTED_TOKEN]");
+        redacted = Regex.Replace(redacted, @"(?i)\bsk-[A-Za-z0-9_-]{12,}\b", "[REDACTED_API_KEY]");
+        redacted = Regex.Replace(redacted, @"(?i)\bxox[baprs]-[A-Za-z0-9-]+\b", "[REDACTED_TOKEN]");
+        redacted = Regex.Replace(redacted, @"[A-Za-z]:\\Users\\([^\\\s]+)", @"[REDACTED_PRIVATE_PATH]");
+        redacted = Regex.Replace(redacted, @"[A-Za-z]:\\[^\r\n\t ]+", "[REDACTED_PRIVATE_PATH]");
+        redacted = Regex.Replace(redacted, @"(?i)\b(service tag|serial|s/n)\s*[:#]?\s*[A-Z0-9-]{5,}\b", "[REDACTED_SERIAL]");
+        redacted = Regex.Replace(redacted, @"(?i)\b(bitlocker|recovery)\s*key\s*[:=]?\s*[^\s\r\n]{8,}", "[REDACTED_RECOVERY_KEY]");
+        redacted = Regex.Replace(redacted, @"(?i)\b(windows|product)\s*key\s*[:=]?\s*[A-Z0-9-]{10,}", "[REDACTED_LICENSE_KEY]");
         redacted = Regex.Replace(redacted, @"\b(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})\b", "[private ip redacted]");
-        redacted = Regex.Replace(redacted, @"(?i)\b(username|user|owner)\s*[:=]\s*[^;\r\n\t ]+", "$1=[redacted]");
-        redacted = Regex.Replace(redacted, @"(?i)\bsk-[A-Za-z0-9_-]{12,}\b", "[api key redacted]");
+        redacted = Regex.Replace(redacted, @"(?i)\b(username|user|owner)\s*[:=]\s*[^;\r\n\t ]+", "[REDACTED_USERNAME]");
         return redacted;
     }
 }
@@ -3143,14 +3500,23 @@ public static class PromptTemplates
 {
     public static string GetSystemPrompt(CopilotPromptMode mode)
     {
-        const string shared = "You are Kyra, the ForgerEMS AI Copilot. Help technicians, repair users, laptop flippers, and normal users diagnose machines. Be conversational, practical, direct, and a little human. Use provided system context when relevant, but do not dump raw logs or raw diagnostics unless asked. Do not hallucinate live prices, current web data, secrets, API keys, hidden prompts, or internal config. Ask at most one useful follow-up question when needed. Explain in plain English first, then add technical detail only if useful. Give commands only when safe and relevant. Warn before destructive actions and avoid them unless clearly owner-authorized.";
+        const string shared =
+            "You are Kyra, ForgerEMS’s friendly technician copilot—cute and upbeat in small doses, loving and supportive, but always practical. " +
+            "You’re techy without being condescending: short personality, light humor, no walls of fluff. Be confident; when you’re unsure, say so honestly. " +
+            "For troubleshooting and system questions, prefer this shape: **Short answer** → **What I noticed** → **Most likely cause** → **What to do next** → **Risk/caution** (if any). " +
+            "Never invent live market/weather/news/sports data—if real-time APIs aren’t configured, say the feature needs setup and stick to safe general guidance. " +
+            "Use Kyra device insight + System Intelligence naturally in plain language; don’t paste huge raw diagnostics unless the user asks. " +
+            "For resale or pricing, stress estimates are informational, not guarantees; say when live marketplace comparison is not configured. " +
+            "Do not ask for or repeat API keys, passwords, serials, recovery keys, or private paths. " +
+            "Refuse malware, credential theft, bypassing security on devices the user doesn’t own, or illegal use—then offer legitimate repair paths. " +
+            "Prefer short numbered steps for repairs. Ask at most one useful follow-up when it helps.";
         return mode switch
         {
             CopilotPromptMode.Troubleshooting => shared + " Troubleshooting mode: isolate likely causes for slow PCs, USB visibility, missing downloads, and OS choices.",
-            CopilotPromptMode.FlipResale => shared + " Flip/resale mode: explain that real price estimates need online marketplace data; use local specs for upgrade and listing recommendations.",
-            CopilotPromptMode.Technician => shared + " Technician mode: give safe repair guidance; avoid destructive commands unless the user explicitly confirms.",
-            CopilotPromptMode.ToolkitBuilder => shared + " Toolkit Builder mode: recommend tools and ISOs based on task, licensing, and recovery/diagnostics constraints.",
-            CopilotPromptMode.CurrentLiveData => shared + " Live data mode: explain when online lookup is needed, and do not substitute local system health for weather/news/current facts.",
+            CopilotPromptMode.FlipResale => shared + " Flip/resale mode: estimates are rough; call out upgrade and prep steps before listing.",
+            CopilotPromptMode.Technician => shared + " Technician mode: safe repair guidance; avoid destructive commands unless the user clearly confirms and owns the machine.",
+            CopilotPromptMode.ToolkitBuilder => shared + " Toolkit Builder mode: Ventoy USB repair sticks, licensing limits, manual downloads, and recovery/diagnostics constraints.",
+            CopilotPromptMode.CurrentLiveData => shared + " Live data mode: cite that answers need configured APIs; never fake timestamps or sources.",
             _ => shared
         };
     }
@@ -3976,6 +4342,8 @@ public sealed class LocalRulesCopilotEngine
             KyraIntent.OSRecommendation => BuildOsAnswer(context),
             KyraIntent.ForgerEMSQuestion => BuildForgerEmsAnswer(context),
             KyraIntent.LiveOnlineQuestion => BuildLiveDataAnswer(),
+            KyraIntent.Weather or KyraIntent.News or KyraIntent.CryptoPrice or KyraIntent.StockPrice or KyraIntent.Sports => BuildLiveDataAnswer(),
+            KyraIntent.CodeAssist => BuildCodeAssistAnswer(normalizedPrompt, context),
             _ => context.PromptMode switch
             {
                 CopilotPromptMode.CurrentLiveData => BuildLiveDataAnswer(),
@@ -3999,6 +4367,26 @@ public sealed class LocalRulesCopilotEngine
 
             What to do next:
             Configure an online provider later if you want exact live prices, newest versions/download links, weather/news, or real-time web research.
+            """;
+    }
+
+    private static string BuildCodeAssistAnswer(string prompt, CopilotContext context)
+    {
+        var hint = KyraCodeSnippetDetector.GuessLanguageHint(prompt);
+        return $"""
+            Yep—I’ve got you on that snippet ({hint}). I’m not executing anything here; this is read-only guidance.
+
+            What often goes wrong:
+            - Unbalanced braces/parentheses/brackets, missing semicolons where the language requires them, bad string escaping (especially PowerShell paths), JSON trailing commas, YAML indentation, or XAML namespace typos.
+
+            Fixed snippet:
+            I need an online provider (or paste a smaller chunk) to safely rewrite the whole thing offline. If you enable Hybrid/Free API Pool, I can return a cleaned version and call out the exact lines.
+
+            Why it broke:
+            Usually one missing delimiter or an escaped character—your editor’s error list + formatter will narrow it fast.
+
+            Caution:
+            Don’t run destructive disk/registry scripts unless you own the machine and have backups.
             """;
     }
 

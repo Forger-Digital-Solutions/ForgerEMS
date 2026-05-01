@@ -262,6 +262,140 @@
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
+            <TabItem Header="Assistant">
+                <ScrollViewer Style="{StaticResource KyraAdvancedScrollViewerStyle}" Padding="0,10,0,0">
+                    <StackPanel>
+                        <Border Background="{StaticResource KyraAdvancedCardBackground}"
+                                BorderBrush="{StaticResource KyraAdvancedCardBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="12"
+                                Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Kyra assistant status" />
+                                <TextBlock Margin="0,8,0,0"
+                                           FontSize="12"
+                                           Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
+                                           Text="{Binding KyraAssistantStatusSummary}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                        <Border Background="{StaticResource KyraAdvancedCardBackground}"
+                                BorderBrush="{StaticResource KyraAdvancedCardBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="12"
+                                Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Tools" />
+                                <TextBlock Margin="0,6,0,8"
+                                           FontSize="11"
+                                           Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
+                                           Text="Per-tool readiness for Kyra. No API keys or secrets are listed."
+                                           TextWrapping="Wrap" />
+                                <DataGrid ItemsSource="{Binding KyraToolStatusRows}"
+                                          AutoGenerateColumns="False"
+                                          IsReadOnly="True"
+                                          HeadersVisibility="Column"
+                                          CanUserAddRows="False"
+                                          CanUserDeleteRows="False"
+                                          CanUserResizeRows="False"
+                                          GridLinesVisibility="Horizontal"
+                                          MaxHeight="280"
+                                          Background="{StaticResource KyraAdvancedInputBackground}"
+                                          BorderBrush="{StaticResource KyraAdvancedInputBorder}"
+                                          Foreground="{StaticResource KyraAdvancedTextBrush}"
+                                          RowBackground="{StaticResource KyraAdvancedInputBackground}"
+                                          AlternatingRowBackground="#190E1A29">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="Tool"
+                                                            Binding="{Binding ToolName}"
+                                                            Width="*"
+                                                            MinWidth="96" />
+                                        <DataGridTextColumn Header="Category"
+                                                            Binding="{Binding Category}"
+                                                            Width="120" />
+                                        <DataGridTextColumn Header="Status"
+                                                            Binding="{Binding Status}"
+                                                            Width="110" />
+                                        <DataGridTextColumn Header="Provider"
+                                                            Binding="{Binding Provider}"
+                                                            Width="130" />
+                                        <DataGridTextColumn Header="Last checked"
+                                                            Binding="{Binding LastChecked}"
+                                                            Width="90" />
+                                        <DataGridTextColumn Header="Notes / setup"
+                                                            Binding="{Binding Notes}"
+                                                            Width="2*"
+                                                            MinWidth="140" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </StackPanel>
+                        </Border>
+                        <CheckBox Margin="0,0,0,8" IsChecked="{Binding KyraApiFirstRouting, Mode=TwoWay}" Content="API-first routing (try online providers before Local Kyra when mode allows)" />
+                        <CheckBox Margin="0,0,0,8" IsChecked="{Binding KyraOfflineFallbackEnabled, Mode=TwoWay}" Content="Allow Local Kyra fallback when online providers fail" />
+                        <CheckBox Margin="0,0,0,8" IsChecked="{Binding VerboseLiveLogs, Mode=TwoWay}" Content="Verbose beta logs (show Kyra routing lines in live logs)" />
+                        <TextBlock Margin="0,0,0,12"
+                                   FontSize="11"
+                                   Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
+                                   Text="With verbose off, chat footnotes stay short; routing detail still respects your privacy settings."
+                                   TextWrapping="Wrap" />
+                        <Border Background="{StaticResource KyraAdvancedCardBackground}"
+                                BorderBrush="{StaticResource KyraAdvancedCardBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="12"
+                                Margin="0,0,0,12">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Optional Kyra memory (local only)" />
+                                <TextBlock Margin="0,8,0,0"
+                                           FontSize="11.5"
+                                           Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
+                                           Text="Stores safe preferences on this PC only—never API keys, passwords, serials, or recovery keys. Not sent to providers unless you enable memory and it passes sanitization."
+                                           TextWrapping="Wrap" />
+                                <CheckBox Margin="0,10,0,8" IsChecked="{Binding KyraPersistentMemoryEnabled, Mode=TwoWay}" Content="Enable Kyra memory" />
+                                <WrapPanel Margin="0,0,0,0">
+                                    <Button MinWidth="132"
+                                            Margin="0,0,8,8"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Content="View memory"
+                                            Command="{Binding ViewKyraMemoryCommand}" />
+                                    <Button MinWidth="132"
+                                            Margin="0,0,8,8"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Content="Export memory"
+                                            Command="{Binding ExportKyraMemoryCommand}" />
+                                    <Button MinWidth="132"
+                                            Margin="0,0,8,8"
+                                            Style="{StaticResource SecondaryButtonStyle}"
+                                            Content="Clear memory"
+                                            Command="{Binding ClearKyraMemoryCommand}" />
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Sanitized context preview (API-safe)" />
+                        <TextBlock Margin="0,6,0,8"
+                                   FontSize="11"
+                                   Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
+                                   Text="What would be summarized for online providers if context sharing is enabled. Refreshed when you open this window."
+                                   TextWrapping="Wrap" />
+                        <Border Padding="10"
+                                MaxHeight="280"
+                                Background="{StaticResource KyraAdvancedCardBackground}"
+                                BorderBrush="{StaticResource KyraAdvancedCardBorder}"
+                                BorderThickness="1"
+                                CornerRadius="8">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" Style="{StaticResource KyraAdvancedScrollViewerStyle}">
+                                <TextBlock FontFamily="Consolas"
+                                           FontSize="11"
+                                           Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
+                                           Text="{Binding KyraSanitizedContextPreviewText}"
+                                           TextWrapping="Wrap" />
+                            </ScrollViewer>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
             <TabItem Header="Privacy">
                 <StackPanel Margin="0,12,0,0">
                     <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Privacy and Context Sharing" />

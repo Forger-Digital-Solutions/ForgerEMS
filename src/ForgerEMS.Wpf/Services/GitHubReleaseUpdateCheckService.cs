@@ -1,6 +1,9 @@
 using System;
+using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -40,108 +43,274 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
     {
         try
         {
+            var latestUrl = $"https://api.github.com/repos/{DefaultOwner}/{DefaultRepo}/releases/latest";
             using var response = await _httpClient
-                .GetAsync($"https://api.github.com/repos/{DefaultOwner}/{DefaultRepo}/releases/latest", cancellationToken)
+                .GetAsync(latestUrl, cancellationToken)
                 .ConfigureAwait(false);
 
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                var emptyReleases = await TryReleasesListIsEmptyAsync(cancellationToken).ConfigureAwait(false);
+                if (emptyReleases == true)
+                {
+                    return new UpdateCheckResult
+                    {
+                        Succeeded = true,
+                        UpdateAvailable = false,
+                        ErrorMessage = "No public GitHub Release is published for this repo yet."
+                    };
+                }
+
+                return new UpdateCheckResult
+                {
+                    Succeeded = false,
+                    FailureKind = UpdateCheckFailureKind.ReleaseEndpointNotFound,
+                    ErrorMessage = "Release endpoint returned 404. Confirm GitHub owner/repo, public Releases, and that a release is marked Latest.",
+                    DiagnosticDetail = await SafeReadBodyPreviewAsync(response, cancellationToken).ConfigureAwait(false)
+                };
+            }
+
             if (!response.IsSuccessStatusCode)
+            {
+                return await BuildFailedResultFromResponseAsync(response, cancellationToken).ConfigureAwait(false);
+            }
+
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            JsonDocument document;
+            try
+            {
+                document = await JsonDocument.ParseAsync(stream, default, cancellationToken).ConfigureAwait(false);
+            }
+            catch (JsonException exception)
             {
                 return new UpdateCheckResult
                 {
                     Succeeded = false,
-                    ErrorMessage = $"GitHub returned HTTP {(int)response.StatusCode}. You may be offline or the release API is unavailable."
+                    FailureKind = UpdateCheckFailureKind.ReleaseMetadataInvalid,
+                    ErrorMessage = "Could not read release metadata (invalid JSON from GitHub).",
+                    DiagnosticDetail = exception.Message
                 };
+            }
+
+            using (document)
+            {
+                return ParseLatestReleaseDocument(document, currentVersion, ignoredVersionNormalized);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return new UpdateCheckResult
+            {
+                Succeeded = false,
+                FailureKind = UpdateCheckFailureKind.Cancelled,
+                ErrorMessage = "Update check was cancelled."
+            };
+        }
+        catch (Exception exception) when (IsLikelyNetworkFailure(exception))
+        {
+            return new UpdateCheckResult
+            {
+                Succeeded = false,
+                FailureKind = UpdateCheckFailureKind.Network,
+                ErrorMessage = "Could not reach GitHub (network, DNS, or timeout). Check your connection and try again.",
+                DiagnosticDetail = exception.Message
+            };
+        }
+        catch (Exception exception)
+        {
+            return new UpdateCheckResult
+            {
+                Succeeded = false,
+                FailureKind = UpdateCheckFailureKind.Unknown,
+                ErrorMessage = "Update check failed unexpectedly.",
+                DiagnosticDetail = exception.Message
+            };
+        }
+    }
+
+    private async Task<bool?> TryReleasesListIsEmptyAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var url = $"https://api.github.com/repos/{DefaultOwner}/{DefaultRepo}/releases?per_page=1";
+            using var response = await _httpClient.GetAsync(url, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
             }
 
             await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
             using var document = await JsonDocument.ParseAsync(stream, default, cancellationToken).ConfigureAwait(false);
-            var root = document.RootElement;
-            if (!root.TryGetProperty("tag_name", out var tagProp))
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
             {
-                return new UpdateCheckResult { Succeeded = false, ErrorMessage = "Release response missing tag_name." };
+                return null;
             }
 
-            var tag = tagProp.GetString() ?? string.Empty;
-            var latestVersion = ReleaseVersionParser.TryParseVersion(tag, out var v) ? v : null;
-            var label = ReleaseVersionParser.NormalizeLabel(tag);
+            return document.RootElement.GetArrayLength() == 0;
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
-            var notesUrl = root.TryGetProperty("html_url", out var urlProp) ? urlProp.GetString() ?? string.Empty : string.Empty;
+    private static async Task<UpdateCheckResult> BuildFailedResultFromResponseAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        var code = (int)response.StatusCode;
+        var body = await SafeReadBodyPreviewAsync(response, cancellationToken).ConfigureAwait(false);
+        var combined = (body ?? string.Empty).ToLowerInvariant();
 
-            string? installerUrl = null;
-            string? installerName = null;
-            if (root.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            var rateLimited = combined.Contains("rate limit", StringComparison.Ordinal) ||
+                              combined.Contains("api rate limit", StringComparison.Ordinal);
+            return new UpdateCheckResult
             {
-                foreach (var asset in assets.EnumerateArray())
+                Succeeded = false,
+                FailureKind = UpdateCheckFailureKind.AccessDeniedOrRateLimited,
+                ErrorMessage = rateLimited
+                    ? "GitHub rate-limited this device. Wait a few minutes or try again on a different network."
+                    : "GitHub denied access (403). The repo may be private or blocked from this network.",
+                DiagnosticDetail = $"HTTP {code}: {body}"
+            };
+        }
+
+        if (code == 429)
+        {
+            return new UpdateCheckResult
+            {
+                Succeeded = false,
+                FailureKind = UpdateCheckFailureKind.AccessDeniedOrRateLimited,
+                ErrorMessage = "GitHub rate limit exceeded. Retry later.",
+                DiagnosticDetail = $"HTTP {code}: {body}"
+            };
+        }
+
+        return new UpdateCheckResult
+        {
+            Succeeded = false,
+            FailureKind = UpdateCheckFailureKind.HttpError,
+            ErrorMessage = $"GitHub returned HTTP {code}. Try again later or check Diagnostics logs.",
+            DiagnosticDetail = $"HTTP {code}: {body}"
+        };
+    }
+
+    private static async Task<string?> SafeReadBodyPreviewAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var text = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return null;
+            }
+
+            return text.Length <= 480 ? text : text[..480] + "…";
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static bool IsLikelyNetworkFailure(Exception exception)
+    {
+        if (exception is HttpRequestException or IOException)
+        {
+            return true;
+        }
+
+        if (exception is TaskCanceledException canceled && !canceled.CancellationToken.IsCancellationRequested)
+        {
+            return true;
+        }
+
+        return exception.InnerException is SocketException or HttpRequestException;
+    }
+
+    private static UpdateCheckResult ParseLatestReleaseDocument(JsonDocument document, Version currentVersion, string? ignoredVersionNormalized)
+    {
+        var root = document.RootElement;
+        if (!root.TryGetProperty("tag_name", out var tagProp))
+        {
+            return new UpdateCheckResult
+            {
+                Succeeded = false,
+                FailureKind = UpdateCheckFailureKind.ReleaseMetadataInvalid,
+                ErrorMessage = "Release metadata is missing tag_name."
+            };
+        }
+
+        var tag = tagProp.GetString() ?? string.Empty;
+        var latestVersion = ReleaseVersionParser.TryParseVersion(tag, out var v) ? v : null;
+        var label = ReleaseVersionParser.NormalizeLabel(tag);
+
+        var notesUrl = root.TryGetProperty("html_url", out var urlProp) ? urlProp.GetString() ?? string.Empty : string.Empty;
+
+        string? installerUrl = null;
+        string? installerName = null;
+        if (root.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var asset in assets.EnumerateArray())
+            {
+                if (!asset.TryGetProperty("name", out var nameProp) ||
+                    !asset.TryGetProperty("browser_download_url", out var dlProp))
                 {
-                    if (!asset.TryGetProperty("name", out var nameProp) ||
-                        !asset.TryGetProperty("browser_download_url", out var dlProp))
-                    {
-                        continue;
-                    }
-
-                    var name = nameProp.GetString() ?? string.Empty;
-                    if (!name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    if (name.Contains("ForgerEMS", StringComparison.OrdinalIgnoreCase) ||
-                        name.Contains("Setup", StringComparison.OrdinalIgnoreCase))
-                    {
-                        installerName = name;
-                        installerUrl = dlProp.GetString();
-                        break;
-                    }
+                    continue;
                 }
 
-                if (installerUrl is null)
+                var name = nameProp.GetString() ?? string.Empty;
+                if (!name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
                 {
-                    var fallback = assets.EnumerateArray().FirstOrDefault(a =>
-                        a.TryGetProperty("name", out var n) &&
-                        (n.GetString() ?? string.Empty).EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
-                    if (fallback.ValueKind != JsonValueKind.Undefined &&
-                        fallback.TryGetProperty("browser_download_url", out var dl) &&
-                        fallback.TryGetProperty("name", out var fn))
-                    {
-                        installerName = fn.GetString();
-                        installerUrl = dl.GetString();
-                    }
+                    continue;
+                }
+
+                if (name.Contains("ForgerEMS", StringComparison.OrdinalIgnoreCase) ||
+                    name.Contains("Setup", StringComparison.OrdinalIgnoreCase))
+                {
+                    installerName = name;
+                    installerUrl = dlProp.GetString();
+                    break;
                 }
             }
 
-            if (latestVersion is null)
+            if (installerUrl is null)
             {
-                return new UpdateCheckResult
+                var fallback = assets.EnumerateArray().FirstOrDefault(a =>
+                    a.TryGetProperty("name", out var n) &&
+                    (n.GetString() ?? string.Empty).EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
+                if (fallback.ValueKind != JsonValueKind.Undefined &&
+                    fallback.TryGetProperty("browser_download_url", out var dl) &&
+                    fallback.TryGetProperty("name", out var fn))
                 {
-                    Succeeded = true,
-                    UpdateAvailable = false,
-                    LatestVersionLabel = label,
-                    ReleaseNotesUrl = notesUrl,
-                    ErrorMessage = "Could not parse a version from the latest release tag."
-                };
+                    installerName = fn.GetString();
+                    installerUrl = dl.GetString();
+                }
             }
+        }
 
-            var ignored = ReleaseVersionParser.NormalizeIgnored(ignoredVersionNormalized);
-            if (!string.IsNullOrEmpty(ignored) &&
-                string.Equals(ReleaseVersionParser.NormalizeLabel(label), ignored, StringComparison.OrdinalIgnoreCase))
-            {
-                return new UpdateCheckResult
-                {
-                    Succeeded = true,
-                    UpdateAvailable = false,
-                    LatestVersion = latestVersion,
-                    LatestVersionLabel = label,
-                    ReleaseNotesUrl = notesUrl,
-                    InstallerAssetName = installerName,
-                    InstallerDownloadUrl = installerUrl
-                };
-            }
-
-            var newer = latestVersion > currentVersion;
+        if (latestVersion is null)
+        {
             return new UpdateCheckResult
             {
                 Succeeded = true,
-                UpdateAvailable = newer,
+                UpdateAvailable = false,
+                LatestVersionLabel = label,
+                ReleaseNotesUrl = notesUrl,
+                ErrorMessage = "Latest release tag could not be parsed as a version.",
+                InstallerAssetName = installerName,
+                InstallerDownloadUrl = installerUrl
+            };
+        }
+
+        var ignored = ReleaseVersionParser.NormalizeIgnored(ignoredVersionNormalized);
+        if (!string.IsNullOrEmpty(ignored) &&
+            string.Equals(ReleaseVersionParser.NormalizeLabel(label), ignored, StringComparison.OrdinalIgnoreCase))
+        {
+            return new UpdateCheckResult
+            {
+                Succeeded = true,
+                UpdateAvailable = false,
                 LatestVersion = latestVersion,
                 LatestVersionLabel = label,
                 ReleaseNotesUrl = notesUrl,
@@ -149,18 +318,18 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
                 InstallerDownloadUrl = installerUrl
             };
         }
-        catch (OperationCanceledException)
+
+        var newer = latestVersion > currentVersion;
+        return new UpdateCheckResult
         {
-            return new UpdateCheckResult { Succeeded = false, ErrorMessage = "Update check was cancelled." };
-        }
-        catch (Exception exception)
-        {
-            return new UpdateCheckResult
-            {
-                Succeeded = false,
-                ErrorMessage = $"Update check failed: {exception.Message}"
-            };
-        }
+            Succeeded = true,
+            UpdateAvailable = newer,
+            LatestVersion = latestVersion,
+            LatestVersionLabel = label,
+            ReleaseNotesUrl = notesUrl,
+            InstallerAssetName = installerName,
+            InstallerDownloadUrl = installerUrl
+        };
     }
 
     public void Dispose()

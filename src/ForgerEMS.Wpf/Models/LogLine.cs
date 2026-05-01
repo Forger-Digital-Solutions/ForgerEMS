@@ -11,6 +11,15 @@ public enum LogSeverity
     Error = 3
 }
 
+/// <summary>Live Logs channel: operation-focused vs Kyra internals (hidden unless verbose).</summary>
+public enum LiveLogChannel
+{
+    Operation,
+    KyraDetail,
+    Update,
+    Diagnostics
+}
+
 public sealed class LogLine
 {
     private static readonly Brush InfoBrush = new SolidColorBrush(Color.FromRgb(224, 232, 244));
@@ -18,12 +27,13 @@ public sealed class LogLine
     private static readonly Brush WarningBrush = new SolidColorBrush(Color.FromRgb(253, 224, 71));
     private static readonly Brush ErrorBrush = new SolidColorBrush(Color.FromRgb(248, 113, 113));
 
-    public LogLine(DateTimeOffset timestamp, string text, LogSeverity severity, bool isErrorStream = false)
+    public LogLine(DateTimeOffset timestamp, string text, LogSeverity severity, bool isErrorStream = false, LiveLogChannel channel = LiveLogChannel.Operation)
     {
         Timestamp = timestamp;
         Text = text;
         Severity = severity;
         IsErrorStream = isErrorStream;
+        Channel = channel;
     }
 
     public DateTimeOffset Timestamp { get; }
@@ -33,6 +43,8 @@ public sealed class LogLine
     public LogSeverity Severity { get; }
 
     public bool IsErrorStream { get; }
+
+    public LiveLogChannel Channel { get; }
 
     public string DisplayText => $"[{Timestamp:HH:mm:ss}] {Text}";
 

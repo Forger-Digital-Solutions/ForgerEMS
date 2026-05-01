@@ -156,6 +156,7 @@ public partial class MainWindow : Window
             _currentViewModel.PropertyChanged += OnViewModelPropertyChanged;
             _currentViewModel.CopilotMessages.CollectionChanged += OnCopilotMessagesChanged;
             _currentViewModel.OpenKyraAdvancedSettingsAction = OpenKyraAdvancedSettingsWindow;
+            _currentViewModel.MainTabNavigationAction = NavigateMainTab;
             UpdateCircuitBackgroundActivity();
             UpdateManagedPackageGlow();
         }
@@ -168,6 +169,7 @@ public partial class MainWindow : Window
             viewModel.PropertyChanged -= OnViewModelPropertyChanged;
             viewModel.CopilotMessages.CollectionChanged -= OnCopilotMessagesChanged;
             viewModel.OpenKyraAdvancedSettingsAction = null;
+            viewModel.MainTabNavigationAction = null;
         }
     }
 
@@ -208,17 +210,133 @@ public partial class MainWindow : Window
         Dispatcher.BeginInvoke(() => CopilotChatScrollViewer?.ScrollToEnd(), DispatcherPriority.Background);
     }
 
-    private void OnCopilotInputPreviewKeyDown(object sender, KeyEventArgs e)
+    private void NavigateMainTab(string key)
     {
-        if (e.Key != Key.Enter || Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+        if (MainTabControl == null || string.IsNullOrWhiteSpace(key))
         {
             return;
         }
 
-        if (DataContext is MainViewModel viewModel && viewModel.SendCopilotMessageCommand.CanExecute(null))
+        foreach (var item in MainTabControl.Items)
+        {
+            if (item is TabItem { Header: string h } && h.Contains(key, StringComparison.OrdinalIgnoreCase))
+            {
+                MainTabControl.SelectedItem = item;
+                return;
+            }
+        }
+    }
+
+    private void OnCopilotInputPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (DataContext is not MainViewModel viewModel)
+        {
+            return;
+        }
+
+        if (e.Key == Key.Escape)
+        {
+            viewModel.KyraSlashPopupOpen = false;
+            viewModel.KyraSlashSuggestions.Clear();
+            viewModel.KyraSlashSelectedIndex = -1;
+            return;
+        }
+
+        if (viewModel.KyraSlashPopupOpen && viewModel.KyraSlashSuggestions.Count > 0)
+        {
+            if (e.Key == Key.Down)
+            {
+                e.Handled = true;
+                viewModel.KyraSlashSelectedIndex = viewModel.KyraSlashSelectedIndex + 1;
+                return;
+            }
+
+            if (e.Key == Key.Up)
+            {
+                e.Handled = true;
+                viewModel.KyraSlashSelectedIndex = viewModel.KyraSlashSelectedIndex - 1;
+                return;
+            }
+        }
+
+        if (e.Key == Key.Tab &&
+            !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) &&
+            viewModel.KyraSlashPopupOpen &&
+            viewModel.KyraSlashSuggestions.Count > 0)
         {
             e.Handled = true;
-            viewModel.SendCopilotMessageCommand.Execute(null);
+            var i = viewModel.KyraSlashSelectedIndex >= 0 ? viewModel.KyraSlashSelectedIndex : 0;
+            viewModel.InsertKyraSlashSuggestion(viewModel.KyraSlashSuggestions[i]);
+            KyraChatInputBox?.Focus();
+            return;
+        }
+
+        if (e.Key == Key.Enter && !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+        {
+            if (viewModel.KyraSlashPopupOpen && viewModel.KyraSlashSuggestions.Count > 0)
+            {
+                if (viewModel.KyraSlashSelectedIndex < 0)
+                {
+                    viewModel.KyraSlashSelectedIndex = 0;
+                }
+
+                e.Handled = true;
+                viewModel.ApplyKyraSlashSelection();
+                KyraChatInputBox?.Focus();
+                return;
+            }
+
+            if (viewModel.SendCopilotMessageCommand.CanExecute(null))
+            {
+                e.Handled = true;
+                viewModel.SendCopilotMessageCommand.Execute(null);
+            }
+
+            return;
+        }
+    }
+
+    private void OnKyraSlashListMouseMove(object sender, MouseEventArgs e)
+    {
+        if (sender is not ListBox box || DataContext is not MainViewModel vm)
+        {
+            return;
+        }
+
+        var hit = box.InputHitTest(e.GetPosition(box)) as DependencyObject;
+        while (hit is not null && hit is not ListBoxItem)
+        {
+            hit = VisualTreeHelper.GetParent(hit);
+        }
+
+        if (hit is ListBoxItem { Content: string line })
+        {
+            var i = vm.KyraSlashSuggestions.IndexOf(line);
+            if (i >= 0)
+            {
+                vm.KyraSlashSelectedIndex = i;
+            }
+        }
+    }
+
+    private void OnKyraSlashSuggestionClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not ListBox box || DataContext is not MainViewModel viewModel)
+        {
+            return;
+        }
+
+        var hit = box.InputHitTest(e.GetPosition(box)) as DependencyObject;
+        while (hit is not null && hit is not ListBoxItem)
+        {
+            hit = VisualTreeHelper.GetParent(hit);
+        }
+
+        if (hit is ListBoxItem { Content: string line })
+        {
+            e.Handled = true;
+            viewModel.InsertKyraSlashSuggestion(line);
+            KyraChatInputBox.Focus();
         }
     }
 
@@ -288,6 +406,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        vm.RefreshKyraAssistantPanel();
         var dialog = new KyraAdvancedSettingsWindow
         {
             Owner = this,

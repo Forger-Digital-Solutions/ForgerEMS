@@ -3,6 +3,15 @@ using System.Collections.Generic;
 
 namespace VentoyToolkitSetup.Wpf.Models;
 
+public enum PowerShellHeartbeatKind
+{
+    /// <summary>Long downloads — heartbeat mentions download progress.</summary>
+    Download,
+
+    /// <summary>Scripts that mostly scan/verify without byte progress (toolkit health, etc.).</summary>
+    LongRunningScan
+}
+
 public sealed class PowerShellRunRequest
 {
     public string DisplayName { get; init; } = "PowerShell";
@@ -16,6 +25,8 @@ public sealed class PowerShellRunRequest
     public IReadOnlyList<string> Arguments { get; init; } = Array.Empty<string>();
 
     public string? ProgressItemName { get; init; }
+
+    public PowerShellHeartbeatKind HeartbeatKind { get; init; } = PowerShellHeartbeatKind.Download;
 }
 
 public sealed class PowerShellRunResult

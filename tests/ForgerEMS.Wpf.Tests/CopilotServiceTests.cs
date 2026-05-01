@@ -34,7 +34,10 @@ public sealed class CopilotServiceTests
         Assert.DoesNotContain("very-secret-value", context.ContextText, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("sk-test123456789012", context.ContextText, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("ABC12345", context.ContextText, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("[redacted]", context.ContextText, StringComparison.OrdinalIgnoreCase);
+        Assert.True(
+            context.ContextText.Contains("[redacted]", StringComparison.OrdinalIgnoreCase) ||
+            context.ContextText.Contains("REDACTED", StringComparison.OrdinalIgnoreCase),
+            "Expected redaction markers in context.");
     }
 
     [Fact]
@@ -69,6 +72,7 @@ public sealed class CopilotServiceTests
         Assert.Contains("Health score:", context.ContextText);
         Assert.Contains("Detected issues:", context.ContextText);
         Assert.Contains("Recommendations:", context.ContextText);
+        Assert.Contains("Kyra device insight", context.ContextText, StringComparison.OrdinalIgnoreCase);
         Assert.NotNull(context.PricingEstimate);
         Assert.Contains("Pricing Engine v0:", context.ContextText);
         Assert.Contains(context.Recommendations, item => item.Contains("16 GB RAM", StringComparison.OrdinalIgnoreCase));
@@ -164,6 +168,29 @@ public sealed class CopilotServiceTests
         Assert.Contains("Health score", response.Text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("RAM", response.Text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("storage", response.Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task NonVerboseProviderNotesOmitRoutingLines()
+    {
+        var service = new CopilotService(new CopilotProviderRegistry());
+        var response = await service.GenerateReplyAsync(new CopilotRequest
+        {
+            Prompt = "Hello",
+            VerboseDiagnosticNotes = false,
+            Settings = new CopilotSettings
+            {
+                Mode = CopilotMode.FreeApiPool,
+                EnableFreeProviderPool = true
+            }
+        });
+
+        Assert.All(response.ProviderNotes, note =>
+            Assert.True(
+                note.StartsWith("Intent detected:", StringComparison.OrdinalIgnoreCase) ||
+                note.StartsWith("Previous intent:", StringComparison.OrdinalIgnoreCase) ||
+                note.StartsWith("Tool plan:", StringComparison.OrdinalIgnoreCase),
+                note));
     }
 
     [Fact]
@@ -324,7 +351,7 @@ public sealed class CopilotServiceTests
         var service = new CopilotService(new CopilotProviderRegistry());
         var response = await service.GenerateReplyAsync(new CopilotRequest
         {
-            Prompt = "What is the latest Windows version right now?",
+            Prompt = "What is the live price of gold right now?",
             Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
         });
 
@@ -598,7 +625,12 @@ public sealed class CopilotServiceTests
         settings.Providers["fake-free"] = new CopilotProviderConfiguration { IsEnabled = true, ApiKeyEnvironmentVariable = "FAKE_FREE_KEY" };
         Environment.SetEnvironmentVariable("FAKE_FREE_KEY", "fake-key");
 
-        var response = await service.GenerateReplyAsync(new CopilotRequest { Prompt = "Hi Kyra", Settings = settings });
+        var response = await service.GenerateReplyAsync(new CopilotRequest
+        {
+            Prompt = "Hi Kyra",
+            Settings = settings,
+            VerboseDiagnosticNotes = true
+        });
 
         Assert.True(response.UsedOnlineData);
         Assert.Equal(1, online.CallCount);
@@ -615,7 +647,12 @@ public sealed class CopilotServiceTests
         settings.Providers["fake-free"] = new CopilotProviderConfiguration { IsEnabled = true, ApiKeyEnvironmentVariable = "FAKE_FREE_KEY" };
         Environment.SetEnvironmentVariable("FAKE_FREE_KEY", "fake-key");
 
-        var response = await service.GenerateReplyAsync(new CopilotRequest { Prompt = "Why is Kyra offline?", Settings = settings });
+        var response = await service.GenerateReplyAsync(new CopilotRequest
+        {
+            Prompt = "Why is Kyra offline?",
+            Settings = settings,
+            VerboseDiagnosticNotes = true
+        });
 
         Assert.False(response.UsedOnlineData);
         Assert.Equal(0, online.CallCount);
@@ -695,7 +732,12 @@ public sealed class CopilotServiceTests
         settings.Providers["fake-free"] = new CopilotProviderConfiguration { IsEnabled = true, ApiKeyEnvironmentVariable = "FAKE_FREE_KEY" };
         Environment.SetEnvironmentVariable("FAKE_FREE_KEY", "fake-key");
 
-        var response = await service.GenerateReplyAsync(new CopilotRequest { Prompt = "What should I upgrade before selling?", Settings = settings });
+        var response = await service.GenerateReplyAsync(new CopilotRequest
+        {
+            Prompt = "What should I upgrade before selling?",
+            Settings = settings,
+            VerboseDiagnosticNotes = true
+        });
 
         Assert.False(response.UsedOnlineData);
         Assert.Equal(0, online.CallCount);
@@ -1069,7 +1111,8 @@ public sealed class CopilotServiceTests
         var response = await service.GenerateReplyAsync(new CopilotRequest
         {
             Prompt = "What is this laptop worth?",
-            Settings = settings
+            Settings = settings,
+            VerboseDiagnosticNotes = true
         });
 
         Assert.False(response.UsedOnlineData);

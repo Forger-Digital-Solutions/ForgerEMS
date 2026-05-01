@@ -24,4 +24,43 @@ public sealed class KyraIntentRouterTests
     {
         Assert.Equal(KyraIntent.ForgerEMSQuestion, KyraIntentRouter.DetectIntent(prompt));
     }
+
+    [Theory]
+    [InlineData("What's the weather in Austin?")]
+    [InlineData("forecast tomorrow humidity")]
+    public void WeatherIntent_Detected(string prompt)
+    {
+        Assert.Equal(KyraIntent.Weather, KyraIntentRouter.DetectIntent(prompt));
+    }
+
+    [Theory]
+    [InlineData("Bitcoin price right now")]
+    [InlineData("ETH price today")]
+    public void CryptoIntent_Detected(string prompt)
+    {
+        Assert.Equal(KyraIntent.CryptoPrice, KyraIntentRouter.DetectIntent(prompt));
+    }
+
+    [Theory]
+    [InlineData("AAPL stock price")]
+    [InlineData("nasdaq ticker msft")]
+    public void StockIntent_Detected(string prompt)
+    {
+        Assert.Equal(KyraIntent.StockPrice, KyraIntentRouter.DetectIntent(prompt));
+    }
+
+    [Theory]
+    [InlineData("NFL scores")]
+    [InlineData("NBA playoff final score")]
+    public void SportsIntent_Detected(string prompt)
+    {
+        Assert.Equal(KyraIntent.Sports, KyraIntentRouter.DetectIntent(prompt));
+    }
+
+    [Fact]
+    public void CodeFence_TriggersCodeAssist()
+    {
+        const string p = "Fix this:\n```json\n{ \"a\": 1 }\n```";
+        Assert.Equal(KyraIntent.CodeAssist, KyraIntentRouter.DetectIntent(p));
+    }
 }

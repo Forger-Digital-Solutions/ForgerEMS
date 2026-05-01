@@ -100,11 +100,19 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
             }
         });
 
+        var heartbeatInterval = request.HeartbeatKind == PowerShellHeartbeatKind.LongRunningScan
+            ? TimeSpan.FromSeconds(20)
+            : TimeSpan.FromSeconds(12);
+        var idleBeforeHeartbeat = request.HeartbeatKind == PowerShellHeartbeatKind.LongRunningScan
+            ? TimeSpan.FromSeconds(20)
+            : TimeSpan.FromSeconds(12);
+        string? lastHeartbeatText = null;
+
         var heartbeatTask = Task.Run(async () =>
         {
             while (!process.HasExited && !cancellationToken.IsCancellationRequested)
             {
-                await Task.Delay(TimeSpan.FromSeconds(12), cancellationToken).ConfigureAwait(false);
+                await Task.Delay(heartbeatInterval, cancellationToken).ConfigureAwait(false);
 
                 if (process.HasExited || cancellationToken.IsCancellationRequested)
                 {
@@ -116,10 +124,31 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
                     continue;
                 }
 
-                if (DateTimeOffset.UtcNow - lastOutputUtc >= TimeSpan.FromSeconds(12))
+                if (DateTimeOffset.UtcNow - lastOutputUtc < idleBeforeHeartbeat)
                 {
-                    PublishLine($"[INFO] Downloading {request.ProgressItemName}... working (no progress data)", isErrorStream: false);
+                    continue;
                 }
+
+                var heartbeatText = request.HeartbeatKind == PowerShellHeartbeatKind.LongRunningScan
+                    ? $"[INFO] Toolkit health scan still running (no new log lines for {idleBeforeHeartbeat.TotalSeconds:0}s) — scanning toolkit items…"
+                    : $"[INFO] Downloading {request.ProgressItemName}... still in progress (no byte progress reported yet).";
+
+                var skipDuplicate = false;
+                lock (sync)
+                {
+                    skipDuplicate = string.Equals(heartbeatText, lastHeartbeatText, StringComparison.Ordinal);
+                    if (!skipDuplicate)
+                    {
+                        lastHeartbeatText = heartbeatText;
+                    }
+                }
+
+                if (skipDuplicate)
+                {
+                    continue;
+                }
+
+                PublishLine(heartbeatText, isErrorStream: false);
             }
         }, cancellationToken);
 
@@ -151,6 +180,11 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
             var line = new LogLine(DateTimeOffset.Now, text, Classify(text, isErrorStream), isErrorStream);
             lock (sync)
             {
+                if (!IsSyntheticProgressHeartbeat(text))
+                {
+                    lastHeartbeatText = null;
+                }
+
                 outputLines.Add(line);
             }
 
@@ -158,6 +192,18 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
 
             onOutput?.Invoke(line);
         }
+    }
+
+    private static bool IsSyntheticProgressHeartbeat(string text)
+    {
+        var trimmed = text.TrimStart();
+        if (trimmed.StartsWith("[INFO] Toolkit health scan still running", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return trimmed.StartsWith("[INFO] Downloading", StringComparison.OrdinalIgnoreCase) &&
+               trimmed.Contains("still in progress (no byte progress reported yet)", StringComparison.OrdinalIgnoreCase);
     }
 
     private static ProcessStartInfo BuildStartInfo(PowerShellRunRequest request)

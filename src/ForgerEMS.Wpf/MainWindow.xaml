@@ -312,8 +312,8 @@
             <Setter Property="Foreground" Value="#FFE8F0FF" />
             <Style.Triggers>
                 <Trigger Property="IsHighlighted" Value="True">
-                    <Setter Property="Background" Value="#334BA3C9" />
-                    <Setter Property="Foreground" Value="#FFFFFFFF" />
+                    <Setter Property="Background" Value="#E6FFB86B" />
+                    <Setter Property="Foreground" Value="#FF111111" />
                 </Trigger>
                 <Trigger Property="IsSelected" Value="True">
                     <Setter Property="Background" Value="#E6FFB86B" />
@@ -1255,15 +1255,30 @@
                            TextWrapping="Wrap"
                            Text="{Binding AppUpdateStateDisplay}" />
                 <WrapPanel Margin="0,10,0,0">
+                    <Button MinWidth="118"
+                            Margin="0,0,8,6"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Content="Retry check"
+                            Command="{Binding CheckForUpdatesNowCommand}"
+                            Visibility="{Binding AppUpdateDiagnosticsHintVisibility}" />
+                    <Button MinWidth="128"
+                            Margin="0,0,8,6"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Content="View logs"
+                            Command="{Binding OpenLogsFolderCommand}"
+                            Visibility="{Binding AppUpdateDiagnosticsHintVisibility}" />
                     <Button MinWidth="138"
                             Margin="0,0,8,6"
                             Style="{StaticResource SecondaryButtonStyle}"
                             Content="View release notes"
-                            Command="{Binding AppUpdateViewReleaseNotesCommand}" />
+                            Command="{Binding AppUpdateViewReleaseNotesCommand}"
+                            Visibility="{Binding AppUpdateViewReleaseNotesVisibility}" />
                     <Button MinWidth="128"
                             Margin="0,0,8,6"
+                            Style="{StaticResource SecondaryButtonStyle}"
                             Content="Download update"
-                            Command="{Binding AppUpdateDownloadInstallerCommand}" />
+                            Command="{Binding AppUpdateDownloadInstallerCommand}"
+                            Visibility="{Binding AppUpdateDownloadButtonVisibility}" />
                     <Button MinWidth="118"
                             Margin="0,0,8,6"
                             Style="{StaticResource SecondaryButtonStyle}"
@@ -1273,7 +1288,8 @@
                             Margin="0,0,8,6"
                             Style="{StaticResource SecondaryButtonStyle}"
                             Content="Ignore this version"
-                            Command="{Binding AppUpdateIgnoreVersionCommand}" />
+                            Command="{Binding AppUpdateIgnoreVersionCommand}"
+                            Visibility="{Binding AppUpdateIgnoreButtonVisibility}" />
                 </WrapPanel>
             </StackPanel>
         </Border>
@@ -2080,7 +2096,7 @@
                                                       ItemContainerStyle="{StaticResource ReadableComboBoxItemStyle}" />
                                             <Border Grid.Column="2"
                                                     Margin="12,0,0,0"
-                                                    Padding="10,4"
+                                                    Padding="10,5"
                                                     Background="#FFE8FAEF"
                                                     BorderBrush="#FF86EFAC"
                                                     BorderThickness="1"
@@ -2089,11 +2105,15 @@
                                                            FontWeight="Bold"
                                                            Foreground="#FF14532D"
                                                            Text="{Binding CopilotProviderBadgeText}"
-                                                           TextWrapping="NoWrap" />
+                                                           TextAlignment="Center"
+                                                           VerticalAlignment="Center"
+                                                           HorizontalAlignment="Center"
+                                                           TextWrapping="Wrap"
+                                                           MaxWidth="320" />
                                             </Border>
                                             <Border Grid.Column="3"
                                                     Margin="8,0,0,0"
-                                                    Padding="10,4"
+                                                    Padding="10,5"
                                                     Background="#FFFFF7ED"
                                                     BorderBrush="#FFFBBF24"
                                                     BorderThickness="1"
@@ -2102,7 +2122,11 @@
                                                            FontWeight="Bold"
                                                            Foreground="#FF7C2D12"
                                                            Text="{Binding CopilotPrivacyBadgeText}"
-                                                           TextWrapping="NoWrap" />
+                                                           TextAlignment="Center"
+                                                           VerticalAlignment="Center"
+                                                           HorizontalAlignment="Center"
+                                                           TextWrapping="Wrap"
+                                                           MaxWidth="280" />
                                             </Border>
                                             <TextBlock Grid.Column="4"
                                                        Margin="12,0,12,0"
@@ -2142,15 +2166,23 @@
                                                 <Button MinWidth="156" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="What is this laptop worth?" Command="{Binding AskCopilotValueCommand}" />
                                                 <Button MinWidth="150" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Best OS for this machine?" Command="{Binding AskCopilotOsCommand}" />
                                                 <Button MinWidth="142" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Build me a repair USB" Command="{Binding AskCopilotUsbCommand}" />
-                                                <Button MinWidth="136" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Explain this warning" Command="{Binding AskCopilotWarningCommand}" />
+                                                <Button MinWidth="136" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Explain this warning" Command="{Binding AskCopilotWarningCommand}" Visibility="{Binding KyraWarningQuickButtonVisibility}" />
+                                                <Button MinWidth="158" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Make resale listing" Command="{Binding AskCopilotListingCommand}" Visibility="{Binding KyraListingQuickButtonVisibility}" />
+                                                <Button MinWidth="128" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Fix code snippet" Command="{Binding AskCopilotFixCodeCommand}" />
+                                                <Button MinWidth="132" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Check live tools" Command="{Binding AskCopilotLiveToolsCommand}" Visibility="{Binding KyraLiveToolsQuickButtonVisibility}" />
                                             </WrapPanel>
-                                            <TextBlock DockPanel.Dock="Bottom"
-                                                       Margin="0,8,0,0"
-                                                       Visibility="{Binding CopilotThinkingVisibility}"
-                                                       FontSize="12"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="#FFFFDAB8"
-                                                       Text="Kyra is thinking..." />
+                                            <StackPanel DockPanel.Dock="Bottom"
+                                                        Margin="0,8,0,0"
+                                                        Visibility="{Binding CopilotThinkingVisibility}">
+                                                <TextBlock FontSize="12"
+                                                           FontWeight="SemiBold"
+                                                           Foreground="#FFFFDAB8"
+                                                           Text="Kyra is working…" />
+                                                <TextBlock Margin="0,2,0,0"
+                                                           FontSize="11"
+                                                           Foreground="#CCFFDAB8"
+                                                           Text="{Binding KyraActivityStatusText}" />
+                                            </StackPanel>
                                             <ScrollViewer x:Name="CopilotChatScrollViewer"
                                                           VerticalScrollBarVisibility="Auto"
                                                           Style="{StaticResource CopilotChatScrollViewerStyle}">
@@ -2205,18 +2237,52 @@
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <Grid Grid.Column="0">
-                                            <TextBox MinHeight="42"
+                                            <TextBox x:Name="KyraChatInputBox"
+                                                     MinHeight="42"
                                                      Style="{StaticResource KyraChatInputTextBoxStyle}"
                                                      Text="{Binding CopilotInput, UpdateSourceTrigger=PropertyChanged}"
                                                      TextWrapping="Wrap"
                                                      AcceptsReturn="True"
-                                                     ToolTip="Ask Kyra about this PC, USB builds, resale value, OS choice, or troubleshooting..."
+                                                     ToolTip="Type a message or a slash command (/help, /diagnose, /usb, /resale…). Tab completes the first suggestion."
                                                      PreviewKeyDown="OnCopilotInputPreviewKeyDown" />
+                                            <Popup PlacementTarget="{Binding ElementName=KyraChatInputBox}"
+                                                   Placement="Top"
+                                                   StaysOpen="True"
+                                                   AllowsTransparency="True"
+                                                   IsOpen="{Binding KyraSlashPopupOpen, Mode=TwoWay}">
+                                                <Border Padding="4"
+                                                        Background="#F20A101A"
+                                                        BorderBrush="{DynamicResource PanelBorderBrush}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="6"
+                                                        MaxWidth="420">
+                                                    <ListBox x:Name="KyraSlashSuggestionList"
+                                                             ItemsSource="{Binding KyraSlashSuggestions}"
+                                                             SelectedIndex="{Binding KyraSlashSelectedIndex, Mode=TwoWay}"
+                                                             MaxHeight="220"
+                                                             MinWidth="260"
+                                                             FontSize="13"
+                                                             Background="Transparent"
+                                                             BorderThickness="0"
+                                                             Focusable="False"
+                                                             IsTabStop="False"
+                                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                             PreviewMouseLeftButtonUp="OnKyraSlashSuggestionClick"
+                                                             MouseMove="OnKyraSlashListMouseMove">
+                                                        <ListBox.ItemContainerStyle>
+                                                            <Style TargetType="ListBoxItem">
+                                                                <Setter Property="Padding" Value="10,7" />
+                                                                <Setter Property="MinHeight" Value="32" />
+                                                            </Style>
+                                                        </ListBox.ItemContainerStyle>
+                                                    </ListBox>
+                                                </Border>
+                                            </Popup>
                                             <TextBlock Margin="14,0,14,0"
                                                        VerticalAlignment="Center"
                                                        IsHitTestVisible="False"
                                                        Foreground="#99E0E8F5"
-                                                       Text="Ask Kyra about this PC, USB builds, resale value, OS choice, or troubleshooting..."
+                                                       Text="Ask Kyra or type /help for slash commands (e.g. /diagnose, /usb, /resale)…"
                                                        TextWrapping="Wrap"
                                                        Visibility="{Binding CopilotInputPlaceholderVisibility}" />
                                         </Grid>
@@ -2598,13 +2664,39 @@
                                             <TextBlock Margin="0,8,0,0"
                                                        FontSize="11.5"
                                                        Foreground="{DynamicResource PanelTextBrush}"
+                                                       Text="{Binding AppUpdateSettingsVersionSummary}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,4,0,0"
+                                                       FontSize="11.5"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       Text="{Binding AppUpdateSettingsLatestSummary}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,8,0,0"
+                                                       FontSize="11.5"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
                                                        Text="{Binding LastUpdateCheckDisplayText}"
                                                        TextWrapping="Wrap" />
                                             <TextBlock Margin="0,6,0,0"
                                                        FontSize="11"
                                                        Foreground="{DynamicResource PanelMutedTextBrush}"
-                                                       Text="Source: public GitHub Releases (Forger-Digital-Solutions/ForgerEMS). ForgerEMS never downloads or installs updates unless you click Download. Offline failures are handled quietly."
+                                                       Text="{Binding AppUpdateSettingsSourceLine}"
                                                        TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,6,0,0"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       Text="{Binding AppUpdateSettingsIgnoredSummary}"
+                                                       TextWrapping="Wrap"
+                                                       Visibility="{Binding AppUpdateSettingsIgnoredVisibility}" />
+                                            <Button Margin="0,6,0,0"
+                                                    MinWidth="160"
+                                                    HorizontalAlignment="Left"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Content="Clear ignored version"
+                                                    Command="{Binding ClearIgnoredAppUpdateVersionCommand}"
+                                                    Visibility="{Binding AppUpdateSettingsIgnoredVisibility}" />
+                                            <CheckBox Margin="0,10,0,0"
+                                                      IsChecked="{Binding VerboseLiveLogs, Mode=TwoWay}"
+                                                      Content="Verbose Live Logs (show Kyra routing and diagnostics lines in the sidebar)" />
                                             <Button Margin="0,10,0,0"
                                                     MinWidth="120"
                                                     HorizontalAlignment="Left"

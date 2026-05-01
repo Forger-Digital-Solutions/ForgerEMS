@@ -94,6 +94,92 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
         var result = await service.CheckForNewerReleaseAsync(new Version(1, 1, 4), null);
         Assert.False(result.Succeeded);
         Assert.NotNull(result.ErrorMessage);
+        Assert.Equal(UpdateCheckFailureKind.Network, result.FailureKind);
+    }
+
+    [Fact]
+    public async Task Latest404_EmptyReleases_NoPublishedReleaseMessage()
+    {
+        var handler = new StubHandler(req =>
+        {
+            var path = req.RequestUri?.AbsolutePath ?? string.Empty;
+            if (path.EndsWith("/releases/latest", StringComparison.Ordinal))
+            {
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            }
+
+            if (path.Contains("/releases", StringComparison.Ordinal))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("[]", Encoding.UTF8, "application/json")
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync(new Version(1, 1, 4), null);
+        Assert.True(result.Succeeded);
+        Assert.False(result.UpdateAvailable);
+        Assert.Contains("No public GitHub Release", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Latest404_WithReleases_EndpointMessage()
+    {
+        var handler = new StubHandler(req =>
+        {
+            var path = req.RequestUri?.AbsolutePath ?? string.Empty;
+            if (path.EndsWith("/releases/latest", StringComparison.Ordinal))
+            {
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            }
+
+            if (path.Contains("/releases", StringComparison.Ordinal))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""[{"tag_name":"v1.0.0"}]""", Encoding.UTF8, "application/json")
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync(new Version(1, 1, 4), null);
+        Assert.False(result.Succeeded);
+        Assert.Equal(UpdateCheckFailureKind.ReleaseEndpointNotFound, result.FailureKind);
+    }
+
+    [Fact]
+    public async Task Forbidden_MarkedAsAccessIssue()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden)
+        {
+            Content = new StringContent("""{"message":"API rate limit exceeded"}""", Encoding.UTF8, "application/json")
+        });
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync(new Version(1, 1, 4), null);
+        Assert.False(result.Succeeded);
+        Assert.Equal(UpdateCheckFailureKind.AccessDeniedOrRateLimited, result.FailureKind);
+    }
+
+    [Fact]
+    public async Task InvalidJson_Body_ClassifiedAsMetadata()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("{not json", Encoding.UTF8, "application/json")
+        });
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync(new Version(1, 1, 4), null);
+        Assert.False(result.Succeeded);
+        Assert.Equal(UpdateCheckFailureKind.ReleaseMetadataInvalid, result.FailureKind);
     }
 
     [Fact]

@@ -1,0 +1,54 @@
+<Window x:Class="VentoyToolkitSetup.Wpf.ScrollableInfoWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ForgerEMS"
+        Width="640"
+        Height="520"
+        MinWidth="480"
+        MinHeight="360"
+        WindowStartupLocation="CenterOwner"
+        Background="#FF04070D"
+        ResizeMode="CanResizeWithGrip"
+        ShowInTaskbar="False"
+        FontFamily="Segoe UI">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Border Grid.Row="0"
+                Background="#CC07101D"
+                BorderBrush="#9967B7E8"
+                BorderThickness="1"
+                CornerRadius="10"
+                Padding="12">
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          Padding="0,0,8,0">
+                <TextBlock x:Name="BodyTextBlock"
+                           FontSize="12.5"
+                           Foreground="#FFE8F0FF"
+                           LineHeight="20"
+                           TextWrapping="Wrap" />
+            </ScrollViewer>
+        </Border>
+        <Border Grid.Row="1"
+                Margin="0,12,0,0"
+                Padding="10,8"
+                Background="#B30A111C"
+                BorderBrush="#6657C7E8"
+                BorderThickness="1"
+                CornerRadius="8">
+            <Button MinWidth="100"
+                    HorizontalAlignment="Right"
+                    Padding="14,8"
+                    Background="#B30F1724"
+                    BorderBrush="#8867B7E8"
+                    BorderThickness="1"
+                    Foreground="#FFE8F0FF"
+                    FontWeight="SemiBold"
+                    Content="Close"
+                    Click="OnCloseClick" />
+        </Border>
+    </Grid>
+</Window>
