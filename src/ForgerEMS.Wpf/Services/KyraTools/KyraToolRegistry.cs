@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,18 +15,20 @@ public sealed class KyraToolRegistry
 {
     private readonly IReadOnlyList<IKyraTool> _tools;
 
-    public KyraToolRegistry()
+    public KyraToolRegistry(HttpMessageHandler? testHttpHandler = null)
     {
+        var http = KyraLiveToolsSharedHttp.Create(testHttpHandler);
+        var cache = new KyraLiveToolCache();
         _tools =
         [
             new SystemContextKyraTool(),
             new ToolkitHealthKyraTool(),
             new DiagnosticsKyraTool(),
-            new WeatherKyraTool(),
-            new NewsKyraTool(),
-            new CryptoPriceKyraTool(),
-            new StockPriceKyraTool(),
-            new SportsKyraTool(),
+            new WeatherKyraTool(http, cache),
+            new NewsKyraTool(http, cache),
+            new CryptoPriceKyraTool(http, cache),
+            new StockPriceKyraTool(http, cache),
+            new SportsKyraTool(http, cache),
             new WebSearchKyraTool(),
             new MarketplaceKyraTool(),
             new CodeAssistKyraTool()
@@ -40,6 +44,7 @@ public sealed class KyraToolRegistry
             KyraToolOperationalStatus.NotConfigured => "Not configured",
             KyraToolOperationalStatus.Disabled => "Disabled",
             KyraToolOperationalStatus.Failed => "Failed",
+            KyraToolOperationalStatus.TimedOut => "Timed out",
             KyraToolOperationalStatus.MissingScan => "Missing scan",
             KyraToolOperationalStatus.Available => "Available",
             _ => "Unknown"
@@ -55,7 +60,7 @@ public sealed class KyraToolRegistry
             _ => "Other"
         };
 
-    /// <summary>True when at least one live/marketplace tool is actually configured (not stub).</summary>
+    /// <summary>True when at least one live/marketplace tool is ready (e.g. Open-Meteo weather, CoinGecko).</summary>
     public bool HasConfiguredLiveDataCapability(CopilotSettings settings, KyraToolHostFacts facts)
     {
         foreach (var tool in _tools)
@@ -87,9 +92,9 @@ public sealed class KyraToolRegistry
                 ToolName = tool.Name,
                 Category = FormatCategoryLabel(tool.SurfaceCategory),
                 Status = FormatStatusLabel(st),
-                Provider = DescribeProviderColumn(tool, st),
-                LastChecked = "—",
-                Notes = BuildNotes(tool, st)
+                Provider = DescribeProviderColumn(tool, st, settings),
+                LastChecked = KyraLiveToolTelemetry.FormatLastCheckedCell(tool.Name),
+                Notes = BuildNotes(tool, st, settings)
             });
         }
 
@@ -105,16 +110,18 @@ public sealed class KyraToolRegistry
         foreach (var tool in _tools.OrderBy(t => t.SurfaceCategory).ThenBy(t => t.Name, StringComparer.OrdinalIgnoreCase))
         {
             var st = tool.GetOperationalStatus(settings, facts);
-            sb.AppendLine($"- **{tool.Name}** ({FormatCategoryLabel(tool.SurfaceCategory)}): {FormatStatusLabel(st)}");
+            var prov = DescribeProviderColumn(tool, st, settings);
+            var last = KyraLiveToolTelemetry.FormatLastCheckedCell(tool.Name);
+            sb.AppendLine($"- **{tool.Name}** ({FormatCategoryLabel(tool.SurfaceCategory)}): {FormatStatusLabel(st)} — {prov} — last: {last}");
         }
 
         sb.AppendLine();
-        sb.AppendLine("Live weather, news, and market tools stay “not configured” until real APIs are wired — Kyra will not invent prices or headlines.");
+        sb.AppendLine("Weather (Open-Meteo) and crypto (CoinGecko) can work without API keys when enabled. News, stocks, and sports need provider keys in **Kyra Advanced → Live APIs**.");
         return sb.ToString().TrimEnd();
     }
 
     public string BuildStatusSummary() =>
-        "See /provider or Kyra Advanced → Tools for per-tool status. Stubs report “not configured” until APIs are added.";
+        "See /provider or Kyra Advanced → Tools for per-tool status. Open-Meteo + CoinGecko are no-key options when enabled.";
 
     /// <summary>Builds a single augmentation block for API providers (disclaimers + stub status).</summary>
     public async Task<string?> BuildAugmentationAsync(
@@ -130,9 +137,15 @@ public sealed class KyraToolRegistry
             }
 
             var result = await tool.ExecuteAsync(request, cancellationToken).ConfigureAwait(false);
-            if (result.AugmentsProviderPrompt && !string.IsNullOrWhiteSpace(result.ProviderAugmentation))
+            if (!result.AugmentsProviderPrompt)
             {
-                sb.AppendLine(result.ProviderAugmentation.Trim());
+                continue;
+            }
+
+            var aug = result.EffectiveProviderAugmentation();
+            if (!string.IsNullOrWhiteSpace(aug))
+            {
+                sb.AppendLine(aug.Trim());
                 sb.AppendLine();
             }
         }
@@ -141,23 +154,75 @@ public sealed class KyraToolRegistry
         return string.IsNullOrEmpty(text) ? null : text;
     }
 
-    private static string DescribeProviderColumn(IKyraTool tool, KyraToolOperationalStatus st)
+    internal static KyraToolHostFacts BuildHostFacts(CopilotRequest request)
     {
-        if (st == KyraToolOperationalStatus.NotConfigured)
+        var scan = !string.IsNullOrWhiteSpace(request.SystemIntelligenceReportPath) &&
+                   File.Exists(request.SystemIntelligenceReportPath);
+        var toolkit = !string.IsNullOrWhiteSpace(request.ToolkitHealthReportPath) &&
+                      File.Exists(request.ToolkitHealthReportPath);
+        var loc = request.Settings.LiveTools?.DefaultWeatherLocation?.Trim();
+        return new KyraToolHostFacts
         {
+            HasSystemIntelligenceScan = scan,
+            HasToolkitHealthReport = toolkit,
+            DefaultWeatherLocation = string.IsNullOrEmpty(loc) ? null : loc
+        };
+    }
+
+    private static string DescribeProviderColumn(IKyraTool tool, KyraToolOperationalStatus st, CopilotSettings settings)
+    {
+        var lt = settings.LiveTools ?? new KyraLiveToolsSettings();
+        if (st == KyraToolOperationalStatus.NotConfigured || st == KyraToolOperationalStatus.Disabled)
+        {
+            if (tool.Name.Equals("Weather", StringComparison.OrdinalIgnoreCase) && lt.WeatherEnabled)
+            {
+                return (lt.WeatherProvider ?? "openmeteo").Trim();
+            }
+
+            if (tool.Name.Equals("Crypto", StringComparison.OrdinalIgnoreCase) && lt.CryptoEnabled)
+            {
+                return (lt.CryptoProvider ?? "coingecko").Trim();
+            }
+
             return "—";
         }
 
         if (tool.SurfaceCategory is KyraToolSurfaceCategory.LiveData or KyraToolSurfaceCategory.Marketplace)
         {
-            return st == KyraToolOperationalStatus.Ready ? "Configured provider" : "ForgerEMS (local)";
+            if (tool.Name.Equals("Weather", StringComparison.OrdinalIgnoreCase))
+            {
+                return (lt.WeatherProvider ?? "openmeteo").Trim();
+            }
+
+            if (tool.Name.Equals("News", StringComparison.OrdinalIgnoreCase))
+            {
+                return (lt.NewsProvider ?? "newsapi").Trim();
+            }
+
+            if (tool.Name.Equals("Stocks", StringComparison.OrdinalIgnoreCase))
+            {
+                return (lt.StocksProvider ?? "finnhub").Trim();
+            }
+
+            if (tool.Name.Equals("Crypto", StringComparison.OrdinalIgnoreCase))
+            {
+                return (lt.CryptoProvider ?? "coingecko").Trim();
+            }
+
+            if (tool.Name.Equals("Sports", StringComparison.OrdinalIgnoreCase))
+            {
+                return (lt.SportsProvider ?? "thesportsdb").Trim();
+            }
+
+            return st == KyraToolOperationalStatus.Ready ? "Configured" : "—";
         }
 
         return "ForgerEMS (local)";
     }
 
-    private static string BuildNotes(IKyraTool tool, KyraToolOperationalStatus st)
+    private static string BuildNotes(IKyraTool tool, KyraToolOperationalStatus st, CopilotSettings settings)
     {
+        var lt = settings.LiveTools ?? new KyraLiveToolsSettings();
         if (st == KyraToolOperationalStatus.MissingScan)
         {
             return tool.Name.Contains("Toolkit", StringComparison.OrdinalIgnoreCase)
@@ -165,10 +230,40 @@ public sealed class KyraToolRegistry
                 : "Run System Intelligence scan for machine-specific context.";
         }
 
-        if (st == KyraToolOperationalStatus.NotConfigured &&
-            tool.SurfaceCategory is KyraToolSurfaceCategory.LiveData or KyraToolSurfaceCategory.Marketplace)
+        if (tool.Name.Equals("Marketplace", StringComparison.OrdinalIgnoreCase))
         {
-            return "No live API wired in this build; Kyra answers honestly when data is unavailable.";
+            return "Live marketplace comparison is not configured yet. Local PricingEngine still estimates from specs.";
+        }
+
+        if (st == KyraToolOperationalStatus.NotConfigured &&
+            tool.SurfaceCategory is KyraToolSurfaceCategory.LiveData)
+        {
+            if (tool.Name.Equals("Weather", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Use openmeteo (no key) or openweather + key in Kyra Advanced → Live APIs.";
+            }
+
+            if (tool.Name.Equals("News", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Enable News and add NewsAPI or GNews key.";
+            }
+
+            if (tool.Name.Equals("Stocks", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Enable Stocks and add Finnhub API key.";
+            }
+
+            if (tool.Name.Equals("Crypto", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Use coingecko (no key) or configure another provider when available.";
+            }
+
+            if (tool.Name.Equals("Sports", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Enable Sports and add TheSportsDB API key.";
+            }
+
+            return "Configure provider/API in Kyra Advanced → Live APIs.";
         }
 
         if (tool.SurfaceCategory == KyraToolSurfaceCategory.CodeAssist)

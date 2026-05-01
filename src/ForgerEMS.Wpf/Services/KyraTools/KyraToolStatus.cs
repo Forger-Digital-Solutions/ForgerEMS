@@ -15,6 +15,7 @@ public enum KyraToolOperationalStatus
     NotConfigured,
     Disabled,
     Failed,
+    TimedOut,
     MissingScan,
     Available
 }
@@ -25,4 +26,7 @@ public readonly struct KyraToolHostFacts
     public bool HasSystemIntelligenceScan { get; init; }
 
     public bool HasToolkitHealthReport { get; init; }
+
+    /// <summary>Optional home ZIP/city from Kyra live tools settings (never auto-filled from system telemetry).</summary>
+    public string? DefaultWeatherLocation { get; init; }
 }

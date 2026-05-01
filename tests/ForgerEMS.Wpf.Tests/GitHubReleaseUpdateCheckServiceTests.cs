@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using VentoyToolkitSetup.Wpf.Services;
+using Xunit;
 
 namespace ForgerEMS.Wpf.Tests;
 
@@ -18,6 +19,15 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
             Task.FromResult(_respond(request));
+    }
+
+    private sealed class DelayUntilCanceledHandler : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        }
     }
 
     private static HttpClient Client(HttpMessageHandler handler) => new(handler) { Timeout = TimeSpan.FromSeconds(5) };
@@ -36,9 +46,10 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
         });
         using var http = Client(handler);
         using var service = new GitHubReleaseUpdateCheckService(http);
-        var result = await service.CheckForNewerReleaseAsync(new Version(1, 1, 4), ignoredVersionNormalized: null);
+        var result = await service.CheckForNewerReleaseAsync("1.1.4", ignoredVersionNormalized: null);
         Assert.True(result.Succeeded);
         Assert.True(result.UpdateAvailable);
+        Assert.Equal(UpdateCheckOutcome.UpdateAvailable, result.Outcome);
         Assert.Equal(new Version(1, 2, 0), result.LatestVersion);
     }
 
@@ -51,9 +62,54 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
         });
         using var http = Client(handler);
         using var service = new GitHubReleaseUpdateCheckService(http);
-        var result = await service.CheckForNewerReleaseAsync(new Version(1, 1, 4), null);
+        var result = await service.CheckForNewerReleaseAsync("1.1.4", null);
         Assert.True(result.Succeeded);
         Assert.False(result.UpdateAvailable);
+        Assert.Equal(UpdateCheckOutcome.AlreadyLatest, result.Outcome);
+    }
+
+    [Fact]
+    public async Task InstalledNewerThanLatest_Public_IsSuccess()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(LatestReleaseJson("v1.1.4"), Encoding.UTF8, "application/json")
+        });
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync("1.1.5-beta.1", null);
+        Assert.True(result.Succeeded);
+        Assert.False(result.UpdateAvailable);
+        Assert.Equal(UpdateCheckOutcome.InstalledNewerThanLatestPublic, result.Outcome);
+    }
+
+    [Fact]
+    public async Task InstalledBeta_LatestStable_UpdateAvailable()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(LatestReleaseJson("v1.1.4"), Encoding.UTF8, "application/json")
+        });
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync("1.1.4-beta.1", null);
+        Assert.True(result.Succeeded);
+        Assert.True(result.UpdateAvailable);
+        Assert.Equal(UpdateCheckOutcome.UpdateAvailable, result.Outcome);
+    }
+
+    [Fact]
+    public async Task ForgerEMS_TagPrefix_Parses()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(LatestReleaseJson("ForgerEMS-v1.2.0"), Encoding.UTF8, "application/json")
+        });
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync("1.1.4", null);
+        Assert.True(result.UpdateAvailable);
+        Assert.Equal("1.2.0", ReleaseVersionParser.NormalizeLabel(result.LatestVersionLabel));
     }
 
     [Fact]
@@ -65,9 +121,10 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
         });
         using var http = Client(handler);
         using var service = new GitHubReleaseUpdateCheckService(http);
-        var result = await service.CheckForNewerReleaseAsync(new Version(1, 1, 4), null);
+        var result = await service.CheckForNewerReleaseAsync("1.1.4", null);
         Assert.True(result.Succeeded);
         Assert.False(result.UpdateAvailable);
+        Assert.Equal(UpdateCheckOutcome.None, result.Outcome);
         Assert.NotNull(result.ErrorMessage);
     }
 
@@ -80,9 +137,10 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
         });
         using var http = Client(handler);
         using var service = new GitHubReleaseUpdateCheckService(http);
-        var result = await service.CheckForNewerReleaseAsync(new Version(1, 1, 4), "v1.9.0");
+        var result = await service.CheckForNewerReleaseAsync("1.1.4", "v1.9.0");
         Assert.True(result.Succeeded);
         Assert.False(result.UpdateAvailable);
+        Assert.Equal(UpdateCheckOutcome.IgnoredVersion, result.Outcome);
     }
 
     [Fact]
@@ -91,10 +149,11 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
         var handler = new StubHandler(_ => throw new HttpRequestException("offline"));
         using var http = Client(handler);
         using var service = new GitHubReleaseUpdateCheckService(http);
-        var result = await service.CheckForNewerReleaseAsync(new Version(1, 1, 4), null);
+        var result = await service.CheckForNewerReleaseAsync("1.1.4", null);
         Assert.False(result.Succeeded);
         Assert.NotNull(result.ErrorMessage);
         Assert.Equal(UpdateCheckFailureKind.Network, result.FailureKind);
+        Assert.Equal(UpdateCheckOutcome.Failed, result.Outcome);
     }
 
     [Fact]
@@ -120,9 +179,10 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
         });
         using var http = Client(handler);
         using var service = new GitHubReleaseUpdateCheckService(http);
-        var result = await service.CheckForNewerReleaseAsync(new Version(1, 1, 4), null);
+        var result = await service.CheckForNewerReleaseAsync("1.1.4", null);
         Assert.True(result.Succeeded);
         Assert.False(result.UpdateAvailable);
+        Assert.Equal(UpdateCheckOutcome.NoPublishedRelease, result.Outcome);
         Assert.Contains("No public GitHub Release", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -149,7 +209,7 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
         });
         using var http = Client(handler);
         using var service = new GitHubReleaseUpdateCheckService(http);
-        var result = await service.CheckForNewerReleaseAsync(new Version(1, 1, 4), null);
+        var result = await service.CheckForNewerReleaseAsync("1.1.4", null);
         Assert.False(result.Succeeded);
         Assert.Equal(UpdateCheckFailureKind.ReleaseEndpointNotFound, result.FailureKind);
     }
@@ -163,7 +223,7 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
         });
         using var http = Client(handler);
         using var service = new GitHubReleaseUpdateCheckService(http);
-        var result = await service.CheckForNewerReleaseAsync(new Version(1, 1, 4), null);
+        var result = await service.CheckForNewerReleaseAsync("1.1.4", null);
         Assert.False(result.Succeeded);
         Assert.Equal(UpdateCheckFailureKind.AccessDeniedOrRateLimited, result.FailureKind);
     }
@@ -177,7 +237,49 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
         });
         using var http = Client(handler);
         using var service = new GitHubReleaseUpdateCheckService(http);
-        var result = await service.CheckForNewerReleaseAsync(new Version(1, 1, 4), null);
+        var result = await service.CheckForNewerReleaseAsync("1.1.4", null);
+        Assert.False(result.Succeeded);
+        Assert.Equal(UpdateCheckFailureKind.ReleaseMetadataInvalid, result.FailureKind);
+    }
+
+    [Fact]
+    public async Task HttpClientTimeout_ReturnsTimeoutFailureKind()
+    {
+        using var http = new HttpClient(new DelayUntilCanceledHandler()) { Timeout = TimeSpan.FromMilliseconds(20) };
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync("1.1.4", null);
+        Assert.False(result.Succeeded);
+        Assert.Equal(UpdateCheckFailureKind.Timeout, result.FailureKind);
+        Assert.Contains("timed out", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task UserCancellation_ReturnsCancelledOutcome()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(LatestReleaseJson("v1.2.0"), Encoding.UTF8, "application/json")
+        });
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+        var result = await service.CheckForNewerReleaseAsync("1.1.4", null, cts.Token);
+        Assert.False(result.Succeeded);
+        Assert.Equal(UpdateCheckFailureKind.Cancelled, result.FailureKind);
+        Assert.Equal(UpdateCheckOutcome.Cancelled, result.Outcome);
+    }
+
+    [Fact]
+    public async Task InvalidInstalledVersion_ReturnsMetadataInvalid()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(LatestReleaseJson("v1.2.0"), Encoding.UTF8, "application/json")
+        });
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync("not-a-version", null);
         Assert.False(result.Succeeded);
         Assert.Equal(UpdateCheckFailureKind.ReleaseMetadataInvalid, result.FailureKind);
     }
@@ -196,5 +298,11 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
     {
         Assert.True(ReleaseVersionParser.TryParseVersion("v2.0.0-beta.1", out var v));
         Assert.Equal(new Version(2, 0, 0), v);
+    }
+
+    [Fact]
+    public void ReleaseVersionParser_StripsProductPrefix()
+    {
+        Assert.Equal("1.0.0", ReleaseVersionParser.NormalizeLabel("ForgerEMS-v1.0.0"));
     }
 }

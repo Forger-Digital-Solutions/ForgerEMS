@@ -332,6 +332,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         TestCopilotConnectionCommand = new AsyncRelayCommand(TestCopilotConnectionAsync, () => !IsCopilotGenerating);
         ClearProviderSessionKeysCommand = new RelayCommand(ClearProviderSessionKeys);
         RefreshCopilotProviderStatusCommand = new RelayCommand(RefreshCopilotProviderStatus);
+        SaveKyraLiveToolsSettingsCommand = new RelayCommand(SaveCopilotSettings);
         ExportKyraMemoryCommand = new RelayCommand(ExportKyraMemory);
         ClearKyraMemoryCommand = new RelayCommand(ClearKyraMemory);
         ViewKyraMemoryCommand = new RelayCommand(ViewKyraMemory);
@@ -376,6 +377,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public ObservableCollection<string> KyraSlashSuggestions { get; } = [];
 
     public ObservableCollection<KyraToolStatusRowView> KyraToolStatusRows { get; } = [];
+
+    /// <summary>Bind Kyra Advanced → Live APIs fields; same instance persisted with copilot settings.</summary>
+    public KyraLiveToolsSettings KyraLiveToolsForBinding
+    {
+        get
+        {
+            _copilotSettings ??= new CopilotSettings();
+            _copilotSettings.LiveTools ??= new KyraLiveToolsSettings();
+            return _copilotSettings.LiveTools;
+        }
+    }
 
     public ObservableCollection<CopilotProviderSettingView> CopilotProviderSettings { get; } = [];
 
@@ -506,6 +518,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public RelayCommand ClearProviderSessionKeysCommand { get; }
 
     public RelayCommand RefreshCopilotProviderStatusCommand { get; }
+
+    public RelayCommand SaveKyraLiveToolsSettingsCommand { get; }
 
     public RelayCommand ExportKyraMemoryCommand { get; }
 
@@ -2017,30 +2031,62 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             if (parse.IsSlashCommand)
             {
                 ReportKyraActivity("Reading command…");
-                var route = KyraSlashCommandRouter.Handle(parse, BuildKyraSlashHostSnapshot());
-                var inline = route.ToCopilotResponse();
-                if (inline is not null)
+                if (KyraLiveSlashCoordinator.IsLiveDataSlash(parse.MatchedCommand))
                 {
-                    ReportKyraActivity("Formatting Kyra response…");
-                    response = inline;
-                    ReportKyraActivity("Done.");
-                }
-                else if (!string.IsNullOrWhiteSpace(route.ForwardPrompt))
-                {
-                    ReportKyraActivity(DescribeKyraLlmPhase(route.ForwardPrompt));
-                    var req = CreateKyraCopilotRequest(route.ForwardPrompt, reportPath, toolkitReportPath);
-                    response = await _copilotService.GenerateReplyAsync(req, _copilotGenerationCancellation.Token);
+                    ReportKyraActivity("Checking configured tool…");
+                    var uiSettings = BuildCopilotSettingsFromUi();
+                    var liveFacts = BuildKyraToolHostFacts(reportPath, toolkitReportPath, uiSettings);
+                    var liveRoute = await KyraLiveSlashCoordinator.ExecuteLiveAsync(
+                        parse,
+                        uiSettings,
+                        liveFacts,
+                        _copilotGenerationCancellation.Token);
+                    var liveResp = liveRoute.ToCopilotResponse();
+                    if (liveResp is not null)
+                    {
+                        ReportKyraActivity("Formatting Kyra response…");
+                        response = liveResp;
+                        ReportKyraActivity("Done.");
+                    }
+                    else
+                    {
+                        response = new CopilotResponse
+                        {
+                            Text = "Live tool returned no text. Try `/provider`.",
+                            ProviderType = CopilotProviderType.LocalOffline,
+                            OnlineStatus = "Local live tool",
+                            SourceLabel = "Kyra · live tool"
+                        };
+                        ReportKyraActivity("Done.");
+                    }
                 }
                 else
                 {
-                    response = new CopilotResponse
+                    var route = KyraSlashCommandRouter.Handle(parse, BuildKyraSlashHostSnapshot());
+                    var inline = route.ToCopilotResponse();
+                    if (inline is not null)
                     {
-                        Text = "That command didn’t produce a response. Try `/help`.",
-                        ProviderType = CopilotProviderType.LocalOffline,
-                        OnlineStatus = "Local command routing",
-                        SourceLabel = "Kyra · command"
-                    };
-                    ReportKyraActivity("Done.");
+                        ReportKyraActivity("Formatting Kyra response…");
+                        response = inline;
+                        ReportKyraActivity("Done.");
+                    }
+                    else if (!string.IsNullOrWhiteSpace(route.ForwardPrompt))
+                    {
+                        ReportKyraActivity(DescribeKyraLlmPhase(route.ForwardPrompt));
+                        var req = CreateKyraCopilotRequest(route.ForwardPrompt, reportPath, toolkitReportPath);
+                        response = await _copilotService.GenerateReplyAsync(req, _copilotGenerationCancellation.Token);
+                    }
+                    else
+                    {
+                        response = new CopilotResponse
+                        {
+                            Text = "That command didn’t produce a response. Try `/help`.",
+                            ProviderType = CopilotProviderType.LocalOffline,
+                            OnlineStatus = "Local command routing",
+                            SourceLabel = "Kyra · command"
+                        };
+                        ReportKyraActivity("Done.");
+                    }
                 }
             }
             else
@@ -2255,12 +2301,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         var toolkitReport = Path.Combine(GetRuntimeReportsDirectory(), "toolkit-health-latest.json");
         var hasToolkit = File.Exists(toolkitReport);
+        var loc = _copilotSettings?.LiveTools?.DefaultWeatherLocation?.Trim();
         var facts = new KyraToolHostFacts
         {
             HasSystemIntelligenceScan = scan,
-            HasToolkitHealthReport = hasToolkit
+            HasToolkitHealthReport = hasToolkit,
+            DefaultWeatherLocation = string.IsNullOrEmpty(loc) ? null : loc
         };
-        var liveOk = new KyraToolRegistry().HasConfiguredLiveDataCapability(_copilotSettings, facts);
+        var liveOk = new KyraToolRegistry().HasConfiguredLiveDataCapability(_copilotSettings ?? new CopilotSettings(), facts);
         if (_kyraShowLiveToolsQuickButton != liveOk)
         {
             _kyraShowLiveToolsQuickButton = liveOk;
@@ -2348,6 +2396,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         };
     }
 
+    private static KyraToolHostFacts BuildKyraToolHostFacts(string reportPath, string toolkitReportPath, CopilotSettings settings)
+    {
+        var loc = settings.LiveTools?.DefaultWeatherLocation?.Trim();
+        return new KyraToolHostFacts
+        {
+            HasSystemIntelligenceScan = File.Exists(reportPath),
+            HasToolkitHealthReport = File.Exists(toolkitReportPath),
+            DefaultWeatherLocation = string.IsNullOrEmpty(loc) ? null : loc
+        };
+    }
+
     private void StopCopilotGeneration()
     {
         _copilotGenerationCancellation?.Cancel();
@@ -2395,10 +2454,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         sb.AppendLine(toolStatus);
         KyraAssistantStatusSummary = sb.ToString().TrimEnd();
 
+        var locPanel = _copilotSettings?.LiveTools?.DefaultWeatherLocation?.Trim();
         var factsPanel = new KyraToolHostFacts
         {
             HasSystemIntelligenceScan = File.Exists(reportPath),
-            HasToolkitHealthReport = File.Exists(toolkitPath)
+            HasToolkitHealthReport = File.Exists(toolkitPath),
+            DefaultWeatherLocation = string.IsNullOrEmpty(locPanel) ? null : locPanel
         };
         var reg = new KyraToolRegistry();
         KyraToolStatusRows.Clear();
@@ -4210,6 +4271,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(KyraApiFirstRouting));
         OnPropertyChanged(nameof(KyraOfflineFallbackEnabled));
         OnPropertyChanged(nameof(KyraPersistentMemoryEnabled));
+        OnPropertyChanged(nameof(KyraLiveToolsForBinding));
     }
 
     private void LoadBetaSettings()
@@ -4274,6 +4336,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private CopilotSettings BuildCopilotSettingsFromUi()
     {
         var settings = _copilotSettings ?? new CopilotSettings();
+        settings.LiveTools ??= new KyraLiveToolsSettings();
         settings.Mode = ToCopilotMode(SelectedCopilotMode);
         settings.ProviderType = CopilotProviderType.LocalOffline;
         settings.TimeoutSeconds = settings.TimeoutSeconds <= 0 ? 12 : settings.TimeoutSeconds;
@@ -5446,23 +5509,139 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             }
         });
 
+        var result = new UpdateCheckResult
+        {
+            Succeeded = false,
+            Outcome = UpdateCheckOutcome.Failed,
+            FailureKind = UpdateCheckFailureKind.Unknown,
+            ErrorMessage = "Update check did not complete."
+        };
+
         try
         {
-            var current = System.Version.Parse(AppReleaseInfo.Version);
             var ignored = string.IsNullOrWhiteSpace(_appUpdateSettings.IgnoredVersion)
                 ? null
                 : _appUpdateSettings.IgnoredVersion;
-            var result = await _updateCheckService.CheckForNewerReleaseAsync(current, ignored, CancellationToken.None).ConfigureAwait(false);
+            var installedLabel = AppReleaseInfo.Version;
+
+            AppendLog(new LogLine(
+                DateTimeOffset.Now,
+                $"[INFO] Update check started. Installed={installedLabel} Source=GitHub Releases Manual={manual}",
+                LogSeverity.Info,
+                channel: LiveLogChannel.Update));
+
+            try
+            {
+                result = await _updateCheckService
+                    .CheckForNewerReleaseAsync(installedLabel, ignored, CancellationToken.None)
+                    .WaitAsync(TimeSpan.FromSeconds(45), CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                result = new UpdateCheckResult
+                {
+                    Succeeded = false,
+                    Outcome = UpdateCheckOutcome.Failed,
+                    FailureKind = UpdateCheckFailureKind.Timeout,
+                    ErrorMessage = "Update check timed out. Try again later.",
+                    DiagnosticDetail = "Overall update-check deadline exceeded."
+                };
+                AppendLog(new LogLine(
+                    DateTimeOffset.Now,
+                    "[WARN] Update check timed out.",
+                    LogSeverity.Warning,
+                    channel: LiveLogChannel.Update));
+            }
 
             result = ReconcileIgnoredInFlightUpdatePrompt(result, _appUpdateSettings.IgnoredVersion);
 
-            _appUpdateSettings.LastCheckedUtc = DateTimeOffset.UtcNow;
-            SaveUpdateSettings();
+            if (result.Succeeded)
+            {
+                if (!string.IsNullOrWhiteSpace(result.LatestVersionLabel) &&
+                    result.Outcome != UpdateCheckOutcome.NoPublishedRelease)
+                {
+                    AppendLog(new LogLine(
+                        DateTimeOffset.Now,
+                        $"[INFO] Latest release found. Latest={ReleaseVersionParser.NormalizeLabel(result.LatestVersionLabel)} Tag={result.LatestVersionLabel}",
+                        LogSeverity.Info,
+                        channel: LiveLogChannel.Update));
+                }
 
-            RunOnUi(() => ApplyUpdateCheckResultToUi(result, manual));
+                if (result.Outcome == UpdateCheckOutcome.UpdateAvailable)
+                {
+                    AppendLog(new LogLine(
+                        DateTimeOffset.Now,
+                        $"[OK] Update available. Installed={ReleaseVersionParser.NormalizeLabel(installedLabel)} Latest={ReleaseVersionParser.NormalizeLabel(result.LatestVersionLabel)}",
+                        LogSeverity.Info,
+                        channel: LiveLogChannel.Update));
+                }
+                else if (result.Outcome == UpdateCheckOutcome.AlreadyLatest)
+                {
+                    AppendLog(new LogLine(
+                        DateTimeOffset.Now,
+                        "[OK] App is already up to date.",
+                        LogSeverity.Info,
+                        channel: LiveLogChannel.Update));
+                }
+                else if (result.Outcome == UpdateCheckOutcome.InstalledNewerThanLatestPublic)
+                {
+                    AppendLog(new LogLine(
+                        DateTimeOffset.Now,
+                        "[OK] Installed build is newer than latest public release.",
+                        LogSeverity.Info,
+                        channel: LiveLogChannel.Update));
+                }
+                else if (result.Outcome == UpdateCheckOutcome.NoPublishedRelease)
+                {
+                    AppendLog(new LogLine(
+                        DateTimeOffset.Now,
+                        "[INFO] No published GitHub release found for this repo.",
+                        LogSeverity.Info,
+                        channel: LiveLogChannel.Update));
+                }
+                else if (result.Outcome == UpdateCheckOutcome.IgnoredVersion)
+                {
+                    AppendLog(new LogLine(
+                        DateTimeOffset.Now,
+                        "[INFO] Update check complete; latest version matches ignored setting.",
+                        LogSeverity.Info,
+                        channel: LiveLogChannel.Update));
+                }
+            }
+            else
+            {
+                AppendLog(new LogLine(
+                    DateTimeOffset.Now,
+                    $"[WARN] Update check failed: {result.FailureKind}.",
+                    LogSeverity.Warning,
+                    channel: LiveLogChannel.Update));
+            }
+        }
+        catch (Exception exception)
+        {
+            result = new UpdateCheckResult
+            {
+                Succeeded = false,
+                Outcome = UpdateCheckOutcome.Failed,
+                FailureKind = UpdateCheckFailureKind.Unknown,
+                ErrorMessage = "Update check failed unexpectedly.",
+                DiagnosticDetail = exception.Message
+            };
+            AppendLog(new LogLine(
+                DateTimeOffset.Now,
+                $"[WARN] Update check failed: {exception.Message}",
+                LogSeverity.Warning,
+                channel: LiveLogChannel.Update));
         }
         finally
         {
+            _appUpdateSettings.LastCheckedUtc = DateTimeOffset.UtcNow;
+            SaveUpdateSettings();
+
+            var applyResult = result;
+            RunOnUi(() => ApplyUpdateCheckResultToUi(applyResult, manual));
+
             _updateCheckInProgress = false;
             RunOnUi(() =>
             {
@@ -5490,21 +5669,26 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return result;
         }
 
+        var norm = ReleaseVersionParser.NormalizeLabel(result.LatestVersionLabel);
         return new UpdateCheckResult
         {
             Succeeded = true,
+            Outcome = UpdateCheckOutcome.IgnoredVersion,
             UpdateAvailable = false,
             LatestVersion = result.LatestVersion,
             LatestVersionLabel = result.LatestVersionLabel,
             ReleaseNotesUrl = result.ReleaseNotesUrl,
             InstallerAssetName = result.InstallerAssetName,
-            InstallerDownloadUrl = result.InstallerDownloadUrl
+            InstallerDownloadUrl = result.InstallerDownloadUrl,
+            ErrorMessage = UpdateCheckDisplay.FormatIgnoredVersion(norm)
         };
     }
 
     private void ApplyUpdateCheckResultToUi(UpdateCheckResult result, bool manual)
     {
         OnPropertyChanged(nameof(LastUpdateCheckDisplayText));
+
+        var installedNorm = ReleaseVersionParser.NormalizeLabel(AppReleaseInfo.Version);
 
         if (result.Succeeded && !string.IsNullOrWhiteSpace(result.LatestVersionLabel))
         {
@@ -5525,18 +5709,21 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             AppUpdateStateDisplay = result.FailureKind switch
             {
-                UpdateCheckFailureKind.Network => "Update check: connection issue.",
-                UpdateCheckFailureKind.ReleaseEndpointNotFound => "Update check: release not found (404).",
-                UpdateCheckFailureKind.AccessDeniedOrRateLimited => "Update check: GitHub rate limit or access block.",
-                UpdateCheckFailureKind.ReleaseMetadataInvalid => "Update check: bad release metadata.",
-                _ => "Update check failed."
+                UpdateCheckFailureKind.Network => "Update check: offline or network issue.",
+                UpdateCheckFailureKind.Timeout => "Update check timed out. Try again later.",
+                UpdateCheckFailureKind.ReleaseEndpointNotFound => "Update check: GitHub release endpoint not found.",
+                UpdateCheckFailureKind.AccessDeniedOrRateLimited => "Update check: access denied or rate limited.",
+                UpdateCheckFailureKind.ReleaseMetadataInvalid => "Update check: invalid release metadata.",
+                UpdateCheckFailureKind.Cancelled => "Update check was cancelled.",
+                UpdateCheckFailureKind.HttpError => "Update check: GitHub returned an error.",
+                _ => string.IsNullOrWhiteSpace(result.ErrorMessage) ? "Update check failed." : result.ErrorMessage!
             };
 
             if (manual)
             {
                 AppUpdateBannerVisibility = Visibility.Visible;
                 AppUpdateBannerTitle = "Update check failed";
-                AppUpdateBannerDetail = result.ErrorMessage ?? "Unknown error.";
+                AppUpdateBannerDetail = result.ErrorMessage ?? result.DiagnosticDetail ?? "Unknown error.";
                 AppUpdateDiagnosticsHintVisibility = Visibility.Visible;
             }
             else
@@ -5563,34 +5750,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         AppUpdateDiagnosticsHintVisibility = Visibility.Collapsed;
 
-        if (!string.IsNullOrWhiteSpace(result.ErrorMessage) &&
-            !result.UpdateAvailable &&
-            result.LatestVersion is null &&
-            string.IsNullOrWhiteSpace(result.LatestVersionLabel))
+        if (result.Outcome == UpdateCheckOutcome.UpdateAvailable && result.UpdateAvailable)
         {
-            AppUpdateStateDisplay = result.ErrorMessage;
-            _appUpdateLatestChannelText = "Latest release: —";
-            OnPropertyChanged(nameof(AppUpdateSettingsLatestSummary));
-        }
-        else
-        {
-            AppUpdateStateDisplay = result.UpdateAvailable
-                ? $"Update available: v{ReleaseVersionParser.NormalizeLabel(result.LatestVersionLabel)}"
-                : string.IsNullOrWhiteSpace(result.ErrorMessage)
-                    ? "You are on the latest published release for this channel."
-                    : result.ErrorMessage;
-        }
+            AppUpdateStateDisplay = $"Update available: v{ReleaseVersionParser.NormalizeLabel(result.LatestVersionLabel)}";
+            _pendingReleaseNotesUrl = result.ReleaseNotesUrl;
+            _pendingInstallerUrl = result.InstallerDownloadUrl ?? string.Empty;
+            _pendingVersionLabel = result.LatestVersionLabel;
 
-        _pendingReleaseNotesUrl = result.ReleaseNotesUrl;
-        _pendingInstallerUrl = result.InstallerDownloadUrl ?? string.Empty;
-        _pendingVersionLabel = result.LatestVersionLabel;
+            var safeReleasePage = Uri.TryCreate(result.ReleaseNotesUrl, UriKind.Absolute, out var notesUri) &&
+                                  string.Equals(notesUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
+                                  string.Equals(notesUri.Host, "github.com", StringComparison.OrdinalIgnoreCase);
 
-        var safeReleasePage = Uri.TryCreate(result.ReleaseNotesUrl, UriKind.Absolute, out var notesUri) &&
-                              string.Equals(notesUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
-                              string.Equals(notesUri.Host, "github.com", StringComparison.OrdinalIgnoreCase);
-
-        if (result.UpdateAvailable)
-        {
             AppUpdateBannerVisibility = Visibility.Visible;
             AppUpdateBannerTitle = UpdateNotificationTextBuilder.BuildHeadline(result.LatestVersionLabel);
             var extras = new List<string>();
@@ -5608,23 +5778,55 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             AppUpdateDownloadButtonVisibility = result.HasActionableInstaller ? Visibility.Visible : Visibility.Collapsed;
             AppUpdateIgnoreButtonVisibility = Visibility.Visible;
             AppUpdateViewReleaseNotesVisibility = safeReleasePage ? Visibility.Visible : Visibility.Collapsed;
+            AppUpdateDownloadInstallerCommand.RaiseCanExecuteChanged();
+            return;
         }
-        else
-        {
-            if (manual)
-            {
-                AppUpdateBannerVisibility = Visibility.Visible;
-                AppUpdateBannerTitle = "You are up to date";
-                AppUpdateBannerDetail = $"Installed: ForgerEMS v{AppReleaseInfo.Version}.";
-            }
-            else
-            {
-                AppUpdateBannerVisibility = Visibility.Collapsed;
-            }
 
-            AppUpdateDownloadButtonVisibility = Visibility.Collapsed;
-            AppUpdateIgnoreButtonVisibility = Visibility.Collapsed;
-            AppUpdateViewReleaseNotesVisibility = Visibility.Collapsed;
+        _pendingInstallerUrl = string.Empty;
+        _pendingReleaseNotesUrl = string.Empty;
+        _pendingVersionLabel = string.Empty;
+
+        AppUpdateDownloadButtonVisibility = Visibility.Collapsed;
+        AppUpdateIgnoreButtonVisibility = Visibility.Collapsed;
+        AppUpdateViewReleaseNotesVisibility = Visibility.Collapsed;
+
+        AppUpdateBannerVisibility = Visibility.Collapsed;
+        AppUpdateDiagnosticsHintVisibility = Visibility.Collapsed;
+
+        switch (result.Outcome)
+        {
+            case UpdateCheckOutcome.NoPublishedRelease:
+                AppUpdateStateDisplay = result.ErrorMessage ?? "No public release found.";
+                _appUpdateLatestChannelText = "Latest release: —";
+                OnPropertyChanged(nameof(AppUpdateSettingsLatestSummary));
+                break;
+            case UpdateCheckOutcome.IgnoredVersion:
+                AppUpdateStateDisplay = result.ErrorMessage ?? UpdateCheckDisplay.FormatIgnoredVersion(ReleaseVersionParser.NormalizeLabel(result.LatestVersionLabel));
+                break;
+            case UpdateCheckOutcome.AlreadyLatest:
+                AppUpdateStateDisplay = UpdateCheckDisplay.FormatInstalledAlreadyLatest(installedNorm);
+                break;
+            case UpdateCheckOutcome.InstalledNewerThanLatestPublic:
+                AppUpdateStateDisplay = UpdateCheckDisplay.FormatInstalledNewerThanPublic(
+                    installedNorm,
+                    ReleaseVersionParser.NormalizeLabel(result.LatestVersionLabel));
+                break;
+            case UpdateCheckOutcome.None:
+                AppUpdateStateDisplay = !string.IsNullOrWhiteSpace(result.ErrorMessage)
+                    ? result.ErrorMessage!
+                    : "Update check completed with no comparable version.";
+                if (string.IsNullOrWhiteSpace(result.LatestVersionLabel))
+                {
+                    _appUpdateLatestChannelText = "Latest release: —";
+                    OnPropertyChanged(nameof(AppUpdateSettingsLatestSummary));
+                }
+
+                break;
+            default:
+                AppUpdateStateDisplay = !string.IsNullOrWhiteSpace(result.ErrorMessage)
+                    ? result.ErrorMessage!
+                    : UpdateCheckDisplay.FormatInstalledAlreadyLatest(installedNorm);
+                break;
         }
 
         AppUpdateDownloadInstallerCommand.RaiseCanExecuteChanged();

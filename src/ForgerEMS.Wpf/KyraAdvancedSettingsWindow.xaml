@@ -262,6 +262,137 @@
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
+            <TabItem Header="Live APIs">
+                <ScrollViewer Style="{StaticResource KyraAdvancedScrollViewerStyle}" Padding="0,10,0,0">
+                    <StackPanel>
+                        <Border Background="#B3161F2E"
+                                BorderBrush="#B3FFB86B"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="12"
+                                Margin="0,0,0,12">
+                            <TextBlock Foreground="#FF0B1220"
+                                       FontWeight="SemiBold"
+                                       TextWrapping="Wrap"
+                                       Text="Keys are stored in your local copilot settings file (beta). Never paste secrets into chat. They are not shown in /provider or tool grids." />
+                        </Border>
+                        <TextBlock Margin="0,0,0,10"
+                                   FontSize="11"
+                                   Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
+                                   TextWrapping="Wrap"
+                                   Text="No-key defaults: Weather → Open-Meteo, Crypto → CoinGecko. News, Stocks, and Sports need provider keys when enabled." />
+
+                        <Border Background="{StaticResource KyraAdvancedCardBackground}"
+                                BorderBrush="{StaticResource KyraAdvancedCardBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="12"
+                                Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Shared" />
+                                <UniformGrid Columns="2" Margin="0,8,0,0">
+                                    <StackPanel Margin="0,0,8,0">
+                                        <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="HTTP timeout override (0 = use Kyra provider timeout)" />
+                                        <TextBox Text="{Binding KyraLiveToolsForBinding.TimeoutSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                    <StackPanel Margin="8,0,0,0">
+                                        <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Cache (minutes)" />
+                                        <TextBox Text="{Binding KyraLiveToolsForBinding.CacheMinutes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    </StackPanel>
+                                </UniformGrid>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Background="{StaticResource KyraAdvancedCardBackground}"
+                                BorderBrush="{StaticResource KyraAdvancedCardBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="12"
+                                Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Weather" />
+                                <CheckBox Margin="0,6,0,6" IsChecked="{Binding KyraLiveToolsForBinding.WeatherEnabled, Mode=TwoWay}" Content="Enabled" />
+                                <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Provider: openmeteo | openweather" />
+                                <TextBox Margin="0,4,0,0" Text="{Binding KyraLiveToolsForBinding.WeatherProvider, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Margin="0,6,0,0" FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="OpenWeather API key (only if provider is openweather)" />
+                                <TextBox Margin="0,4,0,0" Text="{Binding KyraLiveToolsForBinding.WeatherApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Margin="0,6,0,0" FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Default location when /weather has no args (optional)" />
+                                <TextBox Margin="0,4,0,0" Text="{Binding KyraLiveToolsForBinding.DefaultWeatherLocation, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Background="{StaticResource KyraAdvancedCardBackground}"
+                                BorderBrush="{StaticResource KyraAdvancedCardBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="12"
+                                Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="News" />
+                                <CheckBox Margin="0,6,0,6" IsChecked="{Binding KyraLiveToolsForBinding.NewsEnabled, Mode=TwoWay}" Content="Enabled" />
+                                <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Provider: newsapi | gnews" />
+                                <TextBox Margin="0,4,0,0" Text="{Binding KyraLiveToolsForBinding.NewsProvider, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Margin="0,6,0,0" FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="API key / token" />
+                                <TextBox Margin="0,4,0,0" Text="{Binding KyraLiveToolsForBinding.NewsApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Background="{StaticResource KyraAdvancedCardBackground}"
+                                BorderBrush="{StaticResource KyraAdvancedCardBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="12"
+                                Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Stocks" />
+                                <CheckBox Margin="0,6,0,6" IsChecked="{Binding KyraLiveToolsForBinding.StocksEnabled, Mode=TwoWay}" Content="Enabled" />
+                                <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Provider: finnhub" />
+                                <TextBox Margin="0,4,0,0" Text="{Binding KyraLiveToolsForBinding.StocksProvider, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Margin="0,6,0,0" FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Finnhub token" />
+                                <TextBox Margin="0,4,0,0" Text="{Binding KyraLiveToolsForBinding.StocksApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Background="{StaticResource KyraAdvancedCardBackground}"
+                                BorderBrush="{StaticResource KyraAdvancedCardBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="12"
+                                Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Crypto" />
+                                <CheckBox Margin="0,6,0,6" IsChecked="{Binding KyraLiveToolsForBinding.CryptoEnabled, Mode=TwoWay}" Content="Enabled" />
+                                <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Provider: coingecko (no key)" />
+                                <TextBox Margin="0,4,0,0" Text="{Binding KyraLiveToolsForBinding.CryptoProvider, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Background="{StaticResource KyraAdvancedCardBackground}"
+                                BorderBrush="{StaticResource KyraAdvancedCardBorder}"
+                                BorderThickness="1"
+                                CornerRadius="10"
+                                Padding="12"
+                                Margin="0,0,0,10">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Sports" />
+                                <CheckBox Margin="0,6,0,6" IsChecked="{Binding KyraLiveToolsForBinding.SportsEnabled, Mode=TwoWay}" Content="Enabled" />
+                                <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Provider: thesportsdb" />
+                                <TextBox Margin="0,4,0,0" Text="{Binding KyraLiveToolsForBinding.SportsProvider, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock Margin="0,6,0,0" FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="TheSportsDB API key (path segment)" />
+                                <TextBox Margin="0,4,0,0" Text="{Binding KyraLiveToolsForBinding.SportsApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                        </Border>
+
+                        <WrapPanel Margin="0,0,0,12">
+                            <Button MinWidth="200"
+                                    Margin="0,0,8,8"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Content="Save live tool settings"
+                                    Command="{Binding SaveKyraLiveToolsSettingsCommand}" />
+                        </WrapPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
             <TabItem Header="Assistant">
                 <ScrollViewer Style="{StaticResource KyraAdvancedScrollViewerStyle}" Padding="0,10,0,0">
                     <StackPanel>

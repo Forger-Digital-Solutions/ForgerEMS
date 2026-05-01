@@ -32,15 +32,29 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
 
         _httpClient = new HttpClient
         {
-            Timeout = TimeSpan.FromSeconds(20)
+            Timeout = TimeSpan.FromSeconds(25)
         };
         _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "ForgerEMS-UpdateCheck/1.1.4");
         _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/vnd.github+json");
         _ownsClient = true;
     }
 
-    public async Task<UpdateCheckResult> CheckForNewerReleaseAsync(Version currentVersion, string? ignoredVersionNormalized, CancellationToken cancellationToken = default)
+    public async Task<UpdateCheckResult> CheckForNewerReleaseAsync(
+        string installedVersionLabel,
+        string? ignoredVersionNormalized,
+        CancellationToken cancellationToken = default)
     {
+        if (!AppSemanticVersion.TryParse(installedVersionLabel, out var installed))
+        {
+            return new UpdateCheckResult
+            {
+                Succeeded = false,
+                Outcome = UpdateCheckOutcome.Failed,
+                FailureKind = UpdateCheckFailureKind.ReleaseMetadataInvalid,
+                ErrorMessage = "Could not determine the installed app version for comparison."
+            };
+        }
+
         try
         {
             var latestUrl = $"https://api.github.com/repos/{DefaultOwner}/{DefaultRepo}/releases/latest";
@@ -56,6 +70,7 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
                     return new UpdateCheckResult
                     {
                         Succeeded = true,
+                        Outcome = UpdateCheckOutcome.NoPublishedRelease,
                         UpdateAvailable = false,
                         ErrorMessage = "No public GitHub Release is published for this repo yet."
                     };
@@ -64,6 +79,7 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
                 return new UpdateCheckResult
                 {
                     Succeeded = false,
+                    Outcome = UpdateCheckOutcome.Failed,
                     FailureKind = UpdateCheckFailureKind.ReleaseEndpointNotFound,
                     ErrorMessage = "Release endpoint returned 404. Confirm GitHub owner/repo, public Releases, and that a release is marked Latest.",
                     DiagnosticDetail = await SafeReadBodyPreviewAsync(response, cancellationToken).ConfigureAwait(false)
@@ -86,6 +102,7 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
                 return new UpdateCheckResult
                 {
                     Succeeded = false,
+                    Outcome = UpdateCheckOutcome.Failed,
                     FailureKind = UpdateCheckFailureKind.ReleaseMetadataInvalid,
                     ErrorMessage = "Could not read release metadata (invalid JSON from GitHub).",
                     DiagnosticDetail = exception.Message
@@ -94,7 +111,7 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
 
             using (document)
             {
-                return ParseLatestReleaseDocument(document, currentVersion, ignoredVersionNormalized);
+                return ParseLatestReleaseDocument(document, installed, ignoredVersionNormalized);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -102,8 +119,20 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
             return new UpdateCheckResult
             {
                 Succeeded = false,
+                Outcome = UpdateCheckOutcome.Cancelled,
                 FailureKind = UpdateCheckFailureKind.Cancelled,
                 ErrorMessage = "Update check was cancelled."
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            return new UpdateCheckResult
+            {
+                Succeeded = false,
+                Outcome = UpdateCheckOutcome.Failed,
+                FailureKind = UpdateCheckFailureKind.Timeout,
+                ErrorMessage = "Update check timed out. Try again later.",
+                DiagnosticDetail = "Request timed out or was aborted before completion."
             };
         }
         catch (Exception exception) when (IsLikelyNetworkFailure(exception))
@@ -111,8 +140,9 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
             return new UpdateCheckResult
             {
                 Succeeded = false,
+                Outcome = UpdateCheckOutcome.Failed,
                 FailureKind = UpdateCheckFailureKind.Network,
-                ErrorMessage = "Could not reach GitHub (network, DNS, or timeout). Check your connection and try again.",
+                ErrorMessage = "Could not reach GitHub (network, DNS, or offline). Check your connection and try again.",
                 DiagnosticDetail = exception.Message
             };
         }
@@ -121,6 +151,7 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
             return new UpdateCheckResult
             {
                 Succeeded = false,
+                Outcome = UpdateCheckOutcome.Failed,
                 FailureKind = UpdateCheckFailureKind.Unknown,
                 ErrorMessage = "Update check failed unexpectedly.",
                 DiagnosticDetail = exception.Message
@@ -167,6 +198,7 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
             return new UpdateCheckResult
             {
                 Succeeded = false,
+                Outcome = UpdateCheckOutcome.Failed,
                 FailureKind = UpdateCheckFailureKind.AccessDeniedOrRateLimited,
                 ErrorMessage = rateLimited
                     ? "GitHub rate-limited this device. Wait a few minutes or try again on a different network."
@@ -180,6 +212,7 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
             return new UpdateCheckResult
             {
                 Succeeded = false,
+                Outcome = UpdateCheckOutcome.Failed,
                 FailureKind = UpdateCheckFailureKind.AccessDeniedOrRateLimited,
                 ErrorMessage = "GitHub rate limit exceeded. Retry later.",
                 DiagnosticDetail = $"HTTP {code}: {body}"
@@ -189,6 +222,7 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
         return new UpdateCheckResult
         {
             Succeeded = false,
+            Outcome = UpdateCheckOutcome.Failed,
             FailureKind = UpdateCheckFailureKind.HttpError,
             ErrorMessage = $"GitHub returned HTTP {code}. Try again later or check Diagnostics logs.",
             DiagnosticDetail = $"HTTP {code}: {body}"
@@ -220,15 +254,13 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
             return true;
         }
 
-        if (exception is TaskCanceledException canceled && !canceled.CancellationToken.IsCancellationRequested)
-        {
-            return true;
-        }
-
         return exception.InnerException is SocketException or HttpRequestException;
     }
 
-    private static UpdateCheckResult ParseLatestReleaseDocument(JsonDocument document, Version currentVersion, string? ignoredVersionNormalized)
+    private static UpdateCheckResult ParseLatestReleaseDocument(
+        JsonDocument document,
+        AppSemanticVersion installed,
+        string? ignoredVersionNormalized)
     {
         var root = document.RootElement;
         if (!root.TryGetProperty("tag_name", out var tagProp))
@@ -236,13 +268,13 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
             return new UpdateCheckResult
             {
                 Succeeded = false,
+                Outcome = UpdateCheckOutcome.Failed,
                 FailureKind = UpdateCheckFailureKind.ReleaseMetadataInvalid,
                 ErrorMessage = "Release metadata is missing tag_name."
             };
         }
 
         var tag = tagProp.GetString() ?? string.Empty;
-        var latestVersion = ReleaseVersionParser.TryParseVersion(tag, out var v) ? v : null;
         var label = ReleaseVersionParser.NormalizeLabel(tag);
 
         var notesUrl = root.TryGetProperty("html_url", out var urlProp) ? urlProp.GetString() ?? string.Empty : string.Empty;
@@ -289,11 +321,12 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
             }
         }
 
-        if (latestVersion is null)
+        if (!AppSemanticVersion.TryParse(tag, out var latestSem))
         {
             return new UpdateCheckResult
             {
                 Succeeded = true,
+                Outcome = UpdateCheckOutcome.None,
                 UpdateAvailable = false,
                 LatestVersionLabel = label,
                 ReleaseNotesUrl = notesUrl,
@@ -303,6 +336,7 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
             };
         }
 
+        var latestVersion = latestSem.ToLegacyVersion();
         var ignored = ReleaseVersionParser.NormalizeIgnored(ignoredVersionNormalized);
         if (!string.IsNullOrEmpty(ignored) &&
             string.Equals(ReleaseVersionParser.NormalizeLabel(label), ignored, StringComparison.OrdinalIgnoreCase))
@@ -310,19 +344,29 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
             return new UpdateCheckResult
             {
                 Succeeded = true,
+                Outcome = UpdateCheckOutcome.IgnoredVersion,
                 UpdateAvailable = false,
                 LatestVersion = latestVersion,
                 LatestVersionLabel = label,
                 ReleaseNotesUrl = notesUrl,
                 InstallerAssetName = installerName,
-                InstallerDownloadUrl = installerUrl
+                InstallerDownloadUrl = installerUrl,
+                ErrorMessage = UpdateCheckDisplay.FormatIgnoredVersion(ReleaseVersionParser.NormalizeLabel(label))
             };
         }
 
-        var newer = latestVersion > currentVersion;
+        var cmp = latestSem.CompareTo(installed);
+        var newer = cmp > 0;
+        var outcome = newer
+            ? UpdateCheckOutcome.UpdateAvailable
+            : cmp == 0
+                ? UpdateCheckOutcome.AlreadyLatest
+                : UpdateCheckOutcome.InstalledNewerThanLatestPublic;
+
         return new UpdateCheckResult
         {
             Succeeded = true,
+            Outcome = outcome,
             UpdateAvailable = newer,
             LatestVersion = latestVersion,
             LatestVersionLabel = label,
@@ -345,37 +389,13 @@ public static class ReleaseVersionParser
 {
     public static bool TryParseVersion(string? tag, out Version version)
     {
-        version = new Version(0, 0);
-        if (string.IsNullOrWhiteSpace(tag))
+        if (!AppSemanticVersion.TryParse(tag, out var sem))
         {
+            version = new Version(0, 0);
             return false;
         }
 
-        var trimmed = tag.Trim();
-        if (trimmed.StartsWith('v') || trimmed.StartsWith('V'))
-        {
-            trimmed = trimmed[1..];
-        }
-
-        var core = trimmed;
-        var plus = core.IndexOf('+', StringComparison.Ordinal);
-        if (plus >= 0)
-        {
-            core = core[..plus];
-        }
-
-        var dash = core.IndexOf('-', StringComparison.Ordinal);
-        if (dash >= 0)
-        {
-            core = core[..dash];
-        }
-
-        if (!Version.TryParse(core, out var parsed))
-        {
-            return false;
-        }
-
-        version = parsed;
+        version = sem.ToLegacyVersion();
         return true;
     }
 
@@ -387,7 +407,12 @@ public static class ReleaseVersionParser
         }
 
         var t = tag.Trim();
-        if (t.StartsWith('v') || t.StartsWith('V'))
+        while (t.StartsWith("ForgerEMS-", StringComparison.OrdinalIgnoreCase))
+        {
+            t = t["ForgerEMS-".Length..];
+        }
+
+        if (t.Length >= 1 && (t[0] == 'v' || t[0] == 'V'))
         {
             t = t[1..];
         }

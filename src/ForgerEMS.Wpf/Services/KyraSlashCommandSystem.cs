@@ -863,10 +863,12 @@ public static class KyraSlashCommandRouter
 
     private static KyraSlashHandleResult ProviderStatus(KyraSlashHostSnapshot host)
     {
+        var loc = host.ToolSettings.LiveTools?.DefaultWeatherLocation?.Trim();
         var facts = new KyraToolHostFacts
         {
             HasSystemIntelligenceScan = host.HasSystemIntelligenceScan,
-            HasToolkitHealthReport = host.HasToolkitHealthReport
+            HasToolkitHealthReport = host.HasToolkitHealthReport,
+            DefaultWeatherLocation = string.IsNullOrEmpty(loc) ? null : loc
         };
         var reg = new KyraToolRegistry();
         var toolBlock = reg.BuildProviderToolDetailText(host.ToolSettings, facts, host.VerboseLiveLogs);

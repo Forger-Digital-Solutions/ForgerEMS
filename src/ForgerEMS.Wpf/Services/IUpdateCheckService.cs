@@ -9,6 +9,7 @@ public enum UpdateCheckFailureKind
     None,
     Cancelled,
     Network,
+    Timeout,
     ReleaseEndpointNotFound,
     NoPublishedRelease,
     AccessDeniedOrRateLimited,
@@ -17,11 +18,26 @@ public enum UpdateCheckFailureKind
     Unknown
 }
 
+/// <summary>Resolved outcome of an update check (success path and high-level classification).</summary>
+public enum UpdateCheckOutcome
+{
+    None,
+    UpdateAvailable,
+    AlreadyLatest,
+    InstalledNewerThanLatestPublic,
+    NoPublishedRelease,
+    IgnoredVersion,
+    Cancelled,
+    Failed
+}
+
 public sealed class UpdateCheckResult
 {
     public bool Succeeded { get; init; }
 
     public bool UpdateAvailable { get; init; }
+
+    public UpdateCheckOutcome Outcome { get; init; }
 
     public Version? LatestVersion { get; init; }
 
@@ -52,5 +68,8 @@ public sealed class UpdateCheckResult
 
 public interface IUpdateCheckService
 {
-    Task<UpdateCheckResult> CheckForNewerReleaseAsync(Version currentVersion, string? ignoredVersionNormalized, CancellationToken cancellationToken = default);
+    Task<UpdateCheckResult> CheckForNewerReleaseAsync(
+        string installedVersionLabel,
+        string? ignoredVersionNormalized,
+        CancellationToken cancellationToken = default);
 }

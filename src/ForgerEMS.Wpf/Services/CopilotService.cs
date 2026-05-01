@@ -248,6 +248,9 @@ public sealed class CopilotSettings
     /// <summary>Optional on-disk preferences (non-sensitive); user toggle.</summary>
     public bool KyraPersistentMemoryEnabled { get; set; }
 
+    /// <summary>Kyra live weather/news/market tools (beta; API keys stored locally—never log them).</summary>
+    public KyraLiveToolsSettings LiveTools { get; set; } = new();
+
     public Dictionary<string, CopilotProviderConfiguration> Providers { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
@@ -2224,13 +2227,15 @@ public sealed class CopilotService : ICopilotService
             var built = _contextBuilder.Build(request);
             Report("Sanitizing context…");
             Report("Checking configured tool…");
+            var hostFacts = KyraToolRegistry.BuildHostFacts(request);
             var toolAugmentation = await _toolRegistry.BuildAugmentationAsync(
                 new KyraToolExecutionRequest
                 {
                     Intent = built.Intent,
                     Prompt = request.Prompt,
                     Context = built,
-                    Settings = settings
+                    Settings = settings,
+                    HostFacts = hostFacts
                 },
                 cancellationToken).ConfigureAwait(false);
             var context = AttachConversationMemory(AttachToolAugmentation(built, toolAugmentation, settings));
@@ -3492,6 +3497,12 @@ public sealed class CopilotSettingsStore : ICopilotSettingsStore
             providerConfig.DailyRequestCap = providerConfig.DailyRequestCap <= 0 ? (provider.IsOnlineProvider ? 60 : int.MaxValue) : providerConfig.DailyRequestCap;
             providerConfig.MaxInputCharacters = providerConfig.MaxInputCharacters <= 0 ? settings.MaxInputCharactersOnline : providerConfig.MaxInputCharacters;
             providerConfig.MaxOutputTokens = providerConfig.MaxOutputTokens <= 0 ? settings.MaxOutputTokensOnline : providerConfig.MaxOutputTokens;
+        }
+
+        settings.LiveTools ??= new KyraLiveToolsSettings();
+        if (settings.LiveTools.CacheMinutes <= 0)
+        {
+            settings.LiveTools.CacheMinutes = 10;
         }
     }
 }
