@@ -2,9 +2,9 @@ namespace VentoyToolkitSetup.Wpf.Infrastructure;
 
 internal static class AppReleaseInfo
 {
-    public const string Version = "1.1.4";
-    public const string DisplayVersion = "v1.1.4 (Beta)";
-    public const string ReleaseIdentifier = "ForgerEMS Beta v1.1.4 \u2014 Whole-App Intelligence Preview";
+    public const string Version = "1.1.12-rc.3";
+    public const string DisplayVersion = "v1.1.12-rc.3 (Beta RC)";
+    public const string ReleaseIdentifier = "ForgerEMS Beta v1.1.12-rc.3 \u2014 USB mapping wizard, quieter auto-benchmark, mapping fallbacks";
 }
 
 internal static class FeatureFlags

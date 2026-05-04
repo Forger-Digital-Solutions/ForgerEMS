@@ -15,8 +15,8 @@ All previously tracked **CA1822** (mark members static) and **CA1859** (concrete
 - `VentoyIntegrationService.TryLoadPackageAsync` is `static`.
 - `App.RunSelfTestAsync` uses concrete service types for the self-test entry point only.
 - `SystemProfileMapper` mappers return concrete arrays where the analyzer suggested.
-- `SystemHealthEvaluator.Evaluate` and `RecommendationEngine.Generate` are `static`; `CopilotContextBuilder` calls them directly.
-- `CopilotService.CallExternalAPI` is `static`.
+- `SystemHealthEvaluator.Evaluate` and `RecommendationEngine.Generate` are `static`; the Kyra context builder calls them directly.
+- The Kyra external API call path uses a `static` entry point in the provider layer.
 - `MainWindow.ResetPackageGroupGlow` is `static`.
 - `MainViewModel` `AppVersionText` / `AppVersionFooterText` use get-only auto-properties with initializers (no instance state in accessors).
 

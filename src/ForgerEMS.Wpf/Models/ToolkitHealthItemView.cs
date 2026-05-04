@@ -26,8 +26,25 @@ public sealed class ToolkitHealthItemView
 
     public string Recommendation { get; init; } = string.Empty;
 
+    public string NormalizedCategoryLabel { get; init; } = string.Empty;
+
+    /// <summary>Grid/UI label — manual-required items are never shown as generic “missing”.</summary>
+    public string StatusDisplayUi => Status.Trim().ToUpperInvariant() switch
+    {
+        "MISSING_REQUIRED" => "Managed missing",
+        "MISSING" => "Managed missing",
+        "INSTALLED" => "Managed ready",
+        "UPDATE_AVAILABLE" => "Update available",
+        "HASH_FAILED" => "Verification issue",
+        "MANUAL_REQUIRED" => "Manual required",
+        "PLACEHOLDER" => "Placeholder",
+        "SKIPPED" => "Skipped",
+        _ => Status
+    };
+
     public string DetailText =>
         $"{Tool} ({Category}){Environment.NewLine}" +
+        $"Classification: {NormalizedCategoryLabel}{Environment.NewLine}" +
         $"Status: {Status}{Environment.NewLine}" +
         $"Type: {Type}{Environment.NewLine}" +
         $"Expected path: {ExpectedPath}{Environment.NewLine}" +

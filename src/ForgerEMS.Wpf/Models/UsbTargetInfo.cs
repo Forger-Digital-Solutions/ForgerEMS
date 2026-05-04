@@ -106,12 +106,50 @@ public sealed class UsbTargetInfo
 
     public string BenchmarkLastTestedDisplay => BenchmarkLastTestedAt.HasValue ? BenchmarkLastTestedAt.Value.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture) : "Never";
 
-    public string SafetyStatusText =>
-        !IsSelectable || ShouldBlockExecution
-            ? "BLOCKED"
-            : !IsRemovableMedia || IsSystemDrive || IsBootDrive
-                ? "WARNING"
-                : "SAFE";
+    /// <summary>Ventoy data volume heuristic: companion EFI + large non-EFI data partition.</summary>
+    public bool HasVentoyStyleLargeDataPartition =>
+        HasVentoyCompanionEfiPartition &&
+        TotalBytes >= PreferredVentoyDataPartitionBytes &&
+        !IsEfiSystemPartition &&
+        !IsUndersizedPartition;
+
+    public string SafetyStatusText
+    {
+        get
+        {
+            if (!IsSelectable || ShouldBlockExecution)
+            {
+                return "BLOCKED";
+            }
+
+            if (IsPreferredUsbTarget || HasVentoyStyleLargeDataPartition)
+            {
+                return "PREFERRED";
+            }
+
+            if (!IsLikelyUsb)
+            {
+                return "WARNING";
+            }
+
+            if (UsbTargetSafety.IsProtectedSystemDrive(this))
+            {
+                return "BLOCKED";
+            }
+
+            if (IsRemovableMedia)
+            {
+                return "SAFE";
+            }
+
+            if (IsLargeDataPartition || HasVentoyCompanionEfiPartition)
+            {
+                return "SAFE";
+            }
+
+            return "WARNING";
+        }
+    }
 
     public string SafetyReasonText
     {
@@ -133,14 +171,27 @@ public sealed class UsbTargetInfo
                 return "Blocked: small EFI/VTOYEFI or utility partition";
             }
 
-            if (!IsRemovableMedia || IsSystemDrive || IsBootDrive)
+            if (IsPreferredUsbTarget || HasVentoyStyleLargeDataPartition)
             {
-                return "Warning: fixed/system disk metadata detected. Confirm the drive letter before destructive actions.";
+                return "Ventoy data partition detected. This is the correct target.";
             }
 
-            return IsLargeDataPartition || IsPreferredUsbTarget
-                ? "Safe removable data partition"
-                : "Safe removable USB target";
+            if (!IsLikelyUsb)
+            {
+                return "Check USB selection before continuing.";
+            }
+
+            if (IsRemovableMedia)
+            {
+                return "Ready — removable USB detected";
+            }
+
+            if (IsLargeDataPartition)
+            {
+                return "Ready — USB storage partition detected (fixed-type volume).";
+            }
+
+            return "Check USB selection before continuing.";
         }
     }
 

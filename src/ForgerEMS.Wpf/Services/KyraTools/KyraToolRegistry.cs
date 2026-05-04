@@ -80,6 +80,35 @@ public sealed class KyraToolRegistry
         return false;
     }
 
+    /// <summary>True when a live-data Kyra tool is both eligible for <paramref name="intent"/> and operational (ready/available).</summary>
+    public bool HasOperationalLiveDataToolForIntent(
+        KyraIntent intent,
+        string prompt,
+        CopilotSettings settings,
+        KyraToolHostFacts facts)
+    {
+        foreach (var tool in _tools)
+        {
+            if (tool.SurfaceCategory != KyraToolSurfaceCategory.LiveData)
+            {
+                continue;
+            }
+
+            if (!tool.CanHandle(intent, prompt))
+            {
+                continue;
+            }
+
+            var st = tool.GetOperationalStatus(settings, facts);
+            if (st is KyraToolOperationalStatus.Ready or KyraToolOperationalStatus.Available)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>Rows for Advanced panel grid (no API keys or secrets).</summary>
     public IReadOnlyList<KyraToolStatusRowView> BuildStatusGridRows(CopilotSettings settings, KyraToolHostFacts facts)
     {

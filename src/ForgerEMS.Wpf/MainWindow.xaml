@@ -1267,18 +1267,36 @@
                             Content="View logs"
                             Command="{Binding OpenLogsFolderCommand}"
                             Visibility="{Binding AppUpdateDiagnosticsHintVisibility}" />
-                    <Button MinWidth="138"
+                    <Button MinWidth="168"
                             Margin="0,0,8,6"
                             Style="{StaticResource SecondaryButtonStyle}"
-                            Content="View release notes"
+                            Content="Open GitHub Release"
                             Command="{Binding AppUpdateViewReleaseNotesCommand}"
                             Visibility="{Binding AppUpdateViewReleaseNotesVisibility}" />
-                    <Button MinWidth="128"
+                    <Button MinWidth="168"
                             Margin="0,0,8,6"
                             Style="{StaticResource SecondaryButtonStyle}"
-                            Content="Download update"
+                            Content="Copy ZIP download link"
+                            Command="{Binding CopyUpdateZipLinkCommand}"
+                            Visibility="{Binding AppUpdateCopyZipLinkVisibility}" />
+                    <Button MinWidth="200"
+                            Margin="0,0,8,6"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Content="Copy checksum instructions"
+                            Command="{Binding CopyUpdateChecksumInstructionsCommand}"
+                            Visibility="{Binding AppUpdateCopyChecksumInstructionsVisibility}" />
+                    <Button MinWidth="198"
+                            Margin="0,0,8,6"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Content="Download recommended (ZIP/EXE)"
                             Command="{Binding AppUpdateDownloadInstallerCommand}"
                             Visibility="{Binding AppUpdateDownloadButtonVisibility}" />
+                    <Button MinWidth="210"
+                            Margin="0,0,8,6"
+                            Style="{StaticResource SecondaryButtonStyle}"
+                            Content="Download installer (Advanced)"
+                            Command="{Binding AppUpdateDownloadAdvancedInstallerCommand}"
+                            Visibility="{Binding AppUpdateAdvancedDownloadButtonVisibility}" />
                     <Button MinWidth="118"
                             Margin="0,0,8,6"
                             Style="{StaticResource SecondaryButtonStyle}"
@@ -1445,6 +1463,18 @@
                                        FontWeight="SemiBold"
                                        Foreground="{DynamicResource PanelLabelBrush}"
                                        Text="USB Target" />
+                            <Border Margin="0,0,0,10"
+                                    Padding="10,8"
+                                    Background="#E8F4FC"
+                                    BorderBrush="#FF93C5FD"
+                                    BorderThickness="1"
+                                    CornerRadius="8">
+                                <TextBlock FontSize="12"
+                                           FontWeight="SemiBold"
+                                           Foreground="#FF0F172A"
+                                           Text="{Binding UsbBuilderTargetStatusBanner}"
+                                           TextWrapping="Wrap" />
+                            </Border>
 
                             <Grid Margin="0,0,0,12">
                                 <Grid.ColumnDefinitions>
@@ -1513,7 +1543,7 @@
                                 </Grid.RowDefinitions>
 
                                 <TextBlock Grid.Row="0" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Drive" />
-                                <TextBlock Grid.Row="0" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.RootPath, TargetNullValue=No USB target selected}" />
+                                <TextBlock Grid.Row="0" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.RootPath, TargetNullValue=No USB selected — choose a target above.}" />
 
                                 <TextBlock Grid.Row="1" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Label" />
                                 <TextBlock Grid.Row="1" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.LabelDisplay, TargetNullValue=—}" />
@@ -1568,6 +1598,130 @@
                                            Text="{Binding TargetWarningText}"
                                            TextWrapping="Wrap" />
                             </Border>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <GroupBox Header="USB Intelligence Pro">
+                        <StackPanel>
+                            <TextBlock Margin="0,0,0,8"
+                                       FontSize="11"
+                                       FontStyle="Italic"
+                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                       Text="{Binding UsbIntelligenceProPreviewBadge}"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Margin="0,0,0,8"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource PanelTextBrush}"
+                                       Text="{Binding UsbIntelligenceGuidanceIntro}"
+                                       TextWrapping="Wrap" />
+                            <Border Margin="0,0,0,10"
+                                    Padding="10,8"
+                                    Background="#B80A101A"
+                                    BorderBrush="{DynamicResource PanelBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="8">
+                                <TextBlock FontSize="11.5"
+                                           Foreground="{DynamicResource PanelMutedTextBrush}"
+                                           Text="{Binding UsbIntelligenceWorkflowHelp}"
+                                           TextWrapping="Wrap" />
+                            </Border>
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Selected target" />
+                                <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligencePanelTargetDisplay}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="1" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Detected class" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceDetectedClassDisplay}" />
+                                <TextBlock Grid.Row="2" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Benchmark" />
+                                <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceBenchmarkReadWriteDisplay}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="3" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Recommendation" />
+                                <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceRecommendationQualityDisplay}" />
+                                <TextBlock Grid.Row="4" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Confidence" />
+                                <TextBlock Grid.Row="4" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceConfidenceScoreDisplay}" />
+                                <TextBlock Grid.Row="5" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Confidence detail" />
+                                <TextBlock Grid.Row="5" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceConfidenceReasonDisplay}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="6" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Last benchmark" />
+                                <TextBlock Grid.Row="6" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceLastBenchmarkTimeDisplay}" />
+                                <TextBlock Grid.Row="7" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Best port" />
+                                <TextBlock Grid.Row="7" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceBestKnownPortDisplay}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="8" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Benchmark age" />
+                                <TextBlock Grid.Row="8" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceBenchmarkAgeDisplay}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="9" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Benchmark tip" />
+                                <TextBlock Grid.Row="9" Grid.Column="1" Margin="0,0,0,6" Foreground="#FF92400E" Text="{Binding UsbIntelligenceRunBenchmarkHintDisplay}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="10" Margin="0,0,12,0" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Mapped port label" />
+                                <TextBlock Grid.Row="10" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceMappingLabelDisplay}" TextWrapping="Wrap" />
+                            </Grid>
+                            <TextBlock Margin="0,0,0,8"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource PanelTextBrush}"
+                                       Text="{Binding UsbIntelligenceBuilderHintText}"
+                                       TextWrapping="Wrap" />
+                            <WrapPanel Margin="0,0,0,8">
+                                <Button Margin="0,0,8,4"
+                                        Padding="10,6"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Content="Run USB Benchmark"
+                                        Command="{Binding RunUsbIntelligenceBenchmarkCommand}" />
+                                <Button Margin="0,0,8,4"
+                                        Padding="10,6"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Content="Open USB Mapping Wizard"
+                                        Command="{Binding OpenUsbMappingWizardCommand}" />
+                            </WrapPanel>
+                            <Expander Margin="0,0,0,8"
+                                      Foreground="{DynamicResource PanelMutedTextBrush}"
+                                      Header="Advanced: inline port mapping (legacy)">
+                                <StackPanel Margin="0,8,0,0">
+                                    <WrapPanel Margin="0,0,0,8">
+                                        <Button Margin="0,0,8,4"
+                                                Padding="10,6"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Content="Start USB Mapping"
+                                                Command="{Binding StartUsbPortMappingWorkflowCommand}" />
+                                    </WrapPanel>
+                                    <TextBlock Margin="0,0,0,6"
+                                               FontSize="11.5"
+                                               Foreground="{DynamicResource PanelMutedTextBrush}"
+                                               Text="{Binding UsbMappingWorkflowStatus}"
+                                               TextWrapping="Wrap" />
+                                    <WrapPanel Margin="0,0,0,8">
+                                        <Button Margin="0,0,8,4"
+                                                Padding="10,4"
+                                                Content="Capture Current Port"
+                                                Command="{Binding CaptureUsbMappingBeforeCommand}" />
+                                        <Button Margin="0,0,8,4"
+                                                Padding="10,4"
+                                                Content="Detect Port Change"
+                                                Command="{Binding CaptureUsbMappingAfterCommand}" />
+                                    </WrapPanel>
+                                    <DockPanel Margin="0,0,0,4">
+                                        <Button DockPanel.Dock="Right"
+                                                Margin="8,0,0,0"
+                                                Padding="10,4"
+                                                Content="Save Port Label"
+                                                Command="{Binding SaveUsbMappingLabelCommand}" />
+                                        <TextBox MinHeight="28"
+                                                 VerticalContentAlignment="Center"
+                                                 Text="{Binding UsbMappingLabelDraft, UpdateSourceTrigger=PropertyChanged}"
+                                                 ToolTip="Short label for this physical port (e.g. Rear Blue USB 3)" />
+                                    </DockPanel>
+                                </StackPanel>
+                            </Expander>
                         </StackPanel>
                     </GroupBox>
 
@@ -1710,6 +1864,7 @@
                                                 Width="142"
                                                 Margin="12,0,0,0"
                                                 Content="Run System Scan"
+                                                ToolTip="Runs a fresh System Intelligence scan (same as refreshing hardware context)."
                                                 Command="{Binding RunSystemScanCommand}" />
                                         <Button Grid.Column="3"
                                                 Width="132"
@@ -1724,6 +1879,29 @@
                                                 Content="Copy Summary"
                                                 Command="{Binding CopySystemSummaryCommand}" />
                                     </Grid>
+
+                                    <TextBlock Margin="0,4,0,6"
+                                               FontSize="12"
+                                               Foreground="#C2410C"
+                                               Text="{Binding SystemIntelligenceStaleBannerText}"
+                                               TextWrapping="Wrap" />
+
+                                    <TextBlock Margin="0,0,0,4"
+                                               FontSize="12"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource PanelLabelBrush}"
+                                               Text="Automation summary (from last scan)" />
+                                    <TextBlock Margin="0,0,0,12"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource PanelTextBrush}"
+                                               Text="{Binding SystemIntelligenceAutomationLineText}"
+                                               TextWrapping="Wrap" />
+
+                                    <TextBlock Margin="0,0,0,6"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource PanelMutedTextBrush}"
+                                               Text="{Binding UnifiedDiagnosticsSummaryText}"
+                                               TextWrapping="Wrap" />
 
                                     <TextBlock Margin="0,0,0,12"
                                                Foreground="{DynamicResource PanelTextBrush}"
@@ -1913,6 +2091,12 @@
                                                Text="{Binding ToolkitManualExplanationText}"
                                                TextWrapping="Wrap" />
 
+                                    <TextBlock Margin="0,0,0,8"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource PanelMutedTextBrush}"
+                                               Text="{Binding ToolkitClassificationSummaryText}"
+                                               TextWrapping="Wrap" />
+
                                     <WrapPanel Margin="0,0,0,12">
                                         <Border MinWidth="145" Margin="0,0,8,8" Padding="10,5" Background="#E8F7F3EA" BorderBrush="#FFD7B18E" BorderThickness="1" CornerRadius="9">
                                             <TextBlock Foreground="#FF111111" FontWeight="SemiBold" Text="{Binding ToolkitInstalledCountText}" />
@@ -1983,7 +2167,7 @@
                                             <DataGrid.Columns>
                                                 <DataGridTextColumn Header="Tool" Binding="{Binding Tool}" Width="180" />
                                                 <DataGridTextColumn Header="Category" Binding="{Binding Category}" Width="120" />
-                                                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="150" />
+                                                <DataGridTextColumn Header="Status" Binding="{Binding StatusDisplayUi}" Width="160" />
                                                 <DataGridTextColumn Header="Managed/Manual" Binding="{Binding Type}" Width="140" />
                                                 <DataGridTextColumn Header="Expected Path" Binding="{Binding ExpectedFoundPath}" Width="280" />
                                                 <DataGridTextColumn Header="Verification" Binding="{Binding Verification}" Width="170" />
@@ -2087,7 +2271,7 @@
                                                        VerticalAlignment="Center"
                                                        FontWeight="SemiBold"
                                                        Foreground="{DynamicResource PanelLabelBrush}"
-                                                       Text="Mode" />
+                                                       Text="Kyra mode" />
                                             <ComboBox Grid.Column="1"
                                                       Width="188"
                                                       ItemsSource="{Binding CopilotModeOptions}"
@@ -2343,6 +2527,18 @@
                                         </StackPanel>
                                     </Border>
 
+                                    <GroupBox Margin="0,0,0,12" Header="Unified health checklist">
+                                        <ScrollViewer MaxHeight="280"
+                                                      VerticalScrollBarVisibility="Auto"
+                                                      HorizontalScrollBarVisibility="Disabled">
+                                            <TextBlock Padding="4"
+                                                       FontSize="12"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       Text="{Binding DiagnosticsHealthChecklistText}"
+                                                       TextWrapping="Wrap" />
+                                        </ScrollViewer>
+                                    </GroupBox>
+
                                     <WrapPanel Margin="0,0,0,12">
                                         <Button MinWidth="170"
                                                 Margin="0,0,8,8"
@@ -2361,7 +2557,7 @@
                                         <Button MinWidth="190"
                                                 Margin="0,0,8,8"
                                                 Style="{StaticResource SecondaryButtonStyle}"
-                                                Content="Open Ubuntu / WSL Terminal"
+                                                Content="Open WSL Terminal"
                                                 Command="{Binding OpenUbuntuTerminalCommand}" />
                                     </WrapPanel>
 
@@ -2384,8 +2580,16 @@
                                         </StackPanel>
                                     </Border>
 
-                                    <GroupBox Margin="0,14,0,0" Header="WSL / Ubuntu command runner (beta)">
+                                    <GroupBox Margin="0,14,0,0" Header="WSL / Ubuntu command runner (experimental)">
                                         <StackPanel>
+                                            <TextBlock Margin="0,0,0,10"
+                                                       FontSize="12"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource PanelLabelBrush}"
+                                                       TextWrapping="Wrap"
+                                                       Text="Embedded WSL terminal is experimental and disabled for beta stability."
+                                                       Visibility="{Binding DiagnosticsEmbeddedWslDisabledBannerVisibility}" />
+                                            <StackPanel Visibility="{Binding DiagnosticsEmbeddedWslRunnerContentVisibility}">
                                             <TextBlock FontSize="12"
                                                        Foreground="{DynamicResource PanelTextBrush}"
                                                        Text="{Binding WslRunnerSummaryText}"
@@ -2483,6 +2687,7 @@
                                                      Foreground="#FFE8F0FF"
                                                      BorderBrush="{DynamicResource PanelBorderBrush}"
                                                      Text="{Binding WslRunnerOutputText, Mode=OneWay}" />
+                                            </StackPanel>
                                         </StackPanel>
                                     </GroupBox>
 
@@ -2597,17 +2802,49 @@
                                         </StackPanel>
                                     </GroupBox>
 
-                                    <GroupBox Margin="0,14,0,0" Header="Sandbox / VM check — future">
+                                    <GroupBox Margin="0,14,0,0" Header="Safe Testing / Sandbox">
                                         <StackPanel>
                                             <TextBlock FontSize="12"
-                                                       Foreground="{DynamicResource PanelTextBrush}"
-                                                       TextWrapping="Wrap"
-                                                       Text="{Binding WindowsSandboxStatusText}" />
-                                            <TextBlock Margin="0,10,0,0"
-                                                       FontSize="12"
                                                        Foreground="{DynamicResource PanelMutedTextBrush}"
                                                        TextWrapping="Wrap"
-                                                       Text="ForgerEMS will not run unknown files on your host PC. A future version may integrate optional isolated VM workflows when explicitly configured by the operator. Until then, copy suspicious installers into Windows Sandbox, Hyper-V, VMware, or VirtualBox manually and inspect them there." />
+                                                       Text="Use a VM, Windows Sandbox, or external WSL terminal for risky downloads/scripts. ForgerEMS will not run unknown scripts inside the main app." />
+                                            <ScrollViewer Margin="0,10,0,10"
+                                                          MaxHeight="220"
+                                                          VerticalScrollBarVisibility="Auto"
+                                                          HorizontalScrollBarVisibility="Disabled">
+                                                <TextBlock Padding="2"
+                                                           FontSize="12"
+                                                           FontFamily="Consolas"
+                                                           Foreground="{DynamicResource PanelTextBrush}"
+                                                           TextWrapping="Wrap"
+                                                           Text="{Binding SafeTestingEnvironmentSummaryText}" />
+                                            </ScrollViewer>
+                                            <WrapPanel Margin="0,0,0,8">
+                                                <Button MinWidth="200"
+                                                        Margin="0,0,8,8"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Refresh safe testing status"
+                                                        Command="{Binding RefreshSafeTestingEnvironmentCommand}" />
+                                                <Button MinWidth="220"
+                                                        Margin="0,0,8,8"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Open Windows Sandbox settings/help"
+                                                        Command="{Binding OpenWindowsSandboxHelpCommand}" />
+                                                <Button MinWidth="190"
+                                                        Margin="0,0,8,8"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Open WSL Terminal externally"
+                                                        Command="{Binding OpenUbuntuTerminalCommand}" />
+                                                <Button MinWidth="200"
+                                                        Margin="0,0,8,8"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Copy safe diagnostics summary"
+                                                        Command="{Binding CopySafeTestingSummaryCommand}" />
+                                            </WrapPanel>
+                                            <TextBlock FontSize="11"
+                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                       TextWrapping="Wrap"
+                                                       Text="{Binding WindowsSandboxStatusText}" />
                                         </StackPanel>
                                     </GroupBox>
 
@@ -2638,6 +2875,11 @@
                         <StackPanel Margin="24,0,24,0" MaxWidth="1040" HorizontalAlignment="Left">
                             <GroupBox Header="Settings">
                                 <StackPanel>
+                                    <TextBlock Margin="0,0,0,12"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource PanelTextBrush}"
+                                               TextWrapping="Wrap"
+                                               Text="Privacy: Kyra defaults to local/offline rules. Optional online assistants only run when you enable them; use Kyra Advanced to see the active provider, redaction, and data-sharing toggles. Product keys, serials, and raw hardware IDs are not shown in summaries or sent to Kyra’s safe context." />
                                     <TextBlock Margin="0,0,0,10"
                                                FontSize="12"
                                                Foreground="{DynamicResource PanelMutedTextBrush}"
@@ -2681,6 +2923,14 @@
                                                        Foreground="{DynamicResource PanelMutedTextBrush}"
                                                        Text="{Binding AppUpdateSettingsSourceLine}"
                                                        TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,4,0,0"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                       Text="{Binding AppUpdateSettingsChannelLine}"
+                                                       TextWrapping="Wrap" />
+                                            <CheckBox Margin="0,8,0,0"
+                                                      IsChecked="{Binding IncludeBetaRcChannels, Mode=TwoWay}"
+                                                      Content="Include Beta / RC releases from GitHub (recommended for beta testers)" />
                                             <TextBlock Margin="0,6,0,0"
                                                        FontSize="11"
                                                        Foreground="{DynamicResource PanelTextBrush}"
@@ -2770,6 +3020,11 @@
                                                 Style="{StaticResource FooterButtonStyle}"
                                                 Content="Legal"
                                                 Command="{Binding ShowLegalCommand}" />
+                                        <Button MinWidth="90"
+                                                Margin="0,0,8,8"
+                                                Style="{StaticResource FooterButtonStyle}"
+                                                Content="Privacy"
+                                                Command="{Binding ShowPrivacyCommand}" />
                                     </WrapPanel>
                                 </StackPanel>
                             </GroupBox>
@@ -2800,26 +3055,38 @@
                                FontSize="22"
                                FontWeight="Bold"
                                Foreground="#FFFFDAB8"
-                               Text="ForgerEMS v1.1.1-beta.1" />
+                               Text="Welcome to ForgerEMS" />
+                    <TextBlock Margin="0,4,0,0"
+                               FontSize="13"
+                               Foreground="#FFB8C5D9"
+                               Text="{Binding AppVersionFooterText}" />
                     <TextBlock Margin="0,8,0,14"
                                Foreground="#FFE0E8F4"
-                               Text="This is an unsigned beta build for human testing. Confirm the USB target carefully before running setup, update, or Ventoy actions."
+                               Text="This is an unsigned beta build. Confirm the USB target before setup, update, or Ventoy actions. Kyra works offline by default — online providers are optional (Kyra Advanced)."
                                TextWrapping="Wrap" />
                     <TextBlock Foreground="#FFE0E8F4"
                                TextWrapping="Wrap"
-                               Text="Start by picking a USB, confirming the safe data partition, building or updating the toolkit, and reporting anything confusing or broken with logs and screenshots." />
+                               Text="Suggested first steps: Run System Scan, open USB Builder, then select a removable USB before Run USB Benchmark. Open Kyra when you want guided answers. Dismiss anytime — nothing here blocks the app." />
                     <WrapPanel Margin="0,18,0,0">
+                        <Button MinWidth="158"
+                                Margin="0,0,10,8"
+                                Content="Run System Scan"
+                                Click="OnRunSystemScanFromWelcomeClick" />
+                        <Button MinWidth="168"
+                                Margin="0,0,10,8"
+                                Content="Run USB Benchmark"
+                                Click="OnRunUsbBenchmarkFromWelcomeClick" />
                         <Button MinWidth="150"
-                                Margin="0,0,10,0"
-                                Content="Start USB Builder"
+                                Margin="0,0,10,8"
+                                Content="Open USB Builder"
                                 Click="OnStartUsbBuilderFromBetaWelcomeClick" />
                         <Button MinWidth="140"
-                                Margin="0,0,10,0"
+                                Margin="0,0,10,8"
                                 Style="{StaticResource SecondaryButtonStyle}"
                                 Content="Open Logs Folder"
                                 Click="OnOpenLogsFromBetaWelcomeClick" />
                         <Button MinWidth="140"
-                                Margin="0"
+                                Margin="0,0,0,8"
                                 Style="{StaticResource FooterButtonStyle}"
                                 Content="Don't show again"
                                 Click="OnDismissBetaWelcomeClick" />

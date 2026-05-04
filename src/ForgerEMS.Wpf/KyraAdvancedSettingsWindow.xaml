@@ -12,6 +12,7 @@
         ShowInTaskbar="False"
         FontFamily="Segoe UI">
     <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <SolidColorBrush x:Key="KyraAdvancedTabBackground" Color="#FF0D1726" />
         <SolidColorBrush x:Key="KyraAdvancedPanelBackground" Color="#CC07101D" />
         <SolidColorBrush x:Key="KyraAdvancedCardBackground" Color="#B307101D" />
@@ -161,8 +162,9 @@
                                 Padding="12"
                                 Margin="0,0,0,12">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Provider Status" />
-                                <TextBlock Margin="0,8,0,0" FontSize="12" Text="Local Offline Rules and routing status" />
+                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Kyra mode and provider status" />
+                                <TextBlock Margin="0,8,0,0" FontSize="12" TextWrapping="Wrap"
+                                           Text="Beta default: offline/local Kyra always works. Online models activate only when an operator has configured providers (environment variables). Testers are not asked to supply API keys." />
                                 <TextBlock Margin="0,6,0,0" FontSize="12" Text="{Binding CopilotProviderSummaryText}" TextWrapping="Wrap" />
                                 <TextBlock Margin="0,6,0,0" FontSize="12" Text="{Binding CopilotActiveProviderText}" TextWrapping="Wrap" />
                                 <TextBlock Margin="0,4,0,0" FontSize="11.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="{Binding CopilotDiagnosticsSummaryText}" TextWrapping="Wrap" />
@@ -191,7 +193,8 @@
                         </WrapPanel>
                         <WrapPanel Margin="0,0,0,10">
                             <CheckBox Margin="0,0,16,0" IsChecked="{Binding EnableFreeProviderPool, Mode=TwoWay}" Content="Enable free provider pool" />
-                            <CheckBox IsChecked="{Binding EnableByokProviders, Mode=TwoWay}" Content="Enable BYOK/paid providers" />
+                            <CheckBox IsChecked="{Binding EnableByokProviders, Mode=TwoWay}" Content="Enable BYOK/paid providers"
+                                      Visibility="{Binding KyraTesterEditableProviders, Converter={StaticResource BoolToVis}}" />
                         </WrapPanel>
                         <TextBlock Margin="0,0,0,8"
                                    FontSize="11"
@@ -201,7 +204,7 @@
                         <TextBlock Margin="0,0,0,8"
                                    FontSize="11"
                                    Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                                   Text="Session-only key storage for this beta. Do not paste API keys into chat; use provider fields only."
+                                   Text="Operators configure API access via environment variables before launch. Beta testers should not paste API keys into chat, email, or screenshots."
                                    TextWrapping="Wrap" />
                         <ItemsControl ItemsSource="{Binding CopilotProviderSettings}">
                             <ItemsControl.ItemTemplate>
@@ -233,18 +236,25 @@
                                             <UniformGrid Margin="0,6,0,0" Columns="3">
                                                 <StackPanel Margin="0,0,8,0">
                                                     <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Endpoint URL" />
-                                                    <TextBox MinWidth="160" Text="{Binding BaseUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                                    <TextBox MinWidth="160"
+                                                             IsReadOnly="{Binding DataContext.KyraDeveloperManagedProviderUi, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                             Text="{Binding BaseUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                                 </StackPanel>
                                                 <StackPanel Margin="0,0,8,0">
                                                     <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Model" />
-                                                    <TextBox MinWidth="120" Text="{Binding ModelName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                                    <TextBox MinWidth="120"
+                                                             IsReadOnly="{Binding DataContext.KyraDeveloperManagedProviderUi, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                             Text="{Binding ModelName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                                 </StackPanel>
                                                 <StackPanel>
                                                     <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="API key env var" />
-                                                    <TextBox MinWidth="140" Text="{Binding ApiKeyEnvironmentVariable, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                                    <TextBox MinWidth="140"
+                                                             IsReadOnly="{Binding DataContext.KyraDeveloperManagedProviderUi, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                             Text="{Binding ApiKeyEnvironmentVariable, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                                 </StackPanel>
                                             </UniformGrid>
-                                            <UniformGrid Margin="0,6,0,0" Columns="2">
+                                            <UniformGrid Margin="0,6,0,0" Columns="2"
+                                                         Visibility="{Binding DataContext.KyraShowDeveloperProviderPlumbing, Converter={StaticResource BoolToVis}}">
                                                 <StackPanel Margin="0,0,8,0">
                                                     <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Session API key (memory-only, not saved to disk)" />
                                                     <TextBox MinWidth="160" Text="{Binding SessionApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
@@ -274,7 +284,7 @@
                             <TextBlock Foreground="#FF0B1220"
                                        FontWeight="SemiBold"
                                        TextWrapping="Wrap"
-                                       Text="Keys are stored in your local copilot settings file (beta). Never paste secrets into chat. They are not shown in /provider or tool grids." />
+                                       Text="Live tool preferences are stored locally (beta). Never paste secrets into chat. Keys are not shown in /provider or tool grids." />
                         </Border>
                         <TextBlock Margin="0,0,0,10"
                                    FontSize="11"
@@ -463,13 +473,13 @@
                                 </DataGrid>
                             </StackPanel>
                         </Border>
-                        <CheckBox Margin="0,0,0,8" IsChecked="{Binding KyraApiFirstRouting, Mode=TwoWay}" Content="API-first routing (try online providers before Local Kyra when mode allows)" />
-                        <CheckBox Margin="0,0,0,8" IsChecked="{Binding KyraOfflineFallbackEnabled, Mode=TwoWay}" Content="Allow Local Kyra fallback when online providers fail" />
+                        <CheckBox Margin="0,0,0,8" IsChecked="{Binding KyraApiFirstRouting, Mode=TwoWay}" Content="Online assist: try configured providers before Local Kyra when mode allows (not for machine-anchored scans)" />
+                        <CheckBox Margin="0,0,0,8" IsChecked="{Binding KyraOfflineFallbackEnabled, Mode=TwoWay}" Content="Local fallback: allow Local Kyra when online providers fail" />
                         <CheckBox Margin="0,0,0,8" IsChecked="{Binding VerboseLiveLogs, Mode=TwoWay}" Content="Verbose beta logs (show Kyra routing lines in live logs)" />
                         <TextBlock Margin="0,0,0,12"
                                    FontSize="11"
                                    Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                                   Text="With verbose off, chat footnotes stay short; routing detail still respects your privacy settings."
+                                   Text="Kyra can use online language models, but live tools like weather or web search only work when their integrations are enabled. An API provider does not automatically mean live web access."
                                    TextWrapping="Wrap" />
                         <Border Background="{StaticResource KyraAdvancedCardBackground}"
                                 BorderBrush="{StaticResource KyraAdvancedCardBorder}"
@@ -537,6 +547,11 @@
                                TextWrapping="Wrap" />
                     <CheckBox IsChecked="{Binding AllowOnlineSystemContextSharing, Mode=TwoWay}"
                               Content="Allow Kyra to send summarized system context to online providers (default off)" />
+                    <TextBlock Margin="0,10,0,0"
+                               FontSize="12"
+                               Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
+                               Text="Beta testers do not need API keys. Online models are operator-configured; only enable context sharing if you understand what is sent (sanitized summaries, never raw logs or secrets)."
+                               TextWrapping="Wrap" />
                     <TextBlock Margin="0,10,0,0"
                                FontSize="12"
                                Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
@@ -628,10 +643,10 @@
                                TextWrapping="Wrap" />
                 </StackPanel>
             </TabItem>
-            <TabItem Header="API Setup Help">
+            <TabItem Header="Provider Status Help">
                 <ScrollViewer Style="{StaticResource KyraAdvancedScrollViewerStyle}" Margin="0,12,0,0">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="API Environment Variable Setup" />
+                        <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Operator environment setup (advanced)" />
                         <TextBlock Margin="0,8,0,0" FontFamily="Consolas" Text="GEMINI_API_KEY" />
                         <TextBlock FontFamily="Consolas" Text="GROQ_API_KEY" />
                         <TextBlock FontFamily="Consolas" Text="OPENROUTER_API_KEY" />
@@ -645,7 +660,7 @@
 
                         <TextBlock Margin="0,10,0,0"
                                    Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                                   Text="Environment variables are read from process, user, and machine scope. Session keys are memory-only and API keys are not saved to disk."
+                                   Text="See docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md for operator-only setup. Environment variable names are listed below — values are never shown here."
                                    TextWrapping="Wrap" />
                         <TextBlock Margin="0,8,0,0"
                                    Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
@@ -663,7 +678,7 @@
                                 CornerRadius="8">
                             <TextBlock Foreground="#FF0B1220"
                                        FontWeight="SemiBold"
-                                       Text="Do not paste API keys into chat. Use Provider Settings or Windows environment variables."
+                                       Text="Do not paste API keys into chat, logs, or support email. Operators configure keys via environment variables before launch."
                                        TextWrapping="Wrap" />
                         </Border>
                         <TextBlock Margin="0,10,0,0"

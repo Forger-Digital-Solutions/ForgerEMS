@@ -86,7 +86,7 @@ public sealed class MainWindowLogsKyraLayoutTests
         Assert.Contains("Header=\"Privacy\"", text, StringComparison.Ordinal);
         Assert.Contains("Header=\"System Context\"", text, StringComparison.Ordinal);
         Assert.Contains("Header=\"Debug / Source\"", text, StringComparison.Ordinal);
-        Assert.Contains("Header=\"API Setup Help\"", text, StringComparison.Ordinal);
+        Assert.Contains("Header=\"Provider Status Help\"", text, StringComparison.Ordinal);
         Assert.Contains("Assets/KyraAdvancedBackground.png", text, StringComparison.Ordinal);
         Assert.Contains("KyraAdvancedTabControlStyle", text, StringComparison.Ordinal);
         Assert.Contains("KyraAdvancedTabItemStyle", text, StringComparison.Ordinal);
@@ -116,7 +116,7 @@ public sealed class MainWindowLogsKyraLayoutTests
         var path = Path.Combine(root, "src", "ForgerEMS.Wpf", "KyraAdvancedSettingsWindow.xaml");
         var text = File.ReadAllText(path);
         Assert.Contains("Never sent: serials, usernames, file paths, logs, API keys, passwords, product/license keys.", text, StringComparison.Ordinal);
-        Assert.Contains("Do not paste API keys into chat. Use Provider Settings or Windows environment variables.", text, StringComparison.Ordinal);
+        Assert.Contains("Do not paste API keys into chat, logs, or support email.", text, StringComparison.Ordinal);
         foreach (var env in new[]
                  {
                      "GEMINI_API_KEY",

@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using VentoyToolkitSetup.Wpf.Models;
+using VentoyToolkitSetup.Wpf.Services.Intelligence;
 
 namespace VentoyToolkitSetup.Wpf.Services;
 
@@ -35,6 +36,19 @@ public sealed class UsbBenchmarkResult
     public DateTimeOffset? LastTestedAt { get; init; }
 
     public string Classification { get; init; } = string.Empty;
+
+    /// <summary>Native/PowerShell measured write MB/s (for Intelligence profile sync).</summary>
+    public double WriteSpeedMBps { get; init; }
+
+    /// <summary>Native/PowerShell measured read MB/s.</summary>
+    public double ReadSpeedMBps { get; init; }
+
+    public int BenchmarkDurationMs { get; init; }
+
+    /// <summary><see cref="UsbSpeedMeasurementClass"/> name for cache JSON.</summary>
+    public string IntelligenceMeasurementClass { get; init; } = string.Empty;
+
+    public int IntelligenceConfidenceScore { get; init; }
 }
 
 public sealed class UsbBenchmarkService : IUsbBenchmarkService
@@ -64,6 +78,62 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
                 WriteSpeedDisplay = "Skipped (unsafe)",
                 LastTestedAt = DateTimeOffset.Now
             };
+        }
+
+        onOutput?.Invoke(new LogLine(DateTimeOffset.Now, "[INFO] Running native USB file benchmark (measurement-based).", LogSeverity.Info));
+        try
+        {
+            var native = await UsbFileBenchmarkEngine.RunAsync(target, null, cancellationToken).ConfigureAwait(false);
+            if (native.Succeeded)
+            {
+                onOutput?.Invoke(new LogLine(
+                    DateTimeOffset.Now,
+                    $"[OK] Native benchmark: write {native.WriteSpeedMBps:0.0} MB/s, read {native.ReadSpeedMBps:0.0} MB/s ({native.Classification}).",
+                    LogSeverity.Success));
+                return MapNativeToLegacy(native);
+            }
+
+            if (cancellationToken.IsCancellationRequested ||
+                native.SummaryLine.Contains("cancel", StringComparison.OrdinalIgnoreCase))
+            {
+                onOutput?.Invoke(new LogLine(DateTimeOffset.Now, "[INFO] USB benchmark stopped (cancelled or superseded).", LogSeverity.Info));
+                return new UsbBenchmarkResult
+                {
+                    Succeeded = false,
+                    Status = "Cancelled",
+                    Summary = "Benchmark cancelled",
+                    Details = native.SummaryLine,
+                    ReadSpeedDisplay = "Cancelled",
+                    WriteSpeedDisplay = "Cancelled",
+                    LastTestedAt = DateTimeOffset.Now
+                };
+            }
+
+            onOutput?.Invoke(new LogLine(
+                DateTimeOffset.Now,
+                $"[WARN] Native benchmark unavailable ({native.SummaryLine}); falling back to PowerShell.",
+                LogSeverity.Warning));
+        }
+        catch (OperationCanceledException)
+        {
+            onOutput?.Invoke(new LogLine(DateTimeOffset.Now, "[INFO] USB benchmark stopped (cancelled or superseded).", LogSeverity.Info));
+            return new UsbBenchmarkResult
+            {
+                Succeeded = false,
+                Status = "Cancelled",
+                Summary = "Benchmark cancelled",
+                Details = "The benchmark was cancelled.",
+                ReadSpeedDisplay = "Cancelled",
+                WriteSpeedDisplay = "Cancelled",
+                LastTestedAt = DateTimeOffset.Now
+            };
+        }
+        catch (Exception ex)
+        {
+            onOutput?.Invoke(new LogLine(
+                DateTimeOffset.Now,
+                $"[WARN] Native benchmark error: {ex.Message}; falling back to PowerShell.",
+                LogSeverity.Warning));
         }
 
         var testSizeMb = target.FreeBytes >= 512L * 1024 * 1024 ? 128 : 64;
@@ -127,22 +197,48 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
         using var document = JsonDocument.Parse(jsonLine);
         var writeSpeed = document.RootElement.GetProperty("WriteMbps").GetDouble();
         var readSpeed = document.RootElement.GetProperty("ReadMbps").GetDouble();
-        var classification = document.RootElement.GetProperty("Classification").GetString() ?? "Unknown";
+        var legacyTag = document.RootElement.GetProperty("Classification").GetString() ?? "Unknown";
         var finishedAt = DateTimeOffset.Now;
+        var (measClass, conf, _) = UsbMeasurementClassifier.Classify(writeSpeed, readSpeed, null);
 
         return new UsbBenchmarkResult
         {
             Succeeded = true,
             Status = "Complete",
-            Summary = $"USB benchmark complete: {classification}",
+            Summary =
+                $"USB benchmark complete: {measClass} (legacy tag {legacyTag})",
             Details = $"{testSizeMb} MB sequential file speed check. Write {writeSpeed:0.0} MB/s, read {readSpeed:0.0} MB/s.",
             WriteSpeedDisplay = $"{writeSpeed.ToString("0.0", CultureInfo.InvariantCulture)} MB/s",
             ReadSpeedDisplay = $"{readSpeed.ToString("0.0", CultureInfo.InvariantCulture)} MB/s",
             TestSizeMb = testSizeMb,
             LastTestedAt = finishedAt,
-            Classification = classification
+            Classification = legacyTag,
+            WriteSpeedMBps = writeSpeed,
+            ReadSpeedMBps = readSpeed,
+            BenchmarkDurationMs = 0,
+            IntelligenceMeasurementClass = measClass.ToString(),
+            IntelligenceConfidenceScore = conf
         };
     }
+
+    private static UsbBenchmarkResult MapNativeToLegacy(UsbIntelligenceBenchmarkResult native) =>
+        new()
+        {
+            Succeeded = true,
+            Status = "Complete",
+            Summary = $"USB benchmark complete: {native.Classification}",
+            Details = native.SummaryLine,
+            WriteSpeedDisplay = $"{native.WriteSpeedMBps.ToString("0.0", CultureInfo.InvariantCulture)} MB/s",
+            ReadSpeedDisplay = $"{native.ReadSpeedMBps.ToString("0.0", CultureInfo.InvariantCulture)} MB/s",
+            TestSizeMb = native.TestSizeMb,
+            LastTestedAt = native.Timestamp,
+            Classification = native.Classification.ToString(),
+            WriteSpeedMBps = native.WriteSpeedMBps,
+            ReadSpeedMBps = native.ReadSpeedMBps,
+            BenchmarkDurationMs = native.DurationMs,
+            IntelligenceMeasurementClass = native.Classification.ToString(),
+            IntelligenceConfidenceScore = native.ConfidenceScore
+        };
 
     private static string BuildBenchmarkCommand(string rootPath, int testSizeMb)
     {

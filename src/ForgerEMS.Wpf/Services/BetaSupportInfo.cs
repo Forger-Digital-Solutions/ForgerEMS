@@ -11,7 +11,7 @@ public static class BetaSupportInfo
         "Beta issue? Send logs/screenshots to ForgerDigitalSolutions@outlook.com";
 
     public const string DoNotEmailSecretsWarning =
-        "Do not email API keys, passwords, serial numbers, or private documents.";
+        "Do not send API keys, tokens, passwords, product keys, serial numbers, private documents, or sensitive files in support email.";
 
     public const string CopyrightNotice = "Copyright © 2026 Forger Digital Solutions. All rights reserved.";
 

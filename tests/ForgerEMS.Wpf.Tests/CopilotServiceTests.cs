@@ -341,7 +341,7 @@ public sealed class CopilotServiceTests
         });
 
         Assert.False(response.UsedOnlineData);
-        Assert.Contains("local/offline", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("live data tools", response.Text, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Health score", response.Text, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -355,9 +355,8 @@ public sealed class CopilotServiceTests
             Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
         });
 
-        Assert.Contains("local/offline", response.Text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("can’t verify live web results", response.Text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("newest versions", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("live data tools", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Kyra Advanced", response.Text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -595,7 +594,7 @@ public sealed class CopilotServiceTests
         var response = await service.GenerateReplyAsync(new CopilotRequest { Prompt = "General question", Settings = settings });
 
         Assert.True(response.UsedOnlineData);
-        Assert.Contains("Provider: Fake Free", response.OnlineStatus, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("online assist", response.OnlineStatus, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -612,7 +611,8 @@ public sealed class CopilotServiceTests
 
         Assert.True(response.UsedOnlineData);
         Assert.Equal(KyraResponseSource.Groq, response.ResponseSource);
-        Assert.Contains("Answered by", response.SourceLabel, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Kyra", response.SourceLabel, StringComparison.OrdinalIgnoreCase);
+        Assert.True(response.OnlineEnhancementApplied);
     }
 
     [Fact]
@@ -696,7 +696,7 @@ public sealed class CopilotServiceTests
         var response = await service.GenerateReplyAsync(new CopilotRequest { Prompt = "Compare Windows and Ubuntu for a beginner.", Settings = settings });
 
         Assert.True(response.UsedOnlineData);
-        Assert.Contains("Provider: Fake Free", response.OnlineStatus, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("online assist", response.OnlineStatus, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -773,7 +773,8 @@ public sealed class CopilotServiceTests
         Assert.Equal(1, online.CallCount);
         Assert.Contains("Latitude 5400", online.LastContext!.ContextText, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("C:\\Users\\", online.LastContext.ContextText, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("sanitized System Intelligence context", response.SourceLabel, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Kyra", response.SourceLabel, StringComparison.OrdinalIgnoreCase);
+        Assert.True(response.OnlineEnhancementApplied);
     }
 
     [Fact]
@@ -917,7 +918,7 @@ public sealed class CopilotServiceTests
 
         Assert.False(response.UsedOnlineData);
         Assert.Equal(CopilotProviderType.LocalOffline, response.ProviderType);
-        Assert.Contains("Local Kyra", response.SourceLabel, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Kyra", response.SourceLabel, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -1250,6 +1251,21 @@ public sealed class CopilotServiceTests
             }
             """);
         return path;
+    }
+
+    [Fact]
+    public async Task BetaReadinessAnswerReferences_v1_1_10_Checklist()
+    {
+        var registry = new CopilotProviderRegistry();
+        var service = new CopilotService(registry);
+        var response = await service.GenerateReplyAsync(new CopilotRequest
+        {
+            Prompt = "What's missing before beta testing?",
+            Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
+        });
+
+        Assert.Contains("BETA_TESTER_QUICKSTART", response.Text, StringComparison.Ordinal);
+        Assert.Contains("BETA_HUMAN_TESTING_CHECKLIST", response.Text, StringComparison.Ordinal);
     }
 
     private sealed class FakeProviderRegistry(params ICopilotProvider[] providers) : ICopilotProviderRegistry

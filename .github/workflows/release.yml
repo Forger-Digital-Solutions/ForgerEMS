@@ -1,0 +1,126 @@
+name: release
+
+# Publishes versioned assets to GitHub Releases (ZIP-first). See docs/UPDATE_SYSTEM.md for how the app checks updates.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without v prefix (must match an existing tag, e.g. 1.1.4-beta.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Publish GitHub Release
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Resolve version and assets
+        id: meta
+        run: |
+          if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
+            $ver = '${{ inputs.version }}'.Trim()
+            $tag = "v$ver"
+            git fetch --tags
+            $ref = git rev-parse --verify "refs/tags/$tag" 2>$null
+            if (-not $ref) {
+              throw "Git tag '$tag' was not found. Push the tag before running this workflow."
+            }
+          } else {
+            $tag = $env:GITHUB_REF_NAME
+            $ver = $tag.TrimStart('v')
+          }
+          $installer = "ForgerEMS-Setup-v$ver.exe"
+          $zip = "ForgerEMS-v$ver.zip"
+          $zipBeta = "ForgerEMS-Beta-v$ver.zip"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "version=$ver"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "tag=$tag"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "installer=$installer"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "zip=$zip"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "zip_beta=$zipBeta"
+
+      - name: Assemble Ventoy core release bundle
+        run: .\tools\build-backend-release.ps1
+
+      - name: Build release (installer + ZIP bundle)
+        run: .\tools\build-release.ps1 -Version ${{ steps.meta.outputs.version }}
+
+      - name: Test (Release)
+        run: dotnet test .\ForgerEMS.sln -c Release
+
+      - name: Compose release notes
+        run: |
+          $ver = '${{ steps.meta.outputs.version }}'
+          $zip = "ForgerEMS-v$ver.zip"
+          $zipBeta = "ForgerEMS-Beta-v$ver.zip"
+          $exe = "ForgerEMS-Setup-v$ver.exe"
+          $nl = [Environment]::NewLine
+          $header =
+            "## DOWNLOAD THE ZIP — NOT THE EXE$nl$nl" +
+            "Pick **one** ZIP (both contain the same files): **$zip** or **$zipBeta**.$nl" +
+            "Extract the ZIP, open the inner folder, then run **START_HERE.bat**.$nl$nl" +
+            "Do **not** download **$exe** first unless you are an **advanced** user (SmartScreen is usually harsher on raw EXE downloads).$nl$nl" +
+            "**Incomplete Chrome download?** A .crdownload file is not finished — do not rename or run it. See docs/DOWNLOAD_TROUBLESHOOTING.md in the repo.$nl$nl" +
+            "---$nl$nl" +
+            "### Release assets$nl" +
+            "- **ZIP (primary name):** $zip$nl" +
+            "- **ZIP (beta-friendly alias, same bytes):** $zipBeta$nl" +
+            "- **Advanced / direct installer:** $exe$nl" +
+            "- **CHECKSUMS.sha256**, **release.json**, **DOWNLOAD_BETA.txt**$nl$nl" +
+            "---$nl$nl"
+          $body = $header
+          $specificDocs = Join-Path "docs" ("RELEASE_NOTES_v{0}.md" -f $ver)
+          $specificRoot = "RELEASE_NOTES_v{0}.md" -f $ver
+          $specific = if (Test-Path -LiteralPath $specificDocs) { $specificDocs } elseif (Test-Path -LiteralPath $specificRoot) { $specificRoot } else { $null }
+          if ($specific) {
+            $body += (Get-Content -LiteralPath $specific -Raw)
+          } else {
+            $candidates = @()
+            $candidates += Get-ChildItem -LiteralPath "docs" -Filter "RELEASE_NOTES*.md" -File -ErrorAction SilentlyContinue
+            $candidates += Get-ChildItem -LiteralPath "." -Filter "RELEASE_NOTES*.md" -File -ErrorAction SilentlyContinue
+            $fallback = $candidates | Sort-Object Name | Select-Object -First 1
+            if ($fallback) {
+              $body += (Get-Content -LiteralPath $fallback.FullName -Raw)
+            }
+          }
+          Set-Content -LiteralPath "release-body.md" -Value $body -Encoding utf8
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ForgerEMS ${{ steps.meta.outputs.version }}
+          body_path: release-body.md
+          fail_on_unmatched_files: true
+          files: |
+            release/current/${{ steps.meta.outputs.installer }}
+            release/current/${{ steps.meta.outputs.zip }}
+            release/current/${{ steps.meta.outputs.zip_beta }}
+            release/current/CHECKSUMS.sha256
+            release/current/release.json
+            release/current/DOWNLOAD_BETA.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

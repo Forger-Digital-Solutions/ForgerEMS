@@ -1,5 +1,7 @@
 # ForgerEMS Release Readiness
 
+**Mechanical RC v1.1.12-rc.2:** read `docs/BETA_RC_GO_NO_GO_v1.1.12-rc.2.md`, `docs/FIRST_TESTER_DOWNLOAD_FLOW.md`, `docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md`, and `docs/DOWNLOAD_TROUBLESHOOTING.md` before the next beta wave. Prior human-testing pack: `docs/BETA_HUMAN_TESTING_CHECKLIST_v1.1.11.md`, `docs/MISSING_BEFORE_HUMAN_TESTING_v1.1.11.md`, `docs/BETA_TESTER_QUICKSTART.md`, `docs/BETA_ISSUE_REPORT_TEMPLATE.md`, `docs/RELEASE_NOTES_v1.1.12-rc.2.md` (older: `docs/RELEASE_NOTES_v1.1.12-rc.1.md`, `docs/RELEASE_NOTES_v1.1.11-beta.1.md`).
+
 This document is the final operator-facing release prep pass for the native
 `ForgerEMS` frontend `v1.1.1`.
 

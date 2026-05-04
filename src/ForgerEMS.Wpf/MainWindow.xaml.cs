@@ -493,6 +493,36 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnRunSystemScanFromWelcomeClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel viewModel)
+        {
+            return;
+        }
+
+        viewModel.DismissBetaWelcome();
+        MainTabControl.SelectedIndex = 1;
+        if (viewModel.RunSystemScanCommand.CanExecute(null))
+        {
+            viewModel.RunSystemScanCommand.Execute(null);
+        }
+    }
+
+    private void OnRunUsbBenchmarkFromWelcomeClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel viewModel)
+        {
+            return;
+        }
+
+        viewModel.DismissBetaWelcome();
+        MainTabControl.SelectedIndex = 0;
+        if (viewModel.RunUsbIntelligenceBenchmarkCommand.CanExecute(null))
+        {
+            viewModel.RunUsbIntelligenceBenchmarkCommand.Execute(null);
+        }
+    }
+
     private void OnOpenLogsFromBetaWelcomeClick(object sender, RoutedEventArgs e)
     {
         if (DataContext is MainViewModel viewModel && viewModel.OpenLogsFolderCommand.CanExecute(null))

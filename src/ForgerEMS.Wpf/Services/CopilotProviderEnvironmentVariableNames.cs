@@ -16,6 +16,7 @@ public static class CopilotProviderEnvironmentVariableNames
     public const string Anthropic = "ANTHROPIC_API_KEY";
 
     public const string UxHowToConfigure =
+        "Kyra online providers are optional — Offline Local mode works without API keys. Full Windows env-var examples (user vs session), LM Studio, Ollama, and OpenAI-compatible URLs: see the repo file docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md.\n\n" +
         "How to configure: enable a provider below, then either paste a Session API key (memory only, not written to settings JSON) or set the listed environment variable. Use Refresh Provider Status after changing user/machine environment variables so Kyra re-reads them without restarting. Session keys override environment variables. " +
         "Local Kyra (Offline Local) needs no key. Online providers are optional.\n\n" +
         "Supported environment variable names (when using env vars instead of session keys):\n" +

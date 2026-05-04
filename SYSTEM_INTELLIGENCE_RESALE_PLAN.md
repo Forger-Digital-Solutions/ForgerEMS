@@ -28,7 +28,7 @@ Never display/send by default:
 - raw logs
 - API keys/tokens
 
-Redaction is enforced through `HardwarePrivacyRedactor` (delegates to `CopilotRedactor` patterns).
+Redaction is enforced through `HardwarePrivacyRedactor` (delegates to shared Kyra-side redaction patterns).
 
 ## Resale Engine Model
 

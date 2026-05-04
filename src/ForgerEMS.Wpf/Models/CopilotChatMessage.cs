@@ -11,6 +11,8 @@ public sealed class CopilotChatMessage
 
     public string SourceLabel { get; init; } = string.Empty;
 
+    public bool OnlineEnhancementApplied { get; init; }
+
     public DateTimeOffset Timestamp { get; init; } = DateTimeOffset.Now;
 
     public string DisplayText => $"{Role}: {Text}";

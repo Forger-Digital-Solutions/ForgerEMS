@@ -63,4 +63,30 @@ public sealed class KyraIntentRouterTests
         const string p = "Fix this:\n```json\n{ \"a\": 1 }\n```";
         Assert.Equal(KyraIntent.CodeAssist, KyraIntentRouter.DetectIntent(p));
     }
+
+    [Theory]
+    [InlineData("What's missing before beta testing?")]
+    [InlineData("Beta readiness checklist")]
+    public void BetaReadiness_RoutesToForgerEms(string prompt) =>
+        Assert.Equal(KyraIntent.ForgerEMSQuestion, KyraIntentRouter.DetectIntent(prompt));
+
+    [Theory]
+    [InlineData("Windows protected your PC SmartScreen")]
+    [InlineData("publisher unknown unrecognized app")]
+    public void SmartScreenFriction_RoutesToForgerEms(string prompt) =>
+        Assert.Equal(KyraIntent.ForgerEMSQuestion, KyraIntentRouter.DetectIntent(prompt));
+
+    [Fact]
+    public void UsbMappingHowTo_RoutesToUsbBuilderHelp() =>
+        Assert.Equal(KyraIntent.USBBuilderHelp, KyraIntentRouter.DetectIntent("How do I map USB ports in ForgerEMS?"));
+
+    [Theory]
+    [InlineData("What is the current law on right-to-repair today?")]
+    [InlineData("Legal update today for data privacy")]
+    public void LiveFactsLaw_RoutesToLiveOnlineQuestion(string prompt) =>
+        Assert.Equal(KyraIntent.LiveOnlineQuestion, KyraIntentRouter.DetectIntent(prompt));
+
+    [Fact]
+    public void LatestThirdPartySoftwareRelease_RoutesToLiveOnlineQuestion() =>
+        Assert.Equal(KyraIntent.LiveOnlineQuestion, KyraIntentRouter.DetectIntent("What is the newest Chrome release?"));
 }

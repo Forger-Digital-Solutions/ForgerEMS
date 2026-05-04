@@ -16,7 +16,7 @@ coverage/
 dist/
 release/**
 PreRelease/
-*.zip
+# Generated archives live under ignored release/ and dist/; avoid ignoring all *.zip repo-wide.
 *.exe
 *.msi
 *.nupkg

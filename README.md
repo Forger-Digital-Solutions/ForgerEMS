@@ -1,85 +1,84 @@
 # ForgerEMS (Beta)
 
-**Current beta:** **v1.1.4** — *ForgerEMS Beta v1.1.4 — Whole-App Intelligence Preview*.
+**Forger Engineering Maintenance Suite** — a Windows desktop app for technicians who work with USB toolkits, repairs, and diagnostics.
 
-**ForgerEMS** is the Forger Engineering Maintenance Suite from **Forger Digital Solutions**: a Windows desktop companion for offline-first repair, diagnostics, resale intelligence, and building or refreshing a controlled USB engineering toolkit.
+**Current release line:** **v1.1.12-rc.3** (mechanical RC; USB mapping wizard, USB benchmark scheduling, and related fixes continue to evolve).
 
-The repository is organized as the official source for the WPF application, PowerShell backend, Ventoy integration, update manifests, installer configuration, and release automation.
+**Kickstarter:** [Campaign link — add when live](https://www.kickstarter.com/)
 
-## What It Does
+**Support:** [ForgerDigitalSolutions@outlook.com](mailto:ForgerDigitalSolutions@outlook.com) — send **sanitized** screenshots and short log excerpts only; never passwords, keys, or private files.
 
-ForgerEMS gives operators a guided desktop interface for preparing and maintaining USB toolkit media, running System Intelligence, diagnostics (link/file safety checks, WSL helpers), and optional **Kyra AI**. The WPF app wraps a PowerShell backend that validates manifests, manages downloads, stages the Ventoy-based toolkit flow, and supports installed-mode distribution through a Windows installer.
+---
 
-## Kyra AI (summary)
+## What is ForgerEMS?
 
-- **Offline Local Kyra** works without any API key (rules + optional local models such as Ollama / LM Studio).
-- **Optional online providers** (free API pool, BYOK) extend Kyra when you enable them; response source labeling shows which path answered.
-- **Session API keys** are kept in memory for the current run only and are **not** written to settings JSON.
-- **Environment variables** are read in order: process → user → machine. **Session keys override environment.** After changing user/machine variables, use **Refresh Provider Status** in Kyra Advanced so credentials are picked up without restarting.
-- Supported variable names include: `GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `CEREBRAS_API_KEY`, `MISTRAL_API_KEY`, `GITHUB_MODELS_TOKEN`, `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`. Cloudflare requires **both** the API key and **account ID**.
+ForgerEMS helps you **build and maintain a capable USB toolkit**, **understand what the PC is doing** (storage, health signals, diagnostics), and get **guided help from Kyra** — an assistant that works **offline by default**. It is built for repair benches, shops, resellers, and advanced home users who want fewer guess-and-check afternoons.
 
-## Beta support
+This is **beta software**: behavior and packaging can change between builds. See [docs/LEGAL.md](docs/LEGAL.md) and [docs/PRIVACY.md](docs/PRIVACY.md).
 
-**Beta issue? Send logs/screenshots to ForgerDigitalSolutions@outlook.com** (also available via in-app mailto, header, and logs panel). **Do not email API keys, passwords, serial numbers, or private documents.**
+---
 
-## Update notifications
+## Key features
 
-The app can check **public GitHub Releases** for the `Forger-Digital-Solutions/ForgerEMS` repo (no token required for public releases). Checks are **non-blocking**, safe when **offline** (no crash), and **never** silently download or install an update. Use **Settings → App updates** for “check now”, last-checked time, ignored version, and optional installer download to `%LOCALAPPDATA%\ForgerEMS\Updates` (or your chosen folder) only when **you** choose **Download**.
+| Feature | What it does |
+|--------|----------------|
+| **USB Builder** | Guided flows to verify, prepare, and update Ventoy-oriented USB maintenance media, with managed downloads and careful drive selection. |
+| **USB Intelligence** | Measure read/write on a **safe removable** target, map **which physical USB port** you used, and get practical guidance from benchmarks and topology hints (best-effort; varies by PC). |
+| **System Intelligence** | Local scan summaries — hardware and health-oriented cards you can use before a repair or resale prep. |
+| **Diagnostics** | Unified health checklist, file/link safety helpers, and technician-oriented tools (including WSL-related helpers where applicable). |
+| **Toolkit Manager** | Manifest-driven health for what is on your USB; clear paths when something must be supplied manually. |
+| **Kyra** | In-app assistant: **offline local** answers first; optional online help only when your environment already enables it (operators). **Beta testers are not asked to supply API keys in the app.** |
 
-**Upgrading an installed copy:** when a newer build is published, use the in-app update banner or **Settings → App updates** to download the new `ForgerEMS-Setup-v*.exe` and run it over your existing install (there is no silent auto-upgrade).
+More context: [docs/ABOUT_FORGEREMS.md](docs/ABOUT_FORGEREMS.md) · Behavior notes: [KYRA_BEHAVIOR_SPEC.md](KYRA_BEHAVIOR_SPEC.md) (repository root).
 
-## v1.1.4 launch readiness
+---
 
-- **Manual smoke:** follow [FINAL_MANUAL_SMOKE_TEST.md](FINAL_MANUAL_SMOKE_TEST.md) before calling the build “launch-ready” for external users.
-- **Secret hygiene:** run `.\tools\check-secrets.ps1` before tagging; review hits (unit tests may contain fake example tokens). Use `-Strict` to fail on hits outside test folders.
-- **Known non-blockers for beta:** (1) Cloudflare-related tests may skip a branch if your PC already has `CLOUDFLARE_ACCOUNT_ID` in user/machine env. (2) Machine-level env resolution is not covered by a dedicated elevated automated test. (3) Update checks require network access to GitHub for success; otherwise the app should degrade gracefully.
+## Download (ZIP-first)
 
-Operator checklist: [BETA_RELEASE_CHECKLIST.md](BETA_RELEASE_CHECKLIST.md).
+**Always download the ZIP from GitHub Releases — not the standalone `.exe` first.** The ZIP is the supported, beginner-friendly path; Windows and browsers are usually kinder to a folder you extract than to a raw installer download.
 
-## Features
+1. Open **[Releases — Forger-Digital-Solutions/ForgerEMS](https://github.com/Forger-Digital-Solutions/ForgerEMS/releases)**.
+2. Under **Assets**, download **one** of:
+   - `ForgerEMS-v<version>.zip` **or**
+   - `ForgerEMS-Beta-v<version>.zip` (same bundle policy; easier to spot in a long list)
+3. **Wait** until the download finishes completely (see [docs/DOWNLOAD_TROUBLESHOOTING.md](docs/DOWNLOAD_TROUBLESHOOTING.md) if you see `.crdownload` or stalls).
+4. Extract to a **short path** (for example `Desktop\ForgerEMS`).
+5. Open the extracted folder and double-click **`START_HERE.bat`**. It guides you through verification and install.
 
-- USB toolkit builder for repeatable engineering and maintenance media.
-- Managed downloads driven by versioned manifests and vendor inventory.
-- Ventoy integration through the ForgerEMS backend scripts.
-- Installed-mode support with bundled backend validation.
-- Inno Setup installer configuration for Program Files deployment.
-- Release scripting with staging, checksums, and CI-friendly dry runs.
+Optionally verify integrity using **`CHECKSUMS.sha256`** from the **same** release page before you run anything.
 
-## Repository Layout
+The standalone **`ForgerEMS-Setup-v<version>.exe`** on the release is an **advanced / direct** asset for people who already know they want it; it is **not** the recommended first download.
 
-```text
-ForgerEMS/
-├── src/                        # .NET 8 WPF app
-├── backend/                    # PowerShell backend and Ventoy toolkit scripts
-├── manifests/                  # updates.json and schema files
-├── tools/                      # build, staging, and release scripts
-├── installer/                  # Inno Setup installer configuration
-├── docs/                       # product, backend, and release documentation
-├── .github/workflows/          # GitHub Actions CI/CD
-├── .gitignore
-├── README.md
-├── RELEASE_PROCESS.md
-└── LICENSE
-```
+**Helpful links**
 
-## Screenshots
+- [Releases](https://github.com/Forger-Digital-Solutions/ForgerEMS/releases)
+- [FAQ](docs/FAQ.md)
+- [Download troubleshooting](docs/DOWNLOAD_TROUBLESHOOTING.md)
+- [Beta tester quickstart](docs/BETA_TESTER_QUICKSTART.md)
+- [How in-app updates work](docs/UPDATE_SYSTEM.md)
 
-Screenshots are intentionally not committed yet.
+---
 
-- Main dashboard: `docs/screenshots/main-dashboard.png` (placeholder)
-- USB toolkit workflow: `docs/screenshots/usb-toolkit-workflow.png` (placeholder)
-- Release/installer flow: `docs/screenshots/release-installer.png` (placeholder)
+## Beta, SmartScreen, and trust
 
-## Build
+- **SmartScreen** and browser warnings are **common** for newer or less-known Windows software. ForgerEMS does **not** ask you to disable Windows security. Prefer the **ZIP → `START_HERE.bat`** path and verify hashes when you can.
+- **ZIP-first** releases include `VERIFY.txt` and checksum material so you can confirm what you downloaded.
+- **Local-first:** scans and reports are stored on **your PC** (typically under `%LOCALAPPDATA%\ForgerEMS\`). There is **no silent upload** of your logs or scans to Forger Digital Solutions.
+- **Automated quality:** the solution ships with a large automated test suite (`dotnet test` on `ForgerEMS.sln`); the exact count grows with each release.
 
-Prerequisites:
+**Pro / preview labels** during beta are for feedback; licensing is not final. See release notes under `docs/` for the build you are testing.
 
-- Windows 10/11
-- .NET 8 SDK
-- PowerShell 5.1 or newer
-- Inno Setup 6 for installer builds
+---
 
-Build and test the WPF app:
+## In-app updates
+
+The app can check **public GitHub Releases** for this repo (no account required for public releases). It compares your installed build to the **latest eligible release** (by **publish date**, then assets). **Nothing** is downloaded or installed unless **you** choose to. Details: [docs/UPDATE_SYSTEM.md](docs/UPDATE_SYSTEM.md).
+
+---
+
+## For developers
+
+Prerequisites: Windows 10/11, .NET 8 SDK, PowerShell 5.1+, Inno Setup 6 (for installer builds).
 
 ```powershell
 dotnet restore .\ForgerEMS.sln
@@ -87,39 +86,52 @@ dotnet build .\ForgerEMS.sln -c Release --no-incremental
 dotnet test .\ForgerEMS.sln -c Release --no-build
 ```
 
-Create a release staging folder without compiling the installer:
+Staging without compiling the installer:
 
 ```powershell
 .\tools\build-release.ps1 -DryRun
 ```
 
-Create a full local installer release (version defaults to `src/ForgerEMS.Wpf/ForgerEMS.Wpf.csproj` `<Version>`, currently **1.1.4**):
+Full local release (version follows `src/ForgerEMS.Wpf/ForgerEMS.Wpf.csproj`, currently **1.1.12-rc.3**):
 
 ```powershell
-.\tools\build-release.ps1
+.\tools\build-release.ps1 -Version 1.1.12-rc.3
 ```
 
-Installer output (when Inno Setup runs): `dist\installer\ForgerEMS-Setup-v<Version>.exe` (also copied beside other artifacts under `release\current\` for checksums).
+Release layout, CI, and operator checklists: [RELEASE_PROCESS.md](RELEASE_PROCESS.md), [BETA_RELEASE_CHECKLIST.md](BETA_RELEASE_CHECKLIST.md), [BETA_TESTING_GUIDE.md](BETA_TESTING_GUIDE.md).
 
-## Release
+**Operator-only Kyra online setup** (environment variables, local servers): [docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md](docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md) — not required for normal beta testing.
 
-Release outputs are written to:
+---
+
+## Repository layout
 
 ```text
-release/current/
-release/ventoy-core/<coreVersion>/
+ForgerEMS/
+├── src/                 # .NET 8 WPF app
+├── backend/             # PowerShell backend and toolkit scripts
+├── manifests/           # updates.json and schema files
+├── tools/               # build, staging, and release scripts
+├── installer/           # Inno Setup configuration
+├── docs/                # product and release documentation
+├── .github/workflows/   # GitHub Actions
+├── README.md
+├── RELEASE_PROCESS.md
+└── LICENSE
 ```
 
-The release script publishes the WPF app, builds a verified backend bundle, stages manifests, optionally compiles the Inno Setup installer, and writes SHA256 checksums for produced artifacts.
+## Screenshots (placeholders)
 
-`release/current` and `release/ventoy-core` are generated build outputs and should not be used as long-lived versioned snapshots in git history.
-Versioned installer/portable artifacts (for example `v1.1.4`) should be published through GitHub Releases from a tag.
+Add campaign-quality PNGs under `docs/screenshots/` when ready.
 
-See [RELEASE_PROCESS.md](RELEASE_PROCESS.md) for the operator release checklist.
-For beta tester safety guidance, see [BETA_TESTING_GUIDE.md](BETA_TESTING_GUIDE.md) and [BETA_RELEASE_CHECKLIST.md](BETA_RELEASE_CHECKLIST.md).
+| Shot | Suggested filename |
+|------|---------------------|
+| Main dashboard | `docs/screenshots/main-dashboard.png` |
+| USB Builder | `docs/screenshots/usb-toolkit-workflow.png` |
+| USB Intelligence | `docs/screenshots/usb-intelligence-pro.png` |
+| Kyra | `docs/screenshots/kyra-assistant.png` |
+| System Intelligence | `docs/screenshots/system-intelligence.png` |
 
 ## License
 
-Copyright © 2026 Forger Digital Solutions.
-
-This project is distributed under the license terms in [LICENSE](LICENSE).
+Copyright © 2026 Forger Digital Solutions. See [LICENSE](LICENSE).

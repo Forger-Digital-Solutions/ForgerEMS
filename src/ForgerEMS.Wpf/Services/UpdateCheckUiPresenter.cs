@@ -20,16 +20,26 @@ public sealed record UpdateCheckViewState(
     Visibility IgnoreButtonVisibility,
     Visibility ReleaseNotesVisibility,
     Visibility DiagnosticsHintVisibility,
+    /// <summary>Primary download URL (HTTPS ZIP preferred, else installer EXE).</summary>
     string PendingInstallerUrl,
     string PendingReleaseNotesUrl,
     string PendingVersionLabel,
     /// <summary>Safe, non-secret text for Diagnostics logs; null when nothing extra should be logged.</summary>
     string? SafeDiagnosticText,
     string InstalledVersionNormalized,
-    string? LatestVersionNormalized);
+    string? LatestVersionNormalized,
+    string PendingAdvancedInstallerUrl = "",
+    Visibility AdvancedInstallerDownloadVisibility = Visibility.Collapsed,
+    Visibility CopyZipLinkVisibility = Visibility.Collapsed,
+    string PendingZipUrlForClipboard = "",
+    Visibility CopyChecksumInstructionsVisibility = Visibility.Collapsed,
+    string ChecksumInstructionsClipboardText = "");
 
 public static class UpdateCheckUiPresenter
 {
+    public const string DefaultChecksumInstructions =
+        "Download CHECKSUMS.sha256 from the same GitHub Release, then verify the ZIP or EXE hash on your PC before running anything.";
+
     public static UpdateCheckViewState Map(
         UpdateCheckResult result,
         bool isManualCheck,
@@ -45,7 +55,7 @@ public static class UpdateCheckUiPresenter
             return MapFailure(result, isManualCheck, installedNorm, latestNorm);
         }
 
-        if (result.Outcome == UpdateCheckOutcome.UpdateAvailable && result.UpdateAvailable)
+        if (result is { Outcome: UpdateCheckOutcome.UpdateAvailable, UpdateAvailable: true })
         {
             return MapUpdateAvailable(result, installedNorm, latestNorm);
         }
@@ -61,9 +71,10 @@ public static class UpdateCheckUiPresenter
     {
         var status = result.FailureKind switch
         {
-            UpdateCheckFailureKind.Network => "Update check: offline or network issue.",
+            UpdateCheckFailureKind.Network => "Could not check for updates. Network unavailable.",
             UpdateCheckFailureKind.Timeout => "Update check timed out. Try again later.",
-            UpdateCheckFailureKind.ReleaseEndpointNotFound => "Update check: GitHub release endpoint not found.",
+            UpdateCheckFailureKind.ReleaseEndpointNotFound => "Update source could not be reached.",
+            UpdateCheckFailureKind.UpdateSourceUnreachable => "Update source could not be reached.",
             UpdateCheckFailureKind.AccessDeniedOrRateLimited => "Update check: access denied or rate limited.",
             UpdateCheckFailureKind.ReleaseMetadataInvalid => "Update check: invalid release metadata.",
             UpdateCheckFailureKind.Cancelled => "Update check was cancelled.",
@@ -77,6 +88,10 @@ public static class UpdateCheckUiPresenter
             diag = $"[Update] {result.FailureKind}: {result.DiagnosticDetail}";
         }
 
+        var detail = !string.IsNullOrWhiteSpace(result.ErrorMessage)
+            ? result.ErrorMessage!
+            : result.DiagnosticDetail ?? "Unknown error.";
+
         if (isManualCheck)
         {
             return new UpdateCheckViewState(
@@ -84,7 +99,7 @@ public static class UpdateCheckUiPresenter
                 LatestChannelSummary: null,
                 BannerVisibility: Visibility.Visible,
                 BannerTitle: "Update check failed",
-                BannerDetail: result.ErrorMessage ?? result.DiagnosticDetail ?? "Unknown error.",
+                BannerDetail: detail,
                 DownloadButtonVisibility: Visibility.Collapsed,
                 IgnoreButtonVisibility: Visibility.Collapsed,
                 ReleaseNotesVisibility: Visibility.Collapsed,
@@ -124,35 +139,109 @@ public static class UpdateCheckUiPresenter
                               string.Equals(notesUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
                               string.Equals(notesUri.Host, "github.com", StringComparison.OrdinalIgnoreCase);
 
+        var primaryUrl = result.HasRecommendedZipDownload
+            ? result.RecommendedZipDownloadUrl!
+            : string.Empty;
+
+        var advancedExe = result.HasActionableInstaller
+            ? result.InstallerDownloadUrl ?? string.Empty
+            : string.Empty;
+
         var extras = new List<string>();
-        if (!string.IsNullOrWhiteSpace(result.InstallerAssetName))
+        if (!string.IsNullOrWhiteSpace(result.ErrorMessage) &&
+            (result.VersionComparisonUncertain || result.RecommendedZipAssetMissing))
         {
-            extras.Add($"Installer asset: {result.InstallerAssetName}");
+            extras.Add(result.ErrorMessage);
         }
 
-        if (!result.HasActionableInstaller)
+        if (result.RecommendedZipAssetMissing && !string.IsNullOrWhiteSpace(result.ReleaseNotesUrl))
         {
-            extras.Add("No verified .exe installer URL on this release — open release notes or retry after publishing.");
+            extras.Add("Recommended ZIP asset was not found.");
         }
 
-        var detail = extras.Count == 0 ? string.Empty : string.Join(Environment.NewLine, extras);
+        if (result.HasRecommendedZipDownload && !string.IsNullOrWhiteSpace(result.RecommendedZipAssetName))
+        {
+            extras.Add($"Recommended download (ZIP): {result.RecommendedZipAssetName}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(advancedExe) && !string.IsNullOrWhiteSpace(result.InstallerAssetName))
+        {
+            extras.Add($"Advanced — direct installer (EXE, SmartScreen may be stricter): {result.InstallerAssetName}");
+        }
+        else if (result.HasActionableInstaller && !result.HasRecommendedZipDownload &&
+                 !string.IsNullOrWhiteSpace(result.InstallerAssetName))
+        {
+            extras.Add(
+                $"No ZIP on this release — use Advanced to download {result.InstallerAssetName}, or open the GitHub Release page.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.ChecksumsDownloadUrl))
+        {
+            extras.Add("Checksums available on the release (CHECKSUMS.sha256).");
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.DownloadInstructionsUrl))
+        {
+            extras.Add("Download instructions available (DOWNLOAD_BETA.txt on the release).");
+        }
+
+        if (extras.Count == 0)
+        {
+            extras.Add("Open the GitHub Release and download the ZIP bundle (recommended) or installer from published assets.");
+        }
+
+        var detail = string.Join(Environment.NewLine, extras);
+        var showPrimaryDownload = result.HasRecommendedZipDownload;
+        var zipForCopy = result.HasRecommendedZipDownload ? result.RecommendedZipDownloadUrl! : string.Empty;
+        var showCopyZip = result.HasRecommendedZipDownload ? Visibility.Visible : Visibility.Collapsed;
+        var showChecksumCopy = !string.IsNullOrWhiteSpace(result.ChecksumsDownloadUrl) ||
+                               result.HasRecommendedZipDownload ||
+                               result.HasActionableInstaller
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        var statusText = result.VersionComparisonUncertain
+            ? "A newer release may be available (release version could not be compared to this build)."
+            : $"Update available: v{ReleaseVersionParser.NormalizeLabel(result.LatestVersionLabel)}";
+
+        var bannerTitle = result.VersionComparisonUncertain
+            ? UpdateNotificationTextBuilder.BuildUncertainHeadline()
+            : UpdateNotificationTextBuilder.BuildHeadline(result.LatestVersionLabel);
 
         return new UpdateCheckViewState(
-            StatusText: $"Update available: v{ReleaseVersionParser.NormalizeLabel(result.LatestVersionLabel)}",
+            StatusText: statusText,
             LatestChannelSummary: ComputeLatestChannelSummary(result),
             BannerVisibility: Visibility.Visible,
-            BannerTitle: UpdateNotificationTextBuilder.BuildHeadline(result.LatestVersionLabel),
+            BannerTitle: bannerTitle,
             BannerDetail: detail,
-            DownloadButtonVisibility: result.HasActionableInstaller ? Visibility.Visible : Visibility.Collapsed,
+            DownloadButtonVisibility: showPrimaryDownload ? Visibility.Visible : Visibility.Collapsed,
             IgnoreButtonVisibility: Visibility.Visible,
             ReleaseNotesVisibility: safeReleasePage ? Visibility.Visible : Visibility.Collapsed,
             DiagnosticsHintVisibility: Visibility.Collapsed,
-            PendingInstallerUrl: result.InstallerDownloadUrl ?? string.Empty,
+            PendingInstallerUrl: primaryUrl,
             PendingReleaseNotesUrl: result.ReleaseNotesUrl,
             PendingVersionLabel: result.LatestVersionLabel,
             SafeDiagnosticText: null,
             InstalledVersionNormalized: installedNorm,
-            LatestVersionNormalized: latestNorm);
+            LatestVersionNormalized: latestNorm,
+            PendingAdvancedInstallerUrl: advancedExe,
+            AdvancedInstallerDownloadVisibility: string.IsNullOrWhiteSpace(advancedExe)
+                ? Visibility.Collapsed
+                : Visibility.Visible,
+            CopyZipLinkVisibility: showCopyZip,
+            PendingZipUrlForClipboard: zipForCopy,
+            CopyChecksumInstructionsVisibility: showChecksumCopy,
+            ChecksumInstructionsClipboardText: BuildChecksumClipboardText(result));
+    }
+
+    private static string BuildChecksumClipboardText(UpdateCheckResult result)
+    {
+        if (!string.IsNullOrWhiteSpace(result.ChecksumsDownloadUrl))
+        {
+            return DefaultChecksumInstructions + Environment.NewLine + "Checksum file: " + result.ChecksumsDownloadUrl;
+        }
+
+        return DefaultChecksumInstructions;
     }
 
     private static UpdateCheckViewState MapSuccessQuiet(
@@ -165,8 +254,8 @@ public static class UpdateCheckUiPresenter
         switch (result.Outcome)
         {
             case UpdateCheckOutcome.NoPublishedRelease:
-                status = result.ErrorMessage ?? "No public release found.";
-                latestChannel = "Latest release: —";
+                status = result.ErrorMessage ?? "No published ForgerEMS release was found yet.";
+                latestChannel = "Latest release: — · GitHub Releases";
                 break;
             case UpdateCheckOutcome.IgnoredVersion:
                 status = result.ErrorMessage ??
@@ -186,7 +275,7 @@ public static class UpdateCheckUiPresenter
                     : "Update check completed with no comparable version.";
                 if (string.IsNullOrWhiteSpace(result.LatestVersionLabel))
                 {
-                    latestChannel = "Latest release: —";
+                    latestChannel = "Latest release: — · GitHub Releases";
                 }
 
                 break;
@@ -224,9 +313,9 @@ public static class UpdateCheckUiPresenter
 
         if (!string.IsNullOrWhiteSpace(result.LatestVersionLabel))
         {
-            return $"Latest release: v{ReleaseVersionParser.NormalizeLabel(result.LatestVersionLabel)}";
+            return $"Latest release: v{ReleaseVersionParser.NormalizeLabel(result.LatestVersionLabel)} · GitHub Releases";
         }
 
-        return "Latest release: —";
+        return "Latest release: — · GitHub Releases";
     }
 }

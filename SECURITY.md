@@ -10,6 +10,8 @@ Security fixes are prioritized for the newest supported release line.
 Please report security issues privately and do not open a public issue first.
 
 - Email: `security@forgerdigitalsolutions.com`
+
+For **non-security beta feedback** (bugs, UX, logs), use **ForgerDigitalSolutions@outlook.com** as described in the app and [README.md](README.md) — not the security inbox.
 - Subject: `ForgerEMS Security Report`
 - Include:
   - Affected version/commit

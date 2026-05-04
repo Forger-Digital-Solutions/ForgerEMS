@@ -31,6 +31,8 @@ public sealed class BetaSupportInfoTests
     {
         Assert.Contains("API keys", BetaSupportInfo.DoNotEmailSecretsWarning, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("passwords", BetaSupportInfo.DoNotEmailSecretsWarning, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("tokens", BetaSupportInfo.DoNotEmailSecretsWarning, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("product keys", BetaSupportInfo.DoNotEmailSecretsWarning, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

@@ -29,7 +29,8 @@ public sealed class UpdateCheckUiPresenterTests
         Assert.Equal(Visibility.Collapsed, s.IgnoreButtonVisibility);
         Assert.Equal(Visibility.Collapsed, s.ReleaseNotesVisibility);
         Assert.Equal(Visibility.Collapsed, s.DiagnosticsHintVisibility);
-        Assert.Equal("Latest release: v1.1.4", s.LatestChannelSummary);
+        Assert.Contains("Latest release: v1.1.4", s.LatestChannelSummary);
+        Assert.Contains("GitHub Releases", s.LatestChannelSummary, System.StringComparison.OrdinalIgnoreCase);
         Assert.Equal("1.1.4", s.InstalledVersionNormalized);
         Assert.Equal("1.1.4", s.LatestVersionNormalized);
     }
@@ -54,7 +55,7 @@ public sealed class UpdateCheckUiPresenterTests
     }
 
     [Fact]
-    public void UpdateAvailable_WithInstaller_ShowsDownload_AndGithubNotes()
+    public void UpdateAvailable_ExeOnly_PrimaryDownloadHidden_AdvancedShowsInstaller()
     {
         var result = new UpdateCheckResult
         {
@@ -73,12 +74,14 @@ public sealed class UpdateCheckUiPresenterTests
         Assert.Equal(Visibility.Visible, s.BannerVisibility);
         Assert.NotNull(s.BannerTitle);
         Assert.Contains("ForgerEMS", s.BannerTitle, System.StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(Visibility.Visible, s.DownloadButtonVisibility);
+        Assert.Equal(Visibility.Collapsed, s.DownloadButtonVisibility);
         Assert.Equal(Visibility.Visible, s.IgnoreButtonVisibility);
         Assert.Equal(Visibility.Visible, s.ReleaseNotesVisibility);
         Assert.Equal(Visibility.Collapsed, s.DiagnosticsHintVisibility);
-        Assert.False(string.IsNullOrEmpty(s.PendingInstallerUrl));
+        Assert.True(string.IsNullOrEmpty(s.PendingInstallerUrl));
         Assert.Contains("ForgerEMS-Setup.exe", s.BannerDetail, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(Visibility.Visible, s.AdvancedInstallerDownloadVisibility);
+        Assert.Contains("ForgerEMS-Setup.exe", s.PendingAdvancedInstallerUrl, System.StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -99,7 +102,7 @@ public sealed class UpdateCheckUiPresenterTests
 
         Assert.Equal(Visibility.Collapsed, s.DownloadButtonVisibility);
         Assert.Equal(Visibility.Visible, s.IgnoreButtonVisibility);
-        Assert.Contains("No verified .exe", s.BannerDetail, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("GitHub Release", s.BannerDetail, System.StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -115,8 +118,9 @@ public sealed class UpdateCheckUiPresenterTests
 
         var s = UpdateCheckUiPresenter.Map(result, isManualCheck: false, Installed);
 
-        Assert.Contains("No public", s.StatusText, System.StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("Latest release: —", s.LatestChannelSummary);
+        Assert.Contains("release", s.StatusText, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Latest release: —", s.LatestChannelSummary);
+        Assert.Contains("GitHub Releases", s.LatestChannelSummary, System.StringComparison.OrdinalIgnoreCase);
         Assert.Equal(Visibility.Collapsed, s.BannerVisibility);
     }
 
@@ -198,7 +202,49 @@ public sealed class UpdateCheckUiPresenterTests
 
         var s = UpdateCheckUiPresenter.Map(result, isManualCheck: true, Installed);
 
-        Assert.Contains("endpoint", s.StatusText, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("reached", s.StatusText, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void UpdateSourceUnreachable_Manual_StatusIsFriendly()
+    {
+        var result = new UpdateCheckResult
+        {
+            Succeeded = false,
+            Outcome = UpdateCheckOutcome.Failed,
+            FailureKind = UpdateCheckFailureKind.UpdateSourceUnreachable,
+            ErrorMessage = "Update source could not be reached."
+        };
+
+        var s = UpdateCheckUiPresenter.Map(result, isManualCheck: true, Installed);
+
+        Assert.Contains("reached", s.StatusText, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void UpdateAvailable_WithBetaZip_ShowsCopyZip_AndPrimaryIsZip()
+    {
+        var result = new UpdateCheckResult
+        {
+            Succeeded = true,
+            Outcome = UpdateCheckOutcome.UpdateAvailable,
+            UpdateAvailable = true,
+            LatestVersionLabel = "v1.2.0",
+            ReleaseNotesUrl = "https://github.com/Forger-Digital-Solutions/ForgerEMS/releases/tag/v1.2.0",
+            RecommendedZipDownloadUrl = "https://github.com/x/y/releases/download/v1.2.0/ForgerEMS-Beta-v1.2.0.zip",
+            RecommendedZipAssetName = "ForgerEMS-Beta-v1.2.0.zip",
+            InstallerDownloadUrl = "https://github.com/x/y/releases/download/v1.2.0/ForgerEMS-Setup-v1.2.0.exe",
+            InstallerAssetName = "ForgerEMS-Setup-v1.2.0.exe",
+            ChecksumsDownloadUrl = "https://github.com/x/y/releases/download/v1.2.0/CHECKSUMS.sha256"
+        };
+
+        var s = UpdateCheckUiPresenter.Map(result, isManualCheck: true, Installed);
+
+        Assert.Equal(Visibility.Visible, s.CopyZipLinkVisibility);
+        Assert.Contains("ForgerEMS-Beta-v1.2.0.zip", s.PendingInstallerUrl, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(Visibility.Visible, s.AdvancedInstallerDownloadVisibility);
+        Assert.Contains("Advanced", s.BannerDetail, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Checksums", s.BannerDetail, System.StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -251,5 +297,48 @@ public sealed class UpdateCheckUiPresenterTests
         Assert.Equal(Visibility.Collapsed, s.BannerVisibility);
         Assert.Null(s.BannerTitle);
         Assert.Equal(Visibility.Collapsed, s.DiagnosticsHintVisibility);
+    }
+
+    [Fact]
+    public void UpdateAvailable_VersionUncertain_UsesUncertainHeadline_AndStatus()
+    {
+        var result = new UpdateCheckResult
+        {
+            Succeeded = true,
+            Outcome = UpdateCheckOutcome.UpdateAvailable,
+            UpdateAvailable = true,
+            LatestVersionLabel = "not-a-version",
+            ReleaseNotesUrl = "https://github.com/Forger-Digital-Solutions/ForgerEMS/releases/tag/not-a-version",
+            VersionComparisonUncertain = true,
+            ErrorMessage = "A newer release may be available (the release tag could not be parsed as a version)."
+        };
+
+        var s = UpdateCheckUiPresenter.Map(result, isManualCheck: true, Installed);
+
+        Assert.Contains("newer release may be available", s.StatusText, System.StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(s.BannerTitle);
+        Assert.Contains("may be available", s.BannerTitle, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(result.ErrorMessage, s.BannerDetail, System.StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UpdateAvailable_RecommendedZipMissing_ShowsExplicitWarning()
+    {
+        var result = new UpdateCheckResult
+        {
+            Succeeded = true,
+            Outcome = UpdateCheckOutcome.UpdateAvailable,
+            UpdateAvailable = true,
+            LatestVersionLabel = "v1.2.0",
+            ReleaseNotesUrl = "https://github.com/Forger-Digital-Solutions/ForgerEMS/releases/tag/v1.2.0",
+            RecommendedZipDownloadUrl = "https://github.com/x/y/releases/download/v1.2.0/odd.zip",
+            RecommendedZipAssetName = "odd.zip",
+            RecommendedZipAssetMissing = true,
+            RecommendedZipPatternMatched = false
+        };
+
+        var s = UpdateCheckUiPresenter.Map(result, isManualCheck: true, Installed);
+
+        Assert.Contains("Recommended ZIP asset was not found.", s.BannerDetail, System.StringComparison.Ordinal);
     }
 }

@@ -4,6 +4,10 @@ namespace VentoyToolkitSetup.Wpf.Models;
 
 public static class UsbTargetSafety
 {
+    /// <summary>User-facing explanation when the Windows OS volume is excluded from USB/Ventoy actions (Kyra + UI).</summary>
+    public const string WindowsOsDriveBlockedExplanation =
+        "ForgerEMS blocks the Windows OS drive from USB build actions to prevent wiping the machine.";
+
     public static string? GetExecutionBlockReason(UsbTargetInfo? target)
     {
         if (target is null)
@@ -13,7 +17,7 @@ public static class UsbTargetSafety
 
         if (IsProtectedSystemDrive(target))
         {
-            return "C:\\ is the protected Windows system drive and can never be used by ForgerEMS.";
+            return WindowsOsDriveBlockedExplanation;
         }
 
         var hasVentoyEfiLabel = target.Label.Contains("VTOYEFI", StringComparison.OrdinalIgnoreCase);
@@ -73,6 +77,27 @@ public static class UsbTargetSafety
         if (!target.IsLikelyUsb)
         {
             blockReason = "Target is not detected as USB media.";
+            return false;
+        }
+
+        var mediaOkForBenchmark =
+            target.IsRemovableMedia ||
+            target.IsPreferredUsbTarget ||
+            target.IsLargeDataPartition ||
+            target.HasVentoyStyleLargeDataPartition;
+
+        if (!mediaOkForBenchmark)
+        {
+            blockReason =
+                "Benchmark runs only on removable USB volumes or a recognized large Ventoy/USB data partition.";
+            return false;
+        }
+
+        const long benchmarkMinFreeBytes = (128L + 128L) * 1024 * 1024;
+        if (target.FreeBytes < benchmarkMinFreeBytes)
+        {
+            blockReason =
+                $"Not enough free space for a USB file benchmark (need about {UsbTargetInfo.FormatBytes(benchmarkMinFreeBytes)} free).";
             return false;
         }
 

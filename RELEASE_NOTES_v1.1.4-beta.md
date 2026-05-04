@@ -1,5 +1,8 @@
 # ForgerEMS Beta v1.1.4 — Whole-App Intelligence Preview
 
+Recommended download for beta testers:
+Download ForgerEMS-v1.1.4-beta.1.zip, extract it, then double-click START_HERE.bat.
+
 ## Overview
 
 This pre-release focuses on **Kyra** AI orchestration, **System Intelligence**-driven answers, safer **USB / toolkit** workflows, **diagnostics** hardening, and **in-app update** awareness—while keeping **offline Local Kyra** fully usable without API keys.

@@ -1,0 +1,153 @@
+<Window x:Class="VentoyToolkitSetup.Wpf.UsbMappingWizardWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="USB Port Mapping Wizard"
+        Width="560"
+        Height="640"
+        MinHeight="520"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        FontFamily="Segoe UI">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <Style x:Key="WizardBtn" TargetType="Button">
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="Margin" Value="0,0,8,8" />
+            <Setter Property="MinWidth" Value="100" />
+        </Style>
+    </Window.Resources>
+    <Border Padding="20" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10" Margin="16">
+        <DockPanel>
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <!-- Welcome -->
+                    <StackPanel Visibility="{Binding IsWelcomeStep, Converter={StaticResource BoolToVis}}">
+                        <TextBlock FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource HeroTextBrush}" Text="USB Port Mapping Wizard" TextWrapping="Wrap" />
+                        <TextBlock Margin="0,12,0,0" Foreground="{DynamicResource PanelTextBrush}" TextWrapping="Wrap"
+                                   Text="ForgerEMS will help identify which physical USB port your toolkit drive is using." />
+                        <TextBlock Margin="0,16,0,0" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Please note" />
+                        <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" TextWrapping="Wrap"
+                                   Text="• Use only one toolkit USB during mapping when possible.&#x0a;• Avoid hubs/docks for best accuracy.&#x0a;• Do not remove system drives.&#x0a;• Mapping is best-effort on Windows hardware." />
+                        <StackPanel Margin="0,20,0,0" Orientation="Horizontal">
+                            <Button Style="{StaticResource WizardBtn}" Content="Start Mapping" Command="{Binding StartMappingCommand}" />
+                            <Button Style="{StaticResource WizardBtn}" Content="Cancel" Command="{Binding CancelCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Select device -->
+                    <StackPanel Visibility="{Binding IsSelectDeviceStep, Converter={StaticResource BoolToVis}}">
+                        <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource HeroTextBrush}" Text="Select USB Device" />
+                        <TextBlock Margin="0,10,0,8" Foreground="{DynamicResource PanelTextBrush}" Text="Which USB device do you want to map?" TextWrapping="Wrap" />
+                        <ListBox MinHeight="180" ItemsSource="{Binding DeviceOptions}" SelectedItem="{Binding SelectedDevice, Mode=TwoWay}"
+                                 DisplayMemberPath="SummaryLine" />
+                        <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                            <Button Style="{StaticResource WizardBtn}" Content="Continue" Command="{Binding ContinueSelectDeviceCommand}" />
+                            <Button Style="{StaticResource WizardBtn}" Content="Cancel" Command="{Binding CancelCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Confirm current port -->
+                    <StackPanel Visibility="{Binding IsConfirmPortStep, Converter={StaticResource BoolToVis}}">
+                        <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource HeroTextBrush}" Text="Confirm Current Port" />
+                        <TextBlock Margin="0,10,0,12" Foreground="{DynamicResource PanelTextBrush}" TextWrapping="Wrap"
+                                   Text="Leave the USB plugged into the port you want to identify, then click Capture Current Port." />
+                        <Button HorizontalAlignment="Left" Style="{StaticResource WizardBtn}" Content="Capture Current Port" Command="{Binding CaptureCurrentPortCommand}" />
+                        <TextBlock Margin="0,12,0,0" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="After capture" />
+                        <TextBlock Foreground="{DynamicResource PanelTextBrush}" Text="{Binding CaptureSummary}" TextWrapping="Wrap" />
+                        <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" Text="{Binding ConfidenceAfterCapture}" TextWrapping="Wrap" />
+                        <StackPanel Margin="0,16,0,0" Orientation="Horizontal">
+                            <Button Style="{StaticResource WizardBtn}" Content="Next" Command="{Binding NextAfterCaptureCommand}" />
+                            <Button Style="{StaticResource WizardBtn}" Content="Cancel" Command="{Binding CancelCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Move USB -->
+                    <StackPanel Visibility="{Binding IsMoveUsbStep, Converter={StaticResource BoolToVis}}">
+                        <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource HeroTextBrush}" Text="Move USB" />
+                        <TextBlock Margin="0,10,0,12" Foreground="{DynamicResource PanelTextBrush}" TextWrapping="Wrap"
+                                   Text="Now move the SAME USB device to the physical port you want to test or label." />
+                        <CheckBox Foreground="{DynamicResource PanelTextBrush}" IsChecked="{Binding UserConfirmedUsbMoved, Mode=TwoWay}"
+                                  Content="I moved the USB device." />
+                        <StackPanel Margin="0,16,0,0" Orientation="Horizontal">
+                            <Button Style="{StaticResource WizardBtn}" Content="Detect Port Change" Command="{Binding DetectPortChangeCommand}" />
+                            <Button Style="{StaticResource WizardBtn}" Content="Cancel" Command="{Binding CancelCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Detect -->
+                    <StackPanel Visibility="{Binding IsDetectStep, Converter={StaticResource BoolToVis}}">
+                        <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource HeroTextBrush}" Text="Detect Change" />
+                        <TextBlock Margin="0,12,0,0" FontWeight="SemiBold" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding DetectChangePrimaryStatus}" TextWrapping="Wrap" />
+                        <TextBlock Margin="0,4,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" Text="{Binding DetectChangeSubStatus}" TextWrapping="Wrap" />
+                        <ProgressBar Margin="0,10,0,0"
+                                     Height="6"
+                                     IsIndeterminate="{Binding ShowDetectSpinner}"
+                                     Visibility="{Binding ShowDetectSpinner, Converter={StaticResource BoolToVis}}" />
+                        <TextBlock Margin="0,10,0,0" Foreground="{DynamicResource PanelTextBrush}" TextWrapping="Wrap"
+                                   Text="Move the USB to another port, then click Detect Port Change on the previous step when you are ready." />
+                        <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowDetectChangeDebugDetails, Converter={StaticResource BoolToVis}}">
+                            <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Debug (development build)" />
+                            <TextBlock Margin="0,4,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" FontFamily="Consolas" FontSize="11" Text="{Binding DetectChangeDebugSummary}" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowDetectSuccessDetails, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Foreground="{DynamicResource PanelTextBrush}" Text="Port change detected." FontWeight="SemiBold" />
+                            <TextBlock Margin="0,8,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" TextWrapping="Wrap"
+                                       Text="{Binding OldPortKeyShort, StringFormat=Previous port ref: {0}}" />
+                            <TextBlock Foreground="{DynamicResource PanelMutedTextBrush}" TextWrapping="Wrap"
+                                       Text="{Binding NewPortKeyShort, StringFormat=New port ref: {0}}" />
+                            <TextBlock Foreground="{DynamicResource PanelMutedTextBrush}" TextWrapping="Wrap"
+                                       Text="{Binding SpeedClassDisplay, StringFormat=Speed class: {0}}" />
+                            <TextBlock Foreground="{DynamicResource PanelMutedTextBrush}" TextWrapping="Wrap"
+                                       Text="{Binding ConfidenceTierDisplay, StringFormat=Confidence tier: {0}}" />
+                            <TextBlock Margin="0,8,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding RecommendationDisplay}" TextWrapping="Wrap" />
+                            <Button Margin="0,16,0,0" HorizontalAlignment="Left" Style="{StaticResource WizardBtn}" Content="Next" Command="{Binding NextToLabelCommand}" />
+                        </StackPanel>
+                        <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowDetectFailureDetails, Converter={StaticResource BoolToVis}}">
+                            <TextBlock Foreground="#FFFFB4A8" TextWrapping="Wrap" Text="{Binding FailureMessage}" />
+                            <TextBlock Margin="0,8,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" Text="{Binding DetectionDetail}" TextWrapping="Wrap" />
+                            <TextBlock Margin="0,8,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" Text="{Binding RecommendationDisplay}" TextWrapping="Wrap" />
+                            <StackPanel Margin="0,16,0,0" Orientation="Horizontal">
+                                <Button Style="{StaticResource WizardBtn}" Content="Try Again" Command="{Binding TryAgainCommand}" />
+                                <Button Style="{StaticResource WizardBtn}" Content="Use Current Port Anyway" Command="{Binding UseCurrentPortAnywayCommand}" />
+                                <Button Style="{StaticResource WizardBtn}" Content="Save Manual Label" Command="{Binding SaveManualLabelPathCommand}" />
+                                <Button Style="{StaticResource WizardBtn}" Content="Back" Command="{Binding BackFromDetectCommand}" />
+                            </StackPanel>
+                            <Button Margin="0,8,0,0" HorizontalAlignment="Left" Style="{StaticResource WizardBtn}" Content="Cancel" Command="{Binding CancelCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Label -->
+                    <StackPanel Visibility="{Binding IsLabelStep, Converter={StaticResource BoolToVis}}">
+                        <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource HeroTextBrush}" Text="Label Port" />
+                        <TextBlock Margin="0,10,0,8" Foreground="{DynamicResource PanelTextBrush}" Text="What should we call this port?" TextWrapping="Wrap" />
+                        <TextBlock Foreground="{DynamicResource PanelMutedTextBrush}" FontSize="11" TextWrapping="Wrap"
+                                   Text="Examples: Rear Blue USB 3 · Front Left USB · USB-C Left Side · Dock USB Port · Laptop Right USB" />
+                        <TextBox Margin="0,10,0,12" MinHeight="32" Text="{Binding PortLabelDraft, UpdateSourceTrigger=PropertyChanged}" />
+                        <StackPanel Orientation="Horizontal">
+                            <Button Style="{StaticResource WizardBtn}" Content="Save Port Label" Command="{Binding SavePortLabelCommand}" />
+                            <Button Style="{StaticResource WizardBtn}" Content="Cancel" Command="{Binding CancelCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Done -->
+                    <StackPanel Visibility="{Binding IsDoneStep, Converter={StaticResource BoolToVis}}">
+                        <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource HeroTextBrush}" Text="Saved" />
+                        <TextBlock Margin="0,12,0,0" Foreground="{DynamicResource PanelTextBrush}" TextWrapping="Wrap"
+                                   Text="{Binding DoneResult.Label, StringFormat=Label: {0}}" />
+                        <TextBlock Foreground="{DynamicResource PanelTextBrush}" TextWrapping="Wrap"
+                                   Text="{Binding DoneResult.ConfidenceTier, StringFormat=Confidence: {0}}" />
+                        <TextBlock Foreground="{DynamicResource PanelTextBrush}" TextWrapping="Wrap"
+                                   Text="{Binding DoneResult.BenchmarkStatus, StringFormat=Benchmark status: {0}}" />
+                        <TextBlock Margin="0,8,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" Text="{Binding DoneResult.Recommendation, Mode=OneWay}" TextWrapping="Wrap" />
+                        <StackPanel Margin="0,16,0,0" Orientation="Horizontal">
+                            <Button Style="{StaticResource WizardBtn}" Content="Run Benchmark on This Port" Command="{Binding RunBenchmarkOnThisPortCommand}" />
+                            <Button Style="{StaticResource WizardBtn}" Content="Close" Command="{Binding CloseCommand}" />
+                            <Button Style="{StaticResource WizardBtn}" Content="Map Another Port" Command="{Binding MapAnotherPortCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </DockPanel>
+    </Border>
+</Window>

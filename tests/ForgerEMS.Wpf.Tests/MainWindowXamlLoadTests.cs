@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using VentoyToolkitSetup.Wpf;
 using VentoyToolkitSetup.Wpf.Services;
+using VentoyToolkitSetup.Wpf.Services.Intelligence;
 using VentoyToolkitSetup.Wpf.ViewModels;
 
 namespace ForgerEMS.Wpf.Tests;
@@ -50,7 +51,10 @@ public sealed class MainWindowXamlLoadTests
                     runtimeService,
                     usbBenchmarkService,
                     copilotService,
-                    copilotProviderRegistry);
+                    copilotProviderRegistry,
+                    wslExecutor: null,
+                    usbIntelligenceService: new UsbIntelligenceService(),
+                    autoIntelligenceOrchestrator: new NoOpAutoIntelligenceOrchestrator());
 
                 var mainWindow = new VentoyToolkitSetup.Wpf.MainWindow(mainViewModel);
                 var readableCombo = mainWindow.TryFindResource("ReadableComboBoxStyle") as Style;
