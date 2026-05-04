@@ -29,6 +29,7 @@ public static class UsbBenchmarkProfileSync
             return new UsbIntelligenceBenchmarkResult
             {
                 Succeeded = true,
+                EndKind = UsbNativeBenchmarkEndKind.Success,
                 WriteSpeedMBps = result.WriteSpeedMBps,
                 ReadSpeedMBps = result.ReadSpeedMBps,
                 DurationMs = result.BenchmarkDurationMs,

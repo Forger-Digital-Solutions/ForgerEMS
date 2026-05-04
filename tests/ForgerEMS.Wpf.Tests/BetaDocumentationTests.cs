@@ -67,10 +67,31 @@ public sealed class BetaDocumentationTests
     public void Readme_MentionsCurrentBetaAndFaq()
     {
         var text = File.ReadAllText(Path.Combine(RepoRoot, "README.md"));
-        Assert.Contains("1.1.12-rc.3", text, StringComparison.Ordinal);
+        Assert.Contains("1.2.0-preview.1", text, StringComparison.Ordinal);
         Assert.Contains("docs/DOWNLOAD_TROUBLESHOOTING.md", text, StringComparison.Ordinal);
         Assert.Contains("docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md", text, StringComparison.Ordinal);
         Assert.Contains("docs/FAQ.md", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PublicPreview_v1_2_0_Docs_Exist()
+    {
+        var root = RepoRoot;
+        foreach (var name in new[]
+                 {
+                     "ENVIRONMENT.md",
+                     "ARCHITECTURE-INTEGRATION-v1.2.0.md",
+                     "UPDATE-SYSTEM-v1.2.0.md",
+                     "PUBLIC_PREVIEW_CHECKLIST_v1.2.0.md",
+                     "marketing/KICKSTARTER-DRAFT.md",
+                     "marketing/SOCIAL-POSTS.md",
+                     "marketing/SCREENSHOT-SHOTLIST.md",
+                     "marketing/PUBLIC-FAQ.md",
+                     "PUBLIC_PREVIEW_MANUAL_QA_v1.2.0-preview.1.md"
+                 })
+        {
+            Assert.True(File.Exists(Path.Combine(root, "docs", name)), $"Missing docs/{name}");
+        }
     }
 
     [Fact]

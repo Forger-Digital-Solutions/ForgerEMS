@@ -391,7 +391,7 @@ $checksumsPath = Join-Path $releaseRoot "CHECKSUMS.sha256"
 $installerOutputDir = Join-Path $distRoot "installer"
 $installerReleaseName = "ForgerEMS-Setup-v{0}.exe" -f $Version
 $installerReleasePath = Join-Path $releaseRoot $installerReleaseName
-$releaseIdentifierLabel = [string]::Concat("ForgerEMS Beta v", $Version, " ", [char]0x2014, " Beta readiness: ZIP-first download, dual ZIP assets, first-run guidance")
+$releaseIdentifierLabel = "ForgerEMS v1.2.0 Public Preview - package $Version (ZIP-first technician bundle)"
 
 Write-Step "Release version: $Version"
 Write-Step "Restoring solution"
@@ -465,7 +465,7 @@ $metadata = [ordered]@{
     publisher = "Forger Digital Solutions"
     version = $Version
     releaseIdentifier = $releaseIdentifierLabel
-    channel = "Beta"
+    channel = "preview"
     backendVersion = $backendVersion
     runtime = $Runtime
     configuration = $Configuration

@@ -1,4 +1,4 @@
-# ForgerEMS — Privacy overview (Beta)
+# ForgerEMS — Privacy overview (Public Preview)
 
 **Built by Forger Digital Solutions.** This is a practical summary of how the app handles data on your PC; it is **not** a substitute for a formal privacy policy review by your counsel.
 
@@ -10,6 +10,7 @@
 
 Under normal, **offline-first** use:
 
+- **Telemetry / crash reporting** default to **off** unless you explicitly set `FORGEREMS_TELEMETRY_ENABLED` / `FORGEREMS_CRASH_REPORTING_ENABLED` (see [ENVIRONMENT.md](ENVIRONMENT.md)).
 - Forger Digital Solutions **does not** operate a hidden analytics pipeline that continuously uploads your desktop activity.  
 - The app **does not** collect or centralize **API keys**, **passwords**, or **product keys** for upload to Forger Digital Solutions.  
 - **Local scans** (System Intelligence, diagnostics, toolkit health) produce files on **your disk** — they are **not** silently exfiltrated to us when you are simply using those features.

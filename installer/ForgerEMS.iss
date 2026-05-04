@@ -4,15 +4,15 @@
 #define MyAppId "{{9B46E50F-0EF6-4E37-92BB-13C29D43F20B}"
 
 #ifndef AppVersion
-  #define AppVersion "1.1.4"
+  #define AppVersion "1.2.0-preview.1"
 #endif
 
 #ifndef AppVersionInfo
-  #define AppVersionInfo "1.1.4.0"
+  #define AppVersionInfo "1.2.0.0"
 #endif
 
 #ifndef ReleaseIdentifier
-  #define ReleaseIdentifier "ForgerEMS Beta v1.1.4 - Whole-App Intelligence Preview"
+  #define ReleaseIdentifier "ForgerEMS v1.2.0 Public Preview"
 #endif
 
 #define MyAppIconName "ForgerEMS-v" + AppVersion + "-transparent.ico"

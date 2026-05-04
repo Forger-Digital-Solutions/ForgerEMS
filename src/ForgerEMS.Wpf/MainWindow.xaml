@@ -1172,13 +1172,12 @@
                 <Border Grid.Column="3"
                         Grid.Row="0"
                         Margin="0,0,12,0"
-                        Padding="10,4"
+                        Style="{StaticResource StatusPillBorderStyle}"
                         VerticalAlignment="Center"
                         Background="{Binding StatusBackground}"
                         BorderBrush="{Binding StatusBorderBrush}"
-                        BorderThickness="1"
-                        CornerRadius="999">
-                    <TextBlock FontSize="12"
+                        BorderThickness="1">
+                    <TextBlock Style="{StaticResource StatusPillTextStyle}"
                                FontWeight="Bold"
                                Foreground="{Binding StatusForeground}"
                                Text="{Binding CurrentTaskState}"
@@ -1226,6 +1225,12 @@
                                Foreground="#99B8CCE8"
                                TextWrapping="Wrap"
                                Text="{Binding SupportEmailDoNotSecretsText, Mode=OneWay}" />
+                    <TextBlock Margin="0,6,0,0"
+                               FontSize="11"
+                               Foreground="#CCF0F7FF"
+                               FontStyle="Italic"
+                               TextWrapping="Wrap"
+                               Text="{Binding PublicPreviewBannerText, Mode=OneWay}" />
                 </StackPanel>
             </Grid>
         </Border>
@@ -1540,6 +1545,7 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
 
                                 <TextBlock Grid.Row="0" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Drive" />
@@ -1580,12 +1586,14 @@
 
                                 <TextBlock Grid.Row="12" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Benchmark" />
                                 <TextBlock Grid.Row="12" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.BenchmarkStatusDisplay, TargetNullValue=Queued}" />
+                                <TextBlock Grid.Row="13" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Benchmark summary" />
+                                <TextBlock Grid.Row="13" Grid.Column="1" Margin="0,0,0,8" Foreground="{DynamicResource PanelMutedTextBrush}" Text="{Binding SelectedUsbTarget.BenchmarkUiSummaryLine, TargetNullValue=—}" TextWrapping="Wrap" />
 
-                                <TextBlock Grid.Row="13" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Test size" />
-                                <TextBlock Grid.Row="13" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.BenchmarkTestSizeDisplay, TargetNullValue=Not tested}" />
+                                <TextBlock Grid.Row="14" Margin="0,0,14,8" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Test size" />
+                                <TextBlock Grid.Row="14" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.BenchmarkTestSizeDisplay, TargetNullValue=Not tested}" />
 
-                                <TextBlock Grid.Row="14" Margin="0,0,14,0" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Last tested" />
-                                <TextBlock Grid.Row="14" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.BenchmarkLastTestedDisplay, TargetNullValue=Never}" />
+                                <TextBlock Grid.Row="15" Margin="0,0,14,0" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Last tested" />
+                                <TextBlock Grid.Row="15" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SelectedUsbTarget.BenchmarkLastTestedDisplay, TargetNullValue=Never}" />
                             </Grid>
 
                             <Border Padding="12"
@@ -1808,6 +1816,52 @@
                                            TextWrapping="Wrap" />
                             </Border>
 
+                            <Border Margin="0,0,0,10"
+                                    Padding="12"
+                                    Visibility="{Binding ManagedDownloadRetryPanelVisibility}"
+                                    Background="#B80A101A"
+                                    BorderBrush="{DynamicResource PanelBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="10">
+                                <StackPanel>
+                                    <TextBlock FontWeight="SemiBold"
+                                               Foreground="{DynamicResource PanelLabelBrush}"
+                                               Text="Managed downloads — partial staging" />
+                                    <TextBlock Margin="0,6,0,8"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource PanelTextBrush}"
+                                               Text="{Binding ManagedDownloadPartialBannerText}"
+                                               TextWrapping="Wrap" />
+                                    <ItemsControl ItemsSource="{Binding ManagedDownloadFailedRows}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel Margin="0,0,0,8">
+                                                    <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding Name}" />
+                                                    <TextBlock FontSize="11" Foreground="{DynamicResource PanelMutedTextBrush}" Text="{Binding SafeReason}" TextWrapping="Wrap" />
+                                                    <TextBlock FontSize="11"
+                                                               Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                               Text="{Binding FallbackRelativePath, StringFormat=Fallback: {0}}"
+                                                               TextWrapping="Wrap" />
+                                                    <TextBlock FontSize="11"
+                                                               Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                               Text="{Binding Retryable, StringFormat=Retryable: {0}}" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <WrapPanel>
+                                        <Button Margin="0,4,8,0"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Content="Retry Failed Downloads"
+                                                Command="{Binding RetryFailedManagedDownloadsCommand}" />
+                                        <Button Margin="0,4,8,0"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Content="Open logs folder"
+                                                Command="{Binding OpenLogsFolderCommand}" />
+                                    </WrapPanel>
+                                </StackPanel>
+                            </Border>
+
                             <Border Padding="12"
                                     Background="#B80A101A"
                                     BorderBrush="{DynamicResource PanelBorderBrush}"
@@ -1844,12 +1898,12 @@
                                         </Grid.ColumnDefinitions>
                                         <Border DockPanel.Dock="Left"
                                                 Grid.Column="0"
-                                                Padding="10,4"
+                                                Style="{StaticResource StatusPillBorderStyle}"
                                                 Background="{Binding SystemIntelligenceStatusBackground}"
                                                 BorderBrush="{Binding SystemIntelligenceStatusBorderBrush}"
-                                                BorderThickness="1"
-                                                CornerRadius="999">
-                                            <TextBlock FontWeight="SemiBold"
+                                                BorderThickness="1">
+                                            <TextBlock Style="{StaticResource StatusPillTextStyle}"
+                                                       FontWeight="SemiBold"
                                                        Foreground="{Binding SystemIntelligenceStatusForeground}"
                                                        Text="{Binding SystemIntelligenceStatusText}" />
                                         </Border>
@@ -1989,12 +2043,15 @@
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <Border Grid.Column="0"
-                                                Padding="12,5"
+                                                Style="{StaticResource StatusPillBorderStyle}"
+                                                Padding="14,8"
+                                                HorizontalAlignment="Left"
+                                                VerticalAlignment="Center"
                                                 Background="{Binding ToolkitStatusBackground}"
                                                 BorderBrush="{Binding ToolkitStatusBorderBrush}"
-                                                BorderThickness="1"
-                                                CornerRadius="999">
-                                            <TextBlock FontWeight="SemiBold"
+                                                BorderThickness="1">
+                                            <TextBlock Style="{StaticResource StatusPillTextStyle}"
+                                                       FontWeight="SemiBold"
                                                        Foreground="{Binding ToolkitStatusForeground}"
                                                        Text="{Binding ToolkitStatusText}" />
                                         </Border>
@@ -2098,23 +2155,23 @@
                                                TextWrapping="Wrap" />
 
                                     <WrapPanel Margin="0,0,0,12">
-                                        <Border MinWidth="145" Margin="0,0,8,8" Padding="10,5" Background="#E8F7F3EA" BorderBrush="#FFD7B18E" BorderThickness="1" CornerRadius="9">
-                                            <TextBlock Foreground="#FF111111" FontWeight="SemiBold" Text="{Binding ToolkitInstalledCountText}" />
+                                        <Border MinWidth="145" Margin="0,0,8,8" Style="{StaticResource SuccessPillStyle}">
+                                            <TextBlock Style="{StaticResource StatusPillTextStyle}" Foreground="#FF14532D" FontWeight="SemiBold" Text="{Binding ToolkitInstalledCountText}" />
                                         </Border>
-                                        <Border MinWidth="175" Margin="0,0,8,8" Padding="10,5" Background="#FFFFF7ED" BorderBrush="#FFF59E0B" BorderThickness="1" CornerRadius="9">
-                                            <TextBlock Foreground="#FF92400E" FontWeight="SemiBold" Text="{Binding ToolkitMissingCountText}" />
+                                        <Border MinWidth="175" Margin="0,0,8,8" Style="{StaticResource WarningPillStyle}">
+                                            <TextBlock Style="{StaticResource StatusPillTextStyle}" Foreground="#FF92400E" FontWeight="SemiBold" Text="{Binding ToolkitMissingCountText}" />
                                         </Border>
-                                        <Border MinWidth="130" Margin="0,0,8,8" Padding="10,5" Background="#FFFFF7ED" BorderBrush="#FFF59E0B" BorderThickness="1" CornerRadius="9">
-                                            <TextBlock Foreground="#FF92400E" FontWeight="SemiBold" Text="{Binding ToolkitUpdatesCountText}" />
+                                        <Border MinWidth="130" Margin="0,0,8,8" Style="{StaticResource WarningPillStyle}">
+                                            <TextBlock Style="{StaticResource StatusPillTextStyle}" Foreground="#FF92400E" FontWeight="SemiBold" Text="{Binding ToolkitUpdatesCountText}" />
                                         </Border>
-                                        <Border MinWidth="120" Margin="0,0,8,8" Padding="10,5" Background="#FFFFF1F2" BorderBrush="#FFF87171" BorderThickness="1" CornerRadius="9">
-                                            <TextBlock Foreground="#FF991B1B" FontWeight="SemiBold" Text="{Binding ToolkitFailedCountText}" />
+                                        <Border MinWidth="120" Margin="0,0,8,8" Style="{StaticResource BlockedPillStyle}">
+                                            <TextBlock Style="{StaticResource StatusPillTextStyle}" Foreground="#FF991B1B" FontWeight="SemiBold" Text="{Binding ToolkitFailedCountText}" />
                                         </Border>
-                                        <Border MinWidth="120" Margin="0,0,8,8" Padding="10,5" Background="#FFFFF7ED" BorderBrush="#FFD7B18E" BorderThickness="1" CornerRadius="9">
-                                            <TextBlock Foreground="#FF7C3315" FontWeight="SemiBold" Text="{Binding ToolkitManualCountText}" />
+                                        <Border MinWidth="120" Margin="0,0,8,8" Style="{StaticResource PartialPillStyle}">
+                                            <TextBlock Style="{StaticResource StatusPillTextStyle}" Foreground="#FF7C3315" FontWeight="SemiBold" Text="{Binding ToolkitManualCountText}" />
                                         </Border>
-                                        <Border MinWidth="190" Margin="0,0,8,8" Padding="10,5" Background="#FFEFF6FF" BorderBrush="#FF67B7E8" BorderThickness="1" CornerRadius="9">
-                                            <TextBlock Foreground="#FF174E75" FontWeight="SemiBold" Text="{Binding ToolkitPlaceholderCountText}" />
+                                        <Border MinWidth="190" Margin="0,0,8,8" Style="{StaticResource WorkingPillStyle}">
+                                            <TextBlock Style="{StaticResource StatusPillTextStyle}" Foreground="#FF174E75" FontWeight="SemiBold" Text="{Binding ToolkitPlaceholderCountText}" />
                                         </Border>
                                     </WrapPanel>
 
@@ -2540,6 +2597,11 @@
                                     </GroupBox>
 
                                     <WrapPanel Margin="0,0,0,12">
+                                        <Button MinWidth="190"
+                                                Margin="0,0,8,8"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Content="Export Support Bundle"
+                                                Command="{Binding ExportSupportBundleCommand}" />
                                         <Button MinWidth="170"
                                                 Margin="0,0,8,8"
                                                 Content="Refresh Backend Context"
@@ -2880,6 +2942,14 @@
                                                Foreground="{DynamicResource PanelTextBrush}"
                                                TextWrapping="Wrap"
                                                Text="Privacy: Kyra defaults to local/offline rules. Optional online assistants only run when you enable them; use Kyra Advanced to see the active provider, redaction, and data-sharing toggles. Product keys, serials, and raw hardware IDs are not shown in summaries or sent to Kyra’s safe context." />
+                                    <GroupBox Margin="0,0,0,14" Header="Public Preview — feature maturity">
+                                        <ScrollViewer MaxHeight="220" VerticalScrollBarVisibility="Auto">
+                                            <TextBlock FontSize="11.5"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       Text="{Binding FeatureMaturityGuideText}"
+                                                       TextWrapping="Wrap" />
+                                        </ScrollViewer>
+                                    </GroupBox>
                                     <TextBlock Margin="0,0,0,10"
                                                FontSize="12"
                                                Foreground="{DynamicResource PanelMutedTextBrush}"
@@ -2919,6 +2989,36 @@
                                                        Text="{Binding LastUpdateCheckDisplayText}"
                                                        TextWrapping="Wrap" />
                                             <TextBlock Margin="0,6,0,0"
+                                                       FontSize="11.5"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       Text="{Binding AppUpdateMachineStateDisplay, StringFormat=Update status: {0}}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,4,0,0"
+                                                       FontSize="11.5"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       Text="{Binding AppUpdateIncludePrereleasesValueText, StringFormat=Include prereleases: {0}}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,4,0,0"
+                                                       FontSize="11.5"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       Text="{Binding AppUpdateLatestReleaseTagDisplay, StringFormat=Latest release tag: {0}}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,4,0,0"
+                                                       FontSize="11.5"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       Text="{Binding AppUpdateLatestPublishedDisplay, StringFormat=Latest release published: {0}}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,4,0,0"
+                                                       FontSize="11.5"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       Text="{Binding AppUpdateAssetFoundDisplay, StringFormat=Primary asset: {0}}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,4,0,0"
+                                                       FontSize="11.5"
+                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                       Text="{Binding AppUpdateSafeFailureReasonDisplay, StringFormat=Safe failure / detail: {0}}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,6,0,0"
                                                        FontSize="11"
                                                        Foreground="{DynamicResource PanelMutedTextBrush}"
                                                        Text="{Binding AppUpdateSettingsSourceLine}"
@@ -2953,6 +3053,12 @@
                                                     Style="{StaticResource SecondaryButtonStyle}"
                                                     Content="Check for updates now"
                                                     Command="{Binding CheckForUpdatesNowCommand}" />
+                                            <Button Margin="0,8,0,0"
+                                                    MinWidth="220"
+                                                    HorizontalAlignment="Left"
+                                                    Style="{StaticResource SecondaryButtonStyle}"
+                                                    Content="Copy update-check diagnostics (safe summary)"
+                                                    Command="{Binding CopyUpdateDiagnosticsCommand}" />
                                         </StackPanel>
                                     </GroupBox>
 
@@ -3062,7 +3168,7 @@
                                Text="{Binding AppVersionFooterText}" />
                     <TextBlock Margin="0,8,0,14"
                                Foreground="#FFE0E8F4"
-                               Text="This is an unsigned beta build. Confirm the USB target before setup, update, or Ventoy actions. Kyra works offline by default — online providers are optional (Kyra Advanced)."
+                               Text="Public Preview build — confirm the USB target before setup, update, or Ventoy actions. Kyra works offline by default; online providers are optional (Kyra Advanced)."
                                TextWrapping="Wrap" />
                     <TextBlock Foreground="#FFE0E8F4"
                                TextWrapping="Wrap"

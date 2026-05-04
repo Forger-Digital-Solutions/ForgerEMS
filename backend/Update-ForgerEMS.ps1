@@ -60,7 +60,11 @@ param(
     [switch]$Force,
     [switch]$VerifyOnly,
     [switch]$NoArchive,
-    [switch]$ShowVersion
+    [switch]$ShowVersion,
+    # CI / release validation: keep terminating failure when managed items fail (including fallback-covered).
+    [switch]$StrictManagedDownloads,
+    # Retry only items recorded as retryable in the latest ForgerEMS-managed-download-result.json on the USB root.
+    [switch]$RetryFailedManagedDownloads
 )
 
 $ErrorActionPreference = "Stop"
@@ -105,6 +109,12 @@ $script:Summary = [ordered]@{
     FallbackShortcutsReused  = 0
 }
 
+$script:ManagedFailureLines = [System.Collections.Generic.List[string]]::new()
+$script:ManagedDownloadFailedRecords = [System.Collections.Generic.List[hashtable]]::new()
+$script:ManagedDownloadRunId = [guid]::NewGuid().ToString('N')
+$script:ManagedDownloadRunStartedUtc = (Get-Date).ToUniversalTime().ToString('o')
+$script:RetryManagedDestinations = $null
+
 function Write-Log {
     param(
         [Parameter(Mandatory)][string]$Message,
@@ -129,6 +139,90 @@ function Write-Log {
         if ($logParent -and (Test-Path -LiteralPath $logParent)) {
             Add-Content -LiteralPath $script:LogFile -Value $line -Encoding UTF8
         }
+    }
+}
+
+function Add-ManagedDownloadFailedRecord {
+    param(
+        [string]$Name,
+        [string]$DestRel,
+        [string]$Url,
+        [string]$FailureKind,
+        [string]$SafeReason,
+        [string]$HttpStatus,
+        [string]$FallbackRelPath
+    )
+
+    $domain = ""
+    try {
+        if (-not [string]::IsNullOrWhiteSpace($Url)) {
+            $u = [uri]$Url
+            $domain = $u.Host
+        }
+    }
+    catch { }
+
+    $safeUrl = $Url
+    if ($safeUrl.Length -gt 512) {
+        $safeUrl = $safeUrl.Substring(0, 512) + "…"
+    }
+
+    [void]$script:ManagedDownloadFailedRecords.Add(@{
+            id                      = $Name
+            name                    = $Name
+            category                = ""
+            type                    = "file"
+            destinationRelativePath = $DestRel
+            sourceDomain            = $domain
+            sourceUrl               = $safeUrl
+            failureKind             = $FailureKind
+            safeReason              = $SafeReason
+            downloaderAttempts      = 0
+            httpStatus              = $HttpStatus
+            checksumExpected        = ""
+            checksumActual          = ""
+            fallbackRelativePath    = $FallbackRelPath
+            retryable               = $true
+            required                = $true
+        })
+}
+
+function Write-ForgerEmsManagedDownloadResultJson {
+    param(
+        [Parameter(Mandatory)][string]$RootPath,
+        [Parameter(Mandatory)][string]$Readiness
+    )
+
+    $obj = [ordered]@{
+        runId                  = $script:ManagedDownloadRunId
+        startedAt              = $script:ManagedDownloadRunStartedUtc
+        completedAt            = (Get-Date).ToUniversalTime().ToString('o')
+        readiness              = $Readiness
+        totalManifestItems     = $script:Summary.Total
+        managedSelected        = $script:Summary.ManagedFileItems
+        managedCompleted       = $script:Summary.Downloaded
+        managedFailed          = $script:Summary.Failed
+        manualInfoShortcuts    = $script:Summary.PlaceholderItems
+        placeholderOnly        = $script:Summary.PlaceholderOnly
+        fallbackCreated        = $script:Summary.FallbackShortcutsCreated
+        fallbackReused         = $script:Summary.FallbackShortcutsReused
+        failedItems            = @($script:ManagedDownloadFailedRecords)
+        retryFailedModeActive  = ($null -ne $script:RetryManagedDestinations)
+    }
+
+    $path = Join-Path $RootPath "ForgerEMS-managed-download-result.json"
+    if ($WhatIfPreference) {
+        Write-Log "WhatIf: skipping managed download result JSON: $path" "INFO"
+        return
+    }
+
+    try {
+        $json = $obj | ConvertTo-Json -Depth 12
+        Set-Content -LiteralPath $path -Value $json -Encoding UTF8
+        Write-Log "Managed download result JSON: $path" "OK"
+    }
+    catch {
+        Write-Log ("Could not write managed download result JSON: {0}" -f $_.Exception.Message) "WARN"
     }
 }
 
@@ -1585,6 +1679,25 @@ $manifestRaw = Get-Content -LiteralPath $manifestPath -Raw
 $manifest = $manifestRaw | ConvertFrom-Json
 Assert-ManifestContract -Manifest $manifest -Root $root -SourceName $manifestPath
 
+if ($RetryFailedManagedDownloads) {
+    $priorResultPath = Join-Path $root "ForgerEMS-managed-download-result.json"
+    if (-not (Test-Path -LiteralPath $priorResultPath)) {
+        throw "RetryFailedManagedDownloads requires prior result file: $priorResultPath"
+    }
+    $prior = Get-Content -LiteralPath $priorResultPath -Raw | ConvertFrom-Json
+    $script:RetryManagedDestinations = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($fi in @($prior.failedItems)) {
+        if ($null -eq $fi) { continue }
+        $rp = [string]$(if ($fi.destinationRelativePath) { $fi.destinationRelativePath } else { "" })
+        $retryable = $true
+        if ($null -ne $fi.retryable) { $retryable = [bool]$fi.retryable }
+        if ($retryable -and -not [string]::IsNullOrWhiteSpace($rp)) {
+            [void]$script:RetryManagedDestinations.Add($rp.Trim())
+        }
+    }
+    Write-Log ("RetryFailedManagedDownloads: {0} managed path(s) selected for retry." -f $script:RetryManagedDestinations.Count) "INFO"
+}
+
 $dlDir     = Resolve-RootChildPath -Root $root -RelativePath ($(if ($manifest.settings.downloadFolder) { [string]$manifest.settings.downloadFolder } else { "_downloads" }))
 $arcDir    = Resolve-RootChildPath -Root $root -RelativePath ($(if ($manifest.settings.archiveFolder)  { [string]$manifest.settings.archiveFolder }  else { "_archive" }))
 $logDir    = Resolve-RootChildPath -Root $root -RelativePath ($(if ($manifest.settings.logFolder)      { [string]$manifest.settings.logFolder }      else { "_logs" }))
@@ -1682,6 +1795,15 @@ foreach ($item in $orderedItems) {
         Write-Log "Skipping invalid manifest item (missing name/url/dest)." "WARN"
         $script:Summary.Failed++
         continue
+    }
+
+    if ($script:RetryManagedDestinations) {
+        if ($type -eq "page") {
+            continue
+        }
+        if ($type -eq "file" -and -not $script:RetryManagedDestinations.Contains($destRel)) {
+            continue
+        }
     }
 
     $dest = Resolve-RootChildPath -Root $root -RelativePath $destRel
@@ -1908,6 +2030,9 @@ foreach ($item in $orderedItems) {
         }
         Write-Log "Item staging verdict: FAILED WITH FALLBACK" "ERROR"
         $script:Summary.Failed++
+        $fbPath = if ($fallbackResult.ShortcutPath) { $fallbackResult.ShortcutPath } else { "(none)" }
+        [void]$script:ManagedFailureLines.Add("Item: $name | Status: failed with fallback shortcut | Destination: $destRel | Fallback: $fbPath")
+        Add-ManagedDownloadFailedRecord -Name $name -DestRel $destRel -Url $url -FailureKind "DownloadException" -SafeReason "Download failed before staging completed." -HttpStatus "" -FallbackRelPath $destRel
         continue
     }
 
@@ -1967,6 +2092,9 @@ foreach ($item in $orderedItems) {
         }
         Write-Log "Item staging verdict: FAILED WITH FALLBACK" "ERROR"
         $script:Summary.Failed++
+        $fbPath = if ($fallbackResult.ShortcutPath) { $fallbackResult.ShortcutPath } else { "(none)" }
+        [void]$script:ManagedFailureLines.Add("Item: $name | Status: failed with fallback shortcut | Destination: $destRel | Fallback: $fbPath")
+        Add-ManagedDownloadFailedRecord -Name $name -DestRel $destRel -Url $url -FailureKind "StagingException" -SafeReason "Downloaded file could not be verified or moved into place." -HttpStatus "" -FallbackRelPath $destRel
         if (Test-Path -LiteralPath $tmpPath) {
             Remove-Item -LiteralPath $tmpPath -Force -ErrorAction SilentlyContinue
         }
@@ -1979,24 +2107,48 @@ $finalFailureMessage = $null
 
 Write-Log "---------------- MANAGED-DOWNLOAD SUMMARY ----------------" "INFO"
 Write-Log "Total manifest items: $($script:Summary.Total)" "INFO"
-Write-Log "Managed auto-download items: $($script:Summary.ManagedFileItems)" "INFO"
-Write-Log "Seeded placeholder/info shortcut items: $($script:Summary.PlaceholderItems)" "INFO"
-Write-Log "Downloaded successfully: $($script:Summary.Downloaded)" "INFO"
+Write-Log "Managed downloads selected (auto): $($script:Summary.ManagedFileItems)" "INFO"
+Write-Log "Managed downloads completed (written/updated): $($script:Summary.Downloaded)" "INFO"
+Write-Log "Managed downloads failed with fallback shortcut: $($script:Summary.FailedWithFallback)" "INFO"
+Write-Log "Manual/info shortcut items (expected, not failed downloads): $($script:Summary.PlaceholderItems)" "INFO"
 Write-Log "Verified successfully: $($script:Summary.Verified)" "INFO"
-Write-Log "Failed and covered by fallback shortcut: $($script:Summary.FailedWithFallback)" "INFO"
-Write-Log "Skipped / placeholder only: $skippedOrPlaceholderOnly" "INFO"
+Write-Log "Placeholder-only / skipped manifest lines: $skippedOrPlaceholderOnly" "INFO"
 Write-Log "Fallback shortcuts created: $($script:Summary.FallbackShortcutsCreated)" "INFO"
 Write-Log "Fallback shortcuts reused: $($script:Summary.FallbackShortcutsReused)" "INFO"
 Write-Log "Archived prior files: $($script:Summary.Archived)" "INFO"
 Write-Log "Disabled manifest items: $($script:Summary.Disabled)" "INFO"
-Write-Log "Total failed items: $($script:Summary.Failed)" "INFO"
+Write-Log "Total failed managed items: $($script:Summary.Failed)" "INFO"
 
 if ($script:Summary.Failed -gt 0) {
-    Write-Log "USB readiness: PARTIALLY STAGED. Review failed items and the fallback shortcuts before treating this USB as ready." "ERROR"
-    $finalFailureMessage = "Managed download pass completed with $($script:Summary.Failed) failed item(s). The USB is only partially staged."
+    Write-Log "USB readiness: PARTIALLY STAGED - USB layout is present; one or more managed downloads need attention. Manual/info shortcuts above are normal and are not failed downloads." "WARN"
+    Write-Log "------ FAILED MANAGED ITEMS (DETAIL) ------" "WARN"
+    if ($script:ManagedFailureLines.Count -gt 0) {
+        foreach ($line in $script:ManagedFailureLines) {
+            Write-Log $line "WARN"
+        }
+    }
+    else {
+        Write-Log "(No per-item detail captured; search this log for 'Item failed:')" "WARN"
+    }
+    $namesForMessage = if ($script:ManagedFailureLines.Count -gt 0) {
+        ($script:ManagedFailureLines | ForEach-Object { ($_ -split '\|')[0].Replace('Item: ', '').Trim() }) -join ", "
+    }
+    else {
+        "see log for item names"
+    }
+    $partialMsg = "Managed download pass completed with $($script:Summary.Failed) failed item(s): $namesForMessage. USB readiness: PARTIALLY_STAGED (toolkit usable; review fallback shortcuts or retry failed downloads)."
+    if ($StrictManagedDownloads) {
+        Write-Log "Strict managed-download mode: treating partial staging as failure." "ERROR"
+        $finalFailureMessage = $partialMsg
+    }
+    else {
+        Write-Log $partialMsg "WARN"
+        Write-Log "ForgerEMS USB Builder finished with warnings. Beta support: ForgerDigitalSolutions@outlook.com" "WARN"
+    }
 }
 else {
     Write-Log "USB readiness: READY. Managed auto-download items completed without failures." "OK"
+    Write-Log "ForgerEMS USB Builder finished successfully. Your USB is READY." "OK"
 }
 
 if ($script:LogFile -and $WhatIfPreference) {
@@ -2008,6 +2160,15 @@ elseif ($script:LogFile -and (Test-Path -LiteralPath (Split-Path -Parent $script
 else {
     Write-Log "Log file was not created because the log directory is unavailable." "INFO"
 }
+
+$managedResultReadiness = "READY"
+if ($script:Summary.Failed -gt 0) {
+    $managedResultReadiness = "PARTIALLY_STAGED"
+}
+if ($finalFailureMessage) {
+    $managedResultReadiness = "FAILED"
+}
+Write-ForgerEmsManagedDownloadResultJson -RootPath $root -Readiness $managedResultReadiness
 
 if ($finalFailureMessage) {
     throw $finalFailureMessage

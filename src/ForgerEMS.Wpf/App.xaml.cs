@@ -7,6 +7,8 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Markup;
+using VentoyToolkitSetup.Wpf.Configuration;
+using VentoyToolkitSetup.Wpf.Infrastructure;
 using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services;
 using VentoyToolkitSetup.Wpf.ViewModels;
@@ -107,6 +109,25 @@ public partial class App : Application
         return args.Any(arg => string.Equals(arg, target, StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// Support-safe path line for published-self-test.txt: keeps at most the last two path segments, no drive or profile.
+    /// </summary>
+    private static string RedactSelfTestFilesystemPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return "";
+        }
+
+        var trimmed = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var leaf = Path.GetFileName(trimmed);
+        var parentDir = Path.GetDirectoryName(trimmed);
+        var parent = string.IsNullOrEmpty(parentDir) ? "" : Path.GetFileName(parentDir);
+        return string.IsNullOrEmpty(parent)
+            ? $"[REDACTED_PRIVATE_PATH]/{leaf}"
+            : $"[REDACTED_PRIVATE_PATH]/{parent}/{leaf}";
+    }
+
     private static async Task<int> RunSelfTestAsync(
         AppRuntimeService runtimeService,
         BackendDiscoveryService backendDiscoveryService,
@@ -118,13 +139,21 @@ public partial class App : Application
         var lines = new List<string>
         {
             "ForgerEMS self-test",
+            $"AppSemanticVersionLabel: {AppReleaseInfo.Version}",
+            $"AppDisplayVersion: {AppReleaseInfo.DisplayVersion}",
             $"StartedUtc: {startedUtc:O}",
-            $"ExecutableBase: {executableBase}",
-            $"CurrentDirectory: {Directory.GetCurrentDirectory()}",
-            $"RuntimeRoot: {runtimeService.RuntimeRoot}",
-            $"SessionLogPath: {runtimeService.SessionLogPath}",
-            $"ExpectedInstalledBackendRoot: {Path.Combine(executableBase, "backend")}",
-            $"ExpectedInstalledManifestRoot: {Path.Combine(executableBase, "manifests")}"
+            $"ExecutableBase: {RedactSelfTestFilesystemPath(executableBase)}",
+            $"CurrentDirectory: {RedactSelfTestFilesystemPath(Directory.GetCurrentDirectory())}",
+            $"RuntimeRoot: {CopilotRedactor.Redact(runtimeService.RuntimeRoot, enabled: true)}",
+            $"SessionLogPath: {CopilotRedactor.Redact(runtimeService.SessionLogPath, enabled: true)}",
+            $"FORGEREMS_ENV: {ForgerEmsEnvironmentConfiguration.ForgerEmsEnv}",
+            $"FORGEREMS_RELEASE_CHANNEL: {ForgerEmsEnvironmentConfiguration.ReleaseChannel}",
+            $"UpdateGitHubSource: {ForgerEmsEnvironmentConfiguration.GitHubOwner}/{ForgerEmsEnvironmentConfiguration.GitHubRepo}",
+            $"UpdateUserAgent: {ForgerEmsEnvironmentConfiguration.UpdateUserAgent}",
+            $"TelemetryEnabled(env): {ForgerEmsEnvironmentConfiguration.TelemetryEnabled}",
+            $"CrashReportingEnabled(env): {ForgerEmsEnvironmentConfiguration.CrashReportingEnabled}",
+            $"ExpectedInstalledBackendRoot: {RedactSelfTestFilesystemPath(Path.Combine(executableBase, "backend"))}",
+            $"ExpectedInstalledManifestRoot: {RedactSelfTestFilesystemPath(Path.Combine(executableBase, "manifests"))}"
         };
 
         try
@@ -132,7 +161,7 @@ public partial class App : Application
             var backendContext = backendDiscoveryService.Discover();
             lines.Add($"BackendAvailable: {backendContext.IsAvailable}");
             lines.Add($"BackendMode: {backendContext.ModeLabel}");
-            lines.Add($"BackendRoot: {backendContext.RootPath}");
+            lines.Add($"BackendRoot: {RedactSelfTestFilesystemPath(backendContext.RootPath)}");
             lines.Add($"BackendVersion: {backendContext.BackendVersion}");
             lines.Add($"BackendDiagnostic: {backendContext.DiagnosticMessage}");
             lines.Add($"FrontendVersion: {backendContext.FrontendVersion}");
@@ -240,7 +269,7 @@ public partial class App : Application
             Path.Combine(backendContext.WorkingDirectory, "docs", "README.txt")
         }.Where(path => !string.IsNullOrWhiteSpace(path)))
         {
-            yield return $"RequiredFile: {path} | Exists={File.Exists(path)}";
+            yield return $"RequiredFile: {RedactSelfTestFilesystemPath(path)} | Exists={File.Exists(path)}";
         }
     }
 

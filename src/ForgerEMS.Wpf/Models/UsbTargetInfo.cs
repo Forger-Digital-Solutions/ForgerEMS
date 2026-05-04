@@ -65,6 +65,9 @@ public sealed class UsbTargetInfo
 
     public string ClassificationDetails { get; init; } = string.Empty;
 
+    /// <summary>User-facing one-line benchmark outcome (safe for UI and logs).</summary>
+    public string BenchmarkUiSummaryLine { get; init; } = string.Empty;
+
     public string LabelDisplay => string.IsNullOrWhiteSpace(Label) ? "(no label)" : Label;
 
     public string DisplayTotalBytes => FormatBytes(TotalBytes);

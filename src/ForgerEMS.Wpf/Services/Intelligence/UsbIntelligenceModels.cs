@@ -40,10 +40,26 @@ public enum UsbSpeedMeasurementClass
     Bottleneck = 4
 }
 
+/// <summary>How a native USB file benchmark ended (distinct from UI "Cancelled" vs I/O failure).</summary>
+public enum UsbNativeBenchmarkEndKind
+{
+    None = 0,
+    Success = 1,
+    /// <summary>Cooperative cancellation (user or superseding operation).</summary>
+    OperationCanceled = 2,
+    /// <summary>IOException or other non-cancel failure.</summary>
+    IoOrSystemError = 3,
+    /// <summary>Blocked by safety / validation before I/O.</summary>
+    ValidationBlocked = 4
+}
+
 /// <summary>Persisted USB speed sample for Intelligence, diagnostics, and machine profile.</summary>
 public sealed class UsbIntelligenceBenchmarkResult
 {
     public bool Succeeded { get; init; }
+
+    /// <summary>Populated when <see cref="Succeeded"/> is false; distinguishes cancel from I/O errors.</summary>
+    public UsbNativeBenchmarkEndKind EndKind { get; init; }
 
     public double WriteSpeedMBps { get; init; }
 
@@ -63,10 +79,19 @@ public sealed class UsbIntelligenceBenchmarkResult
 
     public string DetailReason { get; init; } = string.Empty;
 
-    public static UsbIntelligenceBenchmarkResult Failed(string message) =>
+    public long ActualBytesWritten { get; init; }
+
+    public long ActualBytesRead { get; init; }
+
+    public long WriteElapsedMs { get; init; }
+
+    public long ReadElapsedMs { get; init; }
+
+    public static UsbIntelligenceBenchmarkResult Failed(string message, UsbNativeBenchmarkEndKind endKind = UsbNativeBenchmarkEndKind.IoOrSystemError) =>
         new()
         {
             Succeeded = false,
+            EndKind = endKind,
             Classification = UsbSpeedMeasurementClass.Unknown,
             ConfidenceScore = 15,
             Timestamp = DateTimeOffset.UtcNow,

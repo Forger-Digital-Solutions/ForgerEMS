@@ -24,7 +24,7 @@ public sealed class ScriptStatusParserTests
     }
 
     [Fact]
-    public void ParseSetupUsbPartialReadinessReturnsFailureAndWarnings()
+    public void ParseSetupUsbPartialReadinessReturnsSuccessWithWarnings()
     {
         var parser = new ScriptStatusParser();
         var runResult = CreateRunResult(
@@ -35,10 +35,11 @@ public sealed class ScriptStatusParserTests
 
         var result = parser.Parse(ScriptActionType.SetupUsb, "Setup USB", runResult);
 
-        Assert.False(result.Succeeded);
+        Assert.True(result.Succeeded);
+        Assert.True(result.PartiallyStaged);
         Assert.True(result.HasWarnings);
-        Assert.Equal("USB readiness: PARTIALLY STAGED", result.Summary);
-        Assert.Contains("Review the log pane for the failed items and fallback coverage.", result.Details);
+        Assert.Contains("partially staged", result.Summary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PARTIALLY STAGED", result.Details, StringComparison.OrdinalIgnoreCase);
     }
 
     private static PowerShellRunResult CreateRunResult(int exitCode, params LogLine[] lines)

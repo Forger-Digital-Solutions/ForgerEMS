@@ -125,6 +125,19 @@ public sealed class KyraOrchestrator
             KyraOrchestrationLog.Append(
                 $"Kyra ctx intent={ctxPackage.Intent} localTruth={ctxPackage.LocalTruthAvailable} requiresLocal={ctxPackage.RequiresLocalTruth} caps={decision.EffectiveCapabilities} liveUnavailable={(plan.StayLocalReason == KyraStayLocalReason.LiveDataNotConfigured ? 1 : 0)}");
 
+            if (KyraLocalSpecAnswerBuilder.TryBuildLocalSpecAnswer(request.Prompt, context.SystemProfile, out var localSpecResponse))
+            {
+                Report("Formatting Kyra response…");
+                if (KyraResponseCache.IsCacheablePrompt(request.Prompt))
+                {
+                    _host.StoreResponseCache(BuildCacheKey(request.Prompt), localSpecResponse.Text);
+                }
+
+                var localSpecDone = _host.CompleteResponse(request, context, localSpecResponse);
+                Report("Done.");
+                return localSpecDone;
+            }
+
             if (_host.TryGetResponseCache(BuildCacheKey(request.Prompt), out var cached))
             {
                 Report("Formatting Kyra response…");
@@ -199,7 +212,8 @@ public sealed class KyraOrchestrator
                         var onlineText = result.UserMessage ?? string.Empty;
                         if (provider.IsOnlineProvider &&
                             result.UsedOnlineData &&
-                            KyraSafetyPolicy.ShouldDiscardOnlineAnswer(onlineText, localReferenceText: null, ledgerGuard))
+                            (KyraSafetyPolicy.ShouldDiscardOnlineAnswer(onlineText, localReferenceText: null, ledgerGuard) ||
+                             KyraSafetyPolicy.ContradictsLocalHardwareLedger(onlineText, ledgerGuard)))
                         {
                             notes.Add("Kyra routing: API-first answer discarded — aligned to local ForgerEMS facts.");
                             KyraOrchestrationLog.Append(
@@ -322,7 +336,8 @@ public sealed class KyraOrchestrator
                         if (KyraSafetyPolicy.ShouldDiscardOnlineAnswer(
                                 effectiveResult.UserMessage ?? string.Empty,
                                 localResult.UserMessage ?? string.Empty,
-                                ledgerLocal))
+                                ledgerLocal) ||
+                            KyraSafetyPolicy.ContradictsLocalHardwareLedger(effectiveResult.UserMessage ?? string.Empty, ledgerLocal))
                         {
                             notes.Add("Kyra routing: online answer discarded — aligned to local ForgerEMS facts.");
                             KyraOrchestrationLog.Append(

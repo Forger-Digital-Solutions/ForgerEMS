@@ -19,6 +19,8 @@ public interface IUsbBenchmarkService
 
 public sealed class UsbBenchmarkResult
 {
+    public Guid RunId { get; init; }
+
     public bool Succeeded { get; init; }
 
     public string Status { get; init; } = "Not tested";
@@ -49,6 +51,71 @@ public sealed class UsbBenchmarkResult
     public string IntelligenceMeasurementClass { get; init; } = string.Empty;
 
     public int IntelligenceConfidenceScore { get; init; }
+
+    public UsbBenchmarkResultKind ResultKind { get; init; } = UsbBenchmarkResultKind.NotStarted;
+
+    public UsbBenchmarkCancellationSource CancellationSource { get; init; } = UsbBenchmarkCancellationSource.None;
+
+    public DateTimeOffset? StartedAtUtc { get; init; }
+
+    public DateTimeOffset? CompletedAtUtc { get; init; }
+
+    public long ActualBytesWritten { get; init; }
+
+    public long ActualBytesRead { get; init; }
+
+    public long WriteElapsedMs { get; init; }
+
+    public long ReadElapsedMs { get; init; }
+
+    public string TargetTopologyFingerprint { get; init; } = string.Empty;
+
+    public string UiSummaryLine { get; init; } = string.Empty;
+
+    public UsbBenchmarkResultKind GetEffectiveResultKind()
+    {
+        if (ResultKind != UsbBenchmarkResultKind.NotStarted)
+        {
+            return ResultKind;
+        }
+
+        if (Succeeded && WriteSpeedMBps > 0 && ReadSpeedMBps > 0 &&
+            Status.Equals("Complete", StringComparison.OrdinalIgnoreCase))
+        {
+            return UsbBenchmarkResultKind.Completed;
+        }
+
+        if (Status.Equals("Blocked", StringComparison.OrdinalIgnoreCase))
+        {
+            return UsbBenchmarkResultKind.BlockedBySafety;
+        }
+
+        if (Status.Equals("Device removed", StringComparison.OrdinalIgnoreCase))
+        {
+            return UsbBenchmarkResultKind.DeviceRemoved;
+        }
+
+        if (Status.Equals("Target changed", StringComparison.OrdinalIgnoreCase))
+        {
+            return UsbBenchmarkResultKind.TargetChanged;
+        }
+
+        if (Status.Equals("Cancelled", StringComparison.OrdinalIgnoreCase))
+        {
+            return UsbBenchmarkResultKind.CancelledByUser;
+        }
+
+        if (Status.Equals("Failed", StringComparison.OrdinalIgnoreCase))
+        {
+            return UsbBenchmarkResultKind.IoFailed;
+        }
+
+        return UsbBenchmarkResultKind.UnknownFailed;
+    }
+
+    /// <summary>History disk cache and Intelligence sync: successful completed runs only.</summary>
+    public bool ShouldPersistSuccessfulHistory =>
+        GetEffectiveResultKind() == UsbBenchmarkResultKind.Completed && Succeeded && WriteSpeedMBps > 0 && ReadSpeedMBps > 0;
 }
 
 public sealed class UsbBenchmarkService : IUsbBenchmarkService
@@ -65,21 +132,38 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
         Action<LogLine>? onOutput = null,
         CancellationToken cancellationToken = default)
     {
+        var runId = Guid.NewGuid();
+        var identity = UsbTargetIdentitySnapshot.Capture(target);
+        var startedAt = DateTimeOffset.UtcNow;
         if (!UsbTargetSafety.IsSafeForBenchmark(target, out var blockReason))
         {
             onOutput?.Invoke(new LogLine(DateTimeOffset.Now, $"[WARN] USB benchmark skipped: {blockReason}", LogSeverity.Warning));
+            var now = DateTimeOffset.UtcNow;
             return new UsbBenchmarkResult
             {
+                RunId = runId,
                 Succeeded = false,
-                Status = "Failed",
+                Status = "Blocked",
                 Summary = "Benchmark skipped",
                 Details = blockReason,
-                ReadSpeedDisplay = "Skipped (unsafe)",
-                WriteSpeedDisplay = "Skipped (unsafe)",
-                LastTestedAt = DateTimeOffset.Now
+                ReadSpeedDisplay = "Blocked",
+                WriteSpeedDisplay = "Blocked",
+                LastTestedAt = now,
+                ResultKind = UsbBenchmarkResultKind.BlockedBySafety,
+                CancellationSource = UsbBenchmarkCancellationSource.SafetyRevalidationBlocked,
+                StartedAtUtc = startedAt,
+                CompletedAtUtc = now,
+                TargetTopologyFingerprint = identity.TopologyFingerprint,
+                UiSummaryLine = UsbBenchmarkUiMessages.BuildUiSummary(UsbBenchmarkResultKind.BlockedBySafety, 0, 0)
             };
         }
 
+        var letter = string.IsNullOrWhiteSpace(target.DriveLetter) ? "?" : target.DriveLetter.TrimEnd('\\');
+        var tokenAlreadyCancelled = cancellationToken.IsCancellationRequested;
+        onOutput?.Invoke(new LogLine(
+            DateTimeOffset.Now,
+            $"[INFO] USB benchmark requested. runId={runId:N} drive={letter} label=\"{target.LabelDisplay}\" fs={target.FileSystem} capacity={target.DisplayTotalBytes} free={target.DisplayFreeBytes} safety={target.SafetyStatusText} tokenPreCancelled={(tokenAlreadyCancelled ? "yes" : "no")}",
+            LogSeverity.Info));
         onOutput?.Invoke(new LogLine(DateTimeOffset.Now, "[INFO] Running native USB file benchmark (measurement-based).", LogSeverity.Info));
         try
         {
@@ -88,44 +172,93 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
             {
                 onOutput?.Invoke(new LogLine(
                     DateTimeOffset.Now,
-                    $"[OK] Native benchmark: write {native.WriteSpeedMBps:0.0} MB/s, read {native.ReadSpeedMBps:0.0} MB/s ({native.Classification}).",
+                    $"[OK] USB benchmark completed. runId={runId:N} native: write {native.WriteSpeedMBps:0.0} MB/s, read {native.ReadSpeedMBps:0.0} MB/s ({native.Classification}).",
                     LogSeverity.Success));
-                return MapNativeToLegacy(native);
+                return MapNativeToLegacy(native, runId, startedAt, identity.TopologyFingerprint);
             }
 
-            if (cancellationToken.IsCancellationRequested ||
-                native.SummaryLine.Contains("cancel", StringComparison.OrdinalIgnoreCase))
+            if (native.EndKind == UsbNativeBenchmarkEndKind.OperationCanceled ||
+                (native.EndKind == UsbNativeBenchmarkEndKind.None &&
+                 cancellationToken.IsCancellationRequested))
             {
-                onOutput?.Invoke(new LogLine(DateTimeOffset.Now, "[INFO] USB benchmark stopped (cancelled or superseded).", LogSeverity.Info));
+                onOutput?.Invoke(new LogLine(
+                    DateTimeOffset.Now,
+                    $"[INFO] USB benchmark cancelled by user or host. runId={runId:N} detail={native.SummaryLine}",
+                    LogSeverity.Info));
+                var nowC = DateTimeOffset.UtcNow;
                 return new UsbBenchmarkResult
                 {
+                    RunId = runId,
                     Succeeded = false,
                     Status = "Cancelled",
                     Summary = "Benchmark cancelled",
                     Details = native.SummaryLine,
                     ReadSpeedDisplay = "Cancelled",
                     WriteSpeedDisplay = "Cancelled",
-                    LastTestedAt = DateTimeOffset.Now
+                    LastTestedAt = nowC,
+                    ResultKind = UsbBenchmarkResultKind.CancelledByUser,
+                    CancellationSource = UsbBenchmarkCancellationSource.OperationCanceledUnknown,
+                    StartedAtUtc = startedAt,
+                    CompletedAtUtc = nowC,
+                    TargetTopologyFingerprint = identity.TopologyFingerprint,
+                    UiSummaryLine = UsbBenchmarkUiMessages.BuildUiSummary(UsbBenchmarkResultKind.CancelledByUser, 0, 0)
+                };
+            }
+
+            if (native.EndKind == UsbNativeBenchmarkEndKind.ValidationBlocked)
+            {
+                onOutput?.Invoke(new LogLine(
+                    DateTimeOffset.Now,
+                    $"[WARN] USB benchmark blocked. runId={runId:N} {native.SummaryLine}",
+                    LogSeverity.Warning));
+                var nowV = DateTimeOffset.UtcNow;
+                return new UsbBenchmarkResult
+                {
+                    RunId = runId,
+                    Succeeded = false,
+                    Status = "Blocked",
+                    Summary = "Benchmark blocked",
+                    Details = native.SummaryLine,
+                    ReadSpeedDisplay = "Blocked",
+                    WriteSpeedDisplay = "Blocked",
+                    LastTestedAt = nowV,
+                    ResultKind = UsbBenchmarkResultKind.ValidationFailed,
+                    StartedAtUtc = startedAt,
+                    CompletedAtUtc = nowV,
+                    TargetTopologyFingerprint = identity.TopologyFingerprint,
+                    UiSummaryLine = UsbBenchmarkUiMessages.BuildUiSummary(
+                        UsbBenchmarkResultKind.ValidationFailed,
+                        0,
+                        0,
+                        native.SummaryLine)
                 };
             }
 
             onOutput?.Invoke(new LogLine(
                 DateTimeOffset.Now,
-                $"[WARN] Native benchmark unavailable ({native.SummaryLine}); falling back to PowerShell.",
+                $"[WARN] Native benchmark failed ({native.SummaryLine}); falling back to PowerShell. runId={runId:N}",
                 LogSeverity.Warning));
         }
         catch (OperationCanceledException)
         {
-            onOutput?.Invoke(new LogLine(DateTimeOffset.Now, "[INFO] USB benchmark stopped (cancelled or superseded).", LogSeverity.Info));
+            onOutput?.Invoke(new LogLine(DateTimeOffset.Now, $"[INFO] USB benchmark cancelled. runId={runId:N}", LogSeverity.Info));
+            var nowX = DateTimeOffset.UtcNow;
             return new UsbBenchmarkResult
             {
+                RunId = runId,
                 Succeeded = false,
                 Status = "Cancelled",
                 Summary = "Benchmark cancelled",
                 Details = "The benchmark was cancelled.",
                 ReadSpeedDisplay = "Cancelled",
                 WriteSpeedDisplay = "Cancelled",
-                LastTestedAt = DateTimeOffset.Now
+                LastTestedAt = nowX,
+                ResultKind = UsbBenchmarkResultKind.CancelledByUser,
+                CancellationSource = UsbBenchmarkCancellationSource.OperationCanceledUnknown,
+                StartedAtUtc = startedAt,
+                CompletedAtUtc = nowX,
+                TargetTopologyFingerprint = identity.TopologyFingerprint,
+                UiSummaryLine = UsbBenchmarkUiMessages.BuildUiSummary(UsbBenchmarkResultKind.CancelledByUser, 0, 0)
             };
         }
         catch (Exception ex)
@@ -139,8 +272,10 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
         var testSizeMb = target.FreeBytes >= 512L * 1024 * 1024 ? 128 : 64;
         if (target.FreeBytes < (testSizeMb + 128L) * 1024 * 1024)
         {
+            var nowF = DateTimeOffset.UtcNow;
             return new UsbBenchmarkResult
             {
+                RunId = runId,
                 Succeeded = false,
                 Status = "Failed",
                 Summary = "Benchmark failed",
@@ -148,7 +283,16 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
                 ReadSpeedDisplay = "Failed",
                 WriteSpeedDisplay = "Failed",
                 TestSizeMb = testSizeMb,
-                LastTestedAt = DateTimeOffset.Now
+                LastTestedAt = nowF,
+                ResultKind = UsbBenchmarkResultKind.ValidationFailed,
+                StartedAtUtc = startedAt,
+                CompletedAtUtc = nowF,
+                TargetTopologyFingerprint = identity.TopologyFingerprint,
+                UiSummaryLine = UsbBenchmarkUiMessages.BuildUiSummary(
+                    UsbBenchmarkResultKind.ValidationFailed,
+                    0,
+                    0,
+                    "Not enough free space.")
             };
         }
 
@@ -162,8 +306,10 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
         var result = await _powerShellRunnerService.RunAsync(request, onOutput, cancellationToken).ConfigureAwait(false);
         if (!result.Succeeded || string.IsNullOrWhiteSpace(result.StandardOutputText))
         {
+            var nowPs = DateTimeOffset.UtcNow;
             return new UsbBenchmarkResult
             {
+                RunId = runId,
                 Succeeded = false,
                 Status = "Failed",
                 Summary = "Benchmark failed",
@@ -171,7 +317,12 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
                 ReadSpeedDisplay = "Failed",
                 WriteSpeedDisplay = "Failed",
                 TestSizeMb = testSizeMb,
-                LastTestedAt = DateTimeOffset.Now
+                LastTestedAt = nowPs,
+                ResultKind = UsbBenchmarkResultKind.IoFailed,
+                StartedAtUtc = startedAt,
+                CompletedAtUtc = nowPs,
+                TargetTopologyFingerprint = identity.TopologyFingerprint,
+                UiSummaryLine = UsbBenchmarkUiMessages.BuildUiSummary(UsbBenchmarkResultKind.IoFailed, 0, 0, "PowerShell benchmark did not complete.")
             };
         }
 
@@ -181,8 +332,10 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
 
         if (string.IsNullOrWhiteSpace(jsonLine))
         {
+            var nowJ = DateTimeOffset.UtcNow;
             return new UsbBenchmarkResult
             {
+                RunId = runId,
                 Succeeded = false,
                 Status = "Failed",
                 Summary = "Benchmark failed",
@@ -190,7 +343,12 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
                 ReadSpeedDisplay = "Failed",
                 WriteSpeedDisplay = "Failed",
                 TestSizeMb = testSizeMb,
-                LastTestedAt = DateTimeOffset.Now
+                LastTestedAt = nowJ,
+                ResultKind = UsbBenchmarkResultKind.IoFailed,
+                StartedAtUtc = startedAt,
+                CompletedAtUtc = nowJ,
+                TargetTopologyFingerprint = identity.TopologyFingerprint,
+                UiSummaryLine = UsbBenchmarkUiMessages.BuildUiSummary(UsbBenchmarkResultKind.IoFailed, 0, 0, "Result payload missing.")
             };
         }
 
@@ -201,8 +359,14 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
         var finishedAt = DateTimeOffset.Now;
         var (measClass, conf, _) = UsbMeasurementClassifier.Classify(writeSpeed, readSpeed, null);
 
+        onOutput?.Invoke(new LogLine(
+            DateTimeOffset.Now,
+            $"[OK] USB benchmark completed (PowerShell path). runId={runId:N} write={writeSpeed:0.0} MB/s read={readSpeed:0.0} MB/s size={testSizeMb} MB",
+            LogSeverity.Success));
+        var byteCount = (long)testSizeMb * 1024L * 1024L;
         return new UsbBenchmarkResult
         {
+            RunId = runId,
             Succeeded = true,
             Status = "Complete",
             Summary =
@@ -217,13 +381,25 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
             ReadSpeedMBps = readSpeed,
             BenchmarkDurationMs = 0,
             IntelligenceMeasurementClass = measClass.ToString(),
-            IntelligenceConfidenceScore = conf
+            IntelligenceConfidenceScore = conf,
+            ResultKind = UsbBenchmarkResultKind.Completed,
+            StartedAtUtc = startedAt,
+            CompletedAtUtc = finishedAt,
+            ActualBytesWritten = byteCount,
+            ActualBytesRead = byteCount,
+            TargetTopologyFingerprint = identity.TopologyFingerprint,
+            UiSummaryLine = UsbBenchmarkUiMessages.BuildUiSummary(UsbBenchmarkResultKind.Completed, readSpeed, writeSpeed)
         };
     }
 
-    private static UsbBenchmarkResult MapNativeToLegacy(UsbIntelligenceBenchmarkResult native) =>
+    private static UsbBenchmarkResult MapNativeToLegacy(
+        UsbIntelligenceBenchmarkResult native,
+        Guid runId,
+        DateTimeOffset startedAt,
+        string topologyFingerprint) =>
         new()
         {
+            RunId = runId,
             Succeeded = true,
             Status = "Complete",
             Summary = $"USB benchmark complete: {native.Classification}",
@@ -237,7 +413,19 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
             ReadSpeedMBps = native.ReadSpeedMBps,
             BenchmarkDurationMs = native.DurationMs,
             IntelligenceMeasurementClass = native.Classification.ToString(),
-            IntelligenceConfidenceScore = native.ConfidenceScore
+            IntelligenceConfidenceScore = native.ConfidenceScore,
+            ResultKind = UsbBenchmarkResultKind.Completed,
+            StartedAtUtc = startedAt,
+            CompletedAtUtc = native.Timestamp,
+            ActualBytesWritten = native.ActualBytesWritten,
+            ActualBytesRead = native.ActualBytesRead,
+            WriteElapsedMs = native.WriteElapsedMs,
+            ReadElapsedMs = native.ReadElapsedMs,
+            TargetTopologyFingerprint = topologyFingerprint,
+            UiSummaryLine = UsbBenchmarkUiMessages.BuildUiSummary(
+                UsbBenchmarkResultKind.Completed,
+                native.ReadSpeedMBps,
+                native.WriteSpeedMBps)
         };
 
     private static string BuildBenchmarkCommand(string rootPath, int testSizeMb)

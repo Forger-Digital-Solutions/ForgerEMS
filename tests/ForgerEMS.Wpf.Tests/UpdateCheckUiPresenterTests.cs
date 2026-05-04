@@ -1,3 +1,4 @@
+using System;
 using System.Windows;
 using VentoyToolkitSetup.Wpf.Services;
 using Xunit;
@@ -31,6 +32,26 @@ public sealed class UpdateCheckUiPresenterTests
         Assert.Equal(Visibility.Collapsed, s.DiagnosticsHintVisibility);
         Assert.Contains("Latest release: v1.1.4", s.LatestChannelSummary);
         Assert.Contains("GitHub Releases", s.LatestChannelSummary, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("1.1.4", s.InstalledVersionNormalized);
+        Assert.Equal("1.1.4", s.LatestVersionNormalized);
+    }
+
+    [Fact]
+    public void AlreadyLatest_WithPublishedAt_ShowsPublishedInLatestLine()
+    {
+        var result = new UpdateCheckResult
+        {
+            Succeeded = true,
+            Outcome = UpdateCheckOutcome.AlreadyLatest,
+            UpdateAvailable = false,
+            LatestVersionLabel = "v1.1.4",
+            SelectedReleasePublishedAt = new DateTimeOffset(2024, 6, 15, 12, 0, 0, TimeSpan.Zero)
+        };
+
+        var s = UpdateCheckUiPresenter.Map(result, isManualCheck: true, Installed);
+
+        Assert.NotNull(s.LatestChannelSummary);
+        Assert.Contains("published", s.LatestChannelSummary, System.StringComparison.OrdinalIgnoreCase);
         Assert.Equal("1.1.4", s.InstalledVersionNormalized);
         Assert.Equal("1.1.4", s.LatestVersionNormalized);
     }
@@ -164,7 +185,7 @@ public sealed class UpdateCheckUiPresenterTests
         Assert.NotNull(s.SafeDiagnosticText);
         Assert.Contains("Timeout", s.SafeDiagnosticText, System.StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Overall deadline", s.SafeDiagnosticText);
-        Assert.Null(s.LatestChannelSummary);
+        Assert.Contains("could not refresh", s.LatestChannelSummary, System.StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

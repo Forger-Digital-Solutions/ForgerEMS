@@ -31,7 +31,7 @@ That is the whole idea: **one official ZIP** → **extract** → **`START_HERE.b
 
 ## What `.crdownload` means (Chrome)
 
-If your file is named something like `ForgerEMS-v1.1.12-rc.3.zip.crdownload`:
+If your file is named something like `ForgerEMS-v1.2.0-preview.1.zip.crdownload`:
 
 - The download is **still in progress** or **stuck**.  
 - **Do not** rename it to `.zip` and **do not** try to open it.  
@@ -74,7 +74,7 @@ From the **same** GitHub release, download **`CHECKSUMS.sha256`** (if published 
 In **PowerShell**, `cd` to the folder that contains **both** the ZIP and `CHECKSUMS.sha256`, then:
 
 ```powershell
-Get-FileHash .\ForgerEMS-v1.1.12-rc.3.zip -Algorithm SHA256
+Get-FileHash .\ForgerEMS-v1.2.0-preview.1.zip -Algorithm SHA256
 ```
 
 Compare the `Hash` value to the line in `CHECKSUMS.sha256` for that exact filename. **They must match** before you treat the file as trustworthy.

@@ -269,10 +269,14 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
 
         if (normalized.Contains("[ERROR]", StringComparison.OrdinalIgnoreCase) ||
             normalized.StartsWith("[FAIL]", StringComparison.OrdinalIgnoreCase) ||
-            normalized.Contains("verification failed", StringComparison.OrdinalIgnoreCase) ||
-            normalized.Contains("USB readiness: PARTIALLY STAGED", StringComparison.OrdinalIgnoreCase))
+            normalized.Contains("verification failed", StringComparison.OrdinalIgnoreCase))
         {
             return LogSeverity.Error;
+        }
+
+        if (normalized.Contains("USB readiness: PARTIALLY STAGED", StringComparison.OrdinalIgnoreCase))
+        {
+            return LogSeverity.Warning;
         }
 
         if (normalized.Contains("[WARN]", StringComparison.OrdinalIgnoreCase) ||

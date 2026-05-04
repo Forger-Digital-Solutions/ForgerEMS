@@ -164,7 +164,12 @@
                             <StackPanel>
                                 <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Kyra mode and provider status" />
                                 <TextBlock Margin="0,8,0,0" FontSize="12" TextWrapping="Wrap"
-                                           Text="Beta default: offline/local Kyra always works. Online models activate only when an operator has configured providers (environment variables). Testers are not asked to supply API keys." />
+                                           Text="Public Preview default: offline/local Kyra always works. Online models activate only when an operator has configured providers (environment variables). API keys are never shown in logs or this summary." />
+                                <TextBlock Margin="0,8,0,0"
+                                           FontSize="11"
+                                           Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
+                                           Text="{Binding KyraProviderHubConfigHealthSummary}"
+                                           TextWrapping="Wrap" />
                                 <TextBlock Margin="0,6,0,0" FontSize="12" Text="{Binding CopilotProviderSummaryText}" TextWrapping="Wrap" />
                                 <TextBlock Margin="0,6,0,0" FontSize="12" Text="{Binding CopilotActiveProviderText}" TextWrapping="Wrap" />
                                 <TextBlock Margin="0,4,0,0" FontSize="11.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="{Binding CopilotDiagnosticsSummaryText}" TextWrapping="Wrap" />

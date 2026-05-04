@@ -34,6 +34,7 @@ public static class KyraCopilotResponseBuilder
                 : KyraResponseComposer.BuildChatSourceLabel(provider, enhancement),
             FallbackUsed = usedFallback,
             OnlineEnhancementApplied = enhancement,
+            GroundedInSystemIntelligence = false,
             ActionSuggestions = []
         };
     }
@@ -50,6 +51,7 @@ public static class KyraCopilotResponseBuilder
             SourceLabel = sourceLabel,
             FallbackUsed = response.FallbackUsed,
             OnlineEnhancementApplied = response.OnlineEnhancementApplied,
+            GroundedInSystemIntelligence = response.GroundedInSystemIntelligence,
             ActionSuggestions = response.ActionSuggestions
         };
 

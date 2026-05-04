@@ -17,7 +17,7 @@ public static class UsbFileBenchmarkEngine
     {
         if (!UsbTargetSafety.IsSafeForBenchmark(target, out var blockReason))
         {
-            return UsbIntelligenceBenchmarkResult.Failed(blockReason);
+            return UsbIntelligenceBenchmarkResult.Failed(blockReason, UsbNativeBenchmarkEndKind.ValidationBlocked);
         }
 
         var testSizeMb = target.FreeBytes >= 512L * 1024 * 1024 ? 128 : 64;
@@ -25,7 +25,8 @@ public static class UsbFileBenchmarkEngine
         if (target.FreeBytes < (testSizeMb + marginMb) * 1024L * 1024)
         {
             return UsbIntelligenceBenchmarkResult.Failed(
-                $"Not enough free space for a {testSizeMb} MB test plus safety margin.");
+                $"Not enough free space for a {testSizeMb} MB test plus safety margin.",
+                UsbNativeBenchmarkEndKind.ValidationBlocked);
         }
 
         var root = target.RootPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -96,12 +97,15 @@ public static class UsbFileBenchmarkEngine
         catch (OperationCanceledException)
         {
             TryDelete(path);
-            return UsbIntelligenceBenchmarkResult.Failed("Benchmark cancelled.");
+            var msg = cancellationToken.IsCancellationRequested
+                ? "Benchmark stopped: cancellation was requested."
+                : "Benchmark stopped: operation was canceled before completion.";
+            return UsbIntelligenceBenchmarkResult.Failed(msg, UsbNativeBenchmarkEndKind.OperationCanceled);
         }
         catch (Exception ex)
         {
             TryDelete(path);
-            return UsbIntelligenceBenchmarkResult.Failed(ex.Message);
+            return UsbIntelligenceBenchmarkResult.Failed(ex.Message, UsbNativeBenchmarkEndKind.IoOrSystemError);
         }
 
         TryDelete(path);
@@ -113,16 +117,21 @@ public static class UsbFileBenchmarkEngine
         return new UsbIntelligenceBenchmarkResult
         {
             Succeeded = true,
+            EndKind = UsbNativeBenchmarkEndKind.Success,
             WriteSpeedMBps = writeMbps,
             ReadSpeedMBps = readMbps,
             DurationMs = durationMs,
+            TestSizeMb = testSizeMb,
             Classification = cls,
             ConfidenceScore = benchConf,
             Timestamp = DateTimeOffset.UtcNow,
             SummaryLine =
                 $"Measured {writeMbps:0.0} MB/s write, {readMbps:0.0} MB/s read ({testSizeMb} MB sample). {cls}.",
             DetailReason = reason,
-            TestSizeMb = testSizeMb
+            ActualBytesWritten = targetBytes,
+            ActualBytesRead = targetBytes,
+            WriteElapsedMs = writeMs,
+            ReadElapsedMs = readMs
         };
     }
 

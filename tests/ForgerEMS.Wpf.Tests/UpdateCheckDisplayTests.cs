@@ -19,5 +19,6 @@ public sealed class UpdateCheckDisplayTests
         var t = UpdateCheckDisplay.FormatInstalledNewerThanPublic("1.2.0", "1.1.4");
         Assert.Contains("1.2.0", t);
         Assert.Contains("1.1.4", t);
+        Assert.Contains("newer", t, System.StringComparison.OrdinalIgnoreCase);
     }
 }

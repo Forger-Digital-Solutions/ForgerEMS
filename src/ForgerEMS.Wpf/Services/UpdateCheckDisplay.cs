@@ -8,14 +8,14 @@ public static class UpdateCheckDisplay
     public static string FormatInstalledAlreadyLatest(string installedNormalizedLabel)
     {
         var v = FormatVersionPrefix(installedNormalizedLabel);
-        return $"Already up to date. Installed version {v} is the latest available release.";
+        return $"You are on the latest selected channel release ({v}).";
     }
 
     public static string FormatInstalledNewerThanPublic(string installedNormalizedLabel, string latestNormalizedLabel)
     {
         var i = FormatVersionPrefix(installedNormalizedLabel);
         var l = FormatVersionPrefix(latestNormalizedLabel);
-        return $"You are running {i}, which is newer than the latest public release {l}.";
+        return $"Installed build is newer than selected channel (installed {i}, latest on channel {l}).";
     }
 
     public static string FormatIgnoredVersion(string ignoredNormalizedLabel)

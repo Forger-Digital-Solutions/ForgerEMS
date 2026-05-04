@@ -21,6 +21,9 @@ public sealed class ScriptExecutionResult
 
     public bool HasWarnings { get; init; }
 
+    /// <summary>Managed downloads completed but one or more items failed with fallback shortcuts (USB still usable).</summary>
+    public bool PartiallyStaged { get; init; }
+
     public string Summary { get; init; } = string.Empty;
 
     public string Details { get; init; } = string.Empty;

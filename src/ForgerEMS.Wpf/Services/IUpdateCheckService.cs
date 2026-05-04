@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -40,11 +41,13 @@ public enum UpdateCheckOutcome
     InstalledNewerThanLatestPublic,
     NoPublishedRelease,
     IgnoredVersion,
+    /// <summary>GitHub release was selected but published assets were empty or unusable for a safe HTTPS download.</summary>
+    NoSuitableAssets,
     Cancelled,
     Failed
 }
 
-public sealed class UpdateCheckResult
+public sealed record UpdateCheckResult
 {
     public bool Succeeded { get; init; }
 
@@ -90,6 +93,21 @@ public sealed class UpdateCheckResult
     /// <summary>Optional technical detail for logs / support (HTTP body snippet, exception type, etc.).</summary>
     public string? DiagnosticDetail { get; init; }
 
+    /// <summary>Count of release objects returned in the GitHub API array (before filtering).</summary>
+    public int ReleasesFetchedCount { get; init; }
+
+    /// <summary><c>published_at</c> of the selected release.</summary>
+    public DateTimeOffset? SelectedReleasePublishedAt { get; init; }
+
+    /// <summary>Raw <c>tag_name</c> from GitHub for the selected release.</summary>
+    public string SelectedReleaseTagRaw { get; init; } = string.Empty;
+
+    /// <summary>Number of asset rows on the selected release.</summary>
+    public int AssetCount { get; init; }
+
+    /// <summary>Subset of asset filenames (HTTPS-only selection uses more than names).</summary>
+    public IReadOnlyList<string> AssetNamesSnapshot { get; init; } = Array.Empty<string>();
+
     public bool IsOfflineOrFailed => !Succeeded;
 
     public bool HasRecommendedZipDownload =>
@@ -105,6 +123,9 @@ public sealed class UpdateCheckResult
         uri.AbsolutePath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
 
     public bool HasPrimaryDownload => HasRecommendedZipDownload || HasActionableInstaller;
+
+    /// <summary>True when at least one HTTPS ZIP or ForgerEMS EXE asset was resolved for the selected release.</summary>
+    public bool SuitablePrimaryAssetFound => HasPrimaryDownload;
 }
 
 public interface IUpdateCheckService

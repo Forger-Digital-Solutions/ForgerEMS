@@ -11,14 +11,14 @@
     <AssemblyName>ForgerEMS</AssemblyName>
     <Product>ForgerEMS</Product>
     <Company>Forger Digital Solutions</Company>
-    <Title>ForgerEMS</Title>
-    <Description>Native WPF controller for the ForgerEMS PowerShell backend.</Description>
+    <Title>ForgerEMS v1.2.0 Public Preview</Title>
+    <Description>ForgerEMS Public Preview — Windows technician suite (USB toolkit, System Intelligence, Kyra offline-first).</Description>
     <Authors>Forger Digital Solutions</Authors>
     <ApplicationIcon>Assets\ForgerEMS.ico</ApplicationIcon>
-    <Version>1.1.12-rc.7</Version>
-    <AssemblyVersion>1.1.12.0</AssemblyVersion>
-    <FileVersion>1.1.12.0</FileVersion>
-    <InformationalVersion>1.1.12-rc.7</InformationalVersion>
+    <Version>1.2.0-preview.1</Version>
+    <AssemblyVersion>1.2.0.0</AssemblyVersion>
+    <FileVersion>1.2.0.0</FileVersion>
+    <InformationalVersion>1.2.0-preview.1</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <DebugType>embedded</DebugType>
     <PublishTrimmed>false</PublishTrimmed>

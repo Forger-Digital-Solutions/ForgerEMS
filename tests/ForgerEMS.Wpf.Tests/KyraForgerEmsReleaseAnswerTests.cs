@@ -15,13 +15,13 @@ public sealed class KyraForgerEmsReleaseAnswerTests
                 UserQuestion = "What is the newest ForgerEMS release?",
                 Intent = KyraIntent.ForgerEMSQuestion,
                 PromptMode = CopilotPromptMode.General,
-                ContextText = """
+                    ContextText = """
                     User question: What is the newest ForgerEMS release?
-                    App version: 1.1.12-rc.7
+                    App version: 1.2.0-preview.1
                     """
             });
 
-        Assert.Contains("1.1.12-rc.7", text, StringComparison.Ordinal);
+        Assert.Contains("1.2.0-preview.1", text, StringComparison.Ordinal);
         Assert.Contains("running install", text, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("don't have live data tools", text, StringComparison.OrdinalIgnoreCase);
     }

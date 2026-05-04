@@ -4,7 +4,7 @@ Copy into email or attach as text. **Do not** include passwords, API keys, produ
 
 ---
 
-**App version:** (e.g. v1.1.12-rc.2)
+**App version:** (e.g. 1.2.0-preview.1 / ForgerEMS v1.2.0 Public Preview)
 
 **Windows version:** (Win+R → `winver`)
 

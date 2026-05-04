@@ -20,12 +20,14 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using VentoyToolkitSetup.Wpf;
+using VentoyToolkitSetup.Wpf.Configuration;
 using VentoyToolkitSetup.Wpf.Infrastructure;
 using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services;
 using VentoyToolkitSetup.Wpf.Services.Intelligence;
 using VentoyToolkitSetup.Wpf.Services.Kyra;
 using VentoyToolkitSetup.Wpf.Services.KyraTools;
+using VentoyToolkitSetup.Wpf.Services.Licensing;
 
 namespace VentoyToolkitSetup.Wpf.ViewModels;
 
@@ -84,6 +86,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _pendingZipUrlForClipboard = string.Empty;
     private string _checksumInstructionsClipboardText = string.Empty;
     private string _appUpdateLatestChannelText = "Latest release: —";
+    private UpdateCheckResult? _lastAppliedUpdateCheckResult;
+    private UpdateCheckMachineState _appUpdateMachineState = UpdateCheckMachineState.IdleNotChecked;
     private Visibility _appUpdateDownloadButtonVisibility = Visibility.Collapsed;
     private Visibility _appUpdateAdvancedDownloadButtonVisibility = Visibility.Collapsed;
     private Visibility _appUpdateCopyZipLinkVisibility = Visibility.Collapsed;
@@ -105,6 +109,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _kyraSanitizedContextPreviewText = string.Empty;
     private string _kyraAssistantStatusSummary = string.Empty;
     private bool _disposed;
+
+    private enum UsbBenchmarkHostInterruptKind
+    {
+        None,
+        SelectionChanged,
+        AppShutdown
+    }
+
+    private UsbBenchmarkHostInterruptKind _usbBenchmarkHostInterruptKind;
 
     private BackendContext _backendContext = BackendContext.Unavailable("Backend discovery has not run yet.");
     private UsbTargetInfo? _selectedUsbTarget;
@@ -142,6 +155,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _managedSummaryPathText = "Summary source: not detected";
     private string _managedSummaryUpdatedText = "Updated: n/a";
     private string _managedSummaryStatusText = "No snapshot";
+    private string _managedDownloadPartialBannerText = string.Empty;
+    private Visibility _managedDownloadRetryPanelVisibility = Visibility.Collapsed;
     private string _logsText = string.Empty;
     private string _recentLogsText = "No log output yet.";
     private string _selectedLogLevelFilter = "All";
@@ -338,6 +353,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         RevalidateManagedDownloadsCommand = new AsyncRelayCommand(RunRevalidateManagedDownloadsAsync, CanRunBackendOnlyActions);
         SetupUsbCommand = new AsyncRelayCommand(RunSetupUsbAsync, CanRunTargetedActions);
         UpdateUsbCommand = new AsyncRelayCommand(RunUpdateUsbAsync, CanRunTargetedActions);
+        RetryFailedManagedDownloadsCommand = new AsyncRelayCommand(RunRetryFailedManagedDownloadsAsync, CanRetryFailedManagedDownloads);
         RenameUsbCommand = new AsyncRelayCommand(RunRenameUsbAsync, CanRunTargetedActions);
         InstallOrUpdateVentoyCommand = new AsyncRelayCommand(RunInstallOrUpdateVentoyAsync, CanRunTargetedActions);
         RunSystemScanCommand = new AsyncRelayCommand(RunSystemScanAsync, CanRunBackendOnlyActions);
@@ -426,6 +442,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         OpenSupportEmailCommand = new RelayCommand(OpenSupportEmail);
         CopyBetaReportTemplateCommand = new RelayCommand(CopyBetaReportTemplate);
         CheckForUpdatesNowCommand = new AsyncRelayCommand(() => RequestUpdateCheckAsync(manual: true), () => !_updateCheckInProgress);
+        CopyUpdateDiagnosticsCommand = new RelayCommand(CopyUpdateCheckDiagnostics, CanCopyUpdateCheckDiagnostics);
+        ExportSupportBundleCommand = new AsyncRelayCommand(ExportSupportBundleAsync, () => !IsBusy && ForgerEmsEnvironmentConfiguration.EnableDiagnosticBundle);
         AppUpdateRemindLaterCommand = new RelayCommand(HideAppUpdateBanner);
         AppUpdateIgnoreVersionCommand = new RelayCommand(IgnorePendingAppUpdateVersion);
         AppUpdateViewReleaseNotesCommand = new RelayCommand(OpenPendingReleaseNotes);
@@ -435,8 +453,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         CopyUpdateZipLinkCommand = new RelayCommand(CopyPendingZipLink, CanCopyPendingZipLink);
         CopyUpdateChecksumInstructionsCommand =
             new RelayCommand(CopyPendingChecksumInstructions, CanCopyPendingChecksumInstructions);
+        CopyUpdateDiagnosticsCommand.RaiseCanExecuteChanged();
         ClearIgnoredAppUpdateVersionCommand = new RelayCommand(ClearIgnoredAppUpdateVersion, CanClearIgnoredAppUpdateVersion);
         ClearIgnoredAppUpdateVersionCommand.RaiseCanExecuteChanged();
+        CheckForUpdatesNowCommand.RaiseCanExecuteChanged();
 
         CopilotMessages.Add(new CopilotChatMessage
         {
@@ -483,7 +503,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public IReadOnlyList<string> LogLevelFilterOptions { get; } = ["All", "Info", "Success", "Warning", "Error"];
 
-    public IReadOnlyList<string> ToolkitFilterOptions { get; } = ["All", "Installed", "Managed Missing", "Manual Required", "Verification Issues", "Managed Updates", "Skipped/Placeholder"];
+    public IReadOnlyList<string> ToolkitFilterOptions { get; } =
+    [
+        "All",
+        "Installed",
+        "Managed Missing",
+        "Manual / Info",
+        "Manual Required",
+        "Verification Issues",
+        "Managed Updates",
+        "Skipped/Placeholder"
+    ];
 
     public IReadOnlyList<string> ToolkitCategoryFilterOptions { get; } = ["All categories", "Windows", "Linux", "Recovery", "Diagnostics", "USB Builders"];
 
@@ -500,6 +530,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public AsyncRelayCommand SetupUsbCommand { get; }
 
     public AsyncRelayCommand UpdateUsbCommand { get; }
+
+    public AsyncRelayCommand RetryFailedManagedDownloadsCommand { get; }
 
     public AsyncRelayCommand RenameUsbCommand { get; }
 
@@ -659,6 +691,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public RelayCommand CopyUpdateChecksumInstructionsCommand { get; }
 
+    public RelayCommand CopyUpdateDiagnosticsCommand { get; }
+
+    public AsyncRelayCommand ExportSupportBundleCommand { get; }
+
     public RelayCommand ClearIgnoredAppUpdateVersionCommand { get; }
 
     public RelayCommand OpenLogsFolderCommand { get; }
@@ -700,6 +736,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             }
 
             RefreshUsbIntelligenceFromDisk();
+            RefreshManagedDownloadRunArtifactFromSelectedUsb();
         }
     }
 
@@ -772,6 +809,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }
 
     public string AppVersionText { get; } = AppReleaseInfo.DisplayVersion;
+
+    public string PublicPreviewBannerText { get; } = AppReleaseInfo.PublicPreviewBannerLine;
+
+    public string FeatureMaturityGuideText => FeatureStatusService.BuildFeatureMaturityGuide();
+
+    public string KyraProviderHubConfigHealthSummary => KyraProviderHubConfigHealthFormatter.BuildSummary();
 
     public string HeaderUsbTargetText => SelectedUsbTarget is null ? "USB: none" : $"USB: {SelectedUsbTarget.RootPath}";
 
@@ -973,6 +1016,20 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         get => _managedSummaryStatusForeground;
         private set => SetProperty(ref _managedSummaryStatusForeground, value);
+    }
+
+    public ObservableCollection<ManagedDownloadFailedItemRecord> ManagedDownloadFailedRows { get; } = new();
+
+    public string ManagedDownloadPartialBannerText
+    {
+        get => _managedDownloadPartialBannerText;
+        private set => SetProperty(ref _managedDownloadPartialBannerText, value);
+    }
+
+    public Visibility ManagedDownloadRetryPanelVisibility
+    {
+        get => _managedDownloadRetryPanelVisibility;
+        private set => SetProperty(ref _managedDownloadRetryPanelVisibility, value);
     }
 
     public string TargetWarningText
@@ -1332,6 +1389,44 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             : "Channel: Stable only (prerelease releases are ignored).";
 #pragma warning restore CA1822
 
+    public string AppUpdateIncludePrereleasesValueText => IncludeBetaRcChannels ? "true" : "false";
+
+    public string AppUpdateMachineStateDisplay => UpdateCheckMachineStateResolver.Describe(_appUpdateMachineState);
+
+    public string AppUpdateLatestReleaseTagDisplay =>
+        _lastAppliedUpdateCheckResult switch
+        {
+            null => "—",
+            { SelectedReleaseTagRaw: var t } when !string.IsNullOrWhiteSpace(t) => t,
+            { LatestVersionLabel: var l } when !string.IsNullOrWhiteSpace(l) => l,
+            _ => "—"
+        };
+
+    public string AppUpdateLatestPublishedDisplay =>
+        _lastAppliedUpdateCheckResult?.SelectedReleasePublishedAt is { } u
+            ? u.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)
+            : "—";
+
+    public string AppUpdateAssetFoundDisplay =>
+        _lastAppliedUpdateCheckResult switch
+        {
+            null => "—",
+            { Succeeded: true } r => r.SuitablePrimaryAssetFound ? "Found (HTTPS ZIP or ForgerEMS EXE)" : "Missing",
+            _ => "—"
+        };
+
+    /// <summary>User-facing failure hint without raw HTTP bodies (those stay in Diagnostics when logged).</summary>
+    public string AppUpdateSafeFailureReasonDisplay =>
+        _lastAppliedUpdateCheckResult switch
+        {
+            null => "—",
+            { Succeeded: true, Outcome: UpdateCheckOutcome.NoSuitableAssets } r =>
+                string.IsNullOrWhiteSpace(r.ErrorMessage) ? "No downloadable assets on the latest release." : r.ErrorMessage!,
+            { Succeeded: true } => "—",
+            { ErrorMessage: { Length: > 0 } m } => m,
+            { FailureKind: var k } => $"Failure: {k}"
+        };
+
     public Visibility AppUpdateBannerVisibility
     {
         get => _appUpdateBannerVisibility;
@@ -1451,6 +1546,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             SaveUpdateSettings();
             OnPropertyChanged(nameof(IncludeBetaRcChannels));
             OnPropertyChanged(nameof(AppUpdateSettingsChannelLine));
+            OnPropertyChanged(nameof(AppUpdateIncludePrereleasesValueText));
         }
     }
 
@@ -2048,6 +2144,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void CancelUsbBenchmarksForSelectionChange()
     {
+        _usbBenchmarkHostInterruptKind = UsbBenchmarkHostInterruptKind.SelectionChanged;
         CancelManualUsbBenchmarkCtsOnly();
         CancelAutoUsbBenchmarkCtsOnly();
     }
@@ -2418,6 +2515,76 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             });
     }
 
+    private bool CanRetryFailedManagedDownloads() =>
+        !IsBusy &&
+        _backendContext.IsAvailable &&
+        SelectedUsbTarget is not null &&
+        UsbTargetSafety.IsSafeForBenchmark(SelectedUsbTarget, out _) &&
+        ManagedDownloadRetryPanelVisibility == Visibility.Visible;
+
+    private async Task RunRetryFailedManagedDownloadsAsync()
+    {
+        if (!TryGetValidatedSelectedTarget("Retry failed managed downloads", out var selectedUsbTarget))
+        {
+            return;
+        }
+
+        if (!ConfirmTargetedAction(
+                "Retry failed managed downloads",
+                selectedUsbTarget,
+                "This retries only items marked retryable in ForgerEMS-managed-download-result.json on the USB root. Already staged files are left intact."))
+        {
+            return;
+        }
+
+        var arguments = new System.Collections.Generic.List<string>
+        {
+            "-UsbRoot",
+            selectedUsbTarget.RootPath,
+            "-RetryFailedManagedDownloads"
+        };
+
+        await RunScriptAsync(
+            ScriptActionType.UpdateUsb,
+            new PowerShellRunRequest
+            {
+                DisplayName = "Retry failed managed downloads",
+                WorkingDirectory = _backendContext.WorkingDirectory,
+                ScriptPath = _backendContext.UpdateScriptPath,
+                Arguments = arguments,
+                ProgressItemName = "managed download retry"
+            });
+    }
+
+    private void RefreshManagedDownloadRunArtifactFromSelectedUsb()
+    {
+        ManagedDownloadFailedRows.Clear();
+        var artifact = ManagedDownloadRunArtifact.TryLoadFromUsbRoot(SelectedUsbTarget?.RootPath);
+        if (artifact is null)
+        {
+            ManagedDownloadPartialBannerText = string.Empty;
+            ManagedDownloadRetryPanelVisibility = Visibility.Collapsed;
+            RetryFailedManagedDownloadsCommand.RaiseCanExecuteChanged();
+            return;
+        }
+
+        ManagedDownloadPartialBannerText = string.Equals(artifact.Readiness, "PARTIALLY_STAGED", StringComparison.OrdinalIgnoreCase)
+            ? "USB is usable, but one or more managed items need attention. Fallback shortcuts may exist — use Retry Failed Downloads when available."
+            : string.Equals(artifact.Readiness, "READY", StringComparison.OrdinalIgnoreCase)
+                ? "USB is READY."
+                : $"Managed download readiness: {artifact.Readiness}";
+
+        foreach (var row in artifact.FailedItems)
+        {
+            ManagedDownloadFailedRows.Add(row);
+        }
+
+        var showRetry = string.Equals(artifact.Readiness, "PARTIALLY_STAGED", StringComparison.OrdinalIgnoreCase) &&
+                        artifact.HasRetryableFailures;
+        ManagedDownloadRetryPanelVisibility = showRetry ? Visibility.Visible : Visibility.Collapsed;
+        RetryFailedManagedDownloadsCommand.RaiseCanExecuteChanged();
+    }
+
     private async Task RunSystemScanAsync()
     {
         var scriptPath = ResolveBackendScriptPath(Path.Combine("SystemIntelligence", "Invoke-ForgerEMSSystemScan.ps1"));
@@ -2691,7 +2858,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (response.OnlineEnhancementApplied &&
             !t.Contains("Enhanced with online", StringComparison.OrdinalIgnoreCase))
         {
-            t = t.TrimEnd() + Environment.NewLine + Environment.NewLine + "_Enhanced with online model assist._";
+            var footer = response.GroundedInSystemIntelligence
+                ? "_Kyra · grounded in latest System Intelligence scan · online wording assist._"
+                : "_Kyra · online wording assist (run System Intelligence scan for grounded hardware facts)._";
+            t = t.TrimEnd() + Environment.NewLine + Environment.NewLine + footer;
         }
 
         if (response.ActionSuggestions is not { Count: > 0 })
@@ -3649,21 +3819,147 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool IsUsbRootStillPresent(string rootPath) =>
         TryGetUsbTargetByRootPath(rootPath) is not null;
 
-    private void LogManualBenchmarkCancellation(string targetAtStartPath)
+    private void LogManualBenchmarkCancellation(string targetAtStartPath, UsbBenchmarkResultKind kind)
     {
-        if (!IsUsbRootStillPresent(targetAtStartPath))
+        if (kind == UsbBenchmarkResultKind.DeviceRemoved)
         {
-            AppendLog(new LogLine(DateTimeOffset.Now, "[WARN] Benchmark cancelled: USB removed.", LogSeverity.Warning));
+            AppendLog(new LogLine(DateTimeOffset.Now, "[WARN] Benchmark stopped: USB drive removed.", LogSeverity.Warning));
+            return;
+        }
+
+        if (kind == UsbBenchmarkResultKind.TargetChanged)
+        {
+            AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Benchmark stopped: USB target identity changed.", LogSeverity.Info));
+            return;
+        }
+
+        if (kind == UsbBenchmarkResultKind.CancelledByHost)
+        {
+            AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Benchmark stopped: application shutdown.", LogSeverity.Info));
             return;
         }
 
         if (!UsbRootPathsEqual(SelectedUsbTarget?.RootPath, targetAtStartPath))
         {
-            AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Benchmark cancelled: selection changed.", LogSeverity.Info));
+            AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Benchmark stopped: selection changed.", LogSeverity.Info));
             return;
         }
 
-        AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Benchmark cancelled: user action.", LogSeverity.Info));
+        AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Benchmark cancelled by user.", LogSeverity.Info));
+    }
+
+    private static UsbBenchmarkResult ReconcileUsbBenchmarkWithLockedIdentity(
+        UsbBenchmarkResult result,
+        UsbTargetIdentitySnapshot identityAtStart,
+        string targetAtStartPath,
+        Func<string, UsbTargetInfo?> tryGetLiveTarget,
+        bool isAutomatic)
+    {
+        if (isAutomatic)
+        {
+            return result;
+        }
+
+        var live = tryGetLiveTarget(targetAtStartPath);
+        if (live is null)
+        {
+            if (result.Succeeded && result.ResultKind == UsbBenchmarkResultKind.Completed)
+            {
+                return BuildUsbBenchmarkReclassified(result, UsbBenchmarkResultKind.DeviceRemoved);
+            }
+
+            if (result.ResultKind == UsbBenchmarkResultKind.CancelledByUser)
+            {
+                return BuildUsbBenchmarkReclassified(result, UsbBenchmarkResultKind.DeviceRemoved);
+            }
+
+            return result;
+        }
+
+        if (!identityAtStart.MatchesVolumeIdentity(live, out _))
+        {
+            if (result.Succeeded && result.ResultKind == UsbBenchmarkResultKind.Completed)
+            {
+                return BuildUsbBenchmarkReclassified(result, UsbBenchmarkResultKind.TargetChanged);
+            }
+
+            if (result.ResultKind == UsbBenchmarkResultKind.CancelledByUser)
+            {
+                return BuildUsbBenchmarkReclassified(result, UsbBenchmarkResultKind.TargetChanged);
+            }
+        }
+
+        return result;
+    }
+
+    private static UsbBenchmarkResult BuildUsbBenchmarkReclassified(UsbBenchmarkResult source, UsbBenchmarkResultKind kind)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return new UsbBenchmarkResult
+        {
+            RunId = source.RunId,
+            Succeeded = false,
+            Status = kind switch
+            {
+                UsbBenchmarkResultKind.DeviceRemoved => "Device removed",
+                UsbBenchmarkResultKind.TargetChanged => "Target changed",
+                UsbBenchmarkResultKind.CancelledByHost => "Cancelled",
+                _ => "Cancelled"
+            },
+            Summary = "Benchmark did not complete",
+            Details = source.Details,
+            ReadSpeedDisplay = "—",
+            WriteSpeedDisplay = "—",
+            TestSizeMb = source.TestSizeMb,
+            LastTestedAt = now,
+            WriteSpeedMBps = 0,
+            ReadSpeedMBps = 0,
+            BenchmarkDurationMs = source.BenchmarkDurationMs,
+            IntelligenceMeasurementClass = string.Empty,
+            IntelligenceConfidenceScore = 0,
+            ResultKind = kind,
+            CancellationSource = source.CancellationSource,
+            StartedAtUtc = source.StartedAtUtc,
+            CompletedAtUtc = now,
+            ActualBytesWritten = source.ActualBytesWritten,
+            ActualBytesRead = source.ActualBytesRead,
+            WriteElapsedMs = source.WriteElapsedMs,
+            ReadElapsedMs = source.ReadElapsedMs,
+            TargetTopologyFingerprint = source.TargetTopologyFingerprint,
+            UiSummaryLine = UsbBenchmarkUiMessages.BuildUiSummary(kind, 0, 0)
+        };
+    }
+
+    private static UsbBenchmarkResult BuildManualBenchmarkCooperativeCancelResult(
+        UsbBenchmarkResultKind kind,
+        Guid runId,
+        DateTimeOffset startedAt,
+        string fingerprint)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return new UsbBenchmarkResult
+        {
+            RunId = runId,
+            Succeeded = false,
+            Status = kind switch
+            {
+                UsbBenchmarkResultKind.DeviceRemoved => "Device removed",
+                UsbBenchmarkResultKind.TargetChanged => "Target changed",
+                UsbBenchmarkResultKind.CancelledByHost => "Cancelled",
+                _ => "Cancelled"
+            },
+            Summary = "Benchmark interrupted",
+            Details = string.Empty,
+            ReadSpeedDisplay = "—",
+            WriteSpeedDisplay = "—",
+            LastTestedAt = now,
+            ResultKind = kind,
+            CancellationSource = UsbBenchmarkCancellationSource.OperationCanceledUnknown,
+            StartedAtUtc = startedAt,
+            CompletedAtUtc = now,
+            TargetTopologyFingerprint = fingerprint,
+            UiSummaryLine = UsbBenchmarkUiMessages.BuildUiSummary(kind, 0, 0)
+        };
     }
 
     private async Task AutoBenchmarkSelectedUsbSafeAsync(bool isAutomatic = true)
@@ -3683,6 +3979,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         var targetAtStartPath = target.RootPath;
         var benchmarkKey = GetBenchmarkCacheKey(target.RootPath);
+        var identityAtStart = UsbTargetIdentitySnapshot.Capture(target);
 
         if (isAutomatic && IsManualUsbBenchmarkActive())
         {
@@ -3727,21 +4024,32 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             if (!_benchmarksInProgress.Add(benchmarkKey))
             {
-                CancelManualUsbBenchmarkCtsOnly();
-                _benchmarksInProgress.Remove(benchmarkKey);
-                _benchmarksInProgress.Add(benchmarkKey);
+                AppendLog(new LogLine(
+                    DateTimeOffset.Now,
+                    "[INFO] USB benchmark already running for this target; duplicate start ignored.",
+                    LogSeverity.Info,
+                    channel: LiveLogChannel.Diagnostics));
+                return;
             }
         }
 
         if (!UsbTargetSafety.IsSafeForBenchmark(target, out var blockReason))
         {
+            var nowB = DateTimeOffset.UtcNow;
             ApplyBenchmarkResult(target, new UsbBenchmarkResult
             {
                 Succeeded = false,
+                Status = "Blocked",
                 Summary = "Benchmark skipped",
                 Details = blockReason,
                 ReadSpeedDisplay = "Skipped (unsafe)",
-                WriteSpeedDisplay = "Skipped (unsafe)"
+                WriteSpeedDisplay = "Skipped (unsafe)",
+                LastTestedAt = nowB,
+                ResultKind = UsbBenchmarkResultKind.BlockedBySafety,
+                StartedAtUtc = nowB,
+                CompletedAtUtc = nowB,
+                TargetTopologyFingerprint = identityAtStart.TopologyFingerprint,
+                UiSummaryLine = UsbBenchmarkUiMessages.BuildUiSummary(UsbBenchmarkResultKind.BlockedBySafety, 0, 0)
             });
             _benchmarksInProgress.Remove(benchmarkKey);
             return;
@@ -3761,6 +4069,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _manualUsbBenchmarkCts = ownedCts;
         }
 
+        _usbBenchmarkHostInterruptKind = UsbBenchmarkHostInterruptKind.None;
         var benchmarkToken = ownedCts!.Token;
 
         try
@@ -3781,7 +4090,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 ReadSpeedDisplay = cachedReadSpeed,
                 WriteSpeedDisplay = cachedWriteSpeed,
                 TestSizeMb = target.BenchmarkTestSizeMb,
-                LastTestedAt = target.BenchmarkLastTestedAt
+                LastTestedAt = target.BenchmarkLastTestedAt,
+                ResultKind = UsbBenchmarkResultKind.Running,
+                TargetTopologyFingerprint = identityAtStart.TopologyFingerprint,
+                UiSummaryLine = UsbBenchmarkUiMessages.BuildUiSummary(UsbBenchmarkResultKind.Running, 0, 0)
             });
             var startLabel = isAutomatic ? "Automatic USB speed check started" : "USB benchmark started";
             AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] {startLabel} for {target.RootPath}.", LogSeverity.Info));
@@ -3789,14 +4101,20 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             try
             {
                 var liveTarget = TryGetUsbTargetByRootPath(targetAtStartPath) ?? target;
-                var result = await _usbBenchmarkService.RunSequentialBenchmarkAsync(liveTarget, AppendLog, benchmarkToken);
+                var serviceResult = await _usbBenchmarkService.RunSequentialBenchmarkAsync(liveTarget, AppendLog, benchmarkToken);
+                var result = ReconcileUsbBenchmarkWithLockedIdentity(
+                    serviceResult,
+                    identityAtStart,
+                    targetAtStartPath,
+                    TryGetUsbTargetByRootPath,
+                    isAutomatic);
 
                 var liveAfter = TryGetUsbTargetByRootPath(targetAtStartPath) ?? liveTarget;
 
                 if (isAutomatic &&
-                    (!result.Succeeded &&
-                     (string.Equals(result.Status, "Cancelled", StringComparison.OrdinalIgnoreCase) ||
-                      result.Summary.Contains("cancel", StringComparison.OrdinalIgnoreCase))))
+                    (!serviceResult.Succeeded &&
+                     (string.Equals(serviceResult.Status, "Cancelled", StringComparison.OrdinalIgnoreCase) ||
+                      serviceResult.Summary.Contains("cancel", StringComparison.OrdinalIgnoreCase))))
                 {
                     AppendLog(new LogLine(
                         DateTimeOffset.Now,
@@ -3810,22 +4128,36 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                     ApplyBenchmarkResult(liveAfter, result);
                 }
 
-                if (result.Succeeded)
+                if (!string.IsNullOrWhiteSpace(result.UiSummaryLine))
+                {
+                    AppendLog(
+                        new LogLine(
+                            DateTimeOffset.Now,
+                            $"[INFO] View benchmark details: {result.UiSummaryLine}",
+                            LogSeverity.Info,
+                            channel: LiveLogChannel.Diagnostics));
+                }
+
+                if (result.Succeeded && result.ResultKind == UsbBenchmarkResultKind.Completed)
                 {
                     var doneLabel = isAutomatic ? "Automatic USB speed check finished" : "USB benchmark finished";
                     AppendLog(new LogLine(DateTimeOffset.Now, $"[OK] {doneLabel} for {target.RootPath}: write {result.WriteSpeedDisplay}, read {result.ReadSpeedDisplay}.", LogSeverity.Success));
                 }
-                else if (!isAutomatic &&
-                         (string.Equals(result.Status, "Cancelled", StringComparison.OrdinalIgnoreCase) ||
-                          result.Summary.Contains("cancel", StringComparison.OrdinalIgnoreCase)))
+                else if (!isAutomatic)
                 {
-                    LogManualBenchmarkCancellation(targetAtStartPath);
-                }
-                else if (!isAutomatic &&
-                         (result.Summary.Contains("failed", StringComparison.OrdinalIgnoreCase) ||
-                          result.Status.Contains("failed", StringComparison.OrdinalIgnoreCase)))
-                {
-                    AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] USB benchmark could not complete for {target.RootPath}.", LogSeverity.Warning));
+                    var k = result.GetEffectiveResultKind();
+                    if (k is UsbBenchmarkResultKind.CancelledByUser
+                        or UsbBenchmarkResultKind.DeviceRemoved
+                        or UsbBenchmarkResultKind.TargetChanged
+                        or UsbBenchmarkResultKind.CancelledByHost)
+                    {
+                        LogManualBenchmarkCancellation(targetAtStartPath, k);
+                    }
+                    else if (result.Summary.Contains("failed", StringComparison.OrdinalIgnoreCase) ||
+                             result.Status.Contains("failed", StringComparison.OrdinalIgnoreCase))
+                    {
+                        AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] USB benchmark could not complete for {target.RootPath}.", LogSeverity.Warning));
+                    }
                 }
                 else if (isAutomatic &&
                          (result.Summary.Contains("failed", StringComparison.OrdinalIgnoreCase) ||
@@ -3848,24 +4180,50 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 }
                 else
                 {
-                    ApplyBenchmarkResult(
-                        liveAfter,
-                        new UsbBenchmarkResult
-                        {
-                            Succeeded = false,
-                            Status = "Cancelled",
-                            Summary = "Benchmark cancelled",
-                            Details = "The benchmark was cancelled.",
-                            ReadSpeedDisplay = "Cancelled",
-                            WriteSpeedDisplay = "Cancelled",
-                            LastTestedAt = DateTimeOffset.Now
-                        });
-                    LogManualBenchmarkCancellation(targetAtStartPath);
+                    var interrupt = _usbBenchmarkHostInterruptKind;
+                    _usbBenchmarkHostInterruptKind = UsbBenchmarkHostInterruptKind.None;
+                    UsbBenchmarkResultKind interruptKind;
+                    if (!IsUsbRootStillPresent(targetAtStartPath))
+                    {
+                        interruptKind = UsbBenchmarkResultKind.DeviceRemoved;
+                    }
+                    else if (interrupt == UsbBenchmarkHostInterruptKind.AppShutdown)
+                    {
+                        interruptKind = UsbBenchmarkResultKind.CancelledByHost;
+                    }
+                    else if (interrupt == UsbBenchmarkHostInterruptKind.SelectionChanged ||
+                             !UsbRootPathsEqual(SelectedUsbTarget?.RootPath, targetAtStartPath))
+                    {
+                        interruptKind = UsbBenchmarkResultKind.TargetChanged;
+                    }
+                    else
+                    {
+                        interruptKind = UsbBenchmarkResultKind.CancelledByUser;
+                    }
+
+                    var cooperative = BuildManualBenchmarkCooperativeCancelResult(
+                        interruptKind,
+                        Guid.NewGuid(),
+                        DateTimeOffset.UtcNow,
+                        identityAtStart.TopologyFingerprint);
+                    ApplyBenchmarkResult(liveAfter, cooperative);
+                    if (!string.IsNullOrWhiteSpace(cooperative.UiSummaryLine))
+                    {
+                        AppendLog(
+                            new LogLine(
+                                DateTimeOffset.Now,
+                                $"[INFO] View benchmark details: {cooperative.UiSummaryLine}",
+                                LogSeverity.Info,
+                                channel: LiveLogChannel.Diagnostics));
+                    }
+
+                    LogManualBenchmarkCancellation(targetAtStartPath, interruptKind);
                 }
             }
             catch (Exception exception)
             {
                 var liveAfter = TryGetUsbTargetByRootPath(targetAtStartPath) ?? target;
+                var nowE = DateTimeOffset.UtcNow;
                 ApplyBenchmarkResult(liveAfter, new UsbBenchmarkResult
                 {
                     Succeeded = false,
@@ -3874,7 +4232,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                     Details = exception.Message,
                     ReadSpeedDisplay = "Could not complete",
                     WriteSpeedDisplay = "Could not complete",
-                    LastTestedAt = DateTimeOffset.Now
+                    LastTestedAt = nowE,
+                    ResultKind = UsbBenchmarkResultKind.IoFailed,
+                    CompletedAtUtc = nowE,
+                    TargetTopologyFingerprint = identityAtStart.TopologyFingerprint,
+                    UiSummaryLine = UsbBenchmarkUiMessages.BuildUiSummary(
+                        UsbBenchmarkResultKind.IoFailed,
+                        0,
+                        0,
+                        "Unexpected error.")
                 });
                 var failLabel = isAutomatic ? "Automatic USB speed check could not complete" : "USB benchmark could not complete";
                 AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] {failLabel} for {target.RootPath}.", LogSeverity.Warning));
@@ -3961,6 +4327,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             var parsed = _scriptStatusParser.Parse(action, request.DisplayName, runResult);
 
             await LoadManagedSummaryAsync();
+            RefreshManagedDownloadRunArtifactFromSelectedUsb();
             await RefreshVentoyStatusAsync();
 
             if (parsed.Succeeded)
@@ -4203,7 +4570,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             ToolkitMissingCountText = $"Managed Missing: {missing}";
             ToolkitUpdatesCountText = $"Managed updates available: {updates}";
             ToolkitFailedCountText = $"Verification issues: {failed}";
-            ToolkitManualCountText = $"Manual Required: {manual}";
+            ToolkitManualCountText = $"Manual / Info items: {manual}";
             ToolkitPlaceholderCountText = $"Skipped/Placeholder {skipped + placeholder}";
             var healthVerdict = GetJsonString(root, "healthVerdict", "UNKNOWN");
             ToolkitLastScanText = $"Last scan: {FormatGeneratedUtc(GetJsonString(root, "generatedUtc", string.Empty))}";
@@ -4214,7 +4581,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             if (functionalHealthy && verdictUpper.Contains("MANUAL", StringComparison.Ordinal))
             {
                 ToolkitHealthVerdictText =
-                    "Health Verdict: MANUAL ACTION NEEDED — Toolkit is usable. Some optional/manual tools still require user-provided downloads or placeholders.";
+                    "Toolkit usable — manual/info items available (expected: download pages, licensed tools, or gated downloads ForgerEMS does not auto-fetch).";
                 ToolkitStatusText = healthVerdict;
                 ApplyStatusBrushes(
                     "READY",
@@ -4327,6 +4694,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             "Managed Updates" => string.Equals(item.Status, "UPDATE_AVAILABLE", StringComparison.OrdinalIgnoreCase),
             "Verification Issues" => string.Equals(item.Status, "HASH_FAILED", StringComparison.OrdinalIgnoreCase),
             "Manual Required" => string.Equals(item.Status, "MANUAL_REQUIRED", StringComparison.OrdinalIgnoreCase),
+            "Manual / Info" => string.Equals(item.Status, "MANUAL_REQUIRED", StringComparison.OrdinalIgnoreCase),
             "Skipped/Placeholder" => string.Equals(item.Status, "SKIPPED", StringComparison.OrdinalIgnoreCase) ||
                                      string.Equals(item.Status, "PLACEHOLDER", StringComparison.OrdinalIgnoreCase),
             _ => true
@@ -4675,7 +5043,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         var parts = disks.EnumerateArray()
-            .Select(disk => $"{GetJsonString(disk, "name", "Disk")} | {GetJsonString(disk, "interfaceType", "UNKNOWN")} {GetJsonString(disk, "mediaType", "UNKNOWN")} | {GetJsonString(disk, "size", "UNKNOWN")} | health {GetJsonString(disk, "healthDisplay", GetJsonString(disk, "health", "Health not reported"))} | temp {GetJsonString(disk, "temperatureDisplay", "Temp unavailable - drive does not expose sensor")} | wear {GetJsonString(disk, "wearDisplay", "Wear unavailable - drive does not expose life counter")} ({GetJsonString(disk, "status", "UNKNOWN")})")
+            .Select(disk => $"{GetJsonString(disk, "name", "Disk")} | {GetJsonString(disk, "interfaceType", "UNKNOWN")} {GetJsonString(disk, "mediaType", "UNKNOWN")} | {GetJsonString(disk, "size", "UNKNOWN")} | health {GetJsonString(disk, "healthDisplay", GetJsonString(disk, "health", "Health not reported"))} | temp {GetJsonString(disk, "temperatureDisplay", "Temp: Not exposed")} | wear {GetJsonString(disk, "wearDisplay", "Wear: Not exposed")} ({GetJsonString(disk, "status", "UNKNOWN")})")
             .ToArray();
         var volumeParts = root.TryGetProperty("volumes", out var volumes) && volumes.ValueKind == JsonValueKind.Array
             ? volumes.EnumerateArray()
@@ -4699,7 +5067,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         var parts = batteries.EnumerateArray()
-            .Select(battery => $"{GetJsonString(battery, "name", "Battery")} {GetJsonInt(battery, "estimatedChargeRemaining")}% charge, design {GetJsonString(battery, "designCapacityDisplay", "Design capacity not reported")}, full {GetJsonString(battery, "fullChargeCapacityDisplay", "Full charge capacity not reported")}, wear {GetJsonString(battery, "wearDisplay", "Wear unavailable")}, cycles {GetJsonString(battery, "cycleCountDisplay", "Cycle count not reported")}, AC {FormatNullableBool(GetJsonNullableBool(battery, "acConnected"))} ({GetJsonString(battery, "healthDisplay", GetJsonString(battery, "status", "UNKNOWN"))})")
+            .Select(battery => $"{GetJsonString(battery, "name", "Battery")} {GetJsonInt(battery, "estimatedChargeRemaining")}% charge, design {GetJsonString(battery, "designCapacityDisplay", "Not exposed by firmware/Windows")}, full {GetJsonString(battery, "fullChargeCapacityDisplay", "Not exposed by firmware/Windows")}, wear {GetJsonString(battery, "wearDisplay", "Battery wear: Not exposed by firmware/Windows")}, cycles {GetJsonString(battery, "cycleCountDisplay", "Not exposed by firmware/Windows")}, AC {FormatNullableBool(GetJsonNullableBool(battery, "acConnected"))} ({GetJsonString(battery, "healthDisplay", GetJsonString(battery, "status", "UNKNOWN"))})")
             .ToArray();
         return $"Battery: {FormatList(parts, "present, details unavailable")}";
     }
@@ -5349,15 +5717,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        if (!string.Equals(result.Status, "Testing", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(result.Status, "Queued", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(result.Status, "Skipped", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(result.Status, "Cancelled", StringComparison.OrdinalIgnoreCase))
+        if (result.ShouldPersistSuccessfulHistory)
         {
             _benchmarkResultsByRoot[GetBenchmarkCacheKey(target.RootPath)] = result;
             SaveBenchmarkCache();
 
-            if (result.Succeeded && result.WriteSpeedMBps > 0)
+            if (result.WriteSpeedMBps > 0)
             {
                 var intel = UsbBenchmarkProfileSync.FromServiceResult(result);
                 if (intel is not null)
@@ -5531,6 +5896,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             entitlement = false;
             verboseLogs = false;
             embeddedWslRunner = false;
+        }
+
+        if (string.Equals(Environment.GetEnvironmentVariable("FORGEREMS_LICENSE_TIER"), "BetaTesterPro", StringComparison.OrdinalIgnoreCase))
+        {
+            entitlement = true;
         }
 
         BetaTesterEntitlement = entitlement;
@@ -5832,6 +6202,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             BenchmarkStatus = string.IsNullOrWhiteSpace(result.Status) ? (result.Succeeded ? "Complete" : "Failed") : result.Status,
             BenchmarkTestSizeMb = result.TestSizeMb,
             BenchmarkLastTestedAt = result.LastTestedAt,
+            BenchmarkUiSummaryLine = string.IsNullOrWhiteSpace(result.UiSummaryLine)
+                ? UsbBenchmarkUiMessages.BuildUiSummary(result.GetEffectiveResultKind(), result.ReadSpeedMBps, result.WriteSpeedMBps, result.Details)
+                : result.UiSummaryLine,
             PartitionType = target.PartitionType,
             IsSystemDrive = target.IsSystemDrive,
             IsBootDrive = target.IsBootDrive,
@@ -5890,11 +6263,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         try
         {
             var stableResults = _benchmarkResultsByRoot
-                .Where(pair => pair.Value.LastTestedAt.HasValue &&
-                               !string.Equals(pair.Value.Status, "Testing", StringComparison.OrdinalIgnoreCase) &&
-                               !string.Equals(pair.Value.Status, "Queued", StringComparison.OrdinalIgnoreCase) &&
-                               !string.Equals(pair.Value.Status, "Skipped", StringComparison.OrdinalIgnoreCase) &&
-                               !string.Equals(pair.Value.Status, "Cancelled", StringComparison.OrdinalIgnoreCase))
+                .Where(pair => pair.Value.ShouldPersistSuccessfulHistory &&
+                               pair.Value.LastTestedAt.HasValue)
                 .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
 
             Directory.CreateDirectory(Path.GetDirectoryName(_benchmarkCachePath)!);
@@ -5928,7 +6298,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             try
             {
                 await Task.Delay(TimeSpan.FromSeconds(4), cancellationToken).ConfigureAwait(false);
-                if (cancellationToken.IsCancellationRequested || _isBusy || _refreshingUsbTargets)
+                if (cancellationToken.IsCancellationRequested || _isBusy || _refreshingUsbTargets || _benchmarksInProgress.Count > 0)
                 {
                     continue;
                 }
@@ -6900,6 +7270,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(LastUpdateCheckDisplayText));
         OnPropertyChanged(nameof(AppUpdateSettingsIgnoredSummary));
         OnPropertyChanged(nameof(AppUpdateSettingsIgnoredVisibility));
+        OnPropertyChanged(nameof(AppUpdateIncludePrereleasesValueText));
+        RaiseAppUpdateStatusDetailProperties();
     }
 
     private void SaveUpdateSettings()
@@ -6944,6 +7316,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         if (_updateCheckInProgress)
         {
+            AppendLog(new LogLine(
+                DateTimeOffset.Now,
+                "[INFO] Update check already running; this request was skipped.",
+                LogSeverity.Info,
+                channel: LiveLogChannel.Update));
             return;
         }
 
@@ -6951,6 +7328,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         RunOnUi(() =>
         {
             CheckForUpdatesNowCommand.RaiseCanExecuteChanged();
+            RefreshAppUpdateMachineStateForUi(inProgress: true);
             AppUpdateStateDisplay = manual ? "Checking for updates…" : "Checking for updates in background…";
             if (manual)
             {
@@ -7065,6 +7443,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                         LogSeverity.Info,
                         channel: LiveLogChannel.Update));
                 }
+                else if (result.Outcome == UpdateCheckOutcome.NoSuitableAssets)
+                {
+                    AppendLog(new LogLine(
+                        DateTimeOffset.Now,
+                        "[INFO] Latest GitHub release has no downloadable assets yet.",
+                        LogSeverity.Info,
+                        channel: LiveLogChannel.Update));
+                }
             }
             else
             {
@@ -7102,13 +7488,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _appUpdateSettings.LastCheckedUtc = DateTimeOffset.UtcNow;
             SaveUpdateSettings();
 
+            _updateCheckInProgress = false;
             var applyResult = result;
             RunOnUi(() => ApplyUpdateCheckResultToUi(applyResult, manual));
-
-            _updateCheckInProgress = false;
             RunOnUi(() =>
             {
                 CheckForUpdatesNowCommand.RaiseCanExecuteChanged();
+                CopyUpdateDiagnosticsCommand.RaiseCanExecuteChanged();
                 AppUpdateDownloadInstallerCommand.RaiseCanExecuteChanged();
             });
         }
@@ -7133,23 +7519,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         var norm = ReleaseVersionParser.NormalizeLabel(result.LatestVersionLabel);
-        return new UpdateCheckResult
+        return result with
         {
-            Succeeded = true,
             Outcome = UpdateCheckOutcome.IgnoredVersion,
             UpdateAvailable = false,
-            LatestVersion = result.LatestVersion,
-            LatestVersionLabel = result.LatestVersionLabel,
-            ReleaseNotesUrl = result.ReleaseNotesUrl,
-            InstallerAssetName = result.InstallerAssetName,
-            InstallerDownloadUrl = result.InstallerDownloadUrl,
-            RecommendedZipAssetName = result.RecommendedZipAssetName,
-            RecommendedZipDownloadUrl = result.RecommendedZipDownloadUrl,
-            ChecksumsDownloadUrl = result.ChecksumsDownloadUrl,
-            DownloadInstructionsUrl = result.DownloadInstructionsUrl,
-            VersionComparisonUncertain = result.VersionComparisonUncertain,
-            RecommendedZipPatternMatched = result.RecommendedZipPatternMatched,
-            RecommendedZipAssetMissing = result.RecommendedZipAssetMissing,
             ErrorMessage = UpdateCheckDisplay.FormatIgnoredVersion(norm)
         };
     }
@@ -7157,6 +7530,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private void ApplyUpdateCheckResultToUi(UpdateCheckResult result, bool manual)
     {
         OnPropertyChanged(nameof(LastUpdateCheckDisplayText));
+
+        _lastAppliedUpdateCheckResult = result;
+        _appUpdateMachineState = UpdateCheckMachineStateResolver.Resolve(updateCheckInProgress: false, result);
+        RaiseAppUpdateStatusDetailProperties();
 
         var state = UpdateCheckUiPresenter.Map(result, manual, AppReleaseInfo.Version);
 
@@ -7214,6 +7591,93 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         AppUpdateBannerVisibility = Visibility.Collapsed;
         AppUpdateDiagnosticsHintVisibility = Visibility.Collapsed;
+    }
+
+    private void RefreshAppUpdateMachineStateForUi(bool inProgress)
+    {
+        _appUpdateMachineState = UpdateCheckMachineStateResolver.Resolve(inProgress, _lastAppliedUpdateCheckResult);
+        RaiseAppUpdateStatusDetailProperties();
+    }
+
+    private void RaiseAppUpdateStatusDetailProperties()
+    {
+        OnPropertyChanged(nameof(AppUpdateMachineStateDisplay));
+        OnPropertyChanged(nameof(AppUpdateLatestReleaseTagDisplay));
+        OnPropertyChanged(nameof(AppUpdateLatestPublishedDisplay));
+        OnPropertyChanged(nameof(AppUpdateAssetFoundDisplay));
+        OnPropertyChanged(nameof(AppUpdateSafeFailureReasonDisplay));
+    }
+
+    private static bool CanCopyUpdateCheckDiagnostics() => true;
+
+    private void CopyUpdateCheckDiagnostics()
+    {
+        try
+        {
+            var text = UpdateCheckDiagnosticsFormatter.BuildClipboardSummary(
+                _lastAppliedUpdateCheckResult,
+                UpdateCheckMachineStateResolver.Resolve(_updateCheckInProgress, _lastAppliedUpdateCheckResult),
+                AppReleaseInfo.Version,
+                _appUpdateSettings.IncludeBetaRcChannels);
+            Clipboard.SetDataObject(text, copy: true);
+            AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Update-check diagnostics copied to clipboard (safe summary).", LogSeverity.Success, channel: LiveLogChannel.Update));
+        }
+        catch (Exception exception)
+        {
+            AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Clipboard copy failed: {exception.Message}", LogSeverity.Warning, channel: LiveLogChannel.Update));
+        }
+    }
+
+    private async Task ExportSupportBundleAsync()
+    {
+        await Task.Yield();
+        try
+        {
+            var dlg = new SaveFileDialog
+            {
+                Filter = "ZIP archive (*.zip)|*.zip",
+                FileName = $"ForgerEMS-support-bundle-{DateTime.UtcNow:yyyyMMdd-HHmmss}.zip"
+            };
+
+            if (dlg.ShowDialog() != true)
+            {
+                return;
+            }
+
+            var updateText = UpdateCheckDiagnosticsFormatter.BuildClipboardSummary(
+                _lastAppliedUpdateCheckResult,
+                UpdateCheckMachineStateResolver.Resolve(_updateCheckInProgress, _lastAppliedUpdateCheckResult),
+                AppReleaseInfo.Version,
+                _appUpdateSettings.IncludeBetaRcChannels);
+
+            var tier = FeatureGateService.ResolveEffectiveTier(BetaTesterEntitlement);
+            var configHealth =
+                KyraProviderHubConfigHealthFormatter.BuildSummary() +
+                Environment.NewLine +
+                $"Effective license tier (local): {tier}" + Environment.NewLine +
+                $"FORGEREMS_ENV: {ForgerEmsEnvironmentConfiguration.ForgerEmsEnv}" + Environment.NewLine +
+                $"FORGEREMS_RELEASE_CHANNEL: {ForgerEmsEnvironmentConfiguration.ReleaseChannel}" + Environment.NewLine +
+                $"GitHub update source: {ForgerEmsEnvironmentConfiguration.GitHubOwner}/{ForgerEmsEnvironmentConfiguration.GitHubRepo}" + Environment.NewLine +
+                $"TelemetryEnabled(env): {ForgerEmsFeatureFlags.TelemetryEnabled} | CrashReporting: {ForgerEmsFeatureFlags.CrashReportingEnabled}";
+
+            if (!SupportBundleExporter.TryCreateSupportBundle(
+                    dlg.FileName,
+                    _appRuntimeService,
+                    SelectedUsbTarget?.RootPath,
+                    updateText,
+                    configHealth,
+                    out var err))
+            {
+                AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Support bundle export failed: {err}", LogSeverity.Warning, channel: LiveLogChannel.Diagnostics));
+                return;
+            }
+
+            AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Exported redacted support bundle.", LogSeverity.Success, channel: LiveLogChannel.Diagnostics));
+        }
+        catch (Exception exception)
+        {
+            AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Support bundle export failed: {exception.Message}", LogSeverity.Warning, channel: LiveLogChannel.Diagnostics));
+        }
     }
 
     private bool CanClearIgnoredAppUpdateVersion()
@@ -7385,7 +7849,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             using var client = new HttpClient();
             client.Timeout = TimeSpan.FromMinutes(20);
-            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "ForgerEMS-UpdateDownload/1.1.12");
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", $"ForgerEMS-UpdateDownload/{AppReleaseInfo.Version}");
             await using var stream = await client.GetStreamAsync(downloadUrl).ConfigureAwait(false);
             await using var file = File.Create(targetPath);
             using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
@@ -7759,6 +8223,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         RevalidateManagedDownloadsCommand.RaiseCanExecuteChanged();
         SetupUsbCommand.RaiseCanExecuteChanged();
         UpdateUsbCommand.RaiseCanExecuteChanged();
+        RetryFailedManagedDownloadsCommand.RaiseCanExecuteChanged();
         RenameUsbCommand.RaiseCanExecuteChanged();
         InstallOrUpdateVentoyCommand.RaiseCanExecuteChanged();
         RunSystemScanCommand.RaiseCanExecuteChanged();
@@ -8087,6 +8552,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _disposed = true;
         _usbMonitorCancellation?.Cancel();
         _copilotGenerationCancellation?.Cancel();
+        _usbBenchmarkHostInterruptKind = UsbBenchmarkHostInterruptKind.AppShutdown;
         try
         {
             _manualUsbBenchmarkCts?.Cancel();

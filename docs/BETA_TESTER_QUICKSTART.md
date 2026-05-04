@@ -1,4 +1,4 @@
-# ForgerEMS beta tester quickstart (v1.1.12-rc.3)
+# ForgerEMS beta tester quickstart (Public Preview v1.2.0-preview.1)
 
 **Forger Engineering Maintenance Suite** — built by **Forger Digital Solutions**.
 
@@ -8,7 +8,7 @@
 
 ## 1. Download the ZIP from GitHub Releases
 
-Get **`ForgerEMS-v1.1.12-rc.3.zip`** or **`ForgerEMS-Beta-v1.1.12-rc.3.zip`** (same bundle style; pick one). Optionally verify **`CHECKSUMS.sha256`** from the same release.
+Get **`ForgerEMS-v1.2.0-preview.1.zip`** or **`ForgerEMS-Beta-v1.2.0-preview.1.zip`** when published (same bundle style; pick one). Optionally verify **`CHECKSUMS.sha256`** from the same release. Older `v1.1.12-rc.*` assets remain on prior GitHub tags for history only.
 
 If the browser download behaves oddly, read **[DOWNLOAD_TROUBLESHOOTING.md](DOWNLOAD_TROUBLESHOOTING.md)** and **[FIRST_TESTER_DOWNLOAD_FLOW.md](FIRST_TESTER_DOWNLOAD_FLOW.md)**.
 

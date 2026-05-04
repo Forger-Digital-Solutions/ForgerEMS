@@ -58,4 +58,60 @@ public sealed class KyraTruthGuardTests
     {
         Assert.True(KyraFollowUpClassifier.LooksLikeConversationFollowUp("What about that USB?"));
     }
+
+    [Fact]
+    public void ContradictsLedger_IntelCpuVsRyzenOnline_IsContradiction()
+    {
+        var ledger = new KyraFactsLedger
+        {
+            HasSystemIntelligenceProfile = true,
+            CpuSummary = "Intel Core i7-9850H",
+            DeviceSummary = "Dell Precision 5540"
+        };
+        const string online = "Your CPU is an AMD Ryzen 9 5900HX with 64 GB RAM.";
+        Assert.True(KyraSafetyPolicy.ContradictsLocalHardwareLedger(online, ledger));
+    }
+
+    [Fact]
+    public void ContradictsLedger_AmdCpuVsIntelCoreOnline_IsContradiction()
+    {
+        var ledger = new KyraFactsLedger
+        {
+            HasSystemIntelligenceProfile = true,
+            CpuSummary = "AMD Ryzen 7 PRO 4750U",
+            DeviceSummary = "Lenovo ThinkPad"
+        };
+        const string online = "This PC has an Intel Core i7-1165G7.";
+        Assert.True(KyraSafetyPolicy.ContradictsLocalHardwareLedger(online, ledger));
+    }
+
+    [Fact]
+    public void ContradictsLedger_IntelUhdVsRtxOnline_IsContradiction()
+    {
+        var ledger = new KyraFactsLedger
+        {
+            HasSystemIntelligenceProfile = true,
+            CpuSummary = "Intel Core i7-9850H",
+            GpuSummary = "Intel UHD Graphics 630",
+            RamSummary = "32 GB",
+            DeviceSummary = "Dell Precision 5540"
+        };
+        const string online = "Your laptop has an NVIDIA GeForce RTX 3080 Laptop GPU.";
+        Assert.True(KyraSafetyPolicy.ContradictsLocalHardwareLedger(online, ledger));
+    }
+
+    [Fact]
+    public void ContradictsLedger_RamAmountFarFromLedger_IsContradiction()
+    {
+        var ledger = new KyraFactsLedger
+        {
+            HasSystemIntelligenceProfile = true,
+            CpuSummary = "Intel Core i7-9850H",
+            RamSummary = "32 GB",
+            GpuSummary = "NVIDIA Quadro T2000",
+            DeviceSummary = "Dell Precision 5540"
+        };
+        const string online = "This machine ships with 64 GB of RAM for heavy CAD workloads.";
+        Assert.True(KyraSafetyPolicy.ContradictsLocalHardwareLedger(online, ledger));
+    }
 }

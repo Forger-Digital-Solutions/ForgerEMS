@@ -1,8 +1,8 @@
-# ForgerEMS (Beta)
+# ForgerEMS (Public Preview)
 
 **Forger Engineering Maintenance Suite** — a Windows desktop app for technicians who work with USB toolkits, repairs, and diagnostics.
 
-**Current release line:** **v1.1.12-rc.3** (mechanical RC; USB mapping wizard, USB benchmark scheduling, and related fixes continue to evolve).
+**Current release line:** **v1.2.0-preview.1** — **ForgerEMS v1.2.0 Public Preview** (Kickstarter-facing polish, config/env layer, support bundle export, licensing foundations, and documentation pass; core WPF/.NET 8 architecture unchanged).
 
 **Kickstarter:** [Campaign link — add when live](https://www.kickstarter.com/)
 
@@ -14,7 +14,7 @@
 
 ForgerEMS helps you **build and maintain a capable USB toolkit**, **understand what the PC is doing** (storage, health signals, diagnostics), and get **guided help from Kyra** — an assistant that works **offline by default**. It is built for repair benches, shops, resellers, and advanced home users who want fewer guess-and-check afternoons.
 
-This is **beta software**: behavior and packaging can change between builds. See [docs/LEGAL.md](docs/LEGAL.md) and [docs/PRIVACY.md](docs/PRIVACY.md).
+This is **Public Preview / prerelease** software: behavior and packaging can change between builds. See [docs/LEGAL.md](docs/LEGAL.md) and [docs/PRIVACY.md](docs/PRIVACY.md). Operator environment variables: [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md).
 
 ---
 
@@ -92,10 +92,16 @@ Staging without compiling the installer:
 .\tools\build-release.ps1 -DryRun
 ```
 
-Full local release (version follows `src/ForgerEMS.Wpf/ForgerEMS.Wpf.csproj`, currently **1.1.12-rc.3**):
+Full local release (version follows `src/ForgerEMS.Wpf/ForgerEMS.Wpf.csproj`, currently **1.2.0-preview.1** / **ForgerEMS v1.2.0 Public Preview**):
 
 ```powershell
-.\tools\build-release.ps1 -Version 1.1.12-rc.3
+.\tools\build-release.ps1 -Version 1.2.0-preview.1
+```
+
+Without Inno Setup (skips installer + dual ZIP bundle; still stages `release\current\` app + backend + `release.json` + checksums):
+
+```powershell
+.\tools\build-release.ps1 -Version 1.2.0-preview.1 -SkipInstaller
 ```
 
 Release layout, CI, and operator checklists: [RELEASE_PROCESS.md](RELEASE_PROCESS.md), [BETA_RELEASE_CHECKLIST.md](BETA_RELEASE_CHECKLIST.md), [BETA_TESTING_GUIDE.md](BETA_TESTING_GUIDE.md).

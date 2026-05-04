@@ -1,4 +1,4 @@
-# ForgerEMS — Legal / beta notice (practical disclaimer)
+# ForgerEMS — Legal / preview notice (practical disclaimer)
 
 **Copyright © 2026 Forger Digital Solutions. All rights reserved.**
 
@@ -6,9 +6,9 @@
 
 ---
 
-## Beta software — as-is
+## Public Preview / prerelease — as-is
 
-ForgerEMS beta builds are prerelease software provided **“as-is”**, without warranties express or implied, to the extent permitted by law. **Use at your own risk.**
+ForgerEMS Public Preview and beta-line builds are prerelease software provided **“as-is”**, without warranties express or implied, to the extent permitted by law. **Use at your own risk.**
 
 ---
 

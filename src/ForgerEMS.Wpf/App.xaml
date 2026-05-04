@@ -22,5 +22,53 @@
         <SolidColorBrush x:Key="PanelTextBrush" Color="#FFF4F8FF" />
         <SolidColorBrush x:Key="PanelMutedTextBrush" Color="#FFB8C8DA" />
         <SolidColorBrush x:Key="PanelLabelBrush" Color="#FFFFC58F" />
+
+        <!-- Shared status pill / badge surfaces (USB, Toolkit, diagnostics, updates) -->
+        <Style x:Key="StatusPillBorderStyle" TargetType="Border">
+            <Setter Property="CornerRadius" Value="999" />
+            <Setter Property="Padding" Value="14,6" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="UseLayoutRounding" Value="True" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="StatusPillTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="TextAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="TextWrapping" Value="NoWrap" />
+        </Style>
+        <Style x:Key="SuccessPillStyle" TargetType="Border" BasedOn="{StaticResource StatusPillBorderStyle}">
+            <Setter Property="Background" Value="{StaticResource ReadyBackground}" />
+            <Setter Property="BorderBrush" Value="{StaticResource ReadyBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style x:Key="WorkingPillStyle" TargetType="Border" BasedOn="{StaticResource StatusPillBorderStyle}">
+            <Setter Property="Background" Value="{StaticResource RunningBackground}" />
+            <Setter Property="BorderBrush" Value="{StaticResource RunningBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style x:Key="WarningPillStyle" TargetType="Border" BasedOn="{StaticResource StatusPillBorderStyle}">
+            <Setter Property="Background" Value="{StaticResource WarningBackground}" />
+            <Setter Property="BorderBrush" Value="{StaticResource WarningBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style x:Key="BlockedPillStyle" TargetType="Border" BasedOn="{StaticResource StatusPillBorderStyle}">
+            <Setter Property="Background" Value="#33F87171" />
+            <Setter Property="BorderBrush" Value="#CCF87171" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style x:Key="PartialPillStyle" TargetType="Border" BasedOn="{StaticResource StatusPillBorderStyle}">
+            <Setter Property="Background" Value="{StaticResource WarningBackground}" />
+            <Setter Property="BorderBrush" Value="{StaticResource WarningBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style x:Key="NeutralPillStyle" TargetType="Border" BasedOn="{StaticResource StatusPillBorderStyle}">
+            <Setter Property="Background" Value="#3323344A" />
+            <Setter Property="BorderBrush" Value="#6680A0C0" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
     </Application.Resources>
 </Application>

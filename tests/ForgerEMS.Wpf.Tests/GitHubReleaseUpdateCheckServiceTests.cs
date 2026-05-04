@@ -39,7 +39,8 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
         bool prerelease = false,
         string htmlUrl = "https://github.com/x/y/releases/tag/v9",
         string? name = null,
-        string assetsJson = "[]")
+        string assetsJson =
+            "[{\"name\":\"ForgerEMS-Beta-v1.0.0.zip\",\"browser_download_url\":\"https://cdn.example.test/ForgerEMS-Beta-v1.0.0.zip\"}]")
     {
         var namePart = string.IsNullOrEmpty(name)
             ? ""
@@ -260,7 +261,8 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
     {
         const string listJson = """
             [{"tag_name":"v1.2.0-rc.1","html_url":"https://github.com/x/y/releases/tag/v1.2.0-rc.1",
-            "draft":false,"prerelease":true,"published_at":"2025-06-01T00:00:00Z","assets":[]}]
+            "draft":false,"prerelease":true,"published_at":"2025-06-01T00:00:00Z",
+            "assets":[{"name":"ForgerEMS-Beta-v1.2.0-rc.1.zip","browser_download_url":"https://cdn.example.test/ForgerEMS-Beta-v1.2.0-rc.1.zip"}]}]
             """;
         var handler = new StubHandler(req =>
         {
@@ -352,7 +354,8 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
               {"tag_name":"v9.9.9","html_url":"https://github.com/x/y/releases/tag/v9.9.9","draft":false,"prerelease":false,
                "published_at":"2024-01-01T00:00:00Z","assets":[]},
               {"tag_name":"v1.2.0","html_url":"https://github.com/x/y/releases/tag/v1.2.0","draft":false,"prerelease":false,
-               "published_at":"2025-06-01T00:00:00Z","assets":[]}
+               "published_at":"2025-06-01T00:00:00Z",
+               "assets":[{"name":"ForgerEMS-Beta-v1.2.0.zip","browser_download_url":"https://cdn.example.test/ForgerEMS-Beta-v1.2.0.zip"}]}
             ]
             """;
         var handler = new StubHandler(req =>
@@ -375,7 +378,8 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
               {"tag_name":"v3.0.0-rc.1","html_url":"https://github.com/x/y/releases/tag/v3.0.0-rc.1","draft":false,"prerelease":true,
                "published_at":"2026-06-01T00:00:00Z","assets":[]},
               {"tag_name":"v1.5.0","html_url":"https://github.com/x/y/releases/tag/v1.5.0","draft":false,"prerelease":false,
-               "published_at":"2025-01-01T00:00:00Z","assets":[]}
+               "published_at":"2025-01-01T00:00:00Z",
+               "assets":[{"name":"ForgerEMS-Beta-v1.5.0.zip","browser_download_url":"https://cdn.example.test/ForgerEMS-Beta-v1.5.0.zip"}]}
             ]
             """;
         var handler = new StubHandler(req =>
@@ -495,5 +499,24 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
         Assert.True(AppSemanticVersion.TryParse("1.1.13-beta.1", out var beta));
         Assert.True(AppSemanticVersion.TryParse("1.1.12", out var stable));
         Assert.True(beta.CompareTo(stable) > 0);
+    }
+
+    [Fact]
+    public async Task EmptyAssets_OnRelease_YieldsNoSuitableAssets()
+    {
+        var handler = new StubHandler(_ => OkReleases(ReleasesArraySingle("v1.2.0", assetsJson: "[]")));
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync("1.1.4", null);
+        Assert.True(result.Succeeded);
+        Assert.Equal(UpdateCheckOutcome.NoSuitableAssets, result.Outcome);
+        Assert.False(result.UpdateAvailable);
+        Assert.Equal(0, result.AssetCount);
+    }
+
+    [Fact]
+    public void UpdateCheckUserAgent_IsForgerEMS()
+    {
+        Assert.Equal("ForgerEMS", GitHubReleaseUpdateCheckService.UpdateCheckUserAgent);
     }
 }

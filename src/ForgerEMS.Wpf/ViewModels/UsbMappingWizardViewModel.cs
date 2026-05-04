@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using VentoyToolkitSetup.Wpf.Infrastructure;
@@ -54,7 +55,7 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         _profileStore = profileStore;
         _getUsbTargets = getUsbTargets;
         _runBenchmarkForTargetAsync = runBenchmarkForTargetAsync;
-        _detectOperationTimeout = detectOperationTimeoutOverride ?? TimeSpan.FromSeconds(15);
+        _detectOperationTimeout = detectOperationTimeoutOverride ?? TimeSpan.FromSeconds(28);
 
         StartMappingCommand = new RelayCommand(StartMapping, () => Step == UsbMappingWizardStep.Welcome);
         CancelCommand = new RelayCommand(() => CloseRequested?.Invoke(this, false));
@@ -424,8 +425,8 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         IsAnalyzingPortChange = true;
         DetectionSuccess = false;
         FailureMessage = string.Empty;
-        DetectChangePrimaryStatus = "Detecting USB topology changes...";
-        DetectChangeSubStatus = "Analyzing port change...";
+        DetectChangePrimaryStatus = "Checking Windows USB topology…";
+        DetectChangeSubStatus = "Waiting for stable enumeration (this may take a few seconds after moving the drive).";
         DetectChangeDebugSummary = string.Empty;
         Step = UsbMappingWizardStep.DetectChange;
         StartupDiagnosticLog.AppendLine("[UsbMappingWizard] Detection started (async).");
@@ -469,9 +470,26 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         {
             var work = Task.Run(() =>
             {
-                var after = _intelligence.BuildTopologySnapshot(SelectedUsbTarget);
-                var resolution = UsbMappingPortResolution.Resolve(_beforeSnap, after, SelectedUsbTarget);
-                return (after, resolution);
+                UsbTopologySnapshot? lastAfter = null;
+                UsbPortMappingResolution? lastRes = null;
+                for (var attempt = 1; attempt <= 12; attempt++)
+                {
+                    var after = _intelligence.BuildTopologySnapshot(SelectedUsbTarget);
+                    var resolution = UsbMappingPortResolution.Resolve(_beforeSnap, after, SelectedUsbTarget);
+                    lastAfter = after;
+                    lastRes = resolution;
+                    if (resolution.Success)
+                    {
+                        return (after, resolution);
+                    }
+
+                    if (attempt < 12)
+                    {
+                        Thread.Sleep(800);
+                    }
+                }
+
+                return (lastAfter!, lastRes!);
             });
 
             _ = SlowHintAsync(work);
@@ -532,14 +550,16 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
             {
                 DetectionSuccess = false;
                 FailureMessage =
-                    "ForgerEMS could not confidently detect a port change.";
-                DetectionDetail = _lastResolution?.UserHint ?? FailureMessage;
+                    "ForgerEMS could not confidently detect a physical port change. Windows may not expose detailed port topology on this device, especially through hubs, docks, or some USB-C controllers.";
+                DetectionDetail = string.IsNullOrWhiteSpace(_lastResolution?.UserHint)
+                    ? "You can try again, use the current detected port, or save a manual label."
+                    : _lastResolution?.UserHint ?? string.Empty;
                 OldPortKeyShort = string.Empty;
                 NewPortKeyShort = string.Empty;
                 SpeedClassDisplay = string.Empty;
                 ConfidenceTierDisplay = "Low";
                 RecommendationDisplay =
-                    "Windows did not expose enough USB topology data. You can still save a manual label for the currently selected port.";
+                    "Try Again waits for another topology pass; Use Current Port Anyway keeps the detected path; Save Manual Label records a friendly port name (recommended when topology is low confidence).";
                 DetectChangePrimaryStatus = FailureMessage;
                 DetectChangeSubStatus = string.Empty;
                 StartupDiagnosticLog.AppendLine("[UsbMappingWizard] Detection completed without a confident port change.");
@@ -549,7 +569,8 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         {
             StartupDiagnosticLog.AppendException("UsbMappingWizard.DetectPortChange", ex);
             DetectionSuccess = false;
-            FailureMessage = "ForgerEMS could not confidently detect a port change.";
+            FailureMessage =
+                "ForgerEMS could not confidently detect a physical port change. Windows may not expose detailed port topology on this device, especially through hubs, docks, or some USB-C controllers.";
             DetectionDetail = ex.Message;
             DetectChangePrimaryStatus = FailureMessage;
             DetectChangeSubStatus = string.Empty;

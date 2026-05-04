@@ -15,6 +15,23 @@
             <Setter Property="Padding" Value="12,8" />
             <Setter Property="Margin" Value="0,0,8,8" />
             <Setter Property="MinWidth" Value="100" />
+            <Setter Property="Foreground" Value="#FFF5F5F5" />
+            <Setter Property="Background" Value="#FF2A2F3A" />
+            <Setter Property="BorderBrush" Value="#FF4B6CB7" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#FF343B4A" />
+                    <Setter Property="BorderBrush" Value="#FF6C8FE8" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#FF1F242E" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.45" />
+                </Trigger>
+            </Style.Triggers>
         </Style>
     </Window.Resources>
     <Border Padding="20" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10" Margin="16">
@@ -84,8 +101,8 @@
                                      Height="6"
                                      IsIndeterminate="{Binding ShowDetectSpinner}"
                                      Visibility="{Binding ShowDetectSpinner, Converter={StaticResource BoolToVis}}" />
-                        <TextBlock Margin="0,10,0,0" Foreground="{DynamicResource PanelTextBrush}" TextWrapping="Wrap"
-                                   Text="Move the USB to another port, then click Detect Port Change on the previous step when you are ready." />
+                        <TextBlock Margin="0,10,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" TextWrapping="Wrap"
+                                   Text="Unplug the selected USB drive, plug it into the physical port you want to map, wait for Windows to recognize it, then use Detect Port Change on the previous step when you are ready." />
                         <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowDetectChangeDebugDetails, Converter={StaticResource BoolToVis}}">
                             <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Debug (development build)" />
                             <TextBlock Margin="0,4,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" FontFamily="Consolas" FontSize="11" Text="{Binding DetectChangeDebugSummary}" TextWrapping="Wrap" />
@@ -104,7 +121,6 @@
                             <Button Margin="0,16,0,0" HorizontalAlignment="Left" Style="{StaticResource WizardBtn}" Content="Next" Command="{Binding NextToLabelCommand}" />
                         </StackPanel>
                         <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowDetectFailureDetails, Converter={StaticResource BoolToVis}}">
-                            <TextBlock Foreground="#FFFFB4A8" TextWrapping="Wrap" Text="{Binding FailureMessage}" />
                             <TextBlock Margin="0,8,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" Text="{Binding DetectionDetail}" TextWrapping="Wrap" />
                             <TextBlock Margin="0,8,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" Text="{Binding RecommendationDisplay}" TextWrapping="Wrap" />
                             <StackPanel Margin="0,16,0,0" Orientation="Horizontal">

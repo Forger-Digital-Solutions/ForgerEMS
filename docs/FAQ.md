@@ -1,10 +1,10 @@
-# ForgerEMS — Frequently asked questions (Beta)
+# ForgerEMS — Frequently asked questions (Public Preview)
 
 **ForgerEMS** = **Forger Engineering Maintenance Suite**, built by **Forger Digital Solutions**.
 
 **Support:** [ForgerDigitalSolutions@outlook.com](mailto:ForgerDigitalSolutions@outlook.com)
 
-This page is practical guidance, not legal advice. See also [LEGAL.md](LEGAL.md) and [PRIVACY.md](PRIVACY.md).
+This page is practical guidance, not legal advice. See also [LEGAL.md](LEGAL.md) and [PRIVACY.md](PRIVACY.md). Environment variables: [ENVIRONMENT.md](ENVIRONMENT.md). Campaign FAQ: [marketing/PUBLIC-FAQ.md](marketing/PUBLIC-FAQ.md).
 
 ---
 
@@ -83,7 +83,7 @@ No beta program can promise “100% safe,” but ForgerEMS is designed for **tec
 Open PowerShell in the folder that contains the ZIP and `CHECKSUMS.sha256`. For example:
 
 ```powershell
-Get-FileHash .\ForgerEMS-v1.1.12-rc.3.zip -Algorithm SHA256
+Get-FileHash .\ForgerEMS-v1.2.0-preview.1.zip -Algorithm SHA256
 ```
 
 Compare the `Hash` line to the line in `CHECKSUMS.sha256` for that filename.

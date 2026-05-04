@@ -1,6 +1,16 @@
 # ForgerEMS Beta Release Checklist
 
-Target: **v1.1.4** — *ForgerEMS Beta v1.1.4 — Whole-App Intelligence Preview*
+## v1.2.0 Public Preview (current line)
+
+Target: **1.2.0-preview.1** — *ForgerEMS v1.2.0 Public Preview*
+
+- [ ] `docs/PUBLIC_PREVIEW_CHECKLIST_v1.2.0.md` completed for the shipping tag
+- [ ] `dotnet test` green; `tools/Validate-ForgerEMSRelease.ps1` green
+- [ ] README + CHANGELOG + FAQ/legal headers mention Public Preview (not legacy RC screens)
+
+---
+
+Target (historical): **v1.1.4** — *ForgerEMS Beta v1.1.4 — Whole-App Intelligence Preview*
 
 ## Validation
 
@@ -57,3 +67,15 @@ Target: **v1.1.4** — *ForgerEMS Beta v1.1.4 — Whole-App Intelligence Preview
 ## Manual smoke (required for launch wording)
 
 - [ ] Complete [FINAL_MANUAL_SMOKE_TEST.md](FINAL_MANUAL_SMOKE_TEST.md) or attach signed results
+
+## v1.1.12-rc.4 hardening (USB / managed downloads / Kyra / Toolkit copy)
+
+- [ ] Run USB benchmark; confirm **Benchmark summary** shows completed read/write line and Diagnostics “View benchmark details”.
+- [ ] Start benchmark twice quickly; duplicate start must **not** cancel the first run.
+- [ ] Move USB to another port and run Port Mapping wizard (or save a manual label if topology is hidden).
+- [ ] Induce **PARTIALLY_STAGED** managed downloads; confirm `ForgerEMS-managed-download-result.json` appears on USB root and **Retry Failed Downloads** panel shows failed rows.
+- [ ] Use **Retry Failed Downloads**; confirm script only revisits retryable destinations.
+- [ ] Run System Intelligence; confirm default route / link speed look reasonable when Ethernet is present.
+- [ ] Ask Kyra “what PC are we working on?” with a known scan — answer must match **system-intelligence-latest.json** (no invented Ryzen/RTX/RAM).
+- [ ] Settings → Check for updates: button re-enables after success/failure; latest line never stays blank after a completed check.
+- [ ] Toolkit Manager: **Manual / Info** filter works; healthy toolkit with only manual/info items should **not** read as a failure.

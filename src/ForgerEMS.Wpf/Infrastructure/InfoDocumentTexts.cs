@@ -8,8 +8,8 @@ public static class InfoDocumentTexts
     public static string BuildAbout(string appVersion, string displayVersion, string frontendVersion, string backendVersion)
     {
         return $"""
-            ForgerEMS — Forger Engineering Maintenance Suite (Beta)
-            v{appVersion} ({displayVersion})
+            ForgerEMS — Forger Engineering Maintenance Suite (Public Preview)
+            v{appVersion} — {displayVersion}
 
             Built by Forger Digital Solutions.
             {BetaSupportInfo.CopyrightNotice}
@@ -17,28 +17,32 @@ public static class InfoDocumentTexts
             Support: {BetaSupportInfo.SupportEmail}
             {BetaSupportInfo.BetaIssueSupportLine}
 
-            PURPOSE
-            USB toolkit builder, System Intelligence, Diagnostics, Toolkit Manager, and Kyra — a Windows desktop companion for technician workflows with a PowerShell backend and optional online AI when you configure it.
+            WHAT THIS BUILD IS
+            ForgerEMS v1.2.0 Public Preview is a free, offline-first Windows technician toolkit for safer Ventoy-oriented USB maintenance media, toolkit health, local system scans, USB benchmarking on removable targets, and Kyra — a grounded assistant that prefers facts from your own scans.
 
-            CORE AREAS
-            • USB Builder — select removable targets, safety checks, Ventoy-related workflows, and USB Intelligence (Pro preview).
-            • System Intelligence — local hardware and health-oriented summaries (stored under %LOCALAPPDATA%\ForgerEMS\).
-            • Toolkit Manager — manifest-driven health (Managed Ready, Managed Missing, Manual Required, and related states).
-            • Diagnostics — unified checklist, logs, WSL helpers, and link/file safety tools.
-            • Kyra — in-app assistant; offline rules by default, optional providers in Kyra Advanced.
+            CORE AREAS (honest maturity)
+            • USB Builder — Beta: removable targets only; blocks Windows/system/internal OS drives and unsafe partitions.
+            • System Intelligence — Beta: local summaries under %LOCALAPPDATA%\ForgerEMS\; some sensors are not exposed by Windows on every machine.
+            • Toolkit Manager — Beta: managed vs manual/info items; manual links are expected where redistribution is gated.
+            • Diagnostics — Beta: checklist, logs, experimental WSL helpers where enabled.
+            • Kyra — Preview: offline/local deterministic answers first; optional online providers only when configured (Kyra Advanced).
+            • USB Intelligence / port mapping — Pro Preview: best-effort port topology on Windows; benchmark-driven hints when you measure.
 
             PRIVACY / SAFETY (summary)
-            Reports and logs stay local unless you share them. Review exports before sending. {BetaSupportInfo.DoNotEmailSecretsWarning}
+            Telemetry and crash reporting default to off unless you enable them via environment variables (see docs/ENVIRONMENT.md). Reports and logs stay local unless you share them. Review exports before sending. {BetaSupportInfo.DoNotEmailSecretsWarning}
 
             KYRA (OPTIONAL ONLINE PROVIDERS)
-            Offline / default Kyra needs no API keys. For optional cloud or local-server providers (Gemini, Groq, OpenAI-compatible, Anthropic path, LM Studio, Ollama, etc.), environment variable names, base URLs, and troubleshooting: see the repository file docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md. Use Kyra Advanced in the app to confirm which provider is active.
+            Offline Kyra needs no API keys. Optional providers (OpenAI-compatible, LM Studio, Ollama, Gemini/Anthropic paths where stubbed, custom base URL): see docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md and docs/ENVIRONMENT.md. Kyra Advanced shows status without revealing secrets.
+
+            UPDATES
+            GitHub Releases power the in-app update checker (stable / beta / RC / preview semantics depend on Settings and release tags). See docs/UPDATE-SYSTEM-v1.2.0.md.
 
             VERSIONS
             App / frontend metadata: {frontendVersion}
             Bundled backend / compatibility: {backendVersion}
 
-            BETA
-            Prerelease software is provided “as-is”. Behavior may change between builds. Prefer the ZIP download from GitHub Releases for beta testing; see FAQ. When reporting issues, include version and steps — never secrets in email.
+            PUBLIC PREVIEW
+            Prerelease software is provided “as-is”. Behavior may change between builds. Prefer the ZIP download from GitHub Releases; see FAQ. When reporting issues, include version and steps — never secrets in email.
             """;
     }
 

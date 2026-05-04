@@ -341,6 +341,9 @@ public sealed class CopilotResponse
     /// <summary>True when an online engine improved wording and the answer was not discarded by the truth guard.</summary>
     public bool OnlineEnhancementApplied { get; init; }
 
+    /// <summary>True when a System Intelligence profile was attached to the turn (Kyra should not invent hardware).</summary>
+    public bool GroundedInSystemIntelligence { get; init; }
+
     public IReadOnlyList<KyraActionSuggestion> ActionSuggestions { get; init; } = Array.Empty<KyraActionSuggestion>();
 }
 
@@ -907,6 +910,8 @@ public static class KyraPromptBuilder
         "- When a sanitized ForgerEMS / System Intelligence context block is present, it is the source of truth for THIS machine.\n" +
         "- Never claim you cannot see the device, lack access, or have no information about this PC when that context is present.\n" +
         "- Never contradict CPU, GPU, RAM, storage, OS, USB selection, toolkit, or update state from the context package.\n" +
+        "- Do not invent, replace, or guess hardware specs. Use only the SystemProfile / facts ledger in the prompt. If a field is missing, say it is unavailable — never substitute a generic gaming-laptop or example PC.\n" +
+        "- Do not use prior conversation specs unless they appear in the current SystemProfile block.\n" +
         "- Do not invent serial numbers, license keys, full file paths, or API secrets.\n" +
         "- If live weather/news/stock/crypto data is not supplied by a labeled tool block, say live tools are not enabled for that in this build — do not fabricate live numbers.\n" +
         "- Never recommend C:\\ or the Windows OS volume as a Ventoy/USB imaging target; ForgerEMS blocks that by design.\n\n";
@@ -2160,7 +2165,9 @@ public sealed class CopilotService : ICopilotService
     {
         RecordConversationTurn(request.Prompt, response.Text, context.Intent);
         var filteredNotes = FilterProviderNotesForDisplay(response.ProviderNotes, request.VerboseDiagnosticNotes);
-        if (filteredNotes.Count == response.ProviderNotes.Count)
+        var grounded = context.SystemProfile is not null;
+        if (filteredNotes.Count == response.ProviderNotes.Count &&
+            response.GroundedInSystemIntelligence == grounded)
         {
             return response;
         }
@@ -2176,6 +2183,7 @@ public sealed class CopilotService : ICopilotService
             SourceLabel = response.SourceLabel,
             FallbackUsed = response.FallbackUsed,
             OnlineEnhancementApplied = response.OnlineEnhancementApplied,
+            GroundedInSystemIntelligence = grounded,
             ActionSuggestions = response.ActionSuggestions
         };
     }
@@ -2545,9 +2553,9 @@ public sealed class CopilotContextBuilder : ICopilotContextBuilder
         var settings = request.Settings ?? new CopilotSettings();
         var intent = KyraIntentRouter.DetectIntent(request.Prompt);
         var promptMode = DetectPromptMode(request.Prompt, intent);
-        var profile = settings.UseLatestSystemScanContext
-            ? LoadSystemProfile(request.SystemIntelligenceReportPath)
-            : null;
+        // Always load the latest saved scan when present so Kyra facts/ledger stay accurate even if
+        // "share System Intelligence with online providers" is disabled (that flag only trims prompt text).
+        var profile = LoadSystemProfile(request.SystemIntelligenceReportPath);
         var systemContext = SystemContext.FromProfile(profile);
         var health = SystemHealthEvaluator.Evaluate(profile);
         var recommendations = RecommendationEngine.Generate(profile, health);
@@ -2565,14 +2573,11 @@ public sealed class CopilotContextBuilder : ICopilotContextBuilder
             parts.Add(KyraSystemContextSanitizer.SanitizeForExternalProviders(request.KyraMemorySummaryForPrompt.Trim()));
         }
 
-        if (settings.UseLatestSystemScanContext)
+        if (settings.UseLatestSystemScanContext && profile is not null)
         {
             parts.Add(BuildSystemSummary(request.SystemIntelligenceReportPath, profile, health, recommendations, pricingEstimate, settings.RedactContextEnabled));
-            if (profile is not null)
-            {
-                var insight = KyraSystemAnalyzer.Analyze(profile, health, recommendations, pricingEstimate);
-                parts.Add(CopilotRedactor.Redact(insight.ToPromptBlock(), settings.RedactContextEnabled));
-            }
+            var insight = KyraSystemAnalyzer.Analyze(profile, health, recommendations, pricingEstimate);
+            parts.Add(CopilotRedactor.Redact(insight.ToPromptBlock(), settings.RedactContextEnabled));
         }
 
         parts.Add(BuildUsbSummary(request.SelectedUsbTarget, settings.RedactContextEnabled));

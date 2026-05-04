@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Windows;
 
 namespace VentoyToolkitSetup.Wpf.Services;
@@ -71,14 +72,17 @@ public static class UpdateCheckUiPresenter
     {
         var status = result.FailureKind switch
         {
-            UpdateCheckFailureKind.Network => "Could not check for updates. Network unavailable.",
+            UpdateCheckFailureKind.Network => "Could not check for updates (offline or network unavailable).",
             UpdateCheckFailureKind.Timeout => "Update check timed out. Try again later.",
             UpdateCheckFailureKind.ReleaseEndpointNotFound => "Update source could not be reached.",
-            UpdateCheckFailureKind.UpdateSourceUnreachable => "Update source could not be reached.",
-            UpdateCheckFailureKind.AccessDeniedOrRateLimited => "Update check: access denied or rate limited.",
-            UpdateCheckFailureKind.ReleaseMetadataInvalid => "Update check: invalid release metadata.",
+            UpdateCheckFailureKind.UpdateSourceUnreachable => "Update source could not be reached (GitHub or TLS/proxy).",
+            UpdateCheckFailureKind.AccessDeniedOrRateLimited =>
+                (result.ErrorMessage ?? string.Empty).Contains("rate", StringComparison.OrdinalIgnoreCase)
+                    ? "GitHub rate-limited this update check. Wait and try again."
+                    : "GitHub denied access to the update endpoint (403).",
+            UpdateCheckFailureKind.ReleaseMetadataInvalid => "Update check: invalid release metadata from GitHub.",
             UpdateCheckFailureKind.Cancelled => "Update check was cancelled.",
-            UpdateCheckFailureKind.HttpError => "Update check: GitHub returned an error.",
+            UpdateCheckFailureKind.HttpError => "Update check: GitHub returned an HTTP error.",
             _ => string.IsNullOrWhiteSpace(result.ErrorMessage) ? "Update check failed." : result.ErrorMessage!
         };
 
@@ -96,7 +100,7 @@ public static class UpdateCheckUiPresenter
         {
             return new UpdateCheckViewState(
                 StatusText: status,
-                LatestChannelSummary: null,
+                LatestChannelSummary: "Latest release: could not refresh — see status below · GitHub Releases",
                 BannerVisibility: Visibility.Visible,
                 BannerTitle: "Update check failed",
                 BannerDetail: detail,
@@ -257,6 +261,11 @@ public static class UpdateCheckUiPresenter
                 status = result.ErrorMessage ?? "No published ForgerEMS release was found yet.";
                 latestChannel = "Latest release: — · GitHub Releases";
                 break;
+            case UpdateCheckOutcome.NoSuitableAssets:
+                status = result.ErrorMessage ??
+                         "The latest GitHub release has no downloadable assets yet. Open the release page from Diagnostics or try again later.";
+                latestChannel = ComputeLatestChannelSummary(result);
+                break;
             case UpdateCheckOutcome.IgnoredVersion:
                 status = result.ErrorMessage ??
                          UpdateCheckDisplay.FormatIgnoredVersion(ReleaseVersionParser.NormalizeLabel(result.LatestVersionLabel));
@@ -313,7 +322,11 @@ public static class UpdateCheckUiPresenter
 
         if (!string.IsNullOrWhiteSpace(result.LatestVersionLabel))
         {
-            return $"Latest release: v{ReleaseVersionParser.NormalizeLabel(result.LatestVersionLabel)} · GitHub Releases";
+            var published = result.SelectedReleasePublishedAt is { } u
+                ? $" · published {u.ToUniversalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)} UTC"
+                : string.Empty;
+            return
+                $"Latest release: v{ReleaseVersionParser.NormalizeLabel(result.LatestVersionLabel)}{published} · GitHub Releases";
         }
 
         return "Latest release: — · GitHub Releases";

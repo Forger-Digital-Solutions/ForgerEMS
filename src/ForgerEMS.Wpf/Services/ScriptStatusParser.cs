@@ -26,21 +26,24 @@ public sealed class ScriptStatusParser : IScriptStatusParser
             !string.IsNullOrWhiteSpace(readinessLine) &&
             readinessLine.Contains("PARTIALLY STAGED", StringComparison.OrdinalIgnoreCase);
 
-        var succeeded = runResult.Succeeded && !indicatesPartial;
+        var succeeded = runResult.Succeeded;
+        var partialStaged = indicatesPartial && runResult.Succeeded;
 
-        var summary = succeeded
-            ? BuildSuccessSummary(action, displayName, hasWarnings)
-            : (!string.IsNullOrWhiteSpace(lastError)
+        var summary = !runResult.Succeeded
+            ? (!string.IsNullOrWhiteSpace(lastError)
                 ? lastError
                 : !string.IsNullOrWhiteSpace(readinessLine)
                     ? readinessLine
-                    : $"{displayName} exited with code {runResult.ExitCode}.");
+                    : $"{displayName} exited with code {runResult.ExitCode}.")
+            : partialStaged
+                ? "USB built; managed downloads partially staged — use Retry Failed Downloads or fallback shortcuts; manual/info items are not failed downloads."
+                : BuildSuccessSummary(action, displayName, hasWarnings || hasErrors);
 
         var details = BuildDetails(
             action,
             runResult,
             succeeded,
-            hasWarnings || indicatesPartial || (succeeded && hasErrors),
+            hasWarnings || partialStaged || (succeeded && hasErrors),
             readinessLine,
             downloadedLine,
             verifiedLine,
@@ -52,7 +55,8 @@ public sealed class ScriptStatusParser : IScriptStatusParser
             Action = action,
             DisplayName = displayName,
             Succeeded = succeeded,
-            HasWarnings = hasWarnings || indicatesPartial || (succeeded && hasErrors),
+            HasWarnings = hasWarnings || partialStaged || (succeeded && hasErrors),
+            PartiallyStaged = partialStaged,
             Summary = summary,
             Details = details,
             RawRun = runResult
@@ -110,7 +114,9 @@ public sealed class ScriptStatusParser : IScriptStatusParser
 
                 if (hasWarnings)
                 {
-                    return detail + " The command completed, but the backend reported warnings that should be reviewed.";
+                    return detail + (readinessLine.Contains("PARTIALLY STAGED", StringComparison.OrdinalIgnoreCase)
+                        ? " Partially staged: the stick is usually still usable — retry managed items that need attention or open fallback shortcuts."
+                        : " The command completed, but the backend reported warnings that should be reviewed.");
                 }
 
                 return detail;

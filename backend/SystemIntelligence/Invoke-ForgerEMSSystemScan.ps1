@@ -694,16 +694,16 @@ elseif ($memorySlotsUsed -gt 0) {
 else {
     "RAM upgrade path could not be detected."
 }
-$memoryConfiguredDisplay = if ($memoryConfiguredSpeeds.Count -gt 0) { (($memoryConfiguredSpeeds | ForEach-Object { "{0} MT/s" -f $_ }) -join ", ") } else { "Configured speed not reported" }
-$memoryRatedDisplay = if ($memoryRatedSpeeds.Count -gt 0) { (($memoryRatedSpeeds | ForEach-Object { "{0} MT/s" -f $_ }) -join ", ") } else { "Module rated speed not reported" }
+$memoryConfiguredDisplay = if ($memoryConfiguredSpeeds.Count -gt 0) { (($memoryConfiguredSpeeds | ForEach-Object { "{0} MT/s" -f $_ }) -join ", ") } else { "Not exposed by SMBIOS" }
+$memoryRatedDisplay = if ($memoryRatedSpeeds.Count -gt 0) { (($memoryRatedSpeeds | ForEach-Object { "{0} MT/s" -f $_ }) -join ", ") } else { "Not exposed by SMBIOS" }
 $memoryInstalledDisplay = if ($null -ne $totalMemoryBytes -and $totalMemoryBytes -gt 0) { "{0} {1}" -f (Format-Bytes -Bytes $totalMemoryBytes), $memoryType } else { "Installed RAM not reported" }
 $memorySlotsDisplay = if ($null -ne $memorySlotsTotal -and $memorySlotsTotal -gt 0) { "Slots: {0}/{1} used" -f $memorySlotsUsed, $memorySlotsTotal } else { "Slot count not reported" }
 $memoryModuleReports = @($memoryModules | ForEach-Object {
     [ordered]@{
         bankLabel = [string]$_.BankLabel
         capacity = Format-Bytes -Bytes ([double]$_.Capacity)
-        configuredSpeed = if ($_.ConfiguredClockSpeed) { "{0} MT/s" -f $_.ConfiguredClockSpeed } else { "Configured speed not reported" }
-        ratedSpeed = if ($_.Speed) { "{0} MT/s" -f $_.Speed } else { "Module rated speed not reported" }
+        configuredSpeed = if ($_.ConfiguredClockSpeed) { "{0} MT/s" -f $_.ConfiguredClockSpeed } else { "Not exposed by SMBIOS" }
+        ratedSpeed = if ($_.Speed) { "{0} MT/s" -f $_.Speed } else { "Module rated speed: Not exposed by SMBIOS" }
         manufacturer = if ([string]::IsNullOrWhiteSpace([string]$_.Manufacturer)) { "Manufacturer not reported" } else { [string]$_.Manufacturer }
         partNumber = if ([string]::IsNullOrWhiteSpace([string]$_.PartNumber)) { "Part number not reported" } else { ([string]$_.PartNumber).Trim() }
     }
@@ -790,9 +790,9 @@ foreach ($disk in $physicalDisks) {
         healthDisplay = if ([string]::IsNullOrWhiteSpace($health)) { "Health not reported by Windows storage stack" } else { $health }
         operationalStatus = $operational
         temperatureC = $temperature
-        temperatureDisplay = if ($null -ne $temperature) { "{0} C" -f $temperature } else { "Temp unavailable - drive does not expose sensor through Windows storage stack." }
+        temperatureDisplay = if ($null -ne $temperature) { "{0} C" -f $temperature } else { "Temp: Not exposed" }
         wearPercent = $wear
-        wearDisplay = if ($null -ne $wear) { "{0}%" -f $wear } else { "Wear unavailable - drive does not expose life counter through Windows storage stack." }
+        wearDisplay = if ($null -ne $wear) { "{0}%" -f $wear } else { "Wear: Not exposed" }
         readErrorsTotal = $readErrors
         writeErrorsTotal = $writeErrors
         status = $diskStatus
@@ -881,13 +881,13 @@ foreach ($battery in $batteries) {
         name = [string]$battery.Name
         estimatedChargeRemaining = $charge
         designCapacity = $designCapacity
-        designCapacityDisplay = if ($null -ne $designCapacity) { "{0:N0} mWh" -f [double]$designCapacity } else { "Design capacity not reported" }
+        designCapacityDisplay = if ($null -ne $designCapacity) { "{0:N0} mWh" -f [double]$designCapacity } else { "Not exposed by firmware/Windows" }
         fullChargeCapacity = $fullChargeCapacity
-        fullChargeCapacityDisplay = if ($null -ne $fullChargeCapacity) { "{0:N0} mWh" -f [double]$fullChargeCapacity } else { "Full charge capacity not reported" }
+        fullChargeCapacityDisplay = if ($null -ne $fullChargeCapacity) { "{0:N0} mWh" -f [double]$fullChargeCapacity } else { "Not exposed by firmware/Windows" }
         wearPercent = $wearPercent
-        wearDisplay = if ($null -ne $wearPercent) { "{0}%" -f $wearPercent } elseif ($null -eq $designCapacity) { "Wear unavailable - design capacity not reported" } else { "Wear unavailable - full charge capacity not reported" }
+        wearDisplay = if ($null -ne $wearPercent) { "{0}%" -f $wearPercent } else { "Battery wear: Not exposed by firmware/Windows" }
         cycleCount = $cycleCount
-        cycleCountDisplay = if ($null -ne $cycleCount) { [string]$cycleCount } else { "Cycle count not reported" }
+        cycleCountDisplay = if ($null -ne $cycleCount) { [string]$cycleCount } else { "Not exposed by firmware/Windows" }
         acConnected = if ($null -ne $battery.BatteryStatus) { $battery.BatteryStatus -in @(2, 6, 7, 8, 9) } else { $null }
         batteryStatusCode = $battery.BatteryStatus
         status = $batteryStatus
@@ -963,6 +963,19 @@ $defaultRouteAdapter = if ($null -ne $defaultRouteRaw) {
 else {
     $null
 }
+# IfIndex match often fails across Win32_NetworkAdapterConfiguration vs Get-NetAdapter; fall back to gateway match on physical NICs.
+if ($null -eq $defaultRouteAdapter -and $null -ne $defaultRouteRaw) {
+    $nh = [string]$defaultRouteRaw.NextHop
+    if (-not [string]::IsNullOrWhiteSpace($nh)) {
+        $gwMatch = $physicalNetworkReport | Where-Object {
+            $gw = $_.gateways
+            $null -ne $gw -and (@($gw) | Where-Object { $_ -eq $nh }).Count -gt 0
+        } | Select-Object -First 1
+        if ($gwMatch) {
+            $defaultRouteAdapter = $gwMatch
+        }
+    }
+}
 $internetCheck = Invoke-Optional { Test-NetConnection -ComputerName "1.1.1.1" -Port 443 -InformationLevel Quiet -WarningAction SilentlyContinue -ErrorAction Stop } $false
 if (-not $internetCheck) {
     $networkStatus = if ($networkStatus -eq "READY") { "WATCH" } else { $networkStatus }
@@ -971,13 +984,35 @@ if (-not $internetCheck) {
 }
 $internetDisplay = if ($internetCheck) { "Internet: Working" } else { "Internet: Check failed" }
 $defaultRouteDisplay = if ($null -ne $defaultRouteAdapter) {
-    "Default route: {0}" -f $defaultRouteAdapter.name
+    $nh = if ($null -ne $defaultRouteRaw) { [string]$defaultRouteRaw.NextHop } else { "" }
+    if (-not [string]::IsNullOrWhiteSpace($nh)) {
+        "Default route: {0} via {1}" -f $defaultRouteAdapter.name, $nh
+    }
+    else {
+        "Default route: {0}" -f $defaultRouteAdapter.name
+    }
 }
 elseif ($null -ne $defaultRouteRaw) {
-    "Default route: interface {0}" -f $defaultRouteRaw.ifIndex
+    "Default route: interface {0} (next hop {1})" -f $defaultRouteRaw.ifIndex, $defaultRouteRaw.NextHop
 }
 else {
-    "Default route: not detected"
+    $gwHint = ($physicalNetworkReport | Where-Object { $_.gatewayPresent } | Select-Object -First 1)
+    if ($gwHint) {
+        $gws = @($gwHint.gateways | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+        if ($gws.Count -gt 0) {
+            $gw0 = [string]$gws[0]
+            "Default route: {0} via {1}" -f $gwHint.name, $gw0
+        }
+        elseif ($internetCheck) {
+            "Default route: {0} (internet check passed; Get-NetRoute match incomplete)" -f $gwHint.name
+        }
+        else {
+            "Default route: not detected"
+        }
+    }
+    else {
+        "Default route: not detected"
+    }
 }
 $virtualIgnoredDisplay = if ($virtualNetworkReport.Count -gt 0) {
     "Virtual adapters ignored: {0}" -f (($virtualNetworkReport | Select-Object -ExpandProperty name) -join ", ")

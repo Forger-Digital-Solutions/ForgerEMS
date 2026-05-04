@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using VentoyToolkitSetup.Wpf.Configuration;
 
 namespace VentoyToolkitSetup.Wpf.Services;
 
@@ -20,6 +21,9 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
 {
     public const string DefaultOwner = "Forger-Digital-Solutions";
     public const string DefaultRepo = "ForgerEMS";
+
+    /// <summary>GitHub API requests use this User-Agent string (see GitHub API guidance).</summary>
+    public const string UpdateCheckUserAgent = "ForgerEMS";
 
     private static readonly Regex ForgerEmsVersionZip = new(
         @"^ForgerEMS-v.+\.zip$",
@@ -38,11 +42,18 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
             return;
         }
 
+        var timeoutSeconds = ForgerEmsEnvironmentConfiguration.UpdateTimeoutSeconds;
         _httpClient = new HttpClient
         {
-            Timeout = TimeSpan.FromSeconds(25)
+            Timeout = TimeSpan.FromSeconds(timeoutSeconds <= 0 ? 25 : timeoutSeconds)
         };
-        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "ForgerEMS-UpdateCheck/1.1.12");
+        var ua = ForgerEmsEnvironmentConfiguration.UpdateUserAgent;
+        if (string.IsNullOrWhiteSpace(ua))
+        {
+            ua = UpdateCheckUserAgent;
+        }
+
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", ua);
         _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/vnd.github+json");
         _ownsClient = true;
     }
@@ -66,7 +77,9 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
 
         try
         {
-            var listUrl = $"https://api.github.com/repos/{DefaultOwner}/{DefaultRepo}/releases?per_page=100";
+            var owner = SanitizeGitHubPathSegment(ForgerEmsEnvironmentConfiguration.GitHubOwner, DefaultOwner);
+            var repo = SanitizeGitHubPathSegment(ForgerEmsEnvironmentConfiguration.GitHubRepo, DefaultRepo);
+            var listUrl = $"https://api.github.com/repos/{owner}/{repo}/releases?per_page=100";
             using var listResponse = await _httpClient.GetAsync(listUrl, cancellationToken).ConfigureAwait(false);
 
             if (listResponse.StatusCode == HttpStatusCode.NotFound)
@@ -78,7 +91,7 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
                     FailureKind = UpdateCheckFailureKind.UpdateSourceUnreachable,
                     ErrorMessage = "Update source could not be reached.",
                     DiagnosticDetail =
-                        "GitHub returned 404 for the releases API. Confirm the repo is public and Forger-Digital-Solutions/ForgerEMS is correct."
+                        $"GitHub returned 404 for the releases API. Confirm the repo is public and {owner}/{repo} is correct."
                 };
             }
 
@@ -158,6 +171,7 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
             };
         }
 
+        var releasesArrayLength = root.GetArrayLength();
         var sorted = new List<(JsonElement Element, DateTimeOffset PublishedAt)>();
         foreach (var rel in root.EnumerateArray())
         {
@@ -200,11 +214,17 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
                 Succeeded = true,
                 Outcome = UpdateCheckOutcome.NoPublishedRelease,
                 UpdateAvailable = false,
-                ErrorMessage = msg
+                ErrorMessage = msg,
+                ReleasesFetchedCount = releasesArrayLength
             };
         }
 
-        return BuildResultFromReleaseRoot(candidate.Value, installed, ignoredVersionNormalized, channel);
+        return BuildResultFromReleaseRoot(
+            candidate.Value,
+            installed,
+            ignoredVersionNormalized,
+            channel,
+            releasesArrayLength);
     }
 
     private static bool TryReadPublishedAt(JsonElement rel, out DateTimeOffset publishedAt)
@@ -241,21 +261,85 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
         }
     }
 
+    private static (int AssetCount, string[] Names) CollectAssetMetadata(JsonElement releaseRoot)
+    {
+        if (!releaseRoot.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
+        {
+            return (0, Array.Empty<string>());
+        }
+
+        var count = assets.GetArrayLength();
+        var names = new List<string>(Math.Min(count, 24));
+        foreach (var asset in assets.EnumerateArray())
+        {
+            if (!asset.TryGetProperty("name", out var nameProp) || nameProp.ValueKind != JsonValueKind.String)
+            {
+                continue;
+            }
+
+            var n = nameProp.GetString();
+            if (!string.IsNullOrWhiteSpace(n) && names.Count < 24)
+            {
+                names.Add(n!);
+            }
+        }
+
+        return (count, names.ToArray());
+    }
+
+    private static UpdateCheckResult AttachReleaseTelemetry(UpdateCheckResult result, JsonElement releaseRoot, int releasesArrayLength)
+    {
+        var (assetCount, assetNames) = CollectAssetMetadata(releaseRoot);
+        var publishedAt = TryReadPublishedAt(releaseRoot, out var p) ? (DateTimeOffset?)p : null;
+        var tagRaw = releaseRoot.TryGetProperty("tag_name", out var tagProp) && tagProp.ValueKind == JsonValueKind.String
+            ? tagProp.GetString() ?? string.Empty
+            : string.Empty;
+
+        var patched = result with
+        {
+            ReleasesFetchedCount = releasesArrayLength,
+            SelectedReleasePublishedAt = publishedAt,
+            SelectedReleaseTagRaw = tagRaw,
+            AssetCount = assetCount,
+            AssetNamesSnapshot = assetNames
+        };
+
+        if (assetCount != 0 ||
+            !patched.Succeeded ||
+            patched.Outcome == UpdateCheckOutcome.NoPublishedRelease)
+        {
+            return patched;
+        }
+
+        const string noAssets =
+            "The latest GitHub release has no published assets yet, so there is nothing safe to download from this check.";
+        return patched with
+        {
+            Outcome = UpdateCheckOutcome.NoSuitableAssets,
+            UpdateAvailable = false,
+            ErrorMessage = string.IsNullOrWhiteSpace(patched.ErrorMessage) ? noAssets : $"{noAssets} {patched.ErrorMessage}"
+        };
+    }
+
     private static UpdateCheckResult BuildResultFromReleaseRoot(
         JsonElement root,
         AppSemanticVersion installed,
         string? ignoredVersionNormalized,
-        UpdateReleaseChannel channel)
+        UpdateReleaseChannel channel,
+        int releasesArrayLength)
     {
         if (!root.TryGetProperty("tag_name", out var tagProp))
         {
-            return new UpdateCheckResult
-            {
-                Succeeded = false,
-                Outcome = UpdateCheckOutcome.Failed,
-                FailureKind = UpdateCheckFailureKind.ReleaseMetadataInvalid,
-                ErrorMessage = "Release metadata is missing tag_name."
-            };
+            return AttachReleaseTelemetry(
+                new UpdateCheckResult
+                {
+                    Succeeded = false,
+                    Outcome = UpdateCheckOutcome.Failed,
+                    FailureKind = UpdateCheckFailureKind.ReleaseMetadataInvalid,
+                    ErrorMessage = "Release metadata is missing tag_name."
+                },
+                root,
+                releasesArrayLength);
         }
 
         var tag = tagProp.GetString() ?? string.Empty;
@@ -275,16 +359,19 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
             root.TryGetProperty("prerelease", out var pre) &&
             pre.ValueKind == JsonValueKind.True)
         {
-            return new UpdateCheckResult
-            {
-                Succeeded = true,
-                Outcome = UpdateCheckOutcome.NoPublishedRelease,
-                UpdateAvailable = false,
-                LatestVersionLabel = label,
-                ReleaseNotesUrl = notesUrl,
-                ErrorMessage =
-                    "No stable ForgerEMS release was found yet. Allow Beta/RC in Settings → App updates to see preview builds."
-            };
+            return AttachReleaseTelemetry(
+                new UpdateCheckResult
+                {
+                    Succeeded = true,
+                    Outcome = UpdateCheckOutcome.NoPublishedRelease,
+                    UpdateAvailable = false,
+                    LatestVersionLabel = label,
+                    ReleaseNotesUrl = notesUrl,
+                    ErrorMessage =
+                        "No stable ForgerEMS release was found yet. Allow Beta/RC in Settings → App updates to see preview builds."
+                },
+                root,
+                releasesArrayLength);
         }
 
         SelectReleaseAssets(root, out var zipName, out var zipUrl, out var matchedPreferredZip, out var exeName, out var exeUrl, out var checksumsUrl, out var instructionsUrl);
@@ -296,12 +383,37 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
             if (!string.IsNullOrEmpty(ignored) &&
                 string.Equals(label, ignored, StringComparison.OrdinalIgnoreCase))
             {
-                return new UpdateCheckResult
+                return AttachReleaseTelemetry(
+                    new UpdateCheckResult
+                    {
+                        Succeeded = true,
+                        Outcome = UpdateCheckOutcome.IgnoredVersion,
+                        UpdateAvailable = false,
+                        LatestVersionLabel = label,
+                        ReleaseNotesUrl = notesUrl,
+                        RecommendedZipAssetName = zipName,
+                        RecommendedZipDownloadUrl = zipUrl,
+                        RecommendedZipPatternMatched = matchedPreferredZip,
+                        InstallerAssetName = exeName,
+                        InstallerDownloadUrl = exeUrl,
+                        ChecksumsDownloadUrl = checksumsUrl,
+                        DownloadInstructionsUrl = instructionsUrl,
+                        VersionComparisonUncertain = true,
+                        RecommendedZipAssetMissing = string.IsNullOrWhiteSpace(zipUrl) || !matchedPreferredZip,
+                        ErrorMessage = UpdateCheckDisplay.FormatIgnoredVersion(label)
+                    },
+                    root,
+                    releasesArrayLength);
+            }
+
+            var missingZip = string.IsNullOrWhiteSpace(zipUrl) || !matchedPreferredZip;
+            return AttachReleaseTelemetry(
+                new UpdateCheckResult
                 {
                     Succeeded = true,
-                    Outcome = UpdateCheckOutcome.IgnoredVersion,
-                    UpdateAvailable = false,
-                    LatestVersionLabel = label,
+                    Outcome = UpdateCheckOutcome.UpdateAvailable,
+                    UpdateAvailable = true,
+                    LatestVersionLabel = string.IsNullOrWhiteSpace(label) ? tag.Trim() : label,
                     ReleaseNotesUrl = notesUrl,
                     RecommendedZipAssetName = zipName,
                     RecommendedZipDownloadUrl = zipUrl,
@@ -311,31 +423,12 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
                     ChecksumsDownloadUrl = checksumsUrl,
                     DownloadInstructionsUrl = instructionsUrl,
                     VersionComparisonUncertain = true,
-                    RecommendedZipAssetMissing = string.IsNullOrWhiteSpace(zipUrl) || !matchedPreferredZip,
-                    ErrorMessage = UpdateCheckDisplay.FormatIgnoredVersion(label)
-                };
-            }
-
-            var missingZip = string.IsNullOrWhiteSpace(zipUrl) || !matchedPreferredZip;
-            return new UpdateCheckResult
-            {
-                Succeeded = true,
-                Outcome = UpdateCheckOutcome.UpdateAvailable,
-                UpdateAvailable = true,
-                LatestVersionLabel = string.IsNullOrWhiteSpace(label) ? tag.Trim() : label,
-                ReleaseNotesUrl = notesUrl,
-                RecommendedZipAssetName = zipName,
-                RecommendedZipDownloadUrl = zipUrl,
-                RecommendedZipPatternMatched = matchedPreferredZip,
-                InstallerAssetName = exeName,
-                InstallerDownloadUrl = exeUrl,
-                ChecksumsDownloadUrl = checksumsUrl,
-                DownloadInstructionsUrl = instructionsUrl,
-                VersionComparisonUncertain = true,
-                RecommendedZipAssetMissing = missingZip,
-                ErrorMessage =
-                    "A newer release may be available (the release tag could not be parsed as a version). Open the GitHub Release page to confirm."
-            };
+                    RecommendedZipAssetMissing = missingZip,
+                    ErrorMessage =
+                        "A newer release may be available (the release tag could not be parsed as a version). Open the GitHub Release page to confirm."
+                },
+                root,
+                releasesArrayLength);
         }
 
         var ignoredOk = ReleaseVersionParser.NormalizeIgnored(ignoredVersionNormalized);
@@ -343,23 +436,26 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
         if (!string.IsNullOrEmpty(ignoredOk) &&
             string.Equals(normTag, ignoredOk, StringComparison.OrdinalIgnoreCase))
         {
-            return new UpdateCheckResult
-            {
-                Succeeded = true,
-                Outcome = UpdateCheckOutcome.IgnoredVersion,
-                UpdateAvailable = false,
-                LatestVersion = latestSem.ToLegacyVersion(),
-                LatestVersionLabel = normTag,
-                ReleaseNotesUrl = notesUrl,
-                RecommendedZipAssetName = zipName,
-                RecommendedZipDownloadUrl = zipUrl,
-                RecommendedZipPatternMatched = matchedPreferredZip,
-                InstallerAssetName = exeName,
-                InstallerDownloadUrl = exeUrl,
-                ChecksumsDownloadUrl = checksumsUrl,
-                DownloadInstructionsUrl = instructionsUrl,
-                ErrorMessage = UpdateCheckDisplay.FormatIgnoredVersion(normTag)
-            };
+            return AttachReleaseTelemetry(
+                new UpdateCheckResult
+                {
+                    Succeeded = true,
+                    Outcome = UpdateCheckOutcome.IgnoredVersion,
+                    UpdateAvailable = false,
+                    LatestVersion = latestSem.ToLegacyVersion(),
+                    LatestVersionLabel = normTag,
+                    ReleaseNotesUrl = notesUrl,
+                    RecommendedZipAssetName = zipName,
+                    RecommendedZipDownloadUrl = zipUrl,
+                    RecommendedZipPatternMatched = matchedPreferredZip,
+                    InstallerAssetName = exeName,
+                    InstallerDownloadUrl = exeUrl,
+                    ChecksumsDownloadUrl = checksumsUrl,
+                    DownloadInstructionsUrl = instructionsUrl,
+                    ErrorMessage = UpdateCheckDisplay.FormatIgnoredVersion(normTag)
+                },
+                root,
+                releasesArrayLength);
         }
 
         var latestVersion = latestSem.ToLegacyVersion();
@@ -373,23 +469,26 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
 
         var missingPreferredZip = newer && (string.IsNullOrWhiteSpace(zipUrl) || !matchedPreferredZip);
 
-        return new UpdateCheckResult
-        {
-            Succeeded = true,
-            Outcome = outcome,
-            UpdateAvailable = newer,
-            LatestVersion = latestVersion,
-            LatestVersionLabel = normTag,
-            ReleaseNotesUrl = notesUrl,
-            RecommendedZipAssetName = zipName,
-            RecommendedZipDownloadUrl = zipUrl,
-            RecommendedZipPatternMatched = matchedPreferredZip,
-            InstallerAssetName = exeName,
-            InstallerDownloadUrl = exeUrl,
-            ChecksumsDownloadUrl = checksumsUrl,
-            DownloadInstructionsUrl = instructionsUrl,
-            RecommendedZipAssetMissing = missingPreferredZip
-        };
+        return AttachReleaseTelemetry(
+            new UpdateCheckResult
+            {
+                Succeeded = true,
+                Outcome = outcome,
+                UpdateAvailable = newer,
+                LatestVersion = latestVersion,
+                LatestVersionLabel = normTag,
+                ReleaseNotesUrl = notesUrl,
+                RecommendedZipAssetName = zipName,
+                RecommendedZipDownloadUrl = zipUrl,
+                RecommendedZipPatternMatched = matchedPreferredZip,
+                InstallerAssetName = exeName,
+                InstallerDownloadUrl = exeUrl,
+                ChecksumsDownloadUrl = checksumsUrl,
+                DownloadInstructionsUrl = instructionsUrl,
+                RecommendedZipAssetMissing = missingPreferredZip
+            },
+            root,
+            releasesArrayLength);
     }
 
     /// <summary>Selects ZIP (preferred patterns first) then a ForgerEMS .exe for Advanced. Sets <paramref name="matchedPreferredZip"/> when tier 1 or 2 matched.</summary>
@@ -624,6 +723,21 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
         {
             _httpClient.Dispose();
         }
+    }
+
+    private static string SanitizeGitHubPathSegment(string? value, string fallback)
+    {
+        var s = (value ?? string.Empty).Trim();
+        if (s.Length == 0 ||
+            s.Contains('/', StringComparison.Ordinal) ||
+            s.Contains('\\', StringComparison.Ordinal) ||
+            s.Contains('?', StringComparison.Ordinal) ||
+            s.Contains('#', StringComparison.Ordinal))
+        {
+            return fallback;
+        }
+
+        return s;
     }
 }
 
