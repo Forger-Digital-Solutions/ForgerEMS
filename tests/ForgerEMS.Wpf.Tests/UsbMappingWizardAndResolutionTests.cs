@@ -240,6 +240,8 @@ public sealed class UsbMappingWizardAndResolutionTests
             _callsInDetect = 0;
         }
 
+        public bool IsMounted => !_detectMode || _callsInDetect != 1;
+
         public IReadOnlyList<UsbTargetInfo> GetTargets()
         {
             if (!_detectMode)
@@ -249,6 +251,20 @@ public sealed class UsbMappingWizardAndResolutionTests
 
             _callsInDetect++;
             return _callsInDetect == 1 ? [] : [_target];
+        }
+    }
+
+    private sealed class MountedSequence
+    {
+        private readonly bool[] _states;
+        private int _index = -1;
+
+        public MountedSequence(params bool[] states) => _states = states.Length == 0 ? [true] : states;
+
+        public bool IsMounted(string? _)
+        {
+            var i = Interlocked.Increment(ref _index);
+            return _states[Math.Min(i, _states.Length - 1)];
         }
     }
 
@@ -345,13 +361,20 @@ public sealed class UsbMappingWizardAndResolutionTests
         try
         {
             var store = new UsbMachineProfileStore(root);
-            var vm = new UsbMappingWizardViewModel(intel, store, () => [MakeRemovable("E:", "Data")]);
+            var target = MakeRemovable("E:", "Data");
+            var targets = new RemovalThenReinsertTargets(target);
+            var vm = new UsbMappingWizardViewModel(
+                intel,
+                store,
+                targets.GetTargets,
+                detectOperationTimeoutOverride: TimeSpan.FromSeconds(5),
+                isDriveRootMounted: _ => targets.IsMounted);
             vm.StartMappingCommand.Execute(null);
             vm.SelectedDevice = vm.DeviceOptions[0];
             vm.ContinueSelectDeviceCommand.Execute(null);
             vm.CaptureCurrentPortCommand.Execute(null);
             vm.NextAfterCaptureCommand.Execute(null);
-            vm.UserConfirmedUsbMoved = true;
+            targets.StartDetectPass();
             await vm.DetectPortChangeAsync();
             Assert.True(vm.IsDetectStep);
             Assert.False(vm.DetectionSuccess);
@@ -373,27 +396,31 @@ public sealed class UsbMappingWizardAndResolutionTests
     }
 
     [Fact]
-    public async Task UsbMappingWizard_DetectChange_Timeout_ShowsFallbackMessage()
+    public async Task UsbMappingWizard_RemovalNotObserved_ShowsWaitingRemovalCopy()
     {
-        var intel = new SlowTopologyUsbIntelligence(delayMs: 500);
+        var intel = new IdenticalTopologyUsbIntelligence();
         var root = Path.Combine(Path.GetTempPath(), $"fe-wiz-to-{Guid.NewGuid():N}");
         try
         {
             var store = new UsbMachineProfileStore(root);
+            var target = MakeRemovable("E:", "Data");
             var vm = new UsbMappingWizardViewModel(
                 intel,
                 store,
-                () => [MakeRemovable("E:", "Data")],
-                detectOperationTimeoutOverride: TimeSpan.FromMilliseconds(120));
+                () => [target],
+                detectOperationTimeoutOverride: TimeSpan.FromMilliseconds(120),
+                isDriveRootMounted: _ => true);
             vm.StartMappingCommand.Execute(null);
             vm.SelectedDevice = vm.DeviceOptions[0];
             vm.ContinueSelectDeviceCommand.Execute(null);
             vm.CaptureCurrentPortCommand.Execute(null);
             vm.NextAfterCaptureCommand.Execute(null);
-            vm.UserConfirmedUsbMoved = true;
             await vm.DetectPortChangeAsync();
-            Assert.Contains("longer than expected", vm.FailureMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(UsbMappingWizardDetectionPhase.WaitingForRemoval, vm.DetectionPhase);
+            Assert.Contains("Waiting for USB Removal", vm.FailureMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("physical port path", vm.FailureMessage, StringComparison.OrdinalIgnoreCase);
             Assert.True(vm.ShowDetectFailureDetails);
+            Assert.True(vm.ShowRemovalNotObservedActions);
         }
         finally
         {
@@ -415,13 +442,20 @@ public sealed class UsbMappingWizardAndResolutionTests
         try
         {
             var store = new UsbMachineProfileStore(root);
-            var vm = new UsbMappingWizardViewModel(intel, store, () => [MakeRemovable("E:", "Data")]);
+            var target = MakeRemovable("E:", "Data");
+            var targets = new RemovalThenReinsertTargets(target);
+            var vm = new UsbMappingWizardViewModel(
+                intel,
+                store,
+                targets.GetTargets,
+                detectOperationTimeoutOverride: TimeSpan.FromSeconds(5),
+                isDriveRootMounted: _ => targets.IsMounted);
             vm.StartMappingCommand.Execute(null);
             vm.SelectedDevice = vm.DeviceOptions[0];
             vm.ContinueSelectDeviceCommand.Execute(null);
             vm.CaptureCurrentPortCommand.Execute(null);
             vm.NextAfterCaptureCommand.Execute(null);
-            vm.UserConfirmedUsbMoved = true;
+            targets.StartDetectPass();
             await vm.DetectPortChangeAsync();
             Assert.True(vm.DetectionSuccess);
             Assert.True(vm.ShowDetectSuccessDetails);
@@ -440,7 +474,7 @@ public sealed class UsbMappingWizardAndResolutionTests
     }
 
     [Fact]
-    public void UsbMappingWizard_DetectDisabledUntilMovedConfirmed()
+    public void UsbMappingWizard_DetectEnabledAfterCurrentPortCaptured()
     {
         var intel = new StubUsbIntelligence();
         var root = Path.Combine(Path.GetTempPath(), $"fe-wiz3-{Guid.NewGuid():N}");
@@ -451,10 +485,9 @@ public sealed class UsbMappingWizardAndResolutionTests
             vm.StartMappingCommand.Execute(null);
             vm.SelectedDevice = vm.DeviceOptions[0];
             vm.ContinueSelectDeviceCommand.Execute(null);
+            Assert.False(vm.DetectPortChangeCommand.CanExecute(null));
             vm.CaptureCurrentPortCommand.Execute(null);
             vm.NextAfterCaptureCommand.Execute(null);
-            Assert.False(vm.DetectPortChangeCommand.CanExecute(null));
-            vm.UserConfirmedUsbMoved = true;
             Assert.True(vm.DetectPortChangeCommand.CanExecute(null));
         }
         finally
@@ -720,21 +753,24 @@ public sealed class UsbMappingWizardAndResolutionTests
         {
             var store = new UsbMachineProfileStore(root);
             var target = MakeRemovable("E:", "Data");
+            var targets = new RemovalThenReinsertTargets(target);
             var vm = new UsbMappingWizardViewModel(
                 intel,
                 store,
-                () => [target],
-                detectOperationTimeoutOverride: TimeSpan.FromSeconds(15));
+                targets.GetTargets,
+                detectOperationTimeoutOverride: TimeSpan.FromSeconds(5),
+                isDriveRootMounted: _ => targets.IsMounted);
             vm.StartMappingCommand.Execute(null);
             vm.SelectedDevice = vm.DeviceOptions[0];
             vm.ContinueSelectDeviceCommand.Execute(null);
             vm.CaptureCurrentPortCommand.Execute(null);
             vm.NextAfterCaptureCommand.Execute(null);
-            vm.UserConfirmedUsbMoved = true;
+            targets.StartDetectPass();
             await vm.DetectPortChangeAsync();
 
             Assert.False(vm.DetectionSuccess);
-            Assert.Contains("Manual label", vm.FailureMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(UsbMappingWizardDetectionPhase.ManualLabelRecommended, vm.DetectionPhase);
+            Assert.Contains("Manual Label", vm.FailureMessage, StringComparison.OrdinalIgnoreCase);
             Assert.True(vm.UseCurrentPortAnywayCommand.CanExecute(null));
             Assert.True(vm.SaveManualLabelPathCommand.CanExecute(null));
         }
@@ -764,13 +800,13 @@ public sealed class UsbMappingWizardAndResolutionTests
                 intel,
                 store,
                 targets.GetTargets,
-                detectOperationTimeoutOverride: TimeSpan.FromSeconds(5));
+                detectOperationTimeoutOverride: TimeSpan.FromSeconds(5),
+                isDriveRootMounted: _ => targets.IsMounted);
             vm.StartMappingCommand.Execute(null);
             vm.SelectedDevice = vm.DeviceOptions[0];
             vm.ContinueSelectDeviceCommand.Execute(null);
             vm.CaptureCurrentPortCommand.Execute(null);
             vm.NextAfterCaptureCommand.Execute(null);
-            vm.UserConfirmedUsbMoved = true;
             targets.StartDetectPass();
             await vm.DetectPortChangeAsync();
 
@@ -778,16 +814,49 @@ public sealed class UsbMappingWizardAndResolutionTests
             Assert.Contains("manual", vm.ConfidenceTierDisplay, StringComparison.OrdinalIgnoreCase);
 
             intel.ReturnChangedPort = true;
-            vm.TryAgainCommand.Execute(null);
-            Assert.True(vm.IsMoveUsbStep);
-            Assert.False(vm.DetectionSuccess);
-            Assert.True(string.IsNullOrWhiteSpace(vm.ConfidenceTierDisplay));
-
-            vm.UserConfirmedUsbMoved = true;
             targets.StartDetectPass();
+            await vm.TryDetectionAgainAsync();
+            Assert.True(vm.IsDetectStep);
+            Assert.True(vm.DetectionSuccess);
+            Assert.Contains("confidence", vm.DetectChangePrimaryStatus, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, true);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task UsbMappingWizard_PollingFallbackDetectsRemovalAndReinsertWhenTargetListIsStale()
+    {
+        var intel = new AlternatingPortIntelligence();
+        var root = Path.Combine(Path.GetTempPath(), $"fe-wiz-poll-{Guid.NewGuid():N}");
+        try
+        {
+            var target = MakeRemovable("E:", "Data");
+            var mounted = new MountedSequence(true, false, false, true, true);
+            var vm = new UsbMappingWizardViewModel(
+                intel,
+                new UsbMachineProfileStore(root),
+                () => [target],
+                detectOperationTimeoutOverride: TimeSpan.FromSeconds(5),
+                isDriveRootMounted: mounted.IsMounted);
+            vm.StartMappingCommand.Execute(null);
+            vm.SelectedDevice = vm.DeviceOptions[0];
+            vm.ContinueSelectDeviceCommand.Execute(null);
+            vm.CaptureCurrentPortCommand.Execute(null);
+            vm.NextAfterCaptureCommand.Execute(null);
+
             await vm.DetectPortChangeAsync();
 
             Assert.True(vm.DetectionSuccess);
+            Assert.Equal(UsbMappingWizardDetectionPhase.Mapped, vm.DetectionPhase);
             Assert.Contains("confidence", vm.DetectChangePrimaryStatus, StringComparison.OrdinalIgnoreCase);
         }
         finally
@@ -818,13 +887,13 @@ public sealed class UsbMappingWizardAndResolutionTests
                 new IdenticalTopologyUsbIntelligence(),
                 new UsbMachineProfileStore(root),
                 targets.GetTargets,
-                detectOperationTimeoutOverride: TimeSpan.FromSeconds(5));
+                detectOperationTimeoutOverride: TimeSpan.FromSeconds(5),
+                isDriveRootMounted: _ => targets.IsMounted);
             vm.StartMappingCommand.Execute(null);
             vm.SelectedDevice = vm.DeviceOptions[0];
             vm.ContinueSelectDeviceCommand.Execute(null);
             vm.CaptureCurrentPortCommand.Execute(null);
             vm.NextAfterCaptureCommand.Execute(null);
-            vm.UserConfirmedUsbMoved = true;
             targets.StartDetectPass();
             await vm.DetectPortChangeAsync();
 
@@ -851,7 +920,9 @@ public sealed class UsbMappingWizardAndResolutionTests
     {
         var xaml = File.ReadAllText(FindRepoFile("src/ForgerEMS.Wpf/UsbMappingWizardWindow.xaml"));
         Assert.DoesNotContain("previous step", xaml, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Click Try Again to repeat removal/reinsert detection", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Start detection first", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("<WrapPanel", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("I moved the USB device", xaml, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
