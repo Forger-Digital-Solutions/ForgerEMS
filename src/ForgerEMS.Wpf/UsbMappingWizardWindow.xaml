@@ -102,9 +102,9 @@
                                      IsIndeterminate="{Binding ShowDetectSpinner}"
                                      Visibility="{Binding ShowDetectSpinner, Converter={StaticResource BoolToVis}}" />
                         <TextBlock Margin="0,10,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" TextWrapping="Wrap"
-                                   Text="Unplug the selected USB drive, plug it into the physical port you want to map, wait for Windows to recognize it, then use Detect Port Change on the previous step when you are ready." />
+                                   Text="Click Try Again to repeat removal/reinsert detection, or save a manual label if Windows does not expose the port path." />
                         <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowDetectChangeDebugDetails, Converter={StaticResource BoolToVis}}">
-                            <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Debug (development build)" />
+                            <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Diagnostics" />
                             <TextBlock Margin="0,4,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" FontFamily="Consolas" FontSize="11" Text="{Binding DetectChangeDebugSummary}" TextWrapping="Wrap" />
                         </StackPanel>
                         <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowDetectSuccessDetails, Converter={StaticResource BoolToVis}}">

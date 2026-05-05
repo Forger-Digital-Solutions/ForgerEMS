@@ -175,6 +175,83 @@ public sealed class UsbMappingWizardAndResolutionTests
             };
     }
 
+    private sealed class RetrySensitivePortIntelligence : IUsbIntelligenceService
+    {
+        private int _call;
+
+        public bool ReturnChangedPort { get; set; }
+
+        public UsbTopologySnapshot BuildTopologySnapshot(UsbTargetInfo? selectedTarget, UsbTopologyBuildOptions? options = null)
+        {
+            var call = Interlocked.Increment(ref _call);
+            var port = ReturnChangedPort && call >= 3 ? "port-b" : "port-a";
+            var location = ReturnChangedPort && call >= 3 ? "loc-b" : "loc-a";
+            return new UsbTopologySnapshot
+            {
+                GeneratedUtc = DateTimeOffset.UtcNow,
+                CombinedConfidenceScore = 60,
+                CombinedConfidenceReason = "retry",
+                Devices =
+                [
+                    new UsbDeviceInfo
+                    {
+                        FriendlyName = "USB Disk",
+                        DriveLetter = "E:",
+                        InferredSpeed = UsbSpeedClassification.Usb3,
+                        StableDeviceKey = "dev-1",
+                        StablePortKey = port,
+                        LocationPathHash = location,
+                        ControllerKey = "c1",
+                        HubKey = "h0",
+                        VolumeIdentityHash = "vol-fixed",
+                        IsRemovableMassStorage = true
+                    }
+                ],
+                Controllers = [],
+                Ports = [],
+                SummaryLine = ""
+            };
+        }
+
+        public Task WriteLatestReportAsync(string reportsDirectory, UsbTopologySnapshot snapshot) => Task.CompletedTask;
+
+        public UsbBuilderPreflightResult GetVentoyPreflight(UsbTargetInfo? selectedTarget, UsbTopologySnapshot? snapshot) =>
+            new()
+            {
+                ShouldWarn = false,
+                Message = "",
+                Speed = UsbSpeedClassification.Unknown,
+                Risk = UsbPortRiskLevel.Unknown,
+                Quality = UsbBuilderQuality.Unknown
+            };
+    }
+
+    private sealed class RemovalThenReinsertTargets
+    {
+        private readonly UsbTargetInfo _target;
+        private bool _detectMode;
+        private int _callsInDetect;
+
+        public RemovalThenReinsertTargets(UsbTargetInfo target) => _target = target;
+
+        public void StartDetectPass()
+        {
+            _detectMode = true;
+            _callsInDetect = 0;
+        }
+
+        public IReadOnlyList<UsbTargetInfo> GetTargets()
+        {
+            if (!_detectMode)
+            {
+                return [_target];
+            }
+
+            _callsInDetect++;
+            return _callsInDetect == 1 ? [] : [_target];
+        }
+    }
+
     private static UsbTargetInfo MakeRemovable(string letter, string label, bool isEfiSystemPartition = false) =>
         new()
         {
@@ -539,7 +616,99 @@ public sealed class UsbMappingWizardAndResolutionTests
 
         Assert.True(res.Success);
         Assert.Equal(UsbPortMappingMatchKind.WeakTopologyEvidencePortChange, res.MatchKind);
-        Assert.Equal("Low", res.ConfidenceTier);
+        Assert.Equal("Medium", res.ConfidenceTier);
+        Assert.Contains("location-path-changed", res.ReasonCodes);
+    }
+
+    [Fact]
+    public void UsbMappingPortResolution_SameDeviceCountChangedControllerHub_MapsWithMediumConfidence()
+    {
+        var before = new UsbTopologySnapshot
+        {
+            GeneratedUtc = DateTimeOffset.UtcNow,
+            Devices =
+            [
+                new UsbDeviceInfo
+                {
+                    FriendlyName = "Vendor USB (Ventoy)",
+                    DriveLetter = "E:",
+                    StableDeviceKey = "same-device",
+                    StablePortKey = "same-port-key",
+                    ControllerKey = "controller-a",
+                    HubKey = "hub-a",
+                    VolumeIdentityHash = "vol-1",
+                    IsRemovableMassStorage = true
+                }
+            ]
+        };
+        var after = new UsbTopologySnapshot
+        {
+            GeneratedUtc = DateTimeOffset.UtcNow,
+            Devices =
+            [
+                new UsbDeviceInfo
+                {
+                    FriendlyName = "Vendor USB (Ventoy)",
+                    DriveLetter = "E:",
+                    StableDeviceKey = "same-device",
+                    StablePortKey = "same-port-key",
+                    ControllerKey = "controller-b",
+                    HubKey = "hub-b",
+                    VolumeIdentityHash = "vol-1",
+                    IsRemovableMassStorage = true
+                }
+            ]
+        };
+
+        var res = UsbMappingPortResolution.Resolve(before, after, MakeRemovable("E:", "Ventoy"));
+
+        Assert.True(res.Success);
+        Assert.Equal(UsbPortMappingMatchKind.WeakTopologyEvidencePortChange, res.MatchKind);
+        Assert.Equal("Medium", res.ConfidenceTier);
+        Assert.Contains("controller-changed", res.ReasonCodes);
+        Assert.Contains("hub-parent-changed", res.ReasonCodes);
+    }
+
+    [Fact]
+    public void UsbMappingPortResolution_SameDriveIdentityWithoutTopology_ReturnsManualLabelRecommended()
+    {
+        var before = new UsbTopologySnapshot
+        {
+            GeneratedUtc = DateTimeOffset.UtcNow,
+            Devices =
+            [
+                new UsbDeviceInfo
+                {
+                    FriendlyName = "USB Disk",
+                    DriveLetter = "E:",
+                    VolumeLabel = "Ventoy",
+                    VolumeIdentityHash = "vol-1",
+                    IsRemovableMassStorage = true
+                }
+            ]
+        };
+        var after = new UsbTopologySnapshot
+        {
+            GeneratedUtc = DateTimeOffset.UtcNow,
+            Devices =
+            [
+                new UsbDeviceInfo
+                {
+                    FriendlyName = "USB Disk",
+                    DriveLetter = "E:",
+                    VolumeLabel = "Ventoy",
+                    VolumeIdentityHash = "vol-1",
+                    IsRemovableMassStorage = true
+                }
+            ]
+        };
+
+        var res = UsbMappingPortResolution.Resolve(before, after, MakeRemovable("E:", "Ventoy"));
+
+        Assert.False(res.Success);
+        Assert.True(res.ManualLabelRecommended);
+        Assert.Equal(UsbPortMappingMatchKind.ManualLabelRecommended, res.MatchKind);
+        Assert.Contains("same-device-identity-matched", res.ReasonCodes);
     }
 
     [Fact]
@@ -582,18 +751,133 @@ public sealed class UsbMappingWizardAndResolutionTests
     }
 
     [Fact]
-    public void UsbMappingWizard_DebugDetailsFollowBuildDiagnosticsMode()
+    public async Task UsbMappingWizard_TryAgainClearsStaleSnapshotsAndStartsFreshDetection()
     {
-        var vm = new UsbMappingWizardViewModel(
-            new StubUsbIntelligence(),
-            new UsbMachineProfileStore(Path.Combine(Path.GetTempPath(), $"fe-wiz-debug-{Guid.NewGuid():N}")),
-            () => [MakeRemovable("E:", "Data")]);
+        var intel = new RetrySensitivePortIntelligence();
+        var root = Path.Combine(Path.GetTempPath(), $"fe-wiz-retry-{Guid.NewGuid():N}");
+        try
+        {
+            var target = MakeRemovable("E:", "Data");
+            var targets = new RemovalThenReinsertTargets(target);
+            var store = new UsbMachineProfileStore(root);
+            var vm = new UsbMappingWizardViewModel(
+                intel,
+                store,
+                targets.GetTargets,
+                detectOperationTimeoutOverride: TimeSpan.FromSeconds(5));
+            vm.StartMappingCommand.Execute(null);
+            vm.SelectedDevice = vm.DeviceOptions[0];
+            vm.ContinueSelectDeviceCommand.Execute(null);
+            vm.CaptureCurrentPortCommand.Execute(null);
+            vm.NextAfterCaptureCommand.Execute(null);
+            vm.UserConfirmedUsbMoved = true;
+            targets.StartDetectPass();
+            await vm.DetectPortChangeAsync();
 
-#if DEBUG
-        Assert.False(vm.ShowDetectChangeDebugDetails);
-#else
-        Assert.False(vm.ShowDetectChangeDebugDetails);
-#endif
+            Assert.False(vm.DetectionSuccess);
+            Assert.Contains("manual", vm.ConfidenceTierDisplay, StringComparison.OrdinalIgnoreCase);
+
+            intel.ReturnChangedPort = true;
+            vm.TryAgainCommand.Execute(null);
+            Assert.True(vm.IsMoveUsbStep);
+            Assert.False(vm.DetectionSuccess);
+            Assert.True(string.IsNullOrWhiteSpace(vm.ConfidenceTierDisplay));
+
+            vm.UserConfirmedUsbMoved = true;
+            targets.StartDetectPass();
+            await vm.DetectPortChangeAsync();
+
+            Assert.True(vm.DetectionSuccess);
+            Assert.Contains("confidence", vm.DetectChangePrimaryStatus, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, true);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task UsbMappingWizard_DebugDetailsHiddenOutsideDiagnosticsMode()
+    {
+        var original = Environment.GetEnvironmentVariable("FORGEREMS_USB_MAPPING_DEBUG_UI");
+        var originalEnv = Environment.GetEnvironmentVariable("FORGEREMS_ENV");
+        Environment.SetEnvironmentVariable("FORGEREMS_USB_MAPPING_DEBUG_UI", null);
+        Environment.SetEnvironmentVariable("FORGEREMS_ENV", "Production");
+        var root = Path.Combine(Path.GetTempPath(), $"fe-wiz-debug-{Guid.NewGuid():N}");
+        try
+        {
+            var target = MakeRemovable("E:", "Data");
+            var targets = new RemovalThenReinsertTargets(target);
+            var vm = new UsbMappingWizardViewModel(
+                new IdenticalTopologyUsbIntelligence(),
+                new UsbMachineProfileStore(root),
+                targets.GetTargets,
+                detectOperationTimeoutOverride: TimeSpan.FromSeconds(5));
+            vm.StartMappingCommand.Execute(null);
+            vm.SelectedDevice = vm.DeviceOptions[0];
+            vm.ContinueSelectDeviceCommand.Execute(null);
+            vm.CaptureCurrentPortCommand.Execute(null);
+            vm.NextAfterCaptureCommand.Execute(null);
+            vm.UserConfirmedUsbMoved = true;
+            targets.StartDetectPass();
+            await vm.DetectPortChangeAsync();
+
+            Assert.True(vm.IsDetectStep);
+            Assert.False(vm.ShowDetectChangeDebugDetails);
+            Assert.False(string.IsNullOrWhiteSpace(vm.DetectChangeDebugSummary));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FORGEREMS_USB_MAPPING_DEBUG_UI", original);
+            Environment.SetEnvironmentVariable("FORGEREMS_ENV", originalEnv);
+            try
+            {
+                Directory.Delete(root, true);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public void UsbMappingWizardWindow_CopyDoesNotReferencePreviousStep()
+    {
+        var xaml = File.ReadAllText(FindRepoFile("src/ForgerEMS.Wpf/UsbMappingWizardWindow.xaml"));
+        Assert.DoesNotContain("previous step", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Click Try Again to repeat removal/reinsert detection", xaml, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void UsbIntelligenceService_RestrictedOrMissingPnpEvidence_DoesNotCrashSnapshot()
+    {
+        var svc = new UsbIntelligenceService();
+        var snapshot = svc.BuildTopologySnapshot(MakeRemovable("Z:", "NoSuchUsb"));
+        Assert.NotNull(snapshot);
+        Assert.NotNull(snapshot.Devices);
+    }
+
+    private static string FindRepoFile(string relativePath)
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(dir.FullName, relativePath);
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            dir = dir.Parent;
+        }
+
+        throw new FileNotFoundException($"Could not find repo file {relativePath}");
     }
 
     [Fact]

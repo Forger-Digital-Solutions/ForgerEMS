@@ -180,6 +180,14 @@ public sealed class UsbDeviceInfo
 
     public string? DriveLetter { get; set; }
 
+    public string VolumeLabel { get; set; } = string.Empty;
+
+    public string FileSystem { get; set; } = string.Empty;
+
+    public int? DiskNumber { get; set; }
+
+    public int? PartitionNumber { get; set; }
+
     public bool IsRemovableMassStorage { get; init; }
 
     public UsbSpeedClassification InferredSpeed { get; init; }
@@ -205,6 +213,14 @@ public sealed class UsbDeviceInfo
 
     public string DeviceInstanceIdHash { get; set; } = string.Empty;
 
+    public string PnpDeviceIdHash { get; set; } = string.Empty;
+
+    public string WmiDeviceIdHash { get; set; } = string.Empty;
+
+    public string SerialHash { get; set; } = string.Empty;
+
+    public string ParentIdPrefixHash { get; set; } = string.Empty;
+
     public string LocationPathHash { get; set; } = string.Empty;
 
     public string LocationInformationHash { get; set; } = string.Empty;
@@ -212,6 +228,12 @@ public sealed class UsbDeviceInfo
     public string LocationPathsHash { get; set; } = string.Empty;
 
     public string ContainerIdHash { get; set; } = string.Empty;
+
+    public string UsbControllerAssociationHash { get; set; } = string.Empty;
+
+    public string UsbHubNameHash { get; set; } = string.Empty;
+
+    public string UsbHubPathHash { get; set; } = string.Empty;
 
     public string VolumeIdentityHash { get; set; } = string.Empty;
 
