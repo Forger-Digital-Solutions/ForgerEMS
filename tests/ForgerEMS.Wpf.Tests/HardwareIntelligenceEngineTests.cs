@@ -392,7 +392,7 @@ public sealed class HardwareIntelligenceEngineTests
         var previous = Environment.GetEnvironmentVariable("FORGEREMS_DEEP_SENSOR_MODE");
         try
         {
-            Environment.SetEnvironmentVariable("FORGEREMS_DEEP_SENSOR_MODE", value);
+            Environment.SetEnvironmentVariable("FORGEREMS_DEEP_SENSOR_MODE", value ?? "Off");
             action();
         }
         finally

@@ -927,13 +927,84 @@ function New-SensorProviderManifest {
     }
 }
 
+function Resolve-ForgerDeepSensorMode {
+    $notice = "Deep Sensor Mode reads local hardware sensor data only while ForgerEMS is running or scanning. No sensor control or cloud service is used."
+
+    function New-DeepSensorModeResolution {
+        param(
+            [string]$Mode,
+            [string]$Source,
+            [bool]$Invalid = $false,
+            [string]$Note = ""
+        )
+
+        $enabled = $Mode -eq "ReadOnly"
+        [ordered]@{
+            value = $Mode
+            source = $Source
+            enabled = $enabled
+            readOnly = $true
+            noControlCapabilities = $true
+            isInvalid = $Invalid
+            noticeText = $notice
+            technicianNote = $(if ($Note) { $Note } elseif ($enabled) { "ForgerEMS Deep Sensor Mode is ReadOnly via $Source. Sensors are local and read-only." } else { "Deep Sensor Mode is Off via $Source." })
+        }
+    }
+
+    function Normalize-DeepSensorMode {
+        param([string]$Value, [string]$Source)
+        if ([string]::IsNullOrWhiteSpace($Value)) {
+            return $null
+        }
+
+        $trimmed = $Value.Trim()
+        if ($trimmed -ieq "Off") {
+            return New-DeepSensorModeResolution -Mode "Off" -Source $Source
+        }
+        if ($trimmed -ieq "ReadOnly" -or $trimmed -ieq "ReadOnlyLocalSensors") {
+            return New-DeepSensorModeResolution -Mode "ReadOnly" -Source $Source
+        }
+        if ($trimmed -ieq "AdminReadOnly") {
+            return New-DeepSensorModeResolution -Mode "AdminReadOnly" -Source $Source -Note "AdminReadOnly is reserved for future explicit admin scans; current beta does not auto-elevate."
+        }
+
+        return New-DeepSensorModeResolution -Mode "Off" -Source $Source -Invalid $true -Note "Invalid Deep Sensor Mode value from $Source; using Off."
+    }
+
+    $envResolution = Normalize-DeepSensorMode -Value $env:FORGEREMS_DEEP_SENSOR_MODE -Source "Environment"
+    if ($null -ne $envResolution) { return $envResolution }
+
+    try {
+        $userPath = Join-Path -Path ([Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)) -ChildPath "ForgerEMS\settings\deep-sensor-mode.txt"
+        if (Test-Path -LiteralPath $userPath) {
+            $userResolution = Normalize-DeepSensorMode -Value (Get-Content -LiteralPath $userPath -Raw) -Source "UserSetting"
+            if ($null -ne $userResolution) { return $userResolution }
+        }
+    }
+    catch {
+        Write-Warning "Deep Sensor Mode user setting could not be read: $($_.Exception.Message)"
+    }
+
+    try {
+        $installValue = (Get-ItemProperty -Path "HKLM:\Software\ForgerEMS" -Name "DeepSensorMode" -ErrorAction Stop).DeepSensorMode
+        $installResolution = Normalize-DeepSensorMode -Value ([string]$installValue) -Source "InstallerDefault"
+        if ($null -ne $installResolution) { return $installResolution }
+    }
+    catch {
+        # No installer default is normal for portable builds.
+    }
+
+    return New-DeepSensorModeResolution -Mode "Off" -Source "BuiltInDefault"
+}
+
 function New-SensorProviderReport {
     param([object[]]$BuiltInReadings)
 
     $deepProviderPath = Join-Path -Path $PSScriptRoot -ChildPath "..\..\providers\sensors\LibreHardwareMonitorLib.dll"
     $deepPackaged = Test-Path -LiteralPath $deepProviderPath
-    $deepMode = if ($env:FORGEREMS_DEEP_SENSOR_MODE) { $env:FORGEREMS_DEEP_SENSOR_MODE } else { "Off" }
-    $deepEnabled = $deepPackaged -and ($deepMode -in @("ReadOnly", "ReadOnlyLocalSensors"))
+    $deepModeResolution = Resolve-ForgerDeepSensorMode
+    $deepMode = [string]$deepModeResolution.value
+    $deepEnabled = $deepPackaged -and [bool]$deepModeResolution.enabled
     @(
         New-SensorProviderManifest `
             -ProviderName "Windows Native" `
@@ -965,9 +1036,9 @@ function New-SensorProviderReport {
             -Capabilities (New-SensorProviderCapabilities `
                 -SupportedCapabilities @("Read-only CPU temperature when exposed", "Read-only CPU package power when exposed", "Read-only CPU clocks/load when exposed", "Read-only GPU temperature/clocks/load when exposed", "Read-only fan RPM when exposed", "Read-only storage temperature/wear when exposed", "Read-only voltage display when exposed") `
                 -MissingCapabilities @("Sensors blocked by firmware/vendor drivers", "Sensors requiring admin access", "Unsupported hardware sensors")) `
-            -FailureReason $(if (-not $deepPackaged) { "LibreHardwareMonitor provider assembly is not packaged in this build." } elseif (-not $deepEnabled) { "Deep Sensor Mode is $deepMode. Set FORGEREMS_DEEP_SENSOR_MODE=ReadOnly to enable local read-only deep sensors." } else { "" }) `
+            -FailureReason $(if (-not $deepPackaged) { "LibreHardwareMonitor provider assembly is not packaged in this build." } elseif (-not $deepEnabled) { "Deep Sensor Mode is $deepMode via $($deepModeResolution.source). Enable Read-only local sensors in Settings or set FORGEREMS_DEEP_SENSOR_MODE=ReadOnly for testing." } else { "" }) `
             -Readings @() `
-            -TechnicianNotes @($(if ($deepEnabled) { "LibreHardwareMonitor: active read-only through the WPF sensor host when System Intelligence runs in-app." } elseif ($deepPackaged) { "LibreHardwareMonitor: bundled but disabled." } else { "LibreHardwareMonitor: not packaged in this build." }), "Deep Sensor Mode is local and read-only.", "ForgerEMS does not expose fan control, voltage control, overclocking, undervolting, or BIOS-write actions.") `
+            -TechnicianNotes @($(if ($deepEnabled) { "LibreHardwareMonitor: active read-only through the WPF sensor host when System Intelligence runs in-app." } elseif ($deepPackaged) { "LibreHardwareMonitor: bundled but disabled." } else { "LibreHardwareMonitor: not packaged in this build." }), "Deep Sensor Mode is $deepMode via $($deepModeResolution.source).", "Deep Sensor Mode is local and read-only.", "ForgerEMS does not expose fan control, voltage control, clock control, overclocking, undervolting, firmware writes, or BIOS-write actions.") `
             -ThirdPartyNotice (New-ThirdPartyNotice "LibreHardwareMonitor" "0.9.6" "MPL-2.0" "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor" "providers/sensors/LibreHardwareMonitorLib.dll" "ForgerEMS uses the unmodified NuGet package LibreHardwareMonitorLib and ships MPL-2.0 notices with installed and portable builds." $false)
 
         New-SensorProviderManifest `
@@ -1111,12 +1182,17 @@ function New-SensorMatrixReport {
     )
     $builtInReadings = @($groups | ForEach-Object { $_.readings })
     $sensorProviders = @(New-SensorProviderReport -BuiltInReadings $builtInReadings)
+    $deepSensorMode = Resolve-ForgerDeepSensorMode
+    $deepProvider = @($sensorProviders | Where-Object { $_.providerName -eq "LibreHardwareMonitor" } | Select-Object -First 1)
+    $deepSensorMode["providerActive"] = if ($deepProvider.Count -gt 0) { [bool]$deepProvider[0].isEnabled } else { $false }
+    $deepSensorMode["providerBundled"] = if ($deepProvider.Count -gt 0) { [bool]$deepProvider[0].isBundled } else { $false }
     $known = @($groups | ForEach-Object { $_.knownFields } | Measure-Object -Sum).Sum
     $total = @($groups | ForEach-Object { $_.totalFields } | Measure-Object -Sum).Sum
     $confidence = if ($total -gt 0 -and ($known / $total) -ge 0.7) { "High" } elseif ($total -gt 0 -and ($known / $total) -ge 0.45) { "Medium" } else { "Low" }
     [ordered]@{
         groups = @($groups)
         sensorProviders = @($sensorProviders)
+        deepSensorMode = $deepSensorMode
         confidence = $confidence
         coverageSummary = (($groups | ForEach-Object { ("{0}: {1}/{2} fields known" -f $_.category, $_.knownFields, $_.totalFields) }) -join "; ")
         deepSensorModeNote = "Some sensors require admin access, firmware support, vendor drivers, or an optional reviewed sensor provider."
@@ -1857,6 +1933,7 @@ $report = [ordered]@{
     flipValue = $flipValue
     machineClass = $machineClass
     sensorMatrix = $sensorMatrix
+    deepSensorMode = $sensorMatrix.deepSensorMode
     sensorProviders = $sensorMatrix.sensorProviders
     deviceFit = $deviceFit
     recommendations = @($recommendations)
@@ -1897,6 +1974,8 @@ $markdown = New-Object System.Collections.Generic.List[string]
 [void]$markdown.Add(("- Technician note: {0}" -f $report.machineClass.technicianNote))
 [void]$markdown.Add(("- Sensor coverage: {0}" -f $report.sensorMatrix.coverageSummary))
 [void]$markdown.Add(("- Sensor confidence: {0}" -f $report.sensorMatrix.confidence))
+[void]$markdown.Add(("- Deep Sensor Mode: {0} via {1}; enabled {2}; read-only {3}" -f $report.deepSensorMode.value, $report.deepSensorMode.source, $report.deepSensorMode.enabled, $report.deepSensorMode.readOnly))
+[void]$markdown.Add(("- Safety: {0}" -f $report.deepSensorMode.noticeText))
 [void]$markdown.Add(("- Deep sensor note: {0}" -f $report.sensorMatrix.deepSensorModeNote))
 [void]$markdown.Add("")
 [void]$markdown.Add("### Sensor Provider Host")

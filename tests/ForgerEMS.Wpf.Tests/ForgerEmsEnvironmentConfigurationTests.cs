@@ -27,17 +27,14 @@ public sealed class ForgerEmsEnvironmentConfigurationTests
     [Fact]
     public void DeepSensorModeDefaultsOff()
     {
-        var previous = Environment.GetEnvironmentVariable("FORGEREMS_DEEP_SENSOR_MODE");
-        try
+        var resolution = DeepSensorModeResolver.Resolve(new DeepSensorModeResolverOptions
         {
-            Environment.SetEnvironmentVariable("FORGEREMS_DEEP_SENSOR_MODE", null);
+            EnvironmentReader = _ => null,
+            LocalAppDataRoot = Path.Combine(Path.GetTempPath(), "forgerems-empty-deep-sensor-" + Guid.NewGuid().ToString("N")),
+            InstallDefaultReader = () => null
+        });
 
-            Assert.Equal("Off", ForgerEmsEnvironmentConfiguration.DeepSensorMode);
-            Assert.False(ForgerEmsFeatureFlags.DeepSensorModeRequested);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("FORGEREMS_DEEP_SENSOR_MODE", previous);
-        }
+        Assert.Equal("Off", resolution.Mode);
+        Assert.False(resolution.IsEnabled);
     }
 }

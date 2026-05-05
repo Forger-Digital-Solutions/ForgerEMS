@@ -6,7 +6,7 @@ This document tracks reviewed local sensor-provider licensing for ForgerEMS.
 
 ForgerEMS may bundle the reviewed `LibreHardwareMonitorLib` package in installer and portable builds under `providers/sensors/`.
 
-The default active provider remains **Windows Native**, which uses local Windows and ForgerEMS data sources only. LibreHardwareMonitor is disabled unless Deep Sensor Mode is explicitly set to `ReadOnly`.
+The default safe provider remains **Windows Native**, which uses local Windows and ForgerEMS data sources only. LibreHardwareMonitor is available when packaged and runs only when ForgerEMS Deep Sensor Mode resolves to `ReadOnly` through installer consent, Settings, or the testing environment variable.
 
 ## Bundled Reviewed Provider: LibreHardwareMonitor
 
@@ -16,6 +16,8 @@ The default active provider remains **Windows Native**, which uses local Windows
 - License: MPL-2.0
 - Project: https://github.com/LibreHardwareMonitor/LibreHardwareMonitor
 - Bundled path: `providers/sensors/LibreHardwareMonitorLib.dll`
+- Packaged license path: `providers/sensors/LICENSES/LibreHardwareMonitor-MPL-2.0.txt`
+- Packaged third-party notice path: `providers/sensors/THIRD-PARTY-NOTICES.txt`
 - Status: reviewed local read-only provider, disabled by default
 - Modified MPL-covered files: none
 
@@ -28,7 +30,7 @@ Release packaging must include:
 - keep ForgerEMS proprietary code in separate files/projects
 - verify the provider is read-only inside ForgerEMS
 
-The provider is local and read-only. ForgerEMS does not expose fan control, voltage control, clock control, overclocking, undervolting, BIOS writes, or firmware writes.
+The provider is local and read-only. ForgerEMS does not expose fan control, voltage control, clock control, overclocking, undervolting, BIOS writes, or firmware writes. ForgerEMS does not redistribute HWiNFO, AIDA64, CPU-Z, or vendor tools, and users do not download sensor providers manually.
 
 ## Tools Not Redistributed By Default
 

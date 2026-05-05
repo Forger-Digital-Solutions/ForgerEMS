@@ -103,11 +103,12 @@ public static class SupportBundleExporter
             Redaction:
             - Private paths may appear as [REDACTED_PRIVATE_PATH] where the redactor applies.
             - API keys and tokens are not exported from environment variables.
+            - Review before sharing. Reports may include hardware details, network adapter data, USB device details, provider status, and diagnostic notes.
 
             Where to send:
             ForgerDigitalSolutions@outlook.com
 
-            Do not email passwords, product keys, private documents, or full disk images.
+            Do not email passwords, product keys, API keys, tokens, private documents, sensitive personal files, or full disk images.
             """);
     }
 

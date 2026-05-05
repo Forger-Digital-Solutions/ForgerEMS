@@ -108,6 +108,54 @@ There is **no automatic upload** to Forger Digital Solutions when you run local 
 
 ---
 
+## Does ForgerEMS require HWiNFO, LibreHardwareMonitor, CPU-Z, or vendor tools?
+
+No. ForgerEMS ships its approved local providers with the app where legally allowed. Deep Sensor Mode uses bundled read-only providers and does not require separate user downloads.
+
+---
+
+## What is Deep Sensor Mode?
+
+Deep Sensor Mode is an optional local read-only sensor mode that may improve **Hardware X-Ray** sensor coverage for temperatures, clocks, load, fan RPM, and storage wear when supported.
+
+---
+
+## Does ForgerEMS control my fans, voltage, clocks, BIOS, or firmware?
+
+No. ForgerEMS only reads supported sensor data. It does not control fans, voltages, clocks, overclocking, undervolting, BIOS, or firmware.
+
+---
+
+## Why are some sensors missing?
+
+Some machines do not expose certain sensors through Windows, firmware, drivers, permissions, or available read-only providers. Unavailable readings are coverage limits, not failures.
+
+---
+
+## Does ForgerEMS upload my sensor data?
+
+No automatic upload. Reports and logs stay local unless you choose to copy, export, or share them.
+
+---
+
+## Can Deep Sensor Mode require administrator access?
+
+Some sensors may require admin access, vendor drivers, or firmware support, but normal scans should not require admin. ForgerEMS reports unavailable readings honestly.
+
+---
+
+## Is LibreHardwareMonitor included?
+
+Yes, where packaged, ForgerEMS includes **LibreHardwareMonitorLib** as a bundled local read-only sensor provider under MPL-2.0 with license and notice files included.
+
+---
+
+## Can I turn Deep Sensor Mode off?
+
+Yes. Deep Sensor Mode can be **Off** or **Read-only local sensors**. Environment variable/testing overrides may also be supported.
+
+---
+
 ## What does Kyra see?
 
 **Offline Kyra** uses built-in rules and optional **local reports** you already generated. With your permission, a **sanitized** summary may be sent to configured online providers — not raw serials, product keys, or full private paths in the safe-summary path.

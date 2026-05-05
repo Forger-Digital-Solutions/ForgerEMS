@@ -195,6 +195,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _systemIntelligenceHardwareXrayCardText = "Run a system scan to build machine class and sensor exposure coverage.";
     private string _systemIntelligenceStaleBannerText = string.Empty;
     private string _systemIntelligenceAutomationLineText = string.Empty;
+    private int _deepSensorModeSelectedIndex;
+    private string _deepSensorModeSourceSummary = string.Empty;
+    private string _deepSensorModeConsentNotice = string.Empty;
+    private bool _isLoadingDeepSensorModeSetting = true;
     private Brush _systemIntelligenceStatusBackground = RunningBackground;
     private Brush _systemIntelligenceStatusBorderBrush = RunningBorder;
     private Brush _systemIntelligenceStatusForeground = RunningForeground;
@@ -350,6 +354,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         LoadCopilotSettings();
         LoadBetaSettings();
         LoadUpdateSettings();
+        RefreshDeepSensorModeSettingsProperties();
+        _isLoadingDeepSensorModeSetting = false;
 
         RefreshAllCommand = new AsyncRelayCommand(RefreshAllAsync, () => !IsBusy);
         RefreshUsbTargetsCommand = new AsyncRelayCommand(RefreshUsbTargetsAsync, () => !IsBusy);
@@ -822,9 +828,56 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public string FeatureMaturityGuideText => FeatureStatusService.BuildFeatureMaturityGuide();
 
-    public string DeepSensorModeSettingsSummary =>
-        $"Deep Sensor Mode: {ForgerEmsEnvironmentConfiguration.DeepSensorMode}. " +
-        "Default is Off. Future bundled reviewed providers are local and read-only; admin mode is optional when needed and never changes fan, voltage, clock, BIOS, or firmware settings.";
+    public string DeepSensorModeSettingsSummary
+    {
+        get
+        {
+            var resolution = ForgerEmsEnvironmentConfiguration.DeepSensorModeResolution;
+            return
+                $"Deep Sensor Mode: {resolution.Mode}. Current source: {resolution.DisplaySource}. " +
+                "Read-only local sensors may improve Hardware X-Ray sensor coverage while ForgerEMS is running or scanning. " +
+                "ForgerEMS does not control fans, voltages, clocks, BIOS, or firmware.";
+        }
+    }
+
+    public int DeepSensorModeSelectedIndex
+    {
+        get => _deepSensorModeSelectedIndex;
+        set
+        {
+            if (!SetProperty(ref _deepSensorModeSelectedIndex, value))
+            {
+                return;
+            }
+
+            if (_isLoadingDeepSensorModeSetting)
+            {
+                return;
+            }
+
+            var mode = value == 1 ? DeepSensorModeValues.ReadOnly : DeepSensorModeValues.Off;
+            DeepSensorModeResolver.SaveUserMode(mode);
+            RefreshDeepSensorModeSettingsProperties();
+            AppendLog(new LogLine(
+                DateTimeOffset.Now,
+                mode.Equals(DeepSensorModeValues.ReadOnly, StringComparison.OrdinalIgnoreCase)
+                    ? "[INFO] ForgerEMS Deep Sensor Mode enabled for this user: local read-only hardware sensors only."
+                    : "[INFO] ForgerEMS Deep Sensor Mode set to Off for this user.",
+                LogSeverity.Info));
+        }
+    }
+
+    public string DeepSensorModeSourceSummary
+    {
+        get => _deepSensorModeSourceSummary;
+        private set => SetProperty(ref _deepSensorModeSourceSummary, value);
+    }
+
+    public string DeepSensorModeConsentNotice
+    {
+        get => _deepSensorModeConsentNotice;
+        private set => SetProperty(ref _deepSensorModeConsentNotice, value);
+    }
 
     public string KyraProviderHubConfigHealthSummary => KyraProviderHubConfigHealthFormatter.BuildSummary();
 
@@ -1572,6 +1625,30 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(AppUpdateSettingsChannelLine));
             OnPropertyChanged(nameof(AppUpdateIncludePrereleasesValueText));
         }
+    }
+
+    private void RefreshDeepSensorModeSettingsProperties()
+    {
+        var resolution = ForgerEmsEnvironmentConfiguration.DeepSensorModeResolution;
+        var selectedIndex = resolution.Mode.Equals(DeepSensorModeValues.ReadOnly, StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+        _isLoadingDeepSensorModeSetting = true;
+        try
+        {
+            _deepSensorModeSelectedIndex = selectedIndex;
+            OnPropertyChanged(nameof(DeepSensorModeSelectedIndex));
+        }
+        finally
+        {
+            _isLoadingDeepSensorModeSetting = false;
+        }
+
+        DeepSensorModeSourceSummary =
+            $"Current source: {resolution.DisplaySource}. Resolved value: {resolution.Mode}. " +
+            (resolution.IsInvalid ? "Invalid configured value was ignored; using Off." : resolution.TechnicianNote);
+        DeepSensorModeConsentNotice =
+            "Read-only local sensors may reveal CPU/GPU/storage temperatures, clocks, loads, fan RPM, and storage wear when supported. " +
+            "Some sensors require admin access, vendor drivers, or firmware support. No fan, voltage, clock, BIOS, firmware, cloud, or telemetry control is used.";
+        OnPropertyChanged(nameof(DeepSensorModeSettingsSummary));
     }
 
     public string LastUpdateCheckDisplayText =>
@@ -2799,6 +2876,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                       "Watch-outs: saved report could not be parsed" + Environment.NewLine +
                       "Next Action: Rerun System Scan, then copy the quick read again.";
         }
+
+        summary += Environment.NewLine +
+                   "Review before sharing. Reports may include hardware, network adapter, USB device, and diagnostic details. Do not send passwords, product keys, API keys, tokens, private documents, or sensitive files.";
 
         Clipboard.SetText(SensitiveDataRedactor.SanitizeForSupportShare(summary));
         AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Safe summary copied to clipboard (sanitized for sharing).", LogSeverity.Success));
@@ -5510,6 +5590,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 $"Coverage: {CompactCoverageSummary(coverage)}{Environment.NewLine}" +
                 $"Live: {live}{Environment.NewLine}" +
                 $"Sensor Providers: {BuildSensorProviderCompactSummary(sensorMatrix)}{Environment.NewLine}" +
+                $"Deep Sensor Mode: {BuildDeepSensorModeCompactSummary(root, sensorMatrix)}{Environment.NewLine}" +
                 $"Inventory: {GetInventoryDataSummary(sensorMatrix)}{Environment.NewLine}" +
                 $"USB: {usb}{Environment.NewLine}" +
                 $"Limited: {limited}{Environment.NewLine}" +
@@ -5529,6 +5610,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 $"Sensor coverage: {CompactCoverageSummary(sensors.CoverageSummary)}{Environment.NewLine}" +
                 $"Live sensors: {FormatList(sensors.Groups.SelectMany(g => g.Readings).Where(r => r.IsLive).Select(r => r.Name).Take(5), "none exposed in safe scan")}{Environment.NewLine}" +
                 $"Sensor Providers: {BuildSensorProviderCompactSummary(sensors)}{Environment.NewLine}" +
+                $"Deep Sensor Mode: {sensors.DeepSensorMode.Mode} via {sensors.DeepSensorMode.DisplaySource}; Safety: read-only; no fan/voltage/clock/firmware control.{Environment.NewLine}" +
                 $"Limited: CPU/GPU temps, fan RPM, package power may require deep/vendor sensor support.{Environment.NewLine}" +
                 $"Note: {classification.TechnicianNote} {sensors.DeepSensorModeNote}";
         }
@@ -5561,6 +5643,36 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         return FormatList(names.Take(5), "none exposed in safe scan");
     }
+
+    private static string BuildDeepSensorModeCompactSummary(JsonElement root, JsonElement sensorMatrix)
+    {
+        JsonElement modeElement;
+        if (root.TryGetProperty("deepSensorMode", out modeElement) && modeElement.ValueKind == JsonValueKind.Object)
+        {
+            var value = GetJsonString(modeElement, "value", "Off");
+            var source = FormatDeepSensorSource(GetJsonString(modeElement, "source", "BuiltInDefault"));
+            return $"{value} via {source}; Safety: read-only; no fan/voltage/clock/firmware control.";
+        }
+
+        if (sensorMatrix.TryGetProperty("deepSensorMode", out modeElement) && modeElement.ValueKind == JsonValueKind.Object)
+        {
+            var value = GetJsonString(modeElement, "mode", "Off");
+            var source = FormatDeepSensorSource(GetJsonString(modeElement, "source", "BuiltInDefault"));
+            return $"{value} via {source}; Safety: read-only; no fan/voltage/clock/firmware control.";
+        }
+
+        var resolution = ForgerEmsEnvironmentConfiguration.DeepSensorModeResolution;
+        return $"{resolution.Mode} via {resolution.DisplaySource}; Safety: read-only; no fan/voltage/clock/firmware control.";
+    }
+
+    private static string FormatDeepSensorSource(string source) => source switch
+    {
+        "Environment" => "environment variable",
+        "UserSetting" => "user setting",
+        "InstallerDefault" => "installer default",
+        "BuiltInDefault" => "built-in default",
+        _ => string.IsNullOrWhiteSpace(source) ? "built-in default" : source
+    };
 
     private static string BuildSensorProviderCompactSummary(JsonElement sensorMatrix)
     {

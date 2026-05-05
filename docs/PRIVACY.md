@@ -32,11 +32,27 @@ These files can contain **paths**, **device names**, **diagnostics**, and simila
 
 ---
 
+## System Intelligence, Hardware X-Ray, and Deep Sensor Mode
+
+ForgerEMS runs diagnostics locally. **Deep Sensor Mode** reads supported local hardware sensor data only while the app is running or System Intelligence / Hardware X-Ray scans are executed.
+
+- Sensor data is **not sold**.
+- Sensor data is **not automatically uploaded**.
+- Reports are **not automatically sent** to support.
+- You choose when to copy, export, or share reports.
+
+Reports may include hardware model, CPU/GPU/RAM/storage info, battery info, network adapter details, USB device details, Windows version, provider status, and diagnostic notes.
+
+Default support reports should be redacted where supported, but you should still review reports before sharing. Do not send product keys, serial numbers, service tags, API keys, tokens, passwords, private documents, or sensitive personal files to support.
+
+---
+
 ## Kyra (offline by default)
 
 - **Offline / local Kyra** uses built-in rules and optional **local reports** you already generated. **Beta testers are not asked to supply API keys in the app** for this path.  
 - **Optional online** providers are **developer/operator-managed** (environment or deployment configuration). They are **advanced** — not part of the default beta tester checklist.  
 - When online paths are enabled and you allow context sharing, **sanitized** text may be sent per **Kyra Advanced** settings — not a dump of your entire disk.
+- **System Intelligence context** may be included in Kyra answers depending on provider/settings. Use offline/local mode when you do not want hardware summaries or report context sent to an online AI provider.
 
 ---
 

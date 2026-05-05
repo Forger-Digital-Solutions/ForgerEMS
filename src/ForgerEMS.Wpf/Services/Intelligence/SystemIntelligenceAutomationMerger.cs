@@ -148,7 +148,23 @@ public static class SystemIntelligenceAutomationMerger
                     provider.RuntimeMode,
                     provider.FailureReason
                 }).ToArray(),
+                deepSensorMode = sensorMatrix.DeepSensorMode,
                 note = sensorMatrix.DeepSensorModeNote
+            },
+            deepSensorMode = new
+            {
+                value = sensorMatrix.DeepSensorMode.Mode,
+                source = sensorMatrix.DeepSensorMode.Source,
+                enabled = sensorMatrix.DeepSensorMode.IsEnabled,
+                providerActive = sensorMatrix.SensorProviders.Any(provider =>
+                    provider.ProviderName.Contains("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase) &&
+                    provider.IsEnabled),
+                providerBundled = sensorMatrix.SensorProviders.Any(provider =>
+                    provider.ProviderName.Contains("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase) &&
+                    provider.IsBundled),
+                readOnly = true,
+                noControlCapabilities = true,
+                noticeText = "Deep Sensor Mode reads local hardware sensor data only while ForgerEMS is running or scanning. No sensor control or cloud service is used."
             },
             issues,
             recommendedActions = recs.ToArray(),
@@ -371,6 +387,7 @@ public static class SystemIntelligenceAutomationMerger
             {
                 Groups = groups,
                 SensorProviders = sensorMatrix.SensorProviders,
+                DeepSensorMode = sensorMatrix.DeepSensorMode,
                 Confidence = confidenceRatio >= 0.7 ? "High" : confidenceRatio >= 0.45 ? "Medium" : "Low",
                 DeepSensorModeNote = sensorMatrix.DeepSensorModeNote
             };

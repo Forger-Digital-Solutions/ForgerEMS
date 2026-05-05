@@ -12,6 +12,20 @@ ForgerEMS is a **Windows desktop technician workbench** centered on **USB toolki
 
 ---
 
+## What is included
+
+- **USB Builder** for safer Ventoy-oriented USB toolkit preparation and maintenance
+- **Toolkit Manager** for manifest-driven managed/manual tool health
+- **System Intelligence** for local hardware, health, network, storage, security, and resale-oriented summaries
+- **Hardware X-Ray** for detected hardware and available sensor coverage
+- **FlipValue** for transparent resale estimates and assumptions
+- **Best Use / Device Fit** for practical device-fit and listing guidance
+- **Kyra** for grounded local assistance, with optional online providers only when configured
+
+Hardware X-Ray uses local read-only providers to show detected hardware and available sensor coverage. Deep Sensor Mode may use bundled LibreHardwareMonitor technology where packaged and enabled.
+
+---
+
 ## Why it exists
 
 Repair and resale workflows still waste hours on **wrong USB ports**, **mystery hardware**, **scattered tools**, and **half-finished ISO hygiene**. ForgerEMS bundles the recurring steps into one disciplined surface: build and verify USB media, benchmark and map ports where possible, scan the machine locally, keep toolkit manifests honest, and get guidance without sending your whole life story to the cloud.
@@ -45,6 +59,8 @@ Kyra helps with **system diagnostics explanations**, **USB guidance**, **upgrade
 ## Beta status
 
 Prerelease software is provided **as-is**; behavior may change between builds. Prefer **GitHub Releases** ZIPs for testing. Read [LEGAL.md](LEGAL.md) and [PRIVACY.md](PRIVACY.md).
+
+Third-party notices are included in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), [THIRD-PARTY-SENSOR-NOTICES.md](THIRD-PARTY-SENSOR-NOTICES.md), and packaged sensor notice files under `providers/sensors/`.
 
 ---
 

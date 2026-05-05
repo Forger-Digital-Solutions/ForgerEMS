@@ -243,6 +243,18 @@ AFTER YOU HAVE A REAL .ZIP
 3. Double-click START_HERE.bat
 4. If Windows SmartScreen appears, only choose More info -> Run anyway if this ZIP came from the official GitHub release and you verified hashes.
 
+DEEP SENSOR MODE
+- The installer or Settings may enable ForgerEMS Deep Sensor Mode.
+- No separate LibreHardwareMonitor download is needed; approved local providers ship with the app where packaged.
+- Deep Sensor Mode uses local read-only hardware sensors for Hardware X-Ray coverage.
+- It does not control fans, voltage, clocks, BIOS, firmware, overclocking, or undervolting.
+- To test manually in PowerShell: `$env:FORGEREMS_DEEP_SENSOR_MODE='ReadOnly'
+- To turn off the testing override: remove FORGEREMS_DEEP_SENSOR_MODE or set it to Off.
+
+SUPPORT PRIVACY
+- Send logs/screenshots only if comfortable.
+- Do not send product keys, API keys, tokens, passwords, private documents, or sensitive files.
+
 VERIFY INTEGRITY
 Use CHECKSUMS.sha256 from the same release page. Full steps: GitHub repo -> docs/DOWNLOAD_TROUBLESHOOTING.md
 "@
@@ -259,6 +271,9 @@ echo Starting ForgerEMS Installer...
 echo.
 echo If Windows shows SmartScreen, choose More info -^> Run anyway ONLY if this
 echo folder came from the official ForgerEMS GitHub release and you verified CHECKSUMS.sha256.
+echo.
+echo Deep Sensor Mode uses bundled local read-only hardware sensors when enabled.
+echo No separate LibreHardwareMonitor download is needed.
 echo.
 start "" "%~dp0ForgerEMS Installer.exe"
 "@
@@ -374,6 +389,17 @@ ForgerDigitalSolutions@outlook.com
 
 Security notice:
 Never send API keys, passwords, serial numbers, private documents, or sensitive personal files.
+
+Deep Sensor Mode:
+- May be enabled by the installer or Settings.
+- Uses bundled local read-only hardware sensors where packaged.
+- No separate LibreHardwareMonitor download is needed.
+- No fan, voltage, clock, BIOS, or firmware control.
+- Some readings depend on firmware, drivers, permissions, and hardware support.
+- Unavailable readings are coverage limits, not failures.
+
+Review before sharing:
+Reports may include hardware details, network adapter data, USB device details, and diagnostic notes. Do not send product keys, API keys, tokens, passwords, private documents, or sensitive files.
 "@
     Set-Content -LiteralPath $Path -Value $content -Encoding utf8
 }

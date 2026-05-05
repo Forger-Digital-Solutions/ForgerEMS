@@ -24,12 +24,14 @@ This is **Public Preview / prerelease** software: behavior and packaging can cha
 |--------|----------------|
 | **USB Builder** | Guided flows to verify, prepare, and update Ventoy-oriented USB maintenance media, with managed downloads and careful drive selection. |
 | **USB Intelligence** | Measure write/read on a **safe removable** target, flag likely cached read samples honestly, map **which physical USB port** you used, and get practical guidance from benchmarks and topology hints (best-effort; varies by PC). |
-| **System Intelligence** | Local scan summaries — hardware and health-oriented cards you can use before a repair or resale prep. |
+| **System Intelligence** | Local scan summaries with Hardware X-Ray sensor coverage, health scoring, FlipValue, Best Use / Device Fit, and honest Unknown/NotExposed handling before repair or resale prep. |
 | **Diagnostics** | Unified health checklist, file/link safety helpers, and technician-oriented tools (including WSL-related helpers where applicable). |
 | **Toolkit Manager** | Manifest-driven health for what is on your USB; clear paths when something must be supplied manually. |
 | **Kyra** | In-app assistant: **offline local** answers first; optional online help only when your environment already enables it (operators). **Beta testers are not asked to supply API keys in the app.** |
 
 More context: [docs/ABOUT_FORGEREMS.md](docs/ABOUT_FORGEREMS.md) · Behavior notes: [KYRA_BEHAVIOR_SPEC.md](KYRA_BEHAVIOR_SPEC.md) (repository root).
+
+**Hardware X-Ray / Deep Sensor Mode:** Deep Sensor Mode is optional and uses bundled local read-only hardware sensors when enabled, including LibreHardwareMonitorLib where packaged. No separate LibreHardwareMonitor download is required. ForgerEMS does not control fans, voltages, clocks, overclocking, undervolting, BIOS, or firmware. Unavailable readings are coverage limits, not failures.
 
 ---
 
@@ -64,6 +66,7 @@ The standalone **`ForgerEMS-Setup-v<version>.exe`** on the release is an **advan
 - **SmartScreen** and browser warnings are **common** for newer or less-known Windows software. ForgerEMS does **not** ask you to disable Windows security. Prefer the **ZIP → `START_HERE.bat`** path and verify hashes when you can.
 - **ZIP-first** releases include `VERIFY.txt` and checksum material so you can confirm what you downloaded.
 - **Local-first:** scans and reports are stored on **your PC** (typically under `%LOCALAPPDATA%\ForgerEMS\`). There is **no silent upload** of your logs or scans to Forger Digital Solutions.
+- **Deep Sensor Mode:** sensor access is local to the device and runs only while ForgerEMS is open or System Intelligence / Hardware X-Ray scans execute. Reports are shared only if you copy/export/send them.
 - **Automated quality:** the solution ships with a large automated test suite (`dotnet test` on `ForgerEMS.sln`); the exact count grows with each release.
 
 **Pro / preview labels** during beta are for feedback; licensing is not final. See release notes under `docs/` for the build you are testing.

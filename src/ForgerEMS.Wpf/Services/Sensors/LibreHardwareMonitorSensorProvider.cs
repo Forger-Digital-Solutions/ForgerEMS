@@ -23,25 +23,28 @@ public class LibreHardwareMonitorSensorProvider : IHardwareSensorProvider
     {
         _ = profile;
         var packaged = _packagedOverride ?? SensorProviderRegistry.IsBundledDeepProviderPackaged();
-        var mode = ForgerEmsEnvironmentConfiguration.DeepSensorMode;
-        if (!IsReadOnlyMode(mode))
+        var resolution = DeepSensorModeResolver.Resolve();
+        if (!resolution.IsEnabled)
         {
             return BuildDisabledResult(
                 packaged,
-                $"Deep Sensor Mode is {mode}. Set FORGEREMS_DEEP_SENSOR_MODE=ReadOnly to enable local read-only deep sensors.");
+                $"{resolution.TechnicianNote} Enable Read-only local sensors in Settings or set FORGEREMS_DEEP_SENSOR_MODE=ReadOnly for testing.",
+                resolution);
         }
 
         if (!packaged)
         {
             return BuildDisabledResult(
                 packaged,
-                "LibreHardwareMonitor provider assembly is not packaged in this build.");
+                "LibreHardwareMonitor provider assembly is not packaged in this build.",
+                resolution);
         }
 
         var readings = new List<SensorReading>();
         var notes = new List<string>
         {
             "ForgerEMS Deep Sensor Mode is local and read-only.",
+            $"Deep Sensor Mode source: {resolution.DisplaySource}.",
             "Some sensors may require admin access, vendor drivers, or firmware support.",
             "No fan, voltage, clock, BIOS, or firmware control is exposed."
         };
@@ -106,11 +109,10 @@ public class LibreHardwareMonitorSensorProvider : IHardwareSensorProvider
         };
     }
 
-    private static bool IsReadOnlyMode(string mode) =>
-        mode.Equals("ReadOnly", StringComparison.OrdinalIgnoreCase) ||
-        mode.Equals("ReadOnlyLocalSensors", StringComparison.OrdinalIgnoreCase);
-
-    private static SensorProviderResult BuildDisabledResult(bool packaged, string reason) => new()
+    private static SensorProviderResult BuildDisabledResult(
+        bool packaged,
+        string reason,
+        DeepSensorModeResolution? resolution = null) => new()
     {
         ProviderName = "LibreHardwareMonitor",
         ProviderVersion = ProviderVersion,
@@ -128,7 +130,8 @@ public class LibreHardwareMonitorSensorProvider : IHardwareSensorProvider
             packaged
                 ? "LibreHardwareMonitor: bundled but disabled."
                 : "LibreHardwareMonitor: not packaged in this build.",
-            $"Deep Sensor Mode setting: {ForgerEmsEnvironmentConfiguration.DeepSensorMode}.",
+            $"Deep Sensor Mode setting: {resolution?.Mode ?? ForgerEmsEnvironmentConfiguration.DeepSensorMode}.",
+            $"Deep Sensor Mode source: {resolution?.DisplaySource ?? ForgerEmsEnvironmentConfiguration.DeepSensorModeResolution.DisplaySource}.",
             "Deep Sensor Mode is local and read-only. ForgerEMS does not control fans, voltages, clocks, BIOS, or firmware."
         ],
         ThirdPartyNotice = BuildThirdPartyNotice()

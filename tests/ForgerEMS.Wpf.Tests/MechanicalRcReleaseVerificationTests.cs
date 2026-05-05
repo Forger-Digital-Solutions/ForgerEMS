@@ -196,6 +196,7 @@ public sealed class MechanicalRcReleaseVerificationTests
     public void SensorProviderPackaging_CopiesLibreHardwareMonitorProviderAndNotices()
     {
         var project = File.ReadAllText(Path.Combine(RepoRoot, "src", "ForgerEMS.Wpf", "ForgerEMS.Wpf.csproj"));
+        var settingsXaml = File.ReadAllText(Path.Combine(RepoRoot, "src", "ForgerEMS.Wpf", "MainWindow.xaml"));
         var installer = File.ReadAllText(Path.Combine(RepoRoot, "installer", "ForgerEMS.iss"));
         var policy = File.ReadAllText(Path.Combine(RepoRoot, "docs", "THIRD-PARTY-SENSOR-NOTICES.md"));
 
@@ -203,6 +204,16 @@ public sealed class MechanicalRcReleaseVerificationTests
         Assert.Contains("providers\\sensors", project, StringComparison.Ordinal);
         Assert.Contains("CopyToPublishDirectory", project, StringComparison.Ordinal);
         Assert.Contains(@"{#PublishDir}\providers\*", installer, StringComparison.Ordinal);
+        Assert.Contains("Enable ForgerEMS Deep Sensor Mode", installer, StringComparison.Ordinal);
+        Assert.Contains(@"HKLM", installer, StringComparison.Ordinal);
+        Assert.Contains(@"Software\ForgerEMS", installer, StringComparison.Ordinal);
+        Assert.Contains("DeepSensorMode", installer, StringComparison.Ordinal);
+        Assert.Contains("ReadOnly", installer, StringComparison.Ordinal);
+        Assert.Contains("DeepSensorDisclosure", installer, StringComparison.Ordinal);
+        Assert.DoesNotContain("service", installer, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Read-only local sensors", settingsXaml, StringComparison.Ordinal);
+        Assert.Contains("DeepSensorModeSelectedIndex", settingsXaml, StringComparison.Ordinal);
+        Assert.Contains("DeepSensorModeConsentNotice", settingsXaml, StringComparison.Ordinal);
         Assert.Contains("MPL-2.0", policy, StringComparison.Ordinal);
         Assert.Contains("Modified MPL-covered files: none", policy, StringComparison.Ordinal);
     }

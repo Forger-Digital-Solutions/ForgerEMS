@@ -5,6 +5,9 @@ namespace VentoyToolkitSetup.Wpf.Infrastructure;
 /// <summary>Long-form copy for scrollable About / FAQ / Legal / Privacy panels.</summary>
 public static class InfoDocumentTexts
 {
+    private const string DeepSensorShortDisclosure =
+        "Hardware X-Ray uses local read-only hardware sensors. When Deep Sensor Mode is enabled, ForgerEMS may use the bundled LibreHardwareMonitor provider to improve sensor coverage for temperatures, clocks, load, fan RPM, and storage wear where supported. Sensor access is local; ForgerEMS does not control fans, voltages, clocks, overclocking, undervolting, BIOS, or firmware. Unavailable readings are coverage limits, not failures.";
+
     public static string BuildAbout(string appVersion, string displayVersion, string frontendVersion, string backendVersion)
     {
         return $"""
@@ -22,14 +25,21 @@ public static class InfoDocumentTexts
 
             CORE AREAS (honest maturity)
             • USB Builder — Beta: removable targets only; blocks Windows/system/internal OS drives and unsafe partitions.
-            • System Intelligence — Beta: local summaries under %LOCALAPPDATA%\ForgerEMS\; some sensors are not exposed by Windows on every machine.
+            • System Intelligence — Beta: Hardware X-Ray, health scoring, FlipValue, Best Use / Device Fit, and local reports under %LOCALAPPDATA%\ForgerEMS\.
+            • Hardware X-Ray — Beta: local read-only providers show detected hardware and available sensor coverage. Deep Sensor Mode may use bundled LibreHardwareMonitor technology where packaged and enabled.
+            • FlipValue — Beta: local/offline resale guidance unless a live provider and location are configured.
+            • Best Use / Device Fit — Beta: practical device-fit guidance for repair, resale, development, gaming, school, and technician use.
             • Toolkit Manager — Beta: managed vs manual/info items; manual links are expected where redistribution is gated.
             • Diagnostics — Beta: checklist, logs, experimental WSL helpers where enabled.
             • Kyra — Preview: offline/local deterministic answers first; optional online providers only when configured (Kyra Advanced).
             • USB Intelligence / port mapping — Pro Preview: best-effort port topology on Windows; benchmark-driven hints when you measure.
 
+            HARDWARE X-RAY / DEEP SENSOR MODE
+            {DeepSensorShortDisclosure}
+            Third-party notices: providers\sensors\THIRD-PARTY-NOTICES.txt and docs\THIRD-PARTY-SENSOR-NOTICES.md.
+
             PRIVACY / SAFETY (summary)
-            Telemetry and crash reporting default to off unless you enable them via environment variables (see docs/ENVIRONMENT.md). Reports and logs stay local unless you share them. Review exports before sending. {BetaSupportInfo.DoNotEmailSecretsWarning}
+            Telemetry and crash reporting default to off unless you enable them via environment variables (see docs/ENVIRONMENT.md). Reports, logs, and sensor data stay local unless you choose to export or share them. Review exports before sending. {BetaSupportInfo.DoNotEmailSecretsWarning}
 
             KYRA (OPTIONAL ONLINE PROVIDERS)
             Offline Kyra needs no API keys. Optional providers (OpenAI-compatible, LM Studio, Ollama, Gemini/Anthropic paths where stubbed, custom base URL): see docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md and docs/ENVIRONMENT.md. Kyra Advanced shows status without revealing secrets.
@@ -71,6 +81,30 @@ public static class InfoDocumentTexts
 
             Does ForgerEMS upload my system info?
             No automatic upload. System Intelligence and related reports are written under %LOCALAPPDATA%\ForgerEMS\. If you enable an online Kyra provider and allow context sharing, only the sanitized context described in Kyra Advanced is sent according to your settings.
+
+            Does ForgerEMS require HWiNFO, LibreHardwareMonitor, CPU-Z, or vendor tools?
+            No. ForgerEMS ships approved local providers with the app where legally allowed. Deep Sensor Mode uses bundled read-only providers and does not require separate user downloads.
+
+            What is Deep Sensor Mode?
+            Deep Sensor Mode is an optional local read-only sensor mode that may improve Hardware X-Ray sensor coverage for temperatures, clocks, load, fan RPM, and storage wear when supported.
+
+            Does ForgerEMS control my fans, voltage, clocks, BIOS, or firmware?
+            No. ForgerEMS only reads supported sensor data. It does not control fans, voltages, clocks, overclocking, undervolting, BIOS, or firmware.
+
+            Why are some sensors missing?
+            Some machines do not expose certain sensors through Windows, firmware, drivers, permissions, or available read-only providers. Unavailable readings are coverage limits, not failures.
+
+            Does ForgerEMS upload my sensor data?
+            No automatic upload. Sensor reports and logs are local unless you choose to copy, export, or share them.
+
+            Can Deep Sensor Mode require administrator access?
+            Some sensors may require admin access, vendor drivers, or firmware support, but normal scans should not require admin. ForgerEMS reports unavailable readings honestly.
+
+            Is LibreHardwareMonitor included?
+            Yes, where packaged, ForgerEMS includes LibreHardwareMonitorLib as a bundled local read-only sensor provider under MPL-2.0 with license and notice files included.
+
+            Can I turn Deep Sensor Mode off?
+            Yes. Deep Sensor Mode can be Off or Read-only local sensors. Environment variable/testing overrides may also be supported.
 
             What does Kyra see?
             Offline Kyra uses rules and optional local reports you already generated. With your permission, a sanitized summary (no product keys, raw serials, or full private paths in the safe summary path) can be included for online providers.
@@ -124,6 +158,15 @@ public static class InfoDocumentTexts
             THIRD-PARTY TOOLS
             ForgerEMS may reference, integrate with, download, or guide you to third-party tools (for example Ventoy or manifest-listed utilities). Those tools remain under their own licenses and terms. ForgerEMS does not claim ownership of them.
 
+            LIBREHARDWAREMONITOR / SENSOR PROVIDERS
+            ForgerEMS may include LibreHardwareMonitorLib as a bundled local read-only sensor provider for Hardware X-Ray when Deep Sensor Mode is enabled.
+            License: MPL-2.0.
+            License path: providers\sensors\LICENSES\LibreHardwareMonitor-MPL-2.0.txt
+            Third-party notice path: providers\sensors\THIRD-PARTY-NOTICES.txt
+            ForgerEMS proprietary code remains separate from MPL-covered LibreHardwareMonitor code. If ForgerEMS modifies MPL-covered LibreHardwareMonitor files and distributes them, those modified files must be made available as required by MPL-2.0.
+            ForgerEMS does not redistribute HWiNFO, AIDA64, CPU-Z, or other proprietary sensor tools unless a license explicitly allows it.
+            Sensor providers are read-only. ForgerEMS does not control fans, voltage, clocks, overclocking, undervolting, BIOS, or firmware. Firmware/vendor/admin limitations may prevent some readings; unavailable readings are coverage limits, not failures.
+
             MANUAL DOWNLOADS
             Some tools require manual steps because of licensing, redistribution limits, commercial rules, or operator safety.
 
@@ -134,7 +177,7 @@ public static class InfoDocumentTexts
             You are responsible for complying with software licenses and local laws, and for backing up data before destructive steps.
 
             SYSTEM INTELLIGENCE
-            Diagnostics and resale guidance are informative and may not be perfectly accurate. Confirm critical decisions with additional testing.
+            Diagnostics, Hardware X-Ray, sensor coverage, and resale guidance are informative and may not be perfectly accurate. Confirm critical decisions with additional testing. There is no warranty that every sensor is exposed on every machine.
 
             MARKETPLACE / VALUE
             Estimates and listing-style guidance are estimates, not guarantees of sale price or outcome.
@@ -157,6 +200,11 @@ public static class InfoDocumentTexts
 
             LOCAL STORAGE
             ForgerEMS stores reports, profiles, and logs under %LOCALAPPDATA%\ForgerEMS\ (including Runtime reports and logs). Nothing is uploaded automatically to Forger Digital Solutions when you run scans locally.
+
+            SYSTEM INTELLIGENCE / HARDWARE X-RAY / DEEP SENSOR MODE
+            ForgerEMS runs diagnostics locally. Deep Sensor Mode reads supported local hardware sensor data only while the app is running or System Intelligence / Hardware X-Ray scans are executed. No sensor data is sold, automatically uploaded, or automatically sent to support.
+            Reports may include hardware model, CPU/GPU/RAM/storage info, battery info, network adapter details, USB device details, Windows version, provider status, and diagnostic notes.
+            Default support reports should be redacted where supported, but you should review reports before sharing. Do not send product keys, serial numbers, service tags, API keys, tokens, passwords, private documents, or sensitive personal files to support.
 
             KYRA AND SANITIZED SUMMARIES
             Kyra uses sanitized summaries for external/provider paths where implemented. Do not paste API keys, passwords, serial numbers, product keys, private documents, or sensitive files into chat or support email.

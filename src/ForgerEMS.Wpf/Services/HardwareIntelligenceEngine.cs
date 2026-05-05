@@ -83,6 +83,8 @@ public sealed class SensorMatrixResult
 
     public IReadOnlyList<SensorProviderManifest> SensorProviders { get; init; } = Array.Empty<SensorProviderManifest>();
 
+    public DeepSensorModeResolution DeepSensorMode { get; init; } = DeepSensorModeResolver.Resolve();
+
     public string Confidence { get; init; } = "Medium";
 
     public string DeepSensorModeNote { get; init; } =
@@ -677,6 +679,7 @@ public static class SensorMatrixBuilder
             return new SensorMatrixResult
             {
                 Confidence = "Low",
+                DeepSensorMode = DeepSensorModeResolver.Resolve(),
                 Groups =
                 [
                     Group("System", now, Unavailable("System profile", "System", "Run System Intelligence first.", "NotApplicable", now))
@@ -703,6 +706,7 @@ public static class SensorMatrixBuilder
         return new SensorMatrixResult
         {
             Groups = groups,
+            DeepSensorMode = DeepSensorModeResolver.Resolve(),
             SensorProviders = SensorProviderRegistry.BuildDefaultManifests(profile, groups),
             Confidence = confidenceRatio >= 0.7 ? "High" : confidenceRatio >= 0.45 ? "Medium" : "Low"
         };

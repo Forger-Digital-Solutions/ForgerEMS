@@ -103,7 +103,9 @@ public static class ForgerEmsEnvironmentConfiguration
     public static string ValuationMode => GetString("FORGEREMS_VALUATION_MODE", "offline");
 
     // System Intelligence sensors
-    public static string DeepSensorMode => GetString("FORGEREMS_DEEP_SENSOR_MODE", "Off");
+    public static string DeepSensorMode => DeepSensorModeResolver.Resolve().Mode;
+
+    public static DeepSensorModeResolution DeepSensorModeResolution => DeepSensorModeResolver.Resolve();
 
     // Telemetry (default off)
     public static bool TelemetryEnabled => GetBool("FORGEREMS_TELEMETRY_ENABLED", false);

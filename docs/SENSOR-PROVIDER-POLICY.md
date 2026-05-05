@@ -5,7 +5,7 @@ ForgerEMS sensor providers are local, read-only diagnostics components. Users sh
 ## Provider Tiers
 
 - **Windows Native**: enabled by default. Uses built-in Windows APIs, WMI/CIM, registry reads, powercfg reports, storage reliability counters where exposed, security APIs, and ForgerEMS USB Intelligence evidence.
-- **LibreHardwareMonitor Deep Sensor Provider**: optional bundled reviewed provider loaded from `providers/sensors/LibreHardwareMonitorLib.dll`. Disabled by default; enabled only when `FORGEREMS_DEEP_SENSOR_MODE=ReadOnly`.
+- **LibreHardwareMonitor Deep Sensor Provider**: optional bundled reviewed provider loaded from `providers/sensors/LibreHardwareMonitorLib.dll`. It is enabled only when ForgerEMS Deep Sensor Mode resolves to `ReadOnly` through the environment variable, user setting, or installer default.
 - **ForgerEMS Admin Sensor Bridge**: future on-demand read-only bridge for sensors requiring elevation. Disabled by default and not included in the current beta.
 - **Signed Driver Provider**: roadmap only. Not part of the current beta.
 
@@ -40,6 +40,8 @@ Bundled providers must:
 - be disabled by default if experimental
 
 ForgerEMS v1.2.0 preview pins `LibreHardwareMonitorLib` 0.9.6 as the reviewed local read-only deep sensor provider. Users do not download it manually; release packaging ships the provider DLL and notices inside the installer and portable bundle.
+
+ForgerEMS Deep Sensor Mode is disclosed in the installer and Settings. It only reads supported local hardware sensor data while ForgerEMS is running or a System Intelligence / Hardware X-Ray scan is executing. It does not install a background service, create a startup task, send sensor telemetry, use cloud sensor services, or auto-send reports.
 
 ## MPL-Style Library Handling
 

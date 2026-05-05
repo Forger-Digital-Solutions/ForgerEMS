@@ -37,6 +37,23 @@ You are responsible for verifying **integrity** (checksums when published) and *
 
 ---
 
+## LibreHardwareMonitor and sensor provider notices
+
+ForgerEMS may include **LibreHardwareMonitorLib** as a bundled local read-only sensor provider for **Hardware X-Ray** when **Deep Sensor Mode** is enabled.
+
+- License: **MPL-2.0**
+- License path: `providers/sensors/LICENSES/LibreHardwareMonitor-MPL-2.0.txt`
+- Third-party notice path: `providers/sensors/THIRD-PARTY-NOTICES.txt`
+- Sensor notice documentation: [THIRD-PARTY-SENSOR-NOTICES.md](THIRD-PARTY-SENSOR-NOTICES.md)
+
+ForgerEMS proprietary code remains separate from MPL-covered LibreHardwareMonitor code. If ForgerEMS modifies MPL-covered LibreHardwareMonitor files and distributes them, those modified files must be made available as required by MPL-2.0.
+
+ForgerEMS does **not** redistribute HWiNFO, AIDA64, CPU-Z, or other proprietary sensor tools unless a license explicitly allows it.
+
+Sensor providers are read-only. ForgerEMS does **not** control fans, voltage, clocks, overclocking, undervolting, BIOS, or firmware. There is no warranty that every sensor is exposed; firmware/vendor/admin limitations may prevent some readings. Unavailable readings are coverage limits, not hardware failures.
+
+---
+
 ## Pro / licensing
 
 **Pro** or preview features may appear during beta for feedback. **Licensing is not enforced** in this beta line unless separately announced. Commercial terms are not final from preview labels alone.
@@ -51,7 +68,13 @@ Do not use ForgerEMS for unauthorized access, bypassing security on devices you 
 
 ## System Intelligence and estimates
 
-Hardware, diagnostics, and resale-oriented summaries are **informational** and may be incomplete or inaccurate. Confirm critical decisions with additional testing.
+Hardware, diagnostics, Hardware X-Ray sensor coverage, and resale-oriented summaries are **informational** and may be incomplete or inaccurate. Confirm critical decisions with additional testing.
+
+---
+
+## Optional online providers
+
+Kyra can use offline/local answers by default. If an operator enables online AI/API providers, prompts and optional sanitized context may be sent to the configured provider under that provider's terms. Do not paste API keys, tokens, passwords, product keys, private documents, or sensitive customer data into Kyra or support messages.
 
 ---
 

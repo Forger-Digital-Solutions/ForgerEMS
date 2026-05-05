@@ -29,6 +29,10 @@
   #define OutputDir "..\dist\installer"
 #endif
 
+#ifndef PublicPreviewDefaultDeepSensors
+  #define PublicPreviewDefaultDeepSensors "true"
+#endif
+
 [Setup]
 AppId={#MyAppId}
 AppName={#MyAppName}
@@ -66,6 +70,16 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
+#if PublicPreviewDefaultDeepSensors == "true"
+Name: "deepsensormode"; Description: "Enable ForgerEMS Deep Sensor Mode — uses bundled local read-only sensor provider for deeper Hardware X-Ray coverage. No fan, voltage, clock, BIOS, or firmware control. Some readings depend on firmware, drivers, permissions, and hardware support."; GroupDescription: "ForgerEMS Deep Sensor Mode:"; Flags: checkedonce
+#else
+Name: "deepsensormode"; Description: "Enable ForgerEMS Deep Sensor Mode — uses bundled local read-only sensor provider for deeper Hardware X-Ray coverage. No fan, voltage, clock, BIOS, or firmware control. Some readings depend on firmware, drivers, permissions, and hardware support."; GroupDescription: "ForgerEMS Deep Sensor Mode:"; Flags: unchecked
+#endif
+
+[Registry]
+Root: HKLM; Subkey: "Software\ForgerEMS"; ValueType: string; ValueName: "DeepSensorMode"; ValueData: "ReadOnly"; Flags: uninsdeletevalue; Tasks: deepsensormode
+Root: HKLM; Subkey: "Software\ForgerEMS"; ValueType: string; ValueName: "DeepSensorMode"; ValueData: "Off"; Flags: uninsdeletevalue; Check: IsDeepSensorModeTaskDisabled
+Root: HKLM; Subkey: "Software\ForgerEMS"; ValueType: string; ValueName: "DeepSensorDisclosure"; ValueData: "ForgerEMS includes LibreHardwareMonitorLib as a bundled local read-only sensor provider under MPL-2.0 with notices. Deep Sensor Mode reads supported hardware sensor data while the app is running or System Intelligence scans execute. Sensor access is local only. ForgerEMS does not control fans, voltage, clocks, BIOS, firmware, or overclocking. Some readings depend on firmware, drivers, permissions, and hardware support."; Flags: uninsdeletevalue
 
 [InstallDelete]
 Type: files; Name: "{autodesktop}\ForgerEMS.lnk"
@@ -120,6 +134,11 @@ end;
 function ShouldCreateDesktopIcon(): Boolean;
 begin
   Result := HadDesktopIcon or WizardIsTaskSelected('desktopicon');
+end;
+
+function IsDeepSensorModeTaskDisabled(): Boolean;
+begin
+  Result := not WizardIsTaskSelected('deepsensormode');
 end;
 
 [UninstallDelete]

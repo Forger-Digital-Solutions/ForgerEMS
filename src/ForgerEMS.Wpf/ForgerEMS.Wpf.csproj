@@ -24,6 +24,10 @@
     <PublishTrimmed>false</PublishTrimmed>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <DefaultItemExcludes>$(DefaultItemExcludes);bin\**;obj\**;.artifacts\**</DefaultItemExcludes>
+    <ForgerNuGetPackageRoot Condition="'$(NuGetPackageRoot)' != ''">$(NuGetPackageRoot)</ForgerNuGetPackageRoot>
+    <ForgerNuGetPackageRoot Condition="'$(ForgerNuGetPackageRoot)' == '' and '$(NUGET_PACKAGES)' != ''">$(NUGET_PACKAGES)\</ForgerNuGetPackageRoot>
+    <ForgerNuGetPackageRoot Condition="'$(ForgerNuGetPackageRoot)' == ''">$(UserProfile)\.nuget\packages\</ForgerNuGetPackageRoot>
+    <ForgerLibreHardwareMonitorDll>$(ForgerNuGetPackageRoot)librehardwaremonitorlib\0.9.6\runtimes\win-x64\lib\net8.0\LibreHardwareMonitorLib.dll</ForgerLibreHardwareMonitorDll>
   </PropertyGroup>
 
   <ItemGroup>
@@ -49,11 +53,19 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>
     </Content>
-    <Content Include="$(NuGetPackageRoot)librehardwaremonitorlib\0.9.6\runtimes\win-x64\lib\net8.0\LibreHardwareMonitorLib.dll" Condition="Exists('$(NuGetPackageRoot)librehardwaremonitorlib\0.9.6\runtimes\win-x64\lib\net8.0\LibreHardwareMonitorLib.dll')">
+    <Content Include="$(ForgerLibreHardwareMonitorDll)" Condition="Exists('$(ForgerLibreHardwareMonitorDll)')">
       <Link>providers\sensors\LibreHardwareMonitorLib.dll</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>
     </Content>
   </ItemGroup>
+
+  <Target Name="CopyLibreHardwareMonitorProviderToOutput" AfterTargets="Build" Condition="Exists('$(ForgerLibreHardwareMonitorDll)')">
+    <Copy SourceFiles="$(ForgerLibreHardwareMonitorDll)" DestinationFiles="$(OutputPath)providers\sensors\LibreHardwareMonitorLib.dll" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyLibreHardwareMonitorProviderToPublish" AfterTargets="Publish" Condition="Exists('$(ForgerLibreHardwareMonitorDll)')">
+    <Copy SourceFiles="$(ForgerLibreHardwareMonitorDll)" DestinationFiles="$(PublishDir)providers\sensors\LibreHardwareMonitorLib.dll" SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>

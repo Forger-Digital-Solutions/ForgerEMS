@@ -76,6 +76,7 @@ public sealed class SystemIntelligenceCardSummaryTests
                   { "providerName":"ForgerEMS Admin Sensor Bridge", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled" },
                   { "providerName":"ForgerEMS Signed Driver Provider", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled" }
                 ],
+                "deepSensorMode": { "mode":"Off", "source":"BuiltInDefault", "isEnabled":false },
                 "groups":[
                   {
                     "category":"Cooling",
@@ -92,6 +93,8 @@ public sealed class SystemIntelligenceCardSummaryTests
 
         Assert.Contains("Limited:", text);
         Assert.Contains("Sensor Providers: Windows Native: Active", text);
+        Assert.Contains("Deep Sensor Mode: Off via built-in default", text);
+        Assert.Contains("no fan/voltage/clock/firmware control", text);
         Assert.Contains("LibreHardwareMonitor: Not packaged", text);
         Assert.Contains("Admin Bridge: Off", text);
         Assert.Contains("Driver Provider: Not included", text);
@@ -119,6 +122,7 @@ public sealed class SystemIntelligenceCardSummaryTests
                   { "providerName":"ForgerEMS Admin Sensor Bridge", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled" },
                   { "providerName":"ForgerEMS Signed Driver Provider", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled" }
                 ],
+                "deepSensorMode": { "mode":"ReadOnly", "source":"InstallerDefault", "isEnabled":true },
                 "groups":[]
               }
             }
@@ -126,6 +130,7 @@ public sealed class SystemIntelligenceCardSummaryTests
 
         Assert.Contains("LibreHardwareMonitor: Active read-only", text);
         Assert.Contains("Windows Native: Active", text);
+        Assert.Contains("Deep Sensor Mode: ReadOnly via installer default", text);
     }
 
     [Fact]

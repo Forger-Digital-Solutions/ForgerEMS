@@ -13,6 +13,7 @@ Installed app:
 - ForgerEMS.exe
 - backend\ (verified bundled backend release-bundle)
 - docs\ForgerEMS-Installed-README.txt
+- providers\sensors\ (bundled local read-only sensor provider and license notices when packaged)
 
 Bundled backend contents include:
 - Verify-VentoyCore.ps1
@@ -41,6 +42,13 @@ Beta safety notes:
 - API keys are session-only in this beta and should be entered in settings fields, not chat.
 - Optional Cloudflare Workers AI needs CLOUDFLARE_API_KEY and CLOUDFLARE_ACCOUNT_ID; use Refresh Provider Status after changing environment variables.
 - The app may check GitHub for newer ForgerEMS releases (Settings → App updates). It does not silently download or install updates.
+- ForgerEMS Deep Sensor Mode uses bundled local read-only hardware sensors for Hardware X-Ray coverage when enabled. It reads only while ForgerEMS is running or scanning.
+- Deep Sensor Mode does not control fans, voltages, clocks, BIOS, firmware, overclocking, or undervolting. It does not install a background service, use cloud sensor telemetry, or require third-party downloads.
+- LibreHardwareMonitorLib is included where packaged under MPL-2.0 with notices:
+  providers\sensors\THIRD-PARTY-NOTICES.txt
+  providers\sensors\LICENSES\LibreHardwareMonitor-MPL-2.0.txt
+- Some readings depend on firmware, drivers, permissions, and hardware support. Unavailable readings are coverage limits, not failures.
+- Review reports before sharing. Do not send product keys, API keys, tokens, passwords, private documents, or sensitive personal files.
 
 Important:
 The WPF app remains a frontend controller for the existing PowerShell backend,
