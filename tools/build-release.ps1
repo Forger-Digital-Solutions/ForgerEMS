@@ -47,6 +47,13 @@ $stageBackendScript = Join-Path $repoRoot "tools\stage-bundled-backend.ps1"
 $installerScript = Join-Path $repoRoot "installer\ForgerEMS.iss"
 $manifestRoot = Join-Path $repoRoot "manifests"
 $distRoot = Join-Path $repoRoot "dist"
+$runtimeHelperPath = Join-Path $repoRoot "backend\ForgerEMS.Runtime.ps1"
+if (Test-Path -LiteralPath $runtimeHelperPath) {
+    . $runtimeHelperPath
+}
+else {
+    throw "ForgerEMS runtime helper was not found. Checked: $runtimeHelperPath"
+}
 
 function Write-Step {
     param([Parameter(Mandatory)][string]$Message)
@@ -135,7 +142,7 @@ function Write-Checksums {
         Sort-Object FullName |
         ForEach-Object {
             $relative = $_.FullName.Substring($rootFull.Length + 1).Replace('\', '/')
-            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
+            $hash = Get-ForgerSha256 -LiteralPath $_.FullName
             "{0} *{1}" -f $hash, $relative
         }
 
@@ -154,10 +161,10 @@ function Get-DistributionChecksumText {
         [string]$ZipBetaRelativeName = ""
     )
 
-    $installerHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $InstallerPath).Hash.ToLowerInvariant()
-    $zipHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $ZipPath).Hash.ToLowerInvariant()
-    $jsonHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $ReleaseJsonPath).Hash.ToLowerInvariant()
-    $downloadBetaHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $DownloadBetaPath).Hash.ToLowerInvariant()
+    $installerHash = Get-ForgerSha256 -LiteralPath $InstallerPath
+    $zipHash = Get-ForgerSha256 -LiteralPath $ZipPath
+    $jsonHash = Get-ForgerSha256 -LiteralPath $ReleaseJsonPath
+    $downloadBetaHash = Get-ForgerSha256 -LiteralPath $DownloadBetaPath
     # Parenthesize each -f expression: comma binds tighter than -f inside @( ), which otherwise splits the array wrong.
     $lines = [System.Collections.Generic.List[string]]::new()
     $lines.Add(("{0} *{1}" -f $installerHash, ($InstallerRelativeName -replace '\\', '/')))
@@ -166,7 +173,7 @@ function Get-DistributionChecksumText {
         if (-not (Test-Path -LiteralPath $ZipBetaPath)) {
             throw "Beta alias ZIP was not found: $ZipBetaPath"
         }
-        $zipBetaHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $ZipBetaPath).Hash.ToLowerInvariant()
+        $zipBetaHash = Get-ForgerSha256 -LiteralPath $ZipBetaPath
         if ($zipBetaHash -ne $zipHash) {
             throw "Beta alias ZIP SHA256 does not match primary ZIP (copy step failed)."
         }
@@ -200,7 +207,7 @@ function Get-PackageLooseFilesChecksumText {
         if (-not (Test-Path -LiteralPath $p.Path)) {
             throw "Package file missing for checksums: $($p.Path)"
         }
-        $h = (Get-FileHash -Algorithm SHA256 -LiteralPath $p.Path).Hash.ToLowerInvariant()
+        $h = Get-ForgerSha256 -LiteralPath $p.Path
         ("{0} *{1}" -f $h, $p.Rel)
     }
     return ($lines -join "`n") + "`n"

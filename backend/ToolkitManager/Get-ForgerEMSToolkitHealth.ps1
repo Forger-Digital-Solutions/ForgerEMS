@@ -8,6 +8,14 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$runtimeHelperPath = Join-Path $PSScriptRoot "..\ForgerEMS.Runtime.ps1"
+if (Test-Path -LiteralPath $runtimeHelperPath) {
+    . $runtimeHelperPath
+}
+else {
+    throw "ForgerEMS runtime helper was not found. Checked: $runtimeHelperPath"
+}
+
 function Write-ToolkitLog {
     param(
         [Parameter(Mandatory)][string]$Message,
@@ -393,7 +401,8 @@ function Get-ToolkitItemStatus {
 
         if (Test-Path -LiteralPath $resolvedPath -PathType Leaf) {
             if (-not [string]::IsNullOrWhiteSpace($expectedHash)) {
-                $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $resolvedPath).Hash.ToLowerInvariant()
+                $actualHash = Get-ForgerSha256 -LiteralPath $resolvedPath
+                Write-ToolkitLog ("SHA256 hash provider: {0} file={1}" -f (Get-ForgerLastHashProvider), (Get-ForgerSafePathForLog -Path $resolvedPath)) "INFO"
                 if ([string]::Equals($actualHash, $expectedHash.ToLowerInvariant(), [System.StringComparison]::OrdinalIgnoreCase)) {
                     $status = "INSTALLED"
                     $verification = "SHA256 verified."

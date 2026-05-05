@@ -246,36 +246,13 @@ function Ensure-Dir {
 function Get-Sha256 {
     param([Parameter(Mandatory)][string]$Path)
 
-    if (-not (Test-Path -LiteralPath $Path)) { return $null }
-
-    $getFileHashCommand = Get-Command -Name Get-FileHash -ErrorAction SilentlyContinue
-    if ($getFileHashCommand -and -not $WhatIfPreference) {
-        try {
-            $fileHash = Get-FileHash -LiteralPath $Path -Algorithm SHA256 -ErrorAction Stop
-            if ($fileHash -and $fileHash.Hash) {
-                return $fileHash.Hash.ToLowerInvariant()
-            }
-        }
-        catch {
-            # Fall back to the .NET hasher below so host/cmdlet quirks do not leave the hash null.
-        }
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $null
     }
 
-    $stream = [IO.File]::OpenRead($Path)
-    try {
-        $sha256 = [Security.Cryptography.SHA256]::Create()
-        try {
-            $hashBytes = $sha256.ComputeHash($stream)
-        }
-        finally {
-            $sha256.Dispose()
-        }
-
-        return (([BitConverter]::ToString($hashBytes)) -replace '-', '').ToLowerInvariant()
-    }
-    finally {
-        $stream.Dispose()
-    }
+    $hash = Get-ForgerSha256 -LiteralPath $Path
+    Write-Log ("SHA256 hash provider: {0} file={1}" -f (Get-ForgerLastHashProvider), (Get-ForgerSafePathForLog -Path $Path)) "INFO"
+    return $hash
 }
 
 function Safe-FileName {

@@ -35,6 +35,15 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$runtimeHelperPath = Join-Path $repoRoot "backend\ForgerEMS.Runtime.ps1"
+if (Test-Path -LiteralPath $runtimeHelperPath) {
+    . $runtimeHelperPath
+}
+else {
+    throw "ForgerEMS runtime helper was not found. Checked: $runtimeHelperPath"
+}
+
 $powerShellExe = Join-Path $PSHOME "powershell.exe"
 if (-not (Test-Path -LiteralPath $powerShellExe)) {
     $powerShellExe = "powershell.exe"
@@ -390,7 +399,7 @@ function Write-ReleaseChecksums {
             throw "Cannot generate checksum for missing release file: $fullPath"
         }
 
-        $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $fullPath).Hash.ToLowerInvariant()
+        $hash = Get-ForgerSha256 -LiteralPath $fullPath
         "{0} *{1}" -f $hash, $relativePath
     }
 
@@ -417,8 +426,8 @@ function Write-ReleaseSignature {
         throw "Cannot generate a signature without ForgerEMS.updates.json."
     }
 
-    $checksumsSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $checksumsPath).Hash.ToLowerInvariant()
-    $manifestSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $manifestPath).Hash.ToLowerInvariant()
+    $checksumsSha256 = Get-ForgerSha256 -LiteralPath $checksumsPath
+    $manifestSha256 = Get-ForgerSha256 -LiteralPath $manifestPath
 
     $content = @"
 # ForgerEMS Ventoy Core integrity seal
