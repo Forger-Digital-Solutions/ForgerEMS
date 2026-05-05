@@ -186,6 +186,8 @@ public sealed class UsbKnownPortRecord
 
     public long LastManualLabelConnectionEpoch { get; set; }
 
+    public string LastManualLabelConfirmationId { get; set; } = string.Empty;
+
     public DateTimeOffset? LabelConfirmedAtUtc { get; set; }
 
     public int LabelConfirmedDeviceSeenCount { get; set; }

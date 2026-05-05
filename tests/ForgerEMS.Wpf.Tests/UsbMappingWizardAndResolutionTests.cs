@@ -787,6 +787,143 @@ public sealed class UsbMappingWizardAndResolutionTests
     }
 
     [Fact]
+    public async Task UsbMappingWizard_RemovalObservationExpiresPreviousManualCurrentLabel()
+    {
+        UsbPortLabelResolver.ResetSessionStateForTests();
+        var intel = new IdenticalTopologyUsbIntelligence();
+        var root = Path.Combine(Path.GetTempPath(), $"fe-wiz-expire-{Guid.NewGuid():N}");
+        try
+        {
+            var store = new UsbMachineProfileStore(root);
+            var profile = store.LoadOrCreate();
+            var existingDevice = new UsbDeviceInfo
+            {
+                FriendlyName = "USB Disk",
+                DriveLetter = "E:",
+                InferredSpeed = UsbSpeedClassification.Usb2,
+                StableDeviceKey = "dev-1",
+                StablePortKey = "port-same",
+                ControllerKey = "c1",
+                HubKey = "h0",
+                IsRemovableMassStorage = true
+            };
+            var right = new UsbKnownPortRecord();
+            UsbPortLabelResolver.StampManualLabel(right, existingDevice, "RT USB-C", 55, DateTimeOffset.UtcNow);
+            profile.KnownPorts.Add(right);
+            store.Save(profile);
+
+            var target = MakeRemovable("E:", "Data");
+            var targets = new RemovalThenReinsertTargets(target);
+            var vm = new UsbMappingWizardViewModel(
+                intel,
+                store,
+                targets.GetTargets,
+                detectOperationTimeoutOverride: TimeSpan.FromSeconds(5),
+                isDriveRootMounted: _ => targets.IsMounted);
+            vm.StartMappingCommand.Execute(null);
+            vm.SelectedDevice = vm.DeviceOptions[0];
+            vm.ContinueSelectDeviceCommand.Execute(null);
+            vm.CaptureCurrentPortCommand.Execute(null);
+            vm.NextAfterCaptureCommand.Execute(null);
+            targets.StartDetectPass();
+
+            await vm.DetectPortChangeAsync();
+
+            Assert.False(vm.DetectionSuccess);
+            var reloaded = store.LoadOrCreate();
+            var status = UsbPortLabelResolver.Resolve(existingDevice, reloaded);
+            Assert.NotEqual(UsbPortLabelValidity.CurrentSessionManual, status.Validity);
+            Assert.Null(status.CurrentLabel);
+            Assert.Equal("RT USB-C", status.LastKnownLabel);
+            Assert.Contains("Unverified", status.StatusLine, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, true);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task UsbMappingWizard_ConfirmSavedLabelBindsThatLabelForCurrentEpoch()
+    {
+        UsbPortLabelResolver.ResetSessionStateForTests();
+        var intel = new IdenticalTopologyUsbIntelligence();
+        var root = Path.Combine(Path.GetTempPath(), $"fe-wiz-confirm-{Guid.NewGuid():N}");
+        try
+        {
+            var store = new UsbMachineProfileStore(root);
+            var profile = store.LoadOrCreate();
+            var weakDevice = new UsbDeviceInfo
+            {
+                FriendlyName = "USB Disk",
+                DriveLetter = "E:",
+                InferredSpeed = UsbSpeedClassification.Usb2,
+                StableDeviceKey = "dev-1",
+                StablePortKey = "port-same",
+                ControllerKey = "c1",
+                HubKey = "h0",
+                IsRemovableMassStorage = true
+            };
+            var left = new UsbKnownPortRecord();
+            var right = new UsbKnownPortRecord();
+            UsbPortLabelResolver.StampManualLabel(left, weakDevice, "LT USB-C", 55, DateTimeOffset.UtcNow.AddMinutes(-3));
+            UsbPortLabelResolver.MarkDriveRemoved("E:");
+            UsbPortLabelResolver.StampManualLabel(right, weakDevice, "RT USB-C", 55, DateTimeOffset.UtcNow.AddMinutes(-2));
+            profile.KnownPorts.Add(left);
+            profile.KnownPorts.Add(right);
+            store.Save(profile);
+
+            var target = MakeRemovable("E:", "Data");
+            var targets = new RemovalThenReinsertTargets(target);
+            var vm = new UsbMappingWizardViewModel(
+                intel,
+                store,
+                targets.GetTargets,
+                detectOperationTimeoutOverride: TimeSpan.FromSeconds(5),
+                isDriveRootMounted: _ => targets.IsMounted);
+            vm.StartMappingCommand.Execute(null);
+            Assert.True(vm.HasSavedPortLabels);
+            Assert.Contains(vm.SavedPortLabels, p => p.Label == "LT USB-C");
+            Assert.Contains(vm.SavedPortLabels, p => p.Label == "RT USB-C");
+            vm.SelectedDevice = vm.DeviceOptions[0];
+            vm.ContinueSelectDeviceCommand.Execute(null);
+            vm.CaptureCurrentPortCommand.Execute(null);
+            vm.NextAfterCaptureCommand.Execute(null);
+            targets.StartDetectPass();
+            await vm.DetectPortChangeAsync();
+
+            Assert.False(vm.DetectionSuccess);
+            Assert.True(vm.ConfirmSavedPortLabelCommand.CanExecute("LT USB-C"));
+            vm.ConfirmSavedPortLabelCommand.Execute("LT USB-C");
+
+            Assert.True(vm.IsDoneStep);
+            Assert.Equal("LT USB-C", vm.DoneResult?.Label);
+            var reloaded = store.LoadOrCreate();
+            Assert.Equal(2, reloaded.KnownPorts.Count);
+            var status = UsbPortLabelResolver.Resolve(weakDevice, reloaded);
+            Assert.Equal(UsbPortLabelValidity.CurrentSessionManual, status.Validity);
+            Assert.Equal("LT USB-C", status.CurrentLabel);
+            Assert.Contains(reloaded.KnownPorts, p => p.UserLabel == "RT USB-C");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, true);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
     public async Task UsbMappingWizard_TryAgainClearsStaleSnapshotsAndStartsFreshDetection()
     {
         var intel = new RetrySensitivePortIntelligence();
@@ -921,6 +1058,8 @@ public sealed class UsbMappingWizardAndResolutionTests
         var xaml = File.ReadAllText(FindRepoFile("src/ForgerEMS.Wpf/UsbMappingWizardWindow.xaml"));
         Assert.DoesNotContain("previous step", xaml, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Start detection first", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Confirm Current Port", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ConfirmSavedPortLabelCommand", xaml, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("<WrapPanel", xaml, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("I moved the USB device", xaml, StringComparison.OrdinalIgnoreCase);
     }

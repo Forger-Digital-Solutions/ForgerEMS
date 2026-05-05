@@ -426,6 +426,7 @@ public partial class MainWindow : Window
         {
             MainTabControl.SelectedIndex = selectedIndex;
             UpdateSidebarSelection();
+            Dispatcher.BeginInvoke(UpdateSidebarSelection, DispatcherPriority.Background);
         }
     }
 
@@ -434,6 +435,7 @@ public partial class MainWindow : Window
         if (ReferenceEquals(sender, MainTabControl))
         {
             UpdateSidebarSelection();
+            Dispatcher.BeginInvoke(UpdateSidebarSelection, DispatcherPriority.Background);
         }
     }
 

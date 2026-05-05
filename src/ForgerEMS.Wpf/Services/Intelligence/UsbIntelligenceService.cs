@@ -123,6 +123,7 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
                 $"benchmarkAttachedToVerifiedPort={portLabelStatus.CanAttachBenchmarkToVerifiedPort} " +
                 $"savedMappedPortCount={options.MachineProfile?.KnownPorts?.Count(p => !string.IsNullOrWhiteSpace(p.UserLabel)) ?? 0} " +
                 $"candidateLabels={string.Join(",", portLabelStatus.CandidateLabels)} " +
+                $"matchScoreByLabel={string.Join(",", portLabelStatus.CandidateScoreSummaries)} " +
                 $"reasonCodes={string.Join(",", portLabelStatus.ReasonCodes)}");
         }
 

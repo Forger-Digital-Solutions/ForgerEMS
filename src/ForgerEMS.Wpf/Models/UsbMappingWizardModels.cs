@@ -49,6 +49,19 @@ public sealed class UsbMappingWizardDeviceOption
         $"{DriveLetterDisplay} · {VolumeLabelDisplay} · {SizeDisplay} · {FileSystemDisplay} · {DetectedClassDisplay}";
 }
 
+public sealed class UsbSavedPortLabelOption
+{
+    public required string Label { get; init; }
+
+    public string LastSeenDisplay { get; init; } = "Last seen: —";
+
+    public string LastBenchmarkDisplay { get; init; } = "Benchmark: —";
+
+    public string VerificationDisplay { get; init; } = "Needs confirmation";
+
+    public string ConfirmButtonText => "Confirm " + Label;
+}
+
 public sealed class UsbMappingWizardResult
 {
     public bool Saved { get; init; }

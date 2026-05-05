@@ -3799,7 +3799,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private async Task RunUsbIntelligenceBenchmarkAsync() =>
         await AutoBenchmarkSelectedUsbSafeAsync(isAutomatic: false).ConfigureAwait(true);
 
-    private void OpenUsbMappingWizard()
+    private async void OpenUsbMappingWizard()
     {
         var vm = new UsbMappingWizardViewModel(
             _usbIntelligenceService,
@@ -3813,8 +3813,51 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         win.ShowDialog();
-        RefreshUsbIntelligenceFromDisk();
+        await RefreshUsbIntelligenceReportForSelectedTargetAsync().ConfigureAwait(true);
         _autoIntelligenceOrchestrator.ScheduleUsbSelectionRefresh(_backendContext, SelectedUsbTarget);
+    }
+
+    private async Task RefreshUsbIntelligenceReportForSelectedTargetAsync()
+    {
+        try
+        {
+            var reports = GetRuntimeReportsDirectory();
+            Directory.CreateDirectory(reports);
+            var usbPath = Path.Combine(reports, "usb-intelligence-latest.json");
+            UsbTopologySnapshot? previousUsb = null;
+            if (File.Exists(usbPath))
+            {
+                try
+                {
+                    previousUsb = JsonSerializer.Deserialize<UsbTopologySnapshot>(
+                        File.ReadAllText(usbPath),
+                        UsbIntelligenceService.UsbJsonReadOptions);
+                }
+                catch (Exception ex)
+                {
+                    AppendDiagnosticsLog($"USB intelligence refresh: previous snapshot ignored ({ex.Message}).");
+                }
+            }
+
+            var profile = _usbMachineProfileStore.LoadOrCreate();
+            var snapshot = _usbIntelligenceService.BuildTopologySnapshot(
+                SelectedUsbTarget,
+                new UsbTopologyBuildOptions
+                {
+                    PreviousSnapshot = previousUsb,
+                    MachineProfile = profile
+                });
+            _usbMachineProfileStore.ApplySnapshot(profile, snapshot);
+            _usbMachineProfileStore.Save(profile);
+            await _usbIntelligenceService.WriteLatestReportAsync(reports, snapshot).ConfigureAwait(true);
+            RefreshUsbIntelligenceFromDisk();
+            AppendDiagnosticsLog("USB mapping panel refreshed after wizard save/close. uiPanelRefreshed=true");
+        }
+        catch (Exception ex)
+        {
+            AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] USB mapping panel refresh failed: {ex.Message}", LogSeverity.Warning));
+            RefreshUsbIntelligenceFromDisk();
+        }
     }
 
     private async Task RunWizardUsbBenchmarkAsync(UsbTargetInfo target)

@@ -138,6 +138,37 @@
                         <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowDetectFailureDetails, Converter={StaticResource BoolToVis}}">
                             <TextBlock Margin="0,8,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" Text="{Binding DetectionDetail}" TextWrapping="Wrap" />
                             <TextBlock Margin="0,8,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" Text="{Binding RecommendationDisplay}" TextWrapping="Wrap" />
+                            <StackPanel Margin="0,14,0,0" Visibility="{Binding HasSavedPortLabels, Converter={StaticResource BoolToVis}}">
+                                <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelTextBrush}" Text="Confirm Current Port" />
+                                <TextBlock Margin="0,4,0,8" Foreground="{DynamicResource PanelMutedTextBrush}" TextWrapping="Wrap"
+                                           Text="Windows sees this USB connection, but it cannot reliably distinguish which saved physical port it is using. Confirm the label for the port you physically used." />
+                                <ItemsControl ItemsSource="{Binding SavedPortLabels}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Margin="0,0,0,8"
+                                                    Padding="10"
+                                                    Background="#B80A101A"
+                                                    BorderBrush="#4457C7E8"
+                                                    BorderThickness="1"
+                                                    CornerRadius="6">
+                                                <DockPanel LastChildFill="True">
+                                                    <Button DockPanel.Dock="Right"
+                                                            Style="{StaticResource WizardPrimaryBtn}"
+                                                            Content="{Binding ConfirmButtonText}"
+                                                            Command="{Binding DataContext.ConfirmSavedPortLabelCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding Label}" />
+                                                    <StackPanel Margin="0,0,12,0">
+                                                        <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding Label}" TextWrapping="Wrap" />
+                                                        <TextBlock Margin="0,3,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" FontSize="11" Text="{Binding LastSeenDisplay}" TextWrapping="Wrap" />
+                                                        <TextBlock Foreground="{DynamicResource PanelMutedTextBrush}" FontSize="11" Text="{Binding LastBenchmarkDisplay}" TextWrapping="Wrap" />
+                                                        <TextBlock Foreground="{DynamicResource PanelMutedTextBrush}" FontSize="11" Text="{Binding VerificationDisplay}" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                </DockPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
                             <WrapPanel Margin="0,16,0,0" Visibility="{Binding ShowRemovalNotObservedActions, Converter={StaticResource BoolToVis}}">
                                 <Button Style="{StaticResource WizardPrimaryBtn}" Content="Try Again" Command="{Binding TryAgainCommand}" />
                                 <Button Style="{StaticResource WizardBtn}" Content="Save Manual Label" Command="{Binding SaveManualLabelPathCommand}" />

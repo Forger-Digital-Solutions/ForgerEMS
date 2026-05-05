@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -87,6 +88,7 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         TryAgainCommand = new AsyncRelayCommand(TryDetectionAgainAsync, () => CanRetry);
         UseCurrentPortAnywayCommand = new RelayCommand(UseCurrentPortAnyway, () => !_detectionSuccess && SelectedDevice is not null && !IsAnalyzingPortChange);
         SaveManualLabelPathCommand = new RelayCommand(UseCurrentPortAnyway, () => !_detectionSuccess && SelectedDevice is not null && !IsAnalyzingPortChange);
+        ConfirmSavedPortLabelCommand = new RelayCommand<string>(ConfirmSavedPortLabel, label => !string.IsNullOrWhiteSpace(label) && SelectedDevice is not null && !IsAnalyzingPortChange);
         BackFromDetectCommand = new RelayCommand(BackFromDetect, () => IsDetectStep && !IsAnalyzingPortChange);
         SavePortLabelCommand = new RelayCommand(SavePortLabel, () => !string.IsNullOrWhiteSpace(PortLabelDraft));
         CloseCommand = new RelayCommand(() => CloseRequested?.Invoke(this, true));
@@ -106,6 +108,7 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
     public AsyncRelayCommand TryAgainCommand { get; }
     public RelayCommand UseCurrentPortAnywayCommand { get; }
     public RelayCommand SaveManualLabelPathCommand { get; }
+    public RelayCommand<string> ConfirmSavedPortLabelCommand { get; }
     public RelayCommand BackFromDetectCommand { get; }
     public RelayCommand SavePortLabelCommand { get; }
     public RelayCommand CloseCommand { get; }
@@ -113,6 +116,10 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
     public AsyncRelayCommand RunBenchmarkOnThisPortCommand { get; }
 
     public ObservableCollection<UsbMappingWizardDeviceOption> DeviceOptions { get; } = new();
+
+    public ObservableCollection<UsbSavedPortLabelOption> SavedPortLabels { get; } = new();
+
+    public bool HasSavedPortLabels => SavedPortLabels.Count > 0;
 
     public UsbMappingWizardStep Step
     {
@@ -400,9 +407,13 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
     private void ReloadDeviceOptions()
     {
         DeviceOptions.Clear();
+        ReloadSavedPortLabels();
         foreach (var t in _getUsbTargets().Where(UsbMappingWizardDeviceFilter.IsEligibleMappingUsb))
         {
-            var snap = _intelligence.BuildTopologySnapshot(t);
+            var profile = _profileStore.LoadOrCreate();
+            var snap = _intelligence.BuildTopologySnapshot(
+                t,
+                new UsbTopologyBuildOptions { MachineProfile = profile });
             var rec = snap.SelectedTargetRecommendation;
             var bench = snap.SelectedTargetBenchmark;
             var benchLine = bench?.Succeeded == true
@@ -511,6 +522,34 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         {
             return false;
         }
+    }
+
+    private void ReloadSavedPortLabels()
+    {
+        SavedPortLabels.Clear();
+        var profile = _profileStore.LoadOrCreate();
+        foreach (var rec in profile.KnownPorts
+                     .Where(p => !string.IsNullOrWhiteSpace(p.UserLabel))
+                     .OrderBy(p => p.UserLabel, StringComparer.OrdinalIgnoreCase))
+        {
+            var lastSeen = rec.LastSeenUtc?.ToLocalTime().ToString("g", CultureInfo.CurrentCulture) ?? "—";
+            var benchmark = rec.LastBenchmark?.Succeeded == true
+                ? $"{rec.LastBenchmark.WriteSpeedMBps:0.0} MB/s write"
+                : "—";
+            var verification = rec.HasStrongPortTopologyEvidence
+                ? "topology evidence saved"
+                : "weak topology; confirm when connected";
+            SavedPortLabels.Add(new UsbSavedPortLabelOption
+            {
+                Label = rec.UserLabel!.Trim(),
+                LastSeenDisplay = "Last seen: " + lastSeen,
+                LastBenchmarkDisplay = "Benchmark: " + benchmark,
+                VerificationDisplay = verification
+            });
+        }
+
+        OnPropertyChanged(nameof(HasSavedPortLabels));
+        ConfirmSavedPortLabelCommand.RaiseCanExecuteChanged();
     }
 
     private async Task DetectPortChangeCoreAsync()
@@ -682,6 +721,8 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
             if (FindSelectedLiveTarget() is null)
             {
                 StartupDiagnosticLog.AppendLine($"[UsbMappingWizard] Removal poll observed selected USB missing. mappingRunId={mappingRunId} poll={poll}");
+                var epoch = UsbPortLabelResolver.MarkDriveRemoved(SelectedUsbTarget?.RootPath ?? SelectedUsbTarget?.DriveLetter);
+                StartupDiagnosticLog.AppendLine($"[UsbMappingWizard] Resolver connection epoch advanced after wizard removal. mappingRunId={mappingRunId} epoch={epoch}");
                 return true;
             }
 
@@ -816,6 +857,23 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         RecommendationDisplay = "Save a friendly label for this observed port, then use benchmark results to compare ports during beta testing.";
         Step = UsbMappingWizardStep.LabelPort;
         NextToLabelCommand.RaiseCanExecuteChanged();
+    }
+
+    private void ConfirmSavedPortLabel(string? label)
+    {
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return;
+        }
+
+        PortLabelDraft = label.Trim();
+        _pendingSaveMode = UsbPortMappingSaveMode.CurrentPortForSelectedTarget;
+        ConfidenceTierDisplay = "Manual";
+        DetectionSuccess = true;
+        FailureMessage = string.Empty;
+        DetectionDetail = "Manual confirmation mode. Windows could not distinguish the physical port, so this label is user-confirmed for the current connection.";
+        RecommendationDisplay = "Benchmark results can now attach to this confirmed label for the active USB connection.";
+        SavePortLabel();
     }
 
     private void ClearDetectionStateForRetry()
@@ -976,6 +1034,7 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         TryAgainCommand.RaiseCanExecuteChanged();
         UseCurrentPortAnywayCommand.RaiseCanExecuteChanged();
         SaveManualLabelPathCommand.RaiseCanExecuteChanged();
+        ConfirmSavedPortLabelCommand.RaiseCanExecuteChanged();
         BackFromDetectCommand.RaiseCanExecuteChanged();
         SavePortLabelCommand.RaiseCanExecuteChanged();
         MapAnotherPortCommand.RaiseCanExecuteChanged();
