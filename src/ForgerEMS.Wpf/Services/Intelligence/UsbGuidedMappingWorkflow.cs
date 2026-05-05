@@ -195,11 +195,22 @@ public sealed class UsbGuidedMappingWorkflow
             profile.KnownPorts.Add(rec);
         }
 
-        rec.UserLabel = trimmedLabel;
         rec.LastSeenUtc = afterGeneratedUtc;
         rec.LastMappingSuggestion = lastMappingSuggestionLine;
-        rec.MappingConfidenceScore = mapConf;
         rec.Confidence = Math.Max(rec.Confidence, Math.Min(95, mapConf));
+        UsbPortLabelResolver.StampManualLabel(rec, afterMatch, trimmedLabel, mapConf, afterGeneratedUtc);
+
+        var letter = UsbPortLabelResolver.NormalizeDriveLetter(afterMatch.DriveLetter);
+        if (!string.IsNullOrWhiteSpace(letter) &&
+            profile.UnverifiedBenchmarkByDriveLetter.TryGetValue(letter, out var unverifiedBenchmark))
+        {
+            rec.LastBenchmark = UsbPortLabelResolver.WithPortAttachment(
+                unverifiedBenchmark,
+                attachedToVerifiedPort: true,
+                trimmedLabel,
+                UsbPortLabelValidity.CurrentSessionManual);
+            profile.UnverifiedBenchmarkByDriveLetter.Remove(letter);
+        }
 
         if (!profile.KnownStablePortKeys.Contains(afterMatch.StablePortKey))
         {

@@ -494,4 +494,206 @@ public sealed class UsbIntelligenceProTests
         Assert.DoesNotContain("PHYSICALDRIVE", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("SENSITIVE_SERIAL", json, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void UsbPortLabelResolver_UsesManualLabelAsCurrentOnlyWhenCurrentSessionConnectionStillMatches()
+    {
+        var profile = new UsbMachineProfile();
+        var current = TestUsbDevice("M:", "dev-a", "port-a", seenCount: 1);
+        var rec = new UsbKnownPortRecord { StablePortKey = current.StablePortKey };
+        UsbPortLabelResolver.StampManualLabel(rec, current, "LT USB C", 60, DateTimeOffset.UtcNow);
+        profile.KnownPorts.Add(rec);
+
+        var status = UsbPortLabelResolver.Resolve(current, profile);
+
+        Assert.Equal(UsbPortLabelValidity.CurrentSessionManual, status.Validity);
+        Assert.Equal("LT USB C", status.CurrentLabel);
+        Assert.True(status.CanAttachBenchmarkToVerifiedPort);
+    }
+
+    [Fact]
+    public void UsbPortLabelResolver_AfterReconnectWeakTopology_ShowsLastKnownLabelNotCurrent()
+    {
+        var profile = new UsbMachineProfile();
+        var original = TestUsbDevice("N:", "dev-b", "port-b", seenCount: 1);
+        var rec = new UsbKnownPortRecord { StablePortKey = original.StablePortKey };
+        UsbPortLabelResolver.StampManualLabel(rec, original, "LT USB C", 60, DateTimeOffset.UtcNow);
+        profile.KnownPorts.Add(rec);
+        UsbPortLabelResolver.MarkDriveRemoved("N:");
+
+        var reinserted = TestUsbDevice("N:", "dev-b", "port-b", seenCount: 2);
+        var status = UsbPortLabelResolver.Resolve(reinserted, profile);
+
+        Assert.Equal(UsbPortLabelValidity.TopologyUnavailable, status.Validity);
+        Assert.Null(status.CurrentLabel);
+        Assert.Equal("LT USB C", status.LastKnownLabel);
+        Assert.Contains("Last known label: LT USB C", status.ReasonLine, StringComparison.Ordinal);
+        Assert.False(status.CanAttachBenchmarkToVerifiedPort);
+    }
+
+    [Fact]
+    public void UsbPortLabelResolver_StrongTopologyChanged_MarksPortChangeSuspected()
+    {
+        var profile = new UsbMachineProfile();
+        var original = TestUsbDevice(
+            "O:",
+            "dev-c",
+            "port-c-old",
+            seenCount: 1,
+            locationPathHash: "loc-left");
+        var rec = new UsbKnownPortRecord { StablePortKey = original.StablePortKey };
+        UsbPortLabelResolver.StampManualLabel(rec, original, "LT USB C", 85, DateTimeOffset.UtcNow);
+        profile.KnownPorts.Add(rec);
+
+        var moved = TestUsbDevice(
+            "O:",
+            "dev-c",
+            "port-c-new",
+            seenCount: 2,
+            locationPathHash: "loc-right");
+        var status = UsbPortLabelResolver.Resolve(moved, profile);
+
+        Assert.Equal(UsbPortLabelValidity.PortChangedSuspected, status.Validity);
+        Assert.Null(status.CurrentLabel);
+        Assert.Equal("LT USB C", status.LastKnownLabel);
+        Assert.Contains("Port change suspected", status.StatusLine, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UsbMachineProfileStore_UnverifiedBenchmarkDoesNotOverwriteBestLabeledPort()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"fe-usb-profile-{Guid.NewGuid():N}");
+        try
+        {
+            var store = new UsbMachineProfileStore(root);
+            var profile = store.LoadOrCreate();
+            var original = TestUsbDevice("P:", "dev-d", "port-d", seenCount: 1);
+            var rec = new UsbKnownPortRecord
+            {
+                StablePortKey = original.StablePortKey,
+                LastBenchmark = new UsbIntelligenceBenchmarkResult
+                {
+                    Succeeded = true,
+                    WriteSpeedMBps = 70,
+                    ReadSpeedMBps = 80,
+                    Timestamp = DateTimeOffset.UtcNow,
+                    SummaryLine = "old"
+                }
+            };
+            UsbPortLabelResolver.StampManualLabel(rec, original, "LT USB C", 60, DateTimeOffset.UtcNow);
+            profile.KnownPorts.Add(rec);
+            profile.PendingBenchmarkByDriveLetter["P"] = new UsbIntelligenceBenchmarkResult
+            {
+                Succeeded = true,
+                WriteSpeedMBps = 120,
+                ReadSpeedMBps = 130,
+                Timestamp = DateTimeOffset.UtcNow,
+                SummaryLine = "new unverified"
+            };
+            UsbPortLabelResolver.MarkDriveRemoved("P:");
+
+            var snapshot = new UsbTopologySnapshot
+            {
+                GeneratedUtc = DateTimeOffset.UtcNow,
+                Devices = [TestUsbDevice("P:", "dev-d", "port-d", seenCount: 2)],
+                SummaryLine = "s"
+            };
+            store.ApplySnapshot(profile, snapshot);
+
+            Assert.Equal(70, rec.LastBenchmark!.WriteSpeedMBps);
+            Assert.True(profile.UnverifiedBenchmarkByDriveLetter.TryGetValue("P", out var unverified));
+            Assert.False(unverified!.AttachedToVerifiedPort);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public void UsbGuidedMappingWorkflow_SavingNewLabelAttachesUnverifiedBenchmarkToCurrentPort()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"fe-usb-map-attach-{Guid.NewGuid():N}");
+        try
+        {
+            var store = new UsbMachineProfileStore(root);
+            var profile = store.LoadOrCreate();
+            profile.UnverifiedBenchmarkByDriveLetter["Q"] = new UsbIntelligenceBenchmarkResult
+            {
+                Succeeded = true,
+                WriteSpeedMBps = 90,
+                ReadSpeedMBps = 95,
+                Timestamp = DateTimeOffset.UtcNow,
+                SummaryLine = "bench on current port",
+                AttachedToVerifiedPort = false
+            };
+
+            var wf = new UsbGuidedMappingWorkflow();
+            wf.StartMappingSession();
+            wf.CaptureBeforeSnapshot(new UsbTopologySnapshot
+            {
+                GeneratedUtc = DateTimeOffset.UtcNow,
+                Devices = [TestUsbDevice("Q:", "dev-e", "port-old", seenCount: 1, locationPathHash: "loc-old")],
+                SummaryLine = "before"
+            });
+            wf.CaptureAfterSnapshot(new UsbTopologySnapshot
+            {
+                GeneratedUtc = DateTimeOffset.UtcNow,
+                Devices = [TestUsbDevice("Q:", "dev-e", "port-new", seenCount: 1, locationPathHash: "loc-new")],
+                SummaryLine = "after"
+            });
+
+            var ok = wf.TrySaveMappingLabel(profile, store, "RT USB C", out _, out var err);
+
+            Assert.True(ok, err);
+            var rec = Assert.Single(profile.KnownPorts);
+            Assert.Equal("RT USB C", rec.UserLabel);
+            Assert.NotNull(rec.LastBenchmark);
+            Assert.True(rec.LastBenchmark!.AttachedToVerifiedPort);
+            Assert.False(profile.UnverifiedBenchmarkByDriveLetter.ContainsKey("Q"));
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private static UsbDeviceInfo TestUsbDevice(
+        string driveLetter,
+        string stableDeviceKey,
+        string stablePortKey,
+        int seenCount,
+        string locationPathHash = "")
+    {
+        return new UsbDeviceInfo
+        {
+            FriendlyName = "Ventoy",
+            DriveLetter = driveLetter,
+            VolumeLabel = "Ventoy",
+            FileSystem = "exFAT",
+            IsRemovableMassStorage = true,
+            InferredSpeed = UsbSpeedClassification.Usb3,
+            StableDeviceKey = stableDeviceKey,
+            StablePortKey = stablePortKey,
+            SerialHash = "serial-" + stableDeviceKey,
+            VolumeIdentityHash = "volume-" + stableDeviceKey,
+            DeviceInstanceIdHash = "instance-" + stableDeviceKey,
+            PnpDeviceIdHash = "pnp-" + stableDeviceKey,
+            ControllerKey = "controller",
+            LocationPathHash = locationPathHash,
+            SeenCount = seenCount
+        };
+    }
 }

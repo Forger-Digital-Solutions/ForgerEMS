@@ -105,6 +105,11 @@ public static class UsbIntelligenceLatestPanelReader
             var r = bench.TryGetProperty("readSpeedMBps", out var rr) ? rr.GetDouble() : 0;
             benchLine =
                 $"{r.ToString("0.0", CultureInfo.InvariantCulture)} MB/s read · {w.ToString("0.0", CultureInfo.InvariantCulture)} MB/s write";
+            if (bench.TryGetProperty("attachedToVerifiedPort", out var attached) &&
+                attached.ValueKind == JsonValueKind.False)
+            {
+                benchLine += " · unverified current port";
+            }
 
             if (bench.TryGetProperty("timestamp", out var ts) && ts.ValueKind == JsonValueKind.String &&
                 DateTimeOffset.TryParse(ts.GetString(), CultureInfo.InvariantCulture,
@@ -137,10 +142,26 @@ public static class UsbIntelligenceLatestPanelReader
             }
         }
 
-        var label = GetStr(root, "selectedTargetPortUserLabel");
-        if (!string.IsNullOrWhiteSpace(label))
+        var statusLine = GetStr(root, "selectedTargetPortLabelStatusLine");
+        var reasonLine = GetStr(root, "selectedTargetPortLabelReasonLine");
+        var lastKnownLabel = GetStr(root, "selectedTargetLastKnownPortUserLabel");
+        if (!string.IsNullOrWhiteSpace(statusLine))
         {
-            mapping = label.Trim();
+            mapping = string.IsNullOrWhiteSpace(reasonLine)
+                ? statusLine.Trim()
+                : $"{statusLine.Trim()} — {reasonLine.Trim()}";
+        }
+        else
+        {
+            var label = GetStr(root, "selectedTargetPortUserLabel");
+            if (!string.IsNullOrWhiteSpace(label))
+            {
+                mapping = label.Trim();
+            }
+            else if (!string.IsNullOrWhiteSpace(lastKnownLabel))
+            {
+                mapping = $"Current port: Needs verification — Last known label: {lastKnownLabel.Trim()}";
+            }
         }
 
         var raw = new UsbIntelligencePanelUiState

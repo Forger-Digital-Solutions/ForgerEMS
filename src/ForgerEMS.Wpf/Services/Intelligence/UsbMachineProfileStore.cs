@@ -117,7 +117,31 @@ public sealed class UsbMachineProfileStore
             if (!string.IsNullOrEmpty(letter) &&
                 profile.PendingBenchmarkByDriveLetter.TryGetValue(letter, out var pendingBench))
             {
-                MergePendingBenchmark(profile, d.StablePortKey, pendingBench, now, d);
+                var labelStatus = UsbPortLabelResolver.Resolve(d, profile);
+                if (labelStatus.CanAttachBenchmarkToVerifiedPort && labelStatus.CurrentRecord is not null)
+                {
+                    var attached = UsbPortLabelResolver.WithPortAttachment(
+                        pendingBench,
+                        attachedToVerifiedPort: true,
+                        labelStatus.CurrentLabel,
+                        labelStatus.Validity);
+                    MergePendingBenchmark(profile, labelStatus.CurrentRecord.StablePortKey, attached, now, d);
+                }
+                else
+                {
+                    profile.UnverifiedBenchmarkByDriveLetter[letter] = UsbPortLabelResolver.WithPortAttachment(
+                        pendingBench,
+                        attachedToVerifiedPort: false,
+                        labelStatus.LastKnownLabel,
+                        labelStatus.Validity);
+                    profile.LastBenchmarkPlaceholder =
+                        "Benchmark measured on unverified current port; save/update a port label to attach it to a physical port.";
+                    if (!string.IsNullOrWhiteSpace(d.StablePortKey))
+                    {
+                        TouchKnownPort(profile, d.StablePortKey, now);
+                    }
+                }
+
                 profile.PendingBenchmarkByDriveLetter.Remove(letter);
             }
             else if (!string.IsNullOrWhiteSpace(d.StablePortKey))

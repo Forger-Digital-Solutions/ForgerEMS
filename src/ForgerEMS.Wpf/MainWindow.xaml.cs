@@ -222,6 +222,7 @@ public partial class MainWindow : Window
             if (item is TabItem { Header: string h } && h.Contains(key, StringComparison.OrdinalIgnoreCase))
             {
                 MainTabControl.SelectedItem = item;
+                UpdateSidebarSelection();
                 return;
             }
         }
@@ -424,6 +425,7 @@ public partial class MainWindow : Window
             selectedIndex < MainTabControl.Items.Count)
         {
             MainTabControl.SelectedIndex = selectedIndex;
+            UpdateSidebarSelection();
         }
     }
 
@@ -458,6 +460,7 @@ public partial class MainWindow : Window
             navButtons[index].Background = new SolidColorBrush(selected ? Color.FromRgb(255, 224, 178) : Color.FromArgb(204, 10, 16, 26));
             navButtons[index].BorderBrush = new SolidColorBrush(selected ? Color.FromRgb(255, 159, 67) : Color.FromArgb(102, 87, 199, 232));
             navButtons[index].Foreground = new SolidColorBrush(selected ? Color.FromRgb(8, 8, 12) : Color.FromRgb(232, 240, 255));
+            navButtons[index].FontWeight = selected ? FontWeights.Bold : FontWeights.SemiBold;
         }
     }
 

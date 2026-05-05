@@ -124,6 +124,29 @@ public sealed class UsbIntelligenceProUiTests
     }
 
     [Fact]
+    public void UsbIntelligenceLatestPanelReader_UnverifiedBenchmarkShowsPortWarning()
+    {
+        const string json = """
+            {
+              "selectedTargetBenchmark": {
+                "succeeded": true,
+                "writeSpeedMBps": 61.0,
+                "readSpeedMBps": 450.0,
+                "classification": "usb3",
+                "attachedToVerifiedPort": false
+              },
+              "selectedTargetPortLabelStatusLine": "Current port: Unverified after reconnect",
+              "selectedTargetPortLabelReasonLine": "Last known label: LT USB C. Save/update a manual label."
+            }
+            """;
+
+        var state = UsbIntelligenceLatestPanelReader.Parse(json);
+        Assert.Contains("unverified current port", state.BenchmarkReadWriteDisplay, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Unverified after reconnect", state.MappingLabelDisplay, StringComparison.Ordinal);
+        Assert.Contains("LT USB C", state.MappingLabelDisplay, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void UsbIntelligencePanelUiCopy_Finalize_DropsBestPortWhenBenchmarkDidNotSucceed()
     {
         var raw = new UsbIntelligencePanelUiState { BestKnownPortSummary = "Front (~60 MB/s)" };

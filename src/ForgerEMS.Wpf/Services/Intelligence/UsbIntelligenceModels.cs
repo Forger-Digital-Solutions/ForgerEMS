@@ -53,6 +53,17 @@ public enum UsbNativeBenchmarkEndKind
     ValidationBlocked = 4
 }
 
+public enum UsbPortLabelValidity
+{
+    None = 0,
+    VerifiedCurrent = 1,
+    CurrentSessionManual = 2,
+    NeedsVerification = 3,
+    PortChangedSuspected = 4,
+    TopologyUnavailable = 5,
+    ManualLabelRecommended = 6
+}
+
 /// <summary>Persisted USB speed sample for Intelligence, diagnostics, and machine profile.</summary>
 public sealed class UsbIntelligenceBenchmarkResult
 {
@@ -95,6 +106,12 @@ public sealed class UsbIntelligenceBenchmarkResult
 
     public string AccuracyWarning { get; init; } = string.Empty;
 
+    public bool? AttachedToVerifiedPort { get; init; }
+
+    public string AttachedPortLabel { get; init; } = string.Empty;
+
+    public UsbPortLabelValidity PortLabelValidity { get; init; }
+
     public static UsbIntelligenceBenchmarkResult Failed(string message, UsbNativeBenchmarkEndKind endKind = UsbNativeBenchmarkEndKind.IoOrSystemError) =>
         new()
         {
@@ -123,6 +140,20 @@ public sealed class UsbKnownPortRecord
     public string? LastMappingSuggestion { get; set; }
 
     public int MappingConfidenceScore { get; set; }
+
+    public string DeviceIdentityKey { get; set; } = string.Empty;
+
+    public string PortTopologyKey { get; set; } = string.Empty;
+
+    public bool HasStrongPortTopologyEvidence { get; set; }
+
+    public string? LastManualLabelSessionId { get; set; }
+
+    public DateTimeOffset? LabelConfirmedAtUtc { get; set; }
+
+    public int LabelConfirmedDeviceSeenCount { get; set; }
+
+    public string? LabelConfirmedDriveLetter { get; set; }
 }
 
 public sealed class UsbControllerInfo
@@ -389,6 +420,14 @@ public sealed class UsbTopologySnapshot
 
     /// <summary>User-confirmed label for the current port (safe for Kyra JSON).</summary>
     public string? SelectedTargetPortUserLabel { get; init; }
+
+    public UsbPortLabelValidity SelectedTargetPortLabelValidity { get; init; }
+
+    public string? SelectedTargetLastKnownPortUserLabel { get; init; }
+
+    public string SelectedTargetPortLabelStatusLine { get; init; } = string.Empty;
+
+    public string SelectedTargetPortLabelReasonLine { get; init; } = string.Empty;
 
     public int SelectedTargetMappingConfidence { get; init; }
 

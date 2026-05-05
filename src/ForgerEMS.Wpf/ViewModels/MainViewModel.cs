@@ -2461,6 +2461,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             if (!string.IsNullOrWhiteSpace(previousSelection) && !previousSelectionStillPresent)
             {
+                UsbPortLabelResolver.MarkDriveRemoved(previousSelection);
                 AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] USB target removed: {previousSelection}", LogSeverity.Warning));
             }
 
@@ -6437,6 +6438,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
                 if (removed.Length > 0)
                 {
+                    foreach (var removedRoot in removed)
+                    {
+                        UsbPortLabelResolver.MarkDriveRemoved(removedRoot);
+                    }
+
                     AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] USB device removed: {string.Join(", ", removed)}.", LogSeverity.Warning));
                 }
 

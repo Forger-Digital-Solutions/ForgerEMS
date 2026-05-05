@@ -61,8 +61,9 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
         };
 
         var diff = UsbTopologyDiffService.Compare(options.PreviousSnapshot, shell);
-        var benchmarkRaw = ResolveBenchmark(match, options.MachineProfile);
-        var portRec = ResolvePortRecord(match, options.MachineProfile);
+        var portLabelStatus = UsbPortLabelResolver.Resolve(match, options.MachineProfile);
+        var benchmarkRaw = ResolveBenchmark(match, options.MachineProfile, portLabelStatus);
+        var portRec = portLabelStatus.CanAttachBenchmarkToVerifiedPort ? portLabelStatus.CurrentRecord : null;
         var recommendation = UsbBuilderRecommendationEngine.Build(
             selectedTarget,
             match,
@@ -95,8 +96,12 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
             MachineProfileFingerprint = fingerprint,
             SelectedTargetBenchmark = refinedBench,
             SelectedTargetStablePortKey = match?.StablePortKey,
-            SelectedTargetPortUserLabel = portRec?.UserLabel,
-            SelectedTargetMappingConfidence = portRec?.MappingConfidenceScore ?? 0,
+            SelectedTargetPortUserLabel = portLabelStatus.CurrentLabel,
+            SelectedTargetPortLabelValidity = portLabelStatus.Validity,
+            SelectedTargetLastKnownPortUserLabel = portLabelStatus.LastKnownLabel,
+            SelectedTargetPortLabelStatusLine = portLabelStatus.StatusLine,
+            SelectedTargetPortLabelReasonLine = portLabelStatus.ReasonLine,
+            SelectedTargetMappingConfidence = portLabelStatus.CanUseCurrentLabel ? portRec?.MappingConfidenceScore ?? 0 : 0,
             CombinedConfidenceScore = combinedScore,
             CombinedConfidenceReason = combinedReason
         };
@@ -105,6 +110,18 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
         var narrative = UsbKyraNarrativeBuilder.Build(withRec);
 
         IntelligenceLogWriter.Append("usb-intelligence.log", $"Topology snapshot: {summary}");
+        if (match is not null)
+        {
+            IntelligenceLogWriter.Append(
+                "usb-intelligence.log",
+                "usbPortProfileStatus " +
+                $"drive={NormalizeDriveLetterForProfile(match.DriveLetter)} " +
+                $"status={portLabelStatus.Validity} " +
+                $"currentLabel={(string.IsNullOrWhiteSpace(portLabelStatus.CurrentLabel) ? "none" : "present")} " +
+                $"lastKnownLabel={(string.IsNullOrWhiteSpace(portLabelStatus.LastKnownLabel) ? "none" : "present")} " +
+                $"benchmarkAttachedToVerifiedPort={portLabelStatus.CanAttachBenchmarkToVerifiedPort} " +
+                $"reasonCodes={string.Join(",", portLabelStatus.ReasonCodes)}");
+        }
 
         return new UsbTopologySnapshot
         {
@@ -120,14 +137,21 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
             MachineProfileFingerprint = fingerprint,
             SelectedTargetBenchmark = refinedBench,
             SelectedTargetStablePortKey = match?.StablePortKey,
-            SelectedTargetPortUserLabel = portRec?.UserLabel,
-            SelectedTargetMappingConfidence = portRec?.MappingConfidenceScore ?? 0,
+            SelectedTargetPortUserLabel = portLabelStatus.CurrentLabel,
+            SelectedTargetPortLabelValidity = portLabelStatus.Validity,
+            SelectedTargetLastKnownPortUserLabel = portLabelStatus.LastKnownLabel,
+            SelectedTargetPortLabelStatusLine = portLabelStatus.StatusLine,
+            SelectedTargetPortLabelReasonLine = portLabelStatus.ReasonLine,
+            SelectedTargetMappingConfidence = portLabelStatus.CanUseCurrentLabel ? portRec?.MappingConfidenceScore ?? 0 : 0,
             CombinedConfidenceScore = combinedScore,
             CombinedConfidenceReason = combinedReason
         };
     }
 
-    private static UsbIntelligenceBenchmarkResult? ResolveBenchmark(UsbDeviceInfo? match, UsbMachineProfile? profile)
+    private static UsbIntelligenceBenchmarkResult? ResolveBenchmark(
+        UsbDeviceInfo? match,
+        UsbMachineProfile? profile,
+        UsbPortLabelStatus portLabelStatus)
     {
         if (match is null || profile is null)
         {
@@ -141,22 +165,21 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
             return pending;
         }
 
+        if (!portLabelStatus.CanAttachBenchmarkToVerifiedPort &&
+            !string.IsNullOrEmpty(letter) &&
+            profile.UnverifiedBenchmarkByDriveLetter.TryGetValue(letter, out var unverified))
+        {
+            return unverified;
+        }
+
         if (string.IsNullOrWhiteSpace(match.StablePortKey))
         {
             return null;
         }
 
-        return profile.KnownPorts.FirstOrDefault(p => p.StablePortKey == match.StablePortKey)?.LastBenchmark;
-    }
-
-    private static UsbKnownPortRecord? ResolvePortRecord(UsbDeviceInfo? match, UsbMachineProfile? profile)
-    {
-        if (match is null || profile is null || string.IsNullOrWhiteSpace(match.StablePortKey))
-        {
-            return null;
-        }
-
-        return profile.KnownPorts.FirstOrDefault(p => p.StablePortKey == match.StablePortKey);
+        return portLabelStatus.CanAttachBenchmarkToVerifiedPort
+            ? portLabelStatus.CurrentRecord?.LastBenchmark
+            : null;
     }
 
     private static string NormalizeDriveLetterForProfile(string? driveLetter)

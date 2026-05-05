@@ -113,19 +113,24 @@ public static class UsbDiagnosticsComposer
             ? profile.KnownPorts.Count
             : profile?.KnownStablePortKeys?.Count ?? 0;
 
-        var portRec = !string.IsNullOrWhiteSpace(snapshot.SelectedTargetStablePortKey) && profile is not null
+        var portRec = !string.IsNullOrWhiteSpace(snapshot.SelectedTargetStablePortKey) &&
+                      !string.IsNullOrWhiteSpace(snapshot.SelectedTargetPortUserLabel) &&
+                      profile is not null
             ? profile.KnownPorts.FirstOrDefault(p => p.StablePortKey == snapshot.SelectedTargetStablePortKey)
             : null;
 
-        var mapSummary = portRec is null || string.IsNullOrWhiteSpace(portRec.UserLabel)
-            ? string.Empty
-            : $"Mapped port label: {portRec.UserLabel} (mapping confidence {portRec.MappingConfidenceScore}).";
+        var mapSummary = !string.IsNullOrWhiteSpace(snapshot.SelectedTargetPortLabelStatusLine)
+            ? snapshot.SelectedTargetPortLabelStatusLine
+            : string.Empty;
 
         var recommendWithBench = recommendLine;
         if (bench is { Succeeded: true } && !string.IsNullOrWhiteSpace(bench.SummaryLine))
         {
             var readNote = bench.ReadLikelyCached || bench.ReadIsEstimate ? " read may be cached" : string.Empty;
-            recommendWithBench = $"{recommendWithBench} Measured: {bench.WriteSpeedMBps:0.0}/{bench.ReadSpeedMBps:0.0} MB/s ({bench.Classification}{readNote}).".Trim();
+            var portNote = bench.AttachedToVerifiedPort == false
+                ? " Benchmark measured on unverified current port; save/update a port label to attach it to a physical port."
+                : string.Empty;
+            recommendWithBench = $"{recommendWithBench} Measured: {bench.WriteSpeedMBps:0.0}/{bench.ReadSpeedMBps:0.0} MB/s ({bench.Classification}{readNote}).{portNote}".Trim();
         }
 
         var riskSummary = rec is null
@@ -144,7 +149,9 @@ public static class UsbDiagnosticsComposer
             UsbProfileKnownPortsCount = portCount,
             UsbOverallSeverity = overall,
             LastBenchmark = bench,
-            MappingConfidenceScore = portRec?.MappingConfidenceScore ?? 0,
+            MappingConfidenceScore = !string.IsNullOrWhiteSpace(snapshot.SelectedTargetPortUserLabel)
+                ? portRec?.MappingConfidenceScore ?? 0
+                : 0,
             MappingConfidenceSummary = mapSummary,
             CombinedConfidenceScore = snapshot.CombinedConfidenceScore,
             CombinedConfidenceSummary = string.IsNullOrWhiteSpace(snapshot.CombinedConfidenceReason)
@@ -163,7 +170,9 @@ public static class UsbDiagnosticsComposer
         }
 
         var ranked = profile.KnownPorts
-            .Where(p => p.LastBenchmark?.Succeeded == true && p.LastBenchmark.WriteSpeedMBps > 0)
+            .Where(p => p.LastBenchmark?.Succeeded == true &&
+                        p.LastBenchmark.WriteSpeedMBps > 0 &&
+                        p.LastBenchmark.AttachedToVerifiedPort != false)
             .OrderByDescending(p => p.LastBenchmark!.WriteSpeedMBps)
             .FirstOrDefault();
 
