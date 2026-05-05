@@ -276,78 +276,8 @@ public sealed class WindowsBuiltInSensorProvider : IHardwareSensorProvider
     }
 }
 
-public class BundledDeepSensorProvider : IHardwareSensorProvider
+public class BundledDeepSensorProvider : LibreHardwareMonitorSensorProvider
 {
-    public string Name => "Bundled Deep Sensor Provider";
-
-    public SensorProviderResult Read(SystemProfile profile)
-    {
-        _ = profile;
-        var packaged = SensorProviderRegistry.IsBundledDeepProviderPackaged();
-        return new SensorProviderResult
-        {
-            ProviderName = Name,
-            ProviderVersion = "0.1-shell",
-            ProviderKind = "LibreHardwareMonitorSensorProviderShell",
-            IsEnabled = false,
-            IsBundled = packaged,
-            RequiresThirdPartyLicenseNotice = true,
-            IsReadOnly = true,
-            TrustLevel = packaged ? SensorProviderTrustLevels.BundledReviewed : SensorProviderTrustLevels.ExperimentalDisabled,
-            RuntimeMode = SensorProviderRuntimeModes.Disabled,
-            FailureReason = packaged
-                ? BuildDeepProviderDisabledReason()
-                : BuildDeepProviderNotPackagedReason(),
-            Capabilities = new SensorProviderCapabilities
-            {
-                SupportedCapabilities =
-                [
-                    "Future read-only CPU temperature",
-                    "Future read-only CPU package power",
-                    "Future read-only GPU temperature/clocks/load",
-                    "Future read-only fan RPM when exposed",
-                    "Future read-only storage temperature/wear"
-                ],
-                MissingCapabilities =
-                [
-                    "Disabled pending review",
-                    "Requires bundled provider assembly",
-                    "May require admin or vendor driver support"
-                ],
-                ReadOnlyGuarantees = SensorProviderCapabilities.None.ReadOnlyGuarantees
-            },
-            Notes =
-            [
-                "Disabled by default for beta safety.",
-                packaged
-                    ? "Bundled deep sensor provider: available, disabled pending review."
-                    : "Bundled deep sensor provider: not packaged in this build.",
-                $"Deep Sensor Mode setting: {ForgerEmsEnvironmentConfiguration.DeepSensorMode}.",
-                "Future reviewed providers must ship inside ForgerEMS and be read-only.",
-                "ForgerEMS does not expose fan control, voltage control, overclocking, undervolting, or BIOS-write actions."
-            ],
-            ThirdPartyNotice = new ThirdPartyNotice
-            {
-                Name = "LibreHardwareMonitor",
-                Version = "review-pending",
-                License = "MPL-2.0 review required before bundling",
-                ProjectUrl = "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor",
-                BundledPath = "providers/sensors/ForgerEMS.SensorProviders.LibreHardwareMonitor.dll",
-                SourceOfferOrNotice = "Include THIRD-PARTY-NOTICES.txt and MPL-2.0 license text before bundling; disclose covered-file modifications if any.",
-                ModifiedFilesDisclosureNeeded = false
-            }
-        };
-    }
-
-    private static string BuildDeepProviderDisabledReason() =>
-        ForgerEmsFeatureFlags.DeepSensorModeRequested
-            ? "Deep Sensor Mode was requested, but the bundled provider remains disabled pending license/packaging review and explicit user notice."
-            : "Bundled provider is present but disabled pending license/packaging review and explicit user opt-in.";
-
-    private static string BuildDeepProviderNotPackagedReason() =>
-        ForgerEmsFeatureFlags.DeepSensorModeRequested
-            ? "Deep Sensor Mode was requested, but the provider assembly is not packaged in this build."
-            : "Provider assembly is not packaged in this build.";
 }
 
 public sealed class OptionalDeepSensorProvider : BundledDeepSensorProvider
@@ -377,12 +307,25 @@ public static class SensorProviderRegistry
 
     public static bool IsBundledDeepProviderPackaged()
     {
-        var candidate = Path.Combine(
-            AppContext.BaseDirectory,
-            "providers",
-            "sensors",
-            "ForgerEMS.SensorProviders.LibreHardwareMonitor.dll");
-        return File.Exists(candidate);
+        var providerRoot = Path.Combine(AppContext.BaseDirectory, "providers", "sensors");
+        var candidates = new[]
+        {
+            Path.Combine(providerRoot, "LibreHardwareMonitorLib.dll"),
+            Path.Combine(providerRoot, "ForgerEMS.SensorProviders.LibreHardwareMonitor.dll")
+        };
+        if (candidates.Any(File.Exists))
+        {
+            return true;
+        }
+
+        try
+        {
+            return typeof(LibreHardwareMonitor.Hardware.Computer).Assembly.GetName().Name is "LibreHardwareMonitorLib";
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static SensorProviderManifest CreateWindowsNativeManifest(IReadOnlyList<SensorGroup> builtInGroups) => new()
@@ -539,11 +482,11 @@ public static class SensorProviderHost
             ? new ThirdPartyNotice
             {
                 Name = "LibreHardwareMonitor",
-                Version = "review-pending",
-                License = "MPL-2.0 review required before bundling",
+                Version = "0.9.6",
+                License = "MPL-2.0",
                 ProjectUrl = "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor",
-                BundledPath = "providers/sensors/ForgerEMS.SensorProviders.LibreHardwareMonitor.dll",
-                SourceOfferOrNotice = "Include license text, notices, and covered-source modification disclosure if bundled.",
+                BundledPath = "providers/sensors/LibreHardwareMonitorLib.dll",
+                SourceOfferOrNotice = "ForgerEMS uses the unmodified NuGet package LibreHardwareMonitorLib and ships MPL-2.0 notices with installed and portable builds.",
                 ModifiedFilesDisclosureNeeded = false
             }
             : null;

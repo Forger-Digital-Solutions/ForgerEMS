@@ -930,8 +930,10 @@ function New-SensorProviderManifest {
 function New-SensorProviderReport {
     param([object[]]$BuiltInReadings)
 
-    $deepProviderPath = Join-Path -Path $PSScriptRoot -ChildPath "..\..\providers\sensors\ForgerEMS.SensorProviders.LibreHardwareMonitor.dll"
+    $deepProviderPath = Join-Path -Path $PSScriptRoot -ChildPath "..\..\providers\sensors\LibreHardwareMonitorLib.dll"
     $deepPackaged = Test-Path -LiteralPath $deepProviderPath
+    $deepMode = if ($env:FORGEREMS_DEEP_SENSOR_MODE) { $env:FORGEREMS_DEEP_SENSOR_MODE } else { "Off" }
+    $deepEnabled = $deepPackaged -and ($deepMode -in @("ReadOnly", "ReadOnlyLocalSensors"))
     @(
         New-SensorProviderManifest `
             -ProviderName "Windows Native" `
@@ -951,22 +953,22 @@ function New-SensorProviderReport {
             -TechnicianNotes @("Active by default. Uses local Windows APIs and ForgerEMS reports only.", "No internet, cloud service, or user-downloaded sensor tool is required.")
 
         New-SensorProviderManifest `
-            -ProviderName "Bundled Deep Sensor Provider" `
-            -ProviderVersion "0.1-shell" `
-            -ProviderKind "LibreHardwareMonitorSensorProviderShell" `
+            -ProviderName "LibreHardwareMonitor" `
+            -ProviderVersion "0.9.6" `
+            -ProviderKind "LibreHardwareMonitorSensorProvider" `
             -IsBundled $deepPackaged `
-            -IsEnabled $false `
+            -IsEnabled $deepEnabled `
             -RequiresAdmin $false `
             -RequiresThirdPartyLicenseNotice $true `
             -TrustLevel $(if ($deepPackaged) { "BundledReviewed" } else { "ExperimentalDisabled" }) `
-            -RuntimeMode "Disabled" `
+            -RuntimeMode $(if ($deepEnabled) { "DeepSensorReadOnly" } else { "Disabled" }) `
             -Capabilities (New-SensorProviderCapabilities `
-                -SupportedCapabilities @("Future read-only CPU temperature", "Future read-only CPU package power", "Future read-only GPU temperature/clocks/load", "Future read-only fan RPM when exposed", "Future read-only storage temperature/wear") `
-                -MissingCapabilities @("Disabled pending review", "Requires bundled provider assembly", "May require admin or vendor driver support")) `
-            -FailureReason $(if ($deepPackaged) { "Bundled provider is present but disabled pending license/packaging review and explicit user opt-in." } else { "Provider assembly is not packaged in this build." }) `
+                -SupportedCapabilities @("Read-only CPU temperature when exposed", "Read-only CPU package power when exposed", "Read-only CPU clocks/load when exposed", "Read-only GPU temperature/clocks/load when exposed", "Read-only fan RPM when exposed", "Read-only storage temperature/wear when exposed", "Read-only voltage display when exposed") `
+                -MissingCapabilities @("Sensors blocked by firmware/vendor drivers", "Sensors requiring admin access", "Unsupported hardware sensors")) `
+            -FailureReason $(if (-not $deepPackaged) { "LibreHardwareMonitor provider assembly is not packaged in this build." } elseif (-not $deepEnabled) { "Deep Sensor Mode is $deepMode. Set FORGEREMS_DEEP_SENSOR_MODE=ReadOnly to enable local read-only deep sensors." } else { "" }) `
             -Readings @() `
-            -TechnicianNotes @("Disabled by default for beta safety.", $(if ($deepPackaged) { "Bundled deep sensor provider: available, disabled pending review." } else { "Bundled deep sensor provider: not packaged in this build." }), "Future reviewed providers must ship inside ForgerEMS and be read-only.", "ForgerEMS does not expose fan control, voltage control, overclocking, undervolting, or BIOS-write actions.") `
-            -ThirdPartyNotice (New-ThirdPartyNotice "LibreHardwareMonitor" "review-pending" "MPL-2.0 review required before bundling" "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor" "providers/sensors/ForgerEMS.SensorProviders.LibreHardwareMonitor.dll" "Include THIRD-PARTY-NOTICES.txt and MPL-2.0 license text before bundling; disclose covered-file modifications if any." $false)
+            -TechnicianNotes @($(if ($deepEnabled) { "LibreHardwareMonitor: active read-only through the WPF sensor host when System Intelligence runs in-app." } elseif ($deepPackaged) { "LibreHardwareMonitor: bundled but disabled." } else { "LibreHardwareMonitor: not packaged in this build." }), "Deep Sensor Mode is local and read-only.", "ForgerEMS does not expose fan control, voltage control, overclocking, undervolting, or BIOS-write actions.") `
+            -ThirdPartyNotice (New-ThirdPartyNotice "LibreHardwareMonitor" "0.9.6" "MPL-2.0" "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor" "providers/sensors/LibreHardwareMonitorLib.dll" "ForgerEMS uses the unmodified NuGet package LibreHardwareMonitorLib and ships MPL-2.0 notices with installed and portable builds." $false)
 
         New-SensorProviderManifest `
             -ProviderName "ForgerEMS Admin Sensor Bridge" `

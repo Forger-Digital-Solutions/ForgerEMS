@@ -192,6 +192,21 @@ public sealed class MechanicalRcReleaseVerificationTests
         Assert.Contains("release/", text, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void SensorProviderPackaging_CopiesLibreHardwareMonitorProviderAndNotices()
+    {
+        var project = File.ReadAllText(Path.Combine(RepoRoot, "src", "ForgerEMS.Wpf", "ForgerEMS.Wpf.csproj"));
+        var installer = File.ReadAllText(Path.Combine(RepoRoot, "installer", "ForgerEMS.iss"));
+        var policy = File.ReadAllText(Path.Combine(RepoRoot, "docs", "THIRD-PARTY-SENSOR-NOTICES.md"));
+
+        Assert.Contains("LibreHardwareMonitorLib", project, StringComparison.Ordinal);
+        Assert.Contains("providers\\sensors", project, StringComparison.Ordinal);
+        Assert.Contains("CopyToPublishDirectory", project, StringComparison.Ordinal);
+        Assert.Contains(@"{#PublishDir}\providers\*", installer, StringComparison.Ordinal);
+        Assert.Contains("MPL-2.0", policy, StringComparison.Ordinal);
+        Assert.Contains("Modified MPL-covered files: none", policy, StringComparison.Ordinal);
+    }
+
     private static string RunPowerShell(string command) =>
         RunPowerShellRaw(command, expectSuccess: true).Output.Trim();
 

@@ -5,7 +5,7 @@ ForgerEMS sensor providers are local, read-only diagnostics components. Users sh
 ## Provider Tiers
 
 - **Windows Native**: enabled by default. Uses built-in Windows APIs, WMI/CIM, registry reads, powercfg reports, storage reliability counters where exposed, security APIs, and ForgerEMS USB Intelligence evidence.
-- **Bundled Reviewed Deep Sensor Provider**: future optional provider loaded from `providers/sensors/` after license, packaging, and safety review. Disabled by default.
+- **LibreHardwareMonitor Deep Sensor Provider**: optional bundled reviewed provider loaded from `providers/sensors/LibreHardwareMonitorLib.dll`. Disabled by default; enabled only when `FORGEREMS_DEEP_SENSOR_MODE=ReadOnly`.
 - **ForgerEMS Admin Sensor Bridge**: future on-demand read-only bridge for sensors requiring elevation. Disabled by default and not included in the current beta.
 - **Signed Driver Provider**: roadmap only. Not part of the current beta.
 
@@ -33,11 +33,13 @@ ForgerEMS does not redistribute unlicensed proprietary tools such as HWiNFO, AID
 Bundled providers must:
 
 - ship inside the ForgerEMS installer or portable bundle
-- be reviewed before enabling
+- be reviewed before enabling by default
 - include required license texts and notices
 - run locally with no cloud or paid sensor service requirement
 - clearly label admin requirements
 - be disabled by default if experimental
+
+ForgerEMS v1.2.0 preview pins `LibreHardwareMonitorLib` 0.9.6 as the reviewed local read-only deep sensor provider. Users do not download it manually; release packaging ships the provider DLL and notices inside the installer and portable bundle.
 
 ## MPL-Style Library Handling
 
@@ -45,9 +47,10 @@ For MPL-style libraries, ForgerEMS must include the license text and third-party
 
 ForgerEMS proprietary code should remain in separate files/projects from MPL-covered code.
 
+ForgerEMS uses the unmodified LibreHardwareMonitor NuGet package. No MPL-covered LibreHardwareMonitor source files are copied into proprietary ForgerEMS files, and `ModifiedFilesDisclosureNeeded` remains false unless that changes.
+
 ## User Wording
 
 Deep Sensor Mode wording should be:
 
 > Deep Sensor Mode may require admin access. It only reads supported sensors and does not change fan, voltage, clock, or firmware settings.
-

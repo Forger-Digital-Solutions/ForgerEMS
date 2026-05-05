@@ -31,7 +31,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="System.Management" Version="8.0.0" />
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
+    <PackageReference Include="System.Management" Version="10.0.2" />
   </ItemGroup>
 
   <ItemGroup>
@@ -40,6 +41,19 @@
     <Resource Include="Assets\ForgerEMS_CommandCenterBackground.png" />
     <Resource Include="Assets\Kyra.png" />
     <Resource Include="Assets\KyraAdvancedBackground.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\providers\sensors\**\*">
+      <Link>providers\sensors\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="$(NuGetPackageRoot)librehardwaremonitorlib\0.9.6\runtimes\win-x64\lib\net8.0\LibreHardwareMonitorLib.dll" Condition="Exists('$(NuGetPackageRoot)librehardwaremonitorlib\0.9.6\runtimes\win-x64\lib\net8.0\LibreHardwareMonitorLib.dll')">
+      <Link>providers\sensors\LibreHardwareMonitorLib.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

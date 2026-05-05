@@ -5566,7 +5566,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         if (!sensorMatrix.TryGetProperty("sensorProviders", out var providers) || providers.ValueKind != JsonValueKind.Array)
         {
-            return "Windows Native: Active; Deep Sensor Provider: Off; Admin Bridge: Off; Driver Provider: Not included";
+            return "Windows Native: Active; LibreHardwareMonitor: Off; Admin Bridge: Off; Driver Provider: Not included";
         }
 
         var rows = new List<string>();
@@ -5580,19 +5580,23 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             var label = name switch
             {
                 var n when n.Contains("Windows", StringComparison.OrdinalIgnoreCase) => "Windows Native",
+                var n when n.Contains("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase) => "LibreHardwareMonitor",
                 var n when n.Contains("Deep", StringComparison.OrdinalIgnoreCase) => "Deep Sensor Provider",
                 var n when n.Contains("Admin", StringComparison.OrdinalIgnoreCase) => "Admin Bridge",
                 var n when n.Contains("Driver", StringComparison.OrdinalIgnoreCase) => "Driver Provider",
                 _ => name
             };
             var status = enabled
-                ? "Active"
+                ? label.Equals("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase) ? "Active read-only" : "Active"
                 : bundled
                     ? "Bundled but disabled"
                     : label.Equals("Driver Provider", StringComparison.OrdinalIgnoreCase)
                         ? "Not included"
                         : "Off";
-            if (!enabled && label.Equals("Deep Sensor Provider", StringComparison.OrdinalIgnoreCase) && failure.Contains("not packaged", StringComparison.OrdinalIgnoreCase))
+            if (!enabled &&
+                (label.Equals("Deep Sensor Provider", StringComparison.OrdinalIgnoreCase) ||
+                 label.Equals("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase)) &&
+                failure.Contains("not packaged", StringComparison.OrdinalIgnoreCase))
             {
                 status = "Not packaged";
             }
@@ -5607,7 +5611,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             }
         }
 
-        return FormatList(rows.Take(4), "Windows Native: Active; Deep Sensor Provider: Off; Admin Bridge: Off; Driver Provider: Not included");
+        return FormatList(rows.Take(4), "Windows Native: Active; LibreHardwareMonitor: Off; Admin Bridge: Off; Driver Provider: Not included");
     }
 
     private static string BuildSensorProviderCompactSummary(SensorMatrixResult sensors)
@@ -5617,26 +5621,30 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             var label = provider.ProviderName switch
             {
                 var n when n.Contains("Windows", StringComparison.OrdinalIgnoreCase) => "Windows Native",
+                var n when n.Contains("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase) => "LibreHardwareMonitor",
                 var n when n.Contains("Deep", StringComparison.OrdinalIgnoreCase) => "Deep Sensor Provider",
                 var n when n.Contains("Admin", StringComparison.OrdinalIgnoreCase) => "Admin Bridge",
                 var n when n.Contains("Driver", StringComparison.OrdinalIgnoreCase) => "Driver Provider",
                 _ => provider.ProviderName
             };
             var status = provider.IsEnabled
-                ? "Active"
+                ? label.Equals("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase) ? "Active read-only" : "Active"
                 : provider.IsBundled
                     ? "Bundled but disabled"
                     : label.Equals("Driver Provider", StringComparison.OrdinalIgnoreCase)
                         ? "Not included"
                         : "Off";
-            if (!provider.IsEnabled && label.Equals("Deep Sensor Provider", StringComparison.OrdinalIgnoreCase) && provider.FailureReason.Contains("not packaged", StringComparison.OrdinalIgnoreCase))
+            if (!provider.IsEnabled &&
+                (label.Equals("Deep Sensor Provider", StringComparison.OrdinalIgnoreCase) ||
+                 label.Equals("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase)) &&
+                provider.FailureReason.Contains("not packaged", StringComparison.OrdinalIgnoreCase))
             {
                 status = "Not packaged";
             }
 
             return $"{label}: {status}";
         });
-        return FormatList(rows.Take(4), "Windows Native: Active; Deep Sensor Provider: Off; Admin Bridge: Off; Driver Provider: Not included");
+        return FormatList(rows.Take(4), "Windows Native: Active; LibreHardwareMonitor: Off; Admin Bridge: Off; Driver Provider: Not included");
     }
 
     private static string NormalizeSystemIntelligenceAutomationLine(string text) =>

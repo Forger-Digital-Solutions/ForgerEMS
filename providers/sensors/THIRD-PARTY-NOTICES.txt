@@ -1,0 +1,32 @@
+ForgerEMS Sensor Provider Notices
+=================================
+
+ForgerEMS Deep Sensor Mode can use bundled, reviewed, local read-only sensor
+providers. Users should not download sensor providers manually.
+
+Bundled reviewed provider:
+
+Name: LibreHardwareMonitor
+Package: LibreHardwareMonitorLib
+Version: 0.9.6
+License: Mozilla Public License 2.0 (MPL-2.0)
+Project: https://github.com/LibreHardwareMonitor/LibreHardwareMonitor
+NuGet: https://www.nuget.org/packages/LibreHardwareMonitorLib/0.9.6
+Package repository commit from NuGet metadata:
+3d331e3370efb858411f19511373eff65a218701
+
+ForgerEMS uses LibreHardwareMonitorLib as a separate bundled dependency. ForgerEMS
+does not copy LibreHardwareMonitor source into proprietary ForgerEMS source files.
+No MPL-covered source files are modified by ForgerEMS in this repository.
+
+ForgerEMS Deep Sensor Mode is read-only. It does not control fans, voltages,
+clocks, overclocking, undervolting, BIOS settings, firmware, or hardware state.
+
+License files:
+- LICENSES/LibreHardwareMonitor-MPL-2.0.txt
+- LICENSES/LibreHardwareMonitor-THIRD-PARTY-LICENSES.txt
+
+Tools not redistributed by default:
+HWiNFO, AIDA64, CPU-Z, GPU-Z, vendor tuning utilities, and proprietary sensor
+tools are not bundled unless redistribution is explicitly licensed and reviewed.
+

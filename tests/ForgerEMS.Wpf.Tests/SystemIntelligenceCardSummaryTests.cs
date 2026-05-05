@@ -72,7 +72,7 @@ public sealed class SystemIntelligenceCardSummaryTests
                 "statusGuide":"guide",
                 "sensorProviders":[
                   { "providerName":"Windows Native", "isEnabled":true, "isBundled":true, "runtimeMode":"DefaultSafe" },
-                  { "providerName":"Bundled Deep Sensor Provider", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled", "failureReason":"Provider assembly is not packaged in this build." },
+                  { "providerName":"LibreHardwareMonitor", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled", "failureReason":"LibreHardwareMonitor provider assembly is not packaged in this build." },
                   { "providerName":"ForgerEMS Admin Sensor Bridge", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled" },
                   { "providerName":"ForgerEMS Signed Driver Provider", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled" }
                 ],
@@ -92,7 +92,7 @@ public sealed class SystemIntelligenceCardSummaryTests
 
         Assert.Contains("Limited:", text);
         Assert.Contains("Sensor Providers: Windows Native: Active", text);
-        Assert.Contains("Deep Sensor Provider: Not packaged", text);
+        Assert.Contains("LibreHardwareMonitor: Not packaged", text);
         Assert.Contains("Admin Bridge: Off", text);
         Assert.Contains("Driver Provider: Not included", text);
         Assert.Contains("may require deep/vendor sensor support", text);
@@ -100,6 +100,32 @@ public sealed class SystemIntelligenceCardSummaryTests
         Assert.DoesNotContain("RequiresVendorDriver", text, StringComparison.Ordinal);
         Assert.DoesNotContain("NotExposedByFirmware", text, StringComparison.Ordinal);
         Assert.DoesNotContain("UnsupportedHardware", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void HardwareXray_ShowsLibreHardwareMonitorActiveReadOnlyWhenEnabled()
+    {
+        var text = InvokeSummary("BuildHardwareXraySummary", JsonDocument.Parse(
+            """
+            {
+              "machineClass": { "primaryClass":"Mobile Workstation", "confidence":"High", "secondaryClasses":[] },
+              "sensorMatrix": {
+                "coverageSummary":"Coverage: partial",
+                "liveSensorsSummary":"CPU Package temperature",
+                "statusGuide":"guide",
+                "sensorProviders":[
+                  { "providerName":"Windows Native", "isEnabled":true, "isBundled":true, "runtimeMode":"DefaultSafe" },
+                  { "providerName":"LibreHardwareMonitor", "isEnabled":true, "isBundled":true, "runtimeMode":"DeepSensorReadOnly" },
+                  { "providerName":"ForgerEMS Admin Sensor Bridge", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled" },
+                  { "providerName":"ForgerEMS Signed Driver Provider", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled" }
+                ],
+                "groups":[]
+              }
+            }
+            """).RootElement);
+
+        Assert.Contains("LibreHardwareMonitor: Active read-only", text);
+        Assert.Contains("Windows Native: Active", text);
     }
 
     [Fact]

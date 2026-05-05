@@ -77,6 +77,7 @@ Type: files; Name: "{app}\ForgerEMS-v*.ico"
 Type: filesandordirs; Name: "{app}\backend"
 Type: filesandordirs; Name: "{app}\manifests"
 Type: filesandordirs; Name: "{app}\docs"
+Type: filesandordirs; Name: "{app}\providers"
 Type: files; Name: "{app}\Verify-VentoyCore.ps1"
 Type: files; Name: "{app}\Setup-ForgerEMS.ps1"
 Type: files; Name: "{app}\Update-ForgerEMS.ps1"
@@ -94,6 +95,7 @@ Source: "{#PublishDir}\ForgerEMS.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\src\ForgerEMS.Wpf\Assets\ForgerEMS.ico"; DestDir: "{app}"; DestName: "{#MyAppIconName}"; Flags: ignoreversion
 Source: "{#BackendBundleDir}\*"; DestDir: "{app}\backend"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\manifests\*"; DestDir: "{app}\manifests"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#PublishDir}\providers\*"; DestDir: "{app}\providers"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 Source: "..\installer\ForgerEMS-Installed-README.txt"; DestDir: "{app}\docs"; Flags: ignoreversion
 
 [Icons]
@@ -125,6 +127,7 @@ Type: files; Name: "{app}\ForgerEMS-v*.ico"
 Type: filesandordirs; Name: "{app}\backend"
 Type: filesandordirs; Name: "{app}\manifests"
 Type: filesandordirs; Name: "{app}\docs"
+Type: filesandordirs; Name: "{app}\providers"
 Type: files; Name: "{app}\Verify-VentoyCore.ps1"
 Type: files; Name: "{app}\Setup-ForgerEMS.ps1"
 Type: files; Name: "{app}\Update-ForgerEMS.ps1"

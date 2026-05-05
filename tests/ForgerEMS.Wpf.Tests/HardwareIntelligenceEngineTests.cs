@@ -170,7 +170,7 @@ public sealed class HardwareIntelligenceEngineTests
             provider.GetProperty("providerName").GetString() == "Windows Native" &&
             provider.GetProperty("isEnabled").GetBoolean());
         Assert.Contains(providers.EnumerateArray(), provider =>
-            provider.GetProperty("providerName").GetString() == "Bundled Deep Sensor Provider" &&
+            provider.GetProperty("providerName").GetString() == "LibreHardwareMonitor" &&
             !provider.GetProperty("isEnabled").GetBoolean());
         Assert.DoesNotContain("USB: 0/3 fields known", sensorMatrix.GetProperty("coverageSummary").GetString(), StringComparison.OrdinalIgnoreCase);
         Assert.Contains("USB: 5/5 fields known", sensorMatrix.GetProperty("coverageSummary").GetString(), StringComparison.OrdinalIgnoreCase);
@@ -181,19 +181,22 @@ public sealed class HardwareIntelligenceEngineTests
     [Fact]
     public void OptionalDeepSensorProvider_IsDisabledByDefaultAndReadOnly()
     {
-        var provider = new OptionalDeepSensorProvider();
-        var result = provider.Read(Profile("Dell", "Precision 5540", "Intel Core i7-9850H", 32, "NVIDIA Quadro T2000", hasBattery: true));
+        WithDeepSensorMode(null, () =>
+        {
+            var provider = new OptionalDeepSensorProvider();
+            var result = provider.Read(Profile("Dell", "Precision 5540", "Intel Core i7-9850H", 32, "NVIDIA Quadro T2000", hasBattery: true));
 
-        Assert.False(result.IsEnabled);
-        Assert.Empty(result.Readings);
-        Assert.True(result.IsReadOnly);
-        Assert.True(result.RequiresThirdPartyLicenseNotice);
-        Assert.Equal(SensorProviderRuntimeModes.Disabled, result.RuntimeMode);
-        Assert.Contains(result.Notes, note => note.Contains("Disabled by default", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(result.Notes, note => note.Contains("read-only", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(result.Notes, note => note.Contains("does not expose fan control", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(result.Notes, note => note.Contains("voltage control", StringComparison.OrdinalIgnoreCase));
-        Assert.Contains(result.Notes, note => note.Contains("BIOS-write", StringComparison.OrdinalIgnoreCase));
+            Assert.False(result.IsEnabled);
+            Assert.Empty(result.Readings);
+            Assert.True(result.IsReadOnly);
+            Assert.True(result.RequiresThirdPartyLicenseNotice);
+            Assert.Equal(SensorProviderRuntimeModes.Disabled, result.RuntimeMode);
+            Assert.Contains("Deep Sensor Mode is Off", result.FailureReason, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(result.Notes, note => note.Contains("read-only", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(result.Notes, note => note.Contains("does not control fans", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(result.Notes, note => note.Contains("voltages", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(result.Notes, note => note.Contains("BIOS", StringComparison.OrdinalIgnoreCase));
+        });
     }
 
     [Fact]
@@ -216,17 +219,58 @@ public sealed class HardwareIntelligenceEngineTests
     [Fact]
     public void SensorProviderRegistry_ListsBundledReviewedDeepProviderShellWithNotice()
     {
-        var sensors = SensorMatrixBuilder.Build(Profile("Dell", "Precision 5540", "Intel Core i7-9850H", 32, "NVIDIA Quadro T2000", hasBattery: true));
-        var deep = Assert.Single(sensors.SensorProviders, provider => provider.ProviderName == "Bundled Deep Sensor Provider");
+        WithDeepSensorMode(null, () =>
+        {
+            var sensors = SensorMatrixBuilder.Build(Profile("Dell", "Precision 5540", "Intel Core i7-9850H", 32, "NVIDIA Quadro T2000", hasBattery: true));
+            var deep = Assert.Single(sensors.SensorProviders, provider => provider.ProviderName == "LibreHardwareMonitor");
 
-        Assert.False(deep.IsEnabled);
-        Assert.True(deep.IsReadOnly);
-        Assert.True(deep.RequiresThirdPartyLicenseNotice);
-        Assert.Equal(SensorProviderRuntimeModes.Disabled, deep.RuntimeMode);
-        Assert.NotNull(deep.ThirdPartyNotice);
-        Assert.Equal("LibreHardwareMonitor", deep.ThirdPartyNotice!.Name);
-        Assert.Contains("MPL", deep.ThirdPartyNotice.License, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("not packaged", deep.FailureReason, StringComparison.OrdinalIgnoreCase);
+            Assert.False(deep.IsEnabled);
+            Assert.True(deep.IsReadOnly);
+            Assert.True(deep.RequiresThirdPartyLicenseNotice);
+            Assert.Equal(SensorProviderRuntimeModes.Disabled, deep.RuntimeMode);
+            Assert.NotNull(deep.ThirdPartyNotice);
+            Assert.Equal("LibreHardwareMonitor", deep.ThirdPartyNotice!.Name);
+            Assert.Equal("0.9.6", deep.ThirdPartyNotice.Version);
+            Assert.Equal("MPL-2.0", deep.ThirdPartyNotice.License);
+            Assert.Equal("providers/sensors/LibreHardwareMonitorLib.dll", deep.ThirdPartyNotice.BundledPath);
+        });
+    }
+
+    [Fact]
+    public void LibreHardwareMonitorProvider_RequiresReadOnlyModeAndPackagedAssembly()
+    {
+        WithDeepSensorMode("ReadOnly", () =>
+        {
+            var provider = new LibreHardwareMonitorSensorProvider(packagedOverride: false);
+            var result = provider.Read(Profile("Dell", "Precision 5540", "Intel Core i7-9850H", 32, "NVIDIA Quadro T2000", hasBattery: true));
+
+            Assert.False(result.IsEnabled);
+            Assert.False(result.IsBundled);
+            Assert.Equal(SensorProviderRuntimeModes.Disabled, result.RuntimeMode);
+            Assert.Contains("not packaged", result.FailureReason, StringComparison.OrdinalIgnoreCase);
+            Assert.True(result.IsReadOnly);
+            Assert.True(result.RequiresThirdPartyLicenseNotice);
+        });
+    }
+
+    [Fact]
+    public void LibreHardwareMonitorProvider_ReadOnlyPackagedProbeFailsSafelyOrReturnsReadings()
+    {
+        WithDeepSensorMode("ReadOnly", () =>
+        {
+            var provider = new LibreHardwareMonitorSensorProvider(packagedOverride: true);
+            var result = provider.Read(Profile("Dell", "Precision 5540", "Intel Core i7-9850H", 32, "NVIDIA Quadro T2000", hasBattery: true));
+
+            Assert.True(result.IsBundled);
+            Assert.True(result.IsReadOnly);
+            Assert.True(result.RequiresThirdPartyLicenseNotice);
+            Assert.Equal(SensorProviderRuntimeModes.DeepSensorReadOnly, result.RuntimeMode);
+            Assert.Equal(SensorProviderTrustLevels.BundledReviewed, result.TrustLevel);
+            Assert.Contains(result.Capabilities.ReadOnlyGuarantees, guarantee => guarantee.Contains("No fan control", StringComparison.OrdinalIgnoreCase));
+            Assert.NotNull(result.ThirdPartyNotice);
+            Assert.Equal("MPL-2.0", result.ThirdPartyNotice!.License);
+            Assert.DoesNotContain(result.Readings, reading => reading.Status.Equals("Failure", StringComparison.OrdinalIgnoreCase));
+        });
     }
 
     [Fact]
@@ -282,7 +326,8 @@ public sealed class HardwareIntelligenceEngineTests
         Assert.Contains("New-SensorProviderReport", text);
         Assert.Contains("### Sensor Provider Host", text);
         Assert.Contains("Windows Native", text);
-        Assert.Contains("Bundled Deep Sensor Provider", text);
+        Assert.Contains("LibreHardwareMonitor", text);
+        Assert.Contains("providers/sensors/LibreHardwareMonitorLib.dll", text);
         Assert.Contains("ForgerEMS Admin Sensor Bridge", text);
         Assert.Contains("ForgerEMS Signed Driver Provider", text);
         Assert.Contains("$tpmSensorStatus", text, StringComparison.Ordinal);
@@ -340,5 +385,19 @@ public sealed class HardwareIntelligenceEngineTests
         }
 
         throw new FileNotFoundException("Could not locate repo file.", Path.Combine(segments));
+    }
+
+    private static void WithDeepSensorMode(string? value, Action action)
+    {
+        var previous = Environment.GetEnvironmentVariable("FORGEREMS_DEEP_SENSOR_MODE");
+        try
+        {
+            Environment.SetEnvironmentVariable("FORGEREMS_DEEP_SENSOR_MODE", value);
+            action();
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FORGEREMS_DEEP_SENSOR_MODE", previous);
+        }
     }
 }

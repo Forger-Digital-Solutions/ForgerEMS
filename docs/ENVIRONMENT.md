@@ -71,7 +71,12 @@ Existing provider-specific names (e.g. `OPENAI_API_KEY`) remain documented in `d
 
 ## System Intelligence sensors
 
-- `FORGEREMS_DEEP_SENSOR_MODE` — default `Off`. Reserved values: `Off`, `ReadOnlyLocalSensors`, `AdminReadOnly`. Experimental/bundled deep providers remain disabled unless reviewed, packaged, and explicitly enabled by a future release.
+- `FORGEREMS_DEEP_SENSOR_MODE` — default `Off`.
+  - `Off`: Windows Native provider only.
+  - `ReadOnly`: enables bundled reviewed local deep sensors when `providers/sensors/LibreHardwareMonitorLib.dll` is packaged.
+  - `AdminReadOnly`: reserved for future on-demand elevated read-only scans; not required for this preview.
+
+Legacy `ReadOnlyLocalSensors` is accepted as an alias for `ReadOnly` during preview builds. Deep Sensor Mode is local and read-only; ForgerEMS does not control fans, voltages, clocks, BIOS, or firmware.
 
 ## Marketplace / valuation (future)
 
