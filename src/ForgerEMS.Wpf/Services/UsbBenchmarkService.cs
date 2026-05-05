@@ -177,9 +177,9 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
                 return MapNativeToLegacy(native, runId, startedAt, identity.TopologyFingerprint);
             }
 
-            if (native.EndKind == UsbNativeBenchmarkEndKind.OperationCanceled ||
-                (native.EndKind == UsbNativeBenchmarkEndKind.None &&
-                 cancellationToken.IsCancellationRequested))
+            if ((native.EndKind == UsbNativeBenchmarkEndKind.OperationCanceled ||
+                 native.EndKind == UsbNativeBenchmarkEndKind.None) &&
+                cancellationToken.IsCancellationRequested)
             {
                 onOutput?.Invoke(new LogLine(
                     DateTimeOffset.Now,
@@ -203,6 +203,14 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
                     TargetTopologyFingerprint = identity.TopologyFingerprint,
                     UiSummaryLine = UsbBenchmarkUiMessages.BuildUiSummary(UsbBenchmarkResultKind.CancelledByUser, 0, 0)
                 };
+            }
+
+            if (native.EndKind == UsbNativeBenchmarkEndKind.OperationCanceled)
+            {
+                onOutput?.Invoke(new LogLine(
+                    DateTimeOffset.Now,
+                    $"[WARN] Native benchmark reported cancellation without an operator cancel request; falling back to PowerShell. runId={runId:N} detail={native.SummaryLine}",
+                    LogSeverity.Warning));
             }
 
             if (native.EndKind == UsbNativeBenchmarkEndKind.ValidationBlocked)
@@ -241,6 +249,15 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
         }
         catch (OperationCanceledException)
         {
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                onOutput?.Invoke(new LogLine(
+                    DateTimeOffset.Now,
+                    $"[WARN] Native benchmark raised cancellation without an operator cancel request; falling back to PowerShell. runId={runId:N}",
+                    LogSeverity.Warning));
+                goto PowerShellFallback;
+            }
+
             onOutput?.Invoke(new LogLine(DateTimeOffset.Now, $"[INFO] USB benchmark cancelled. runId={runId:N}", LogSeverity.Info));
             var nowX = DateTimeOffset.UtcNow;
             return new UsbBenchmarkResult
@@ -269,6 +286,7 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
                 LogSeverity.Warning));
         }
 
+PowerShellFallback:
         var testSizeMb = target.FreeBytes >= 512L * 1024 * 1024 ? 128 : 64;
         if (target.FreeBytes < (testSizeMb + 128L) * 1024 * 1024)
         {

@@ -82,6 +82,28 @@ public sealed class UsbTargetInfoTests
     }
 
     [Fact]
+    public void UsbSafetyBlocksNonUsbInternalDataVolume()
+    {
+        var target = new UsbTargetInfo
+        {
+            RootPath = "D:\\",
+            Label = "Data",
+            TotalBytes = 512L * 1024 * 1024 * 1024,
+            FreeBytes = 256L * 1024 * 1024 * 1024,
+            FileSystem = "NTFS",
+            IsLikelyUsb = false,
+            IsRemovableMedia = false,
+            IsSelectable = true,
+            IsLargeDataPartition = true
+        };
+
+        var reason = UsbTargetSafety.GetExecutionBlockReason(target);
+
+        Assert.NotNull(reason);
+        Assert.Contains("not detected as removable USB", reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void UsbSafetyAllowsLargeRemovableDataPartition()
     {
         var target = new UsbTargetInfo

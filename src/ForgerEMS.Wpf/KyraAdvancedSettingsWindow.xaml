@@ -286,7 +286,7 @@
                                 CornerRadius="8"
                                 Padding="12"
                                 Margin="0,0,0,12">
-                            <TextBlock Foreground="#FF0B1220"
+                            <TextBlock Foreground="{StaticResource KyraAdvancedTextBrush}"
                                        FontWeight="SemiBold"
                                        TextWrapping="Wrap"
                                        Text="Live tool preferences are stored locally (beta). Never paste secrets into chat. Keys are not shown in /provider or tool grids." />
@@ -681,7 +681,7 @@
                                 BorderBrush="#B3FFB86B"
                                 BorderThickness="1"
                                 CornerRadius="8">
-                            <TextBlock Foreground="#FF0B1220"
+                            <TextBlock Foreground="{StaticResource KyraAdvancedTextBrush}"
                                        FontWeight="SemiBold"
                                        Text="Do not paste API keys into chat, logs, or support email. Operators configure keys via environment variables before launch."
                                        TextWrapping="Wrap" />

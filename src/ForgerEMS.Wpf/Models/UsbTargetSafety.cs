@@ -49,6 +49,11 @@ public static class UsbTargetSafety
                 $"Partition type: {target.PartitionTypeDisplay}";
         }
 
+        if (!target.IsLikelyUsb)
+        {
+            return "This target is not detected as removable USB media or a safe Ventoy USB data partition.";
+        }
+
         if (!target.IsSelectable)
         {
             return string.IsNullOrWhiteSpace(target.SelectionWarningDisplay)
@@ -71,12 +76,6 @@ public static class UsbTargetSafety
         if (target is null)
         {
             blockReason = "Select a USB target before benchmarking.";
-            return false;
-        }
-
-        if (!target.IsLikelyUsb)
-        {
-            blockReason = "Target is not detected as USB media.";
             return false;
         }
 

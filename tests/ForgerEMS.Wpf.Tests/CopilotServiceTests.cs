@@ -638,6 +638,29 @@ public sealed class CopilotServiceTests
     }
 
     [Fact]
+    public async Task ApiModeWithApiFirstOffStillUsesOneProviderPath()
+    {
+        var local = new FakeCountingLocalProvider();
+        var online = new FakeSuccessProvider();
+        var registry = new FakeProviderRegistry(local, online);
+        var service = new CopilotService(registry);
+        var settings = new CopilotSettings
+        {
+            Mode = CopilotMode.FreeApiPool,
+            EnableFreeProviderPool = true,
+            ApiFirstRouting = false
+        };
+        settings.Providers["fake-free"] = new CopilotProviderConfiguration { IsEnabled = true, ApiKeyEnvironmentVariable = "FAKE_FREE_KEY" };
+        Environment.SetEnvironmentVariable("FAKE_FREE_KEY", "fake-key");
+
+        var response = await service.GenerateReplyAsync(new CopilotRequest { Prompt = "Hi Kyra", Settings = settings });
+
+        Assert.True(response.UsedOnlineData);
+        Assert.Equal(1, online.CallCount);
+        Assert.Equal(0, local.CallCount);
+    }
+
+    [Fact]
     public async Task WhyIsKyraOfflineStaysLocalWithoutOnlineProvider()
     {
         var online = new FakeSuccessProvider();
@@ -1309,6 +1332,35 @@ public sealed class CopilotServiceTests
         {
             CallCount++;
             return Task.FromResult(new CopilotProviderResult { Succeeded = true, UsedOnlineData = true, UserMessage = "online result" });
+        }
+    }
+
+    private sealed class FakeCountingLocalProvider : ICopilotProvider
+    {
+        public int CallCount { get; private set; }
+        public string Id => "local-offline";
+        public string DisplayName => "Local Offline Rules";
+        public CopilotProviderType ProviderType => CopilotProviderType.LocalOffline;
+        public string Category => "Offline fallback";
+        public bool IsOnlineProvider => false;
+        public bool IsPaidProvider => true;
+        public bool EnabledByDefault => true;
+        public string DefaultBaseUrl => string.Empty;
+        public string DefaultModelName => "local-rules";
+        public string DefaultApiKeyEnvironmentVariable => string.Empty;
+        public string StatusText => "fake local";
+        public bool IsConfigured(CopilotProviderConfiguration configuration) => true;
+        public bool CanHandle(CopilotProviderRequest request) => true;
+
+        public Task<CopilotProviderResult> GenerateAsync(CopilotProviderRequest request, CancellationToken cancellationToken)
+        {
+            CallCount++;
+            return Task.FromResult(new CopilotProviderResult
+            {
+                Succeeded = true,
+                UsedOnlineData = false,
+                UserMessage = "local result"
+            });
         }
     }
 

@@ -531,14 +531,14 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
             OnPropertyChanged(nameof(ShowDetectChangeDebugDetails));
 #endif
 
-            if (_lastResolution.Success)
+            if (_lastResolution is { Success: true } resolution)
             {
                 DetectionSuccess = true;
                 FailureMessage = string.Empty;
-                OldPortKeyShort = _lastResolution.OldPortKeyShort;
-                NewPortKeyShort = _lastResolution.NewPortKeyShort;
-                SpeedClassDisplay = _lastResolution.AfterDevice?.InferredSpeed.ToString() ?? "Unknown";
-                ConfidenceTierDisplay = _lastResolution.ConfidenceTier;
+                OldPortKeyShort = resolution.OldPortKeyShort;
+                NewPortKeyShort = resolution.NewPortKeyShort;
+                SpeedClassDisplay = resolution.AfterDevice?.InferredSpeed.ToString() ?? "Unknown";
+                ConfidenceTierDisplay = resolution.ConfidenceTier;
                 RecommendationDisplay = _afterSnap.SelectedTargetRecommendation?.Summary ?? string.Empty;
                 DetectionDetail = "Port change detected.";
                 _pendingSaveMode = UsbPortMappingSaveMode.TopologyInference;

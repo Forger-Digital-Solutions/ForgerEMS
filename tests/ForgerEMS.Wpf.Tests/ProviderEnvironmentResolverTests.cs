@@ -1,4 +1,5 @@
 using System;
+using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
 using VentoyToolkitSetup.Wpf.Services;
@@ -80,7 +81,19 @@ public sealed class ProviderEnvironmentResolverTests
         try
         {
             Environment.SetEnvironmentVariable(name, null, EnvironmentVariableTarget.Process);
-            Environment.SetEnvironmentVariable(name, "user-value", EnvironmentVariableTarget.User);
+            try
+            {
+                Environment.SetEnvironmentVariable(name, "user-value", EnvironmentVariableTarget.User);
+            }
+            catch (SecurityException)
+            {
+                return;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return;
+            }
+
             var r = ProviderEnvironmentResolver.ResolveFromEnvironmentVariable(name);
             Assert.Equal(KyraCredentialSource.UserEnvironment, r.Source);
             Assert.Equal("user-value", r.Value);
@@ -88,7 +101,16 @@ public sealed class ProviderEnvironmentResolverTests
         finally
         {
             Environment.SetEnvironmentVariable(name, null, EnvironmentVariableTarget.Process);
-            Environment.SetEnvironmentVariable(name, null, EnvironmentVariableTarget.User);
+            try
+            {
+                Environment.SetEnvironmentVariable(name, null, EnvironmentVariableTarget.User);
+            }
+            catch (SecurityException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
         }
     }
 

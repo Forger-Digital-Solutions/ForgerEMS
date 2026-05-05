@@ -317,8 +317,6 @@ public sealed class KyraOrchestrator
                 return noFb;
             }
 
-            Report("Thinking locally…");
-            var localResult = await RunInstrumentedAsync(localProvider, request, settings, context, notes, cancellationToken).ConfigureAwait(false);
             var freePoolAttemptFailedLegacy = false;
             for (var i = 0; i < candidates.Count; i++)
             {
@@ -329,39 +327,29 @@ public sealed class KyraOrchestrator
                 {
                     var effectiveResult = result;
                     var responseProvider = provider;
-                    var discardedOnlineForTruth = false;
-                    if (provider.IsOnlineProvider && localResult.Succeeded && !plan.ShouldPolishWithProvider)
+                    if (provider.IsOnlineProvider && !plan.ShouldPolishWithProvider)
                     {
                         var ledgerLocal = KyraFactsLedger.FromCopilotContext(context);
                         if (KyraSafetyPolicy.ShouldDiscardOnlineAnswer(
                                 effectiveResult.UserMessage ?? string.Empty,
-                                localResult.UserMessage ?? string.Empty,
+                                localReferenceText: null,
                                 ledgerLocal) ||
                             KyraSafetyPolicy.ContradictsLocalHardwareLedger(effectiveResult.UserMessage ?? string.Empty, ledgerLocal))
                         {
                             notes.Add("Kyra routing: online answer discarded — aligned to local ForgerEMS facts.");
                             KyraOrchestrationLog.Append(
                                 "Kyra discard_online=1 reason=truth_guard discarded=1 discardReason=truth_guard");
-                            effectiveResult = new CopilotProviderResult
+                            var localTruth = await RunInstrumentedAsync(localProvider, request, settings, context, notes, cancellationToken).ConfigureAwait(false);
+                            effectiveResult = localTruth.Succeeded
+                                ? localTruth
+                                : new CopilotProviderResult
                             {
                                 Succeeded = true,
                                 UsedOnlineData = false,
-                                UserMessage = localResult.UserMessage ?? string.Empty
+                                UserMessage = "Kyra discarded the online answer because it conflicted with local ForgerEMS facts, but Local Kyra could not produce a replacement response."
                             };
                             responseProvider = localProvider;
-                            discardedOnlineForTruth = true;
                         }
-                    }
-
-                    if (plan.ShouldPolishWithProvider && !discardedOnlineForTruth && provider.IsOnlineProvider)
-                    {
-                        effectiveResult = new CopilotProviderResult
-                        {
-                            Succeeded = true,
-                            UsedOnlineData = effectiveResult.UsedOnlineData,
-                            UserMessage =
-                                $"Quick draft (local):{Environment.NewLine}{localResult.UserMessage}{Environment.NewLine}{Environment.NewLine}Polished version (online assist):{Environment.NewLine}{result.UserMessage}"
-                        };
                     }
 
                     if (KyraResponseCache.IsCacheablePrompt(request.Prompt))
@@ -403,6 +391,7 @@ public sealed class KyraOrchestrator
             {
                 notes.Add("Kyra routing: all AI unavailable -> Local Kyra");
                 Report("Using local fallback…");
+                var localResult = await RunInstrumentedAsync(localProvider, request, settings, context, notes, cancellationToken).ConfigureAwait(false);
                 Report("Formatting Kyra response…");
                 var allFail = _host.CompleteResponse(
                     request,

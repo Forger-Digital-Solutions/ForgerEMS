@@ -22,6 +22,12 @@
         <SolidColorBrush x:Key="PanelTextBrush" Color="#FFF4F8FF" />
         <SolidColorBrush x:Key="PanelMutedTextBrush" Color="#FFB8C8DA" />
         <SolidColorBrush x:Key="PanelLabelBrush" Color="#FFFFC58F" />
+        <SolidColorBrush x:Key="ReadyBackground" Color="#FFE8FAEF" />
+        <SolidColorBrush x:Key="ReadyBorder" Color="#FF86EFAC" />
+        <SolidColorBrush x:Key="RunningBackground" Color="#FFE0F7FF" />
+        <SolidColorBrush x:Key="RunningBorder" Color="#FF67B7E8" />
+        <SolidColorBrush x:Key="WarningBackground" Color="#FFFFF7ED" />
+        <SolidColorBrush x:Key="WarningBorder" Color="#FFFBBF24" />
 
         <!-- Shared status pill / badge surfaces (USB, Toolkit, diagnostics, updates) -->
         <Style x:Key="StatusPillBorderStyle" TargetType="Border">

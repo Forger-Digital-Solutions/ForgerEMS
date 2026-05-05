@@ -68,19 +68,19 @@ public static class ProviderEnvironmentResolver
             return KyraCredentialResolution.Empty;
         }
 
-        var process = Environment.GetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.Process);
+        var process = SafeGetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.Process);
         if (!string.IsNullOrWhiteSpace(process))
         {
             return new KyraCredentialResolution(process, KyraCredentialSource.ProcessEnvironment);
         }
 
-        var user = Environment.GetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.User);
+        var user = SafeGetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.User);
         if (!string.IsNullOrWhiteSpace(user))
         {
             return new KyraCredentialResolution(user, KyraCredentialSource.UserEnvironment);
         }
 
-        var machine = Environment.GetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.Machine);
+        var machine = SafeGetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.Machine);
         if (!string.IsNullOrWhiteSpace(machine))
         {
             return new KyraCredentialResolution(machine, KyraCredentialSource.MachineEnvironment);
@@ -91,4 +91,16 @@ public static class ProviderEnvironmentResolver
 
     public static KyraCredentialResolution ResolveCloudflareAccountId()
         => ResolveFromEnvironmentVariable(CopilotProviderEnvironmentVariableNames.CloudflareAccountId);
+
+    private static string? SafeGetEnvironmentVariable(string name, EnvironmentVariableTarget target)
+    {
+        try
+        {
+            return Environment.GetEnvironmentVariable(name, target);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
 }
