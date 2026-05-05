@@ -2010,6 +2010,18 @@
                                                 <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceFlipValueCardText}" TextWrapping="Wrap" />
                                             </StackPanel>
                                         </Border>
+                                        <Border Margin="8,8,0,0" Padding="12" Background="#B80A101A" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10">
+                                            <StackPanel>
+                                                <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Best Use / Device Fit" />
+                                                <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceDeviceFitCardText}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Margin="0,8,8,0" Padding="12" Background="#B80A101A" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10">
+                                            <StackPanel>
+                                                <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Sensors / Hardware X-Ray" />
+                                                <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceHardwareXrayCardText}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </Border>
                                     </UniformGrid>
 
                                     <TextBlock Margin="0,2,0,8"

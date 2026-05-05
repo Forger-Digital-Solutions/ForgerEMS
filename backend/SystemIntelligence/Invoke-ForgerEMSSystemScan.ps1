@@ -54,14 +54,18 @@ function New-ProviderField {
         [string]$Status,
         [string]$Source,
         [string]$Reason,
-        [string]$FriendlyDisplayText
+        [string]$FriendlyDisplayText,
+        [string]$Confidence = "Medium",
+        [string]$TechnicianNote = ""
     )
 
     [ordered]@{
         value = $Value
         status = $Status
+        confidence = $Confidence
         source = $Source
         reason = $Reason
+        technicianNote = $TechnicianNote
         friendlyDisplayText = $FriendlyDisplayText
     }
 }
@@ -83,19 +87,19 @@ function Get-SecureBootInfo {
     try {
         $value = Confirm-SecureBootUEFI -ErrorAction Stop
         if ($value) {
-            return New-ProviderField -Value $true -Status "READY" -Source "Confirm-SecureBootUEFI" -Reason "" -FriendlyDisplayText "Enabled"
+            return New-ProviderField -Value $true -Status "READY" -Source "Confirm-SecureBootUEFI" -Reason "" -FriendlyDisplayText "Enabled" -Confidence "High" -TechnicianNote "Secure Boot state was reported by Windows firmware API."
         }
 
-        return New-ProviderField -Value $false -Status "WARNING" -Source "Confirm-SecureBootUEFI" -Reason "Secure Boot is disabled in firmware." -FriendlyDisplayText "Disabled"
+        return New-ProviderField -Value $false -Status "WARNING" -Source "Confirm-SecureBootUEFI" -Reason "Secure Boot is disabled in firmware." -FriendlyDisplayText "Disabled" -Confidence "High" -TechnicianNote "Windows explicitly reported Secure Boot disabled."
     }
     catch {
         $firmware = Get-FirmwareTypeDisplay
         $message = $_.Exception.Message
         if ($firmware -eq "Legacy BIOS" -or $message -match "Cmdlet not supported|not supported") {
-            return New-ProviderField -Value $null -Status "UNKNOWN" -Source "Confirm-SecureBootUEFI + registry" -Reason "Secure Boot requires UEFI firmware." -FriendlyDisplayText "Unsupported / Legacy BIOS"
+            return New-ProviderField -Value $null -Status "UNKNOWN" -Source "Confirm-SecureBootUEFI + registry" -Reason "Secure Boot requires UEFI firmware." -FriendlyDisplayText "Unsupported / Legacy BIOS" -Confidence "Low" -TechnicianNote "Windows did not expose Secure Boot state. Verify in BIOS/UEFI before treating it as disabled."
         }
 
-        return New-ProviderField -Value $null -Status "UNKNOWN" -Source "Confirm-SecureBootUEFI + registry" -Reason $message -FriendlyDisplayText "Unknown - requires admin or unavailable"
+        return New-ProviderField -Value $null -Status "UNKNOWN" -Source "Confirm-SecureBootUEFI + registry" -Reason $message -FriendlyDisplayText "Unknown - requires admin or unavailable" -Confidence "Low" -TechnicianNote "Windows did not expose Secure Boot state. Verify in BIOS/UEFI before treating it as disabled."
     }
 }
 
@@ -125,8 +129,10 @@ function Get-TpmInfo {
             manufacturer = [string]$value.ManufacturerIdTxt
             version = [string]$value.ManufacturerVersion
             status = $status
+            confidence = "High"
             source = "Get-Tpm"
             reason = if ($status -eq "READY") { "" } else { "TPM is not fully ready for Windows security features." }
+            technicianNote = if ($status -eq "READY") { "TPM was reported ready by Get-Tpm." } else { "TPM was reported by Windows but needs firmware/Windows verification before listing." }
             friendlyDisplayText = $friendly
         }
     }
@@ -146,8 +152,10 @@ function Get-TpmInfo {
                 manufacturer = [string]$fallback.ManufacturerId
                 version = [string]$fallback.ManufacturerVersion
                 status = if ($ready) { "READY" } else { "WARNING" }
+                confidence = "Medium"
                 source = "Win32_Tpm"
                 reason = if ($ready) { "" } else { "TPM exists but is not enabled and activated." }
+                technicianNote = "TPM state came from the WMI fallback provider."
                 friendlyDisplayText = if ($ready) { "TPM ready for Windows 11" } elseif (-not $enabled) { "TPM disabled in firmware" } else { "TPM present but not ready" }
             }
         }
@@ -160,8 +168,10 @@ function Get-TpmInfo {
             manufacturer = ""
             version = ""
             status = "UNKNOWN"
+            confidence = "Low"
             source = "Get-Tpm + Win32_Tpm"
             reason = $_.Exception.Message
+            technicianNote = "Windows did not expose TPM state. Verify in BIOS/UEFI or vendor diagnostics before treating it as missing."
             friendlyDisplayText = "TPM status unavailable"
         }
     }
@@ -534,7 +544,12 @@ function New-FlipValueReport {
 
     return [ordered]@{
         estimateType = "local estimate only"
-        providerStatus = "Pricing provider not configured"
+        providerStatus = "LocalHeuristicProvider active; eBay active listing provider not configured; sold comps/manual providers unavailable until configured"
+        locationBasis = "Location not configured; national/offline heuristic basis"
+        saleMode = "NormalLocal"
+        compsUsed = 0
+        outliersRemoved = 0
+        providerArchitecture = "LocalHeuristicProvider, EbayActiveListingProvider, EbaySoldCompProvider future, FacebookMarketplaceProvider manual/future, OfferUpProvider manual/future, ManualCompImportProvider"
         estimatedResaleRange = ('$' + $low + ' - $' + $high)
         recommendedListPrice = ('$' + $high)
         quickSalePrice = ('$' + $quick)
@@ -561,6 +576,374 @@ function New-FlipValueReport {
             "Ports and charger"
         )
         pricingProviders = @(Get-PricingProviders)
+    }
+}
+
+function New-DeviceFitReport {
+    param(
+        [object]$ComputerSystem,
+        [object]$OperatingSystem,
+        [object]$Processor,
+        [Nullable[double]]$TotalMemoryBytes,
+        [object[]]$Gpus,
+        [object[]]$DiskReports,
+        [object[]]$BatteryReports
+    )
+
+    $cpuName = Get-ProcessorName -Processor $Processor
+    $cores = if ($null -ne $Processor) { [int]$Processor.NumberOfCores } else { 0 }
+    $threads = if ($null -ne $Processor) { [int]$Processor.NumberOfLogicalProcessors } else { 0 }
+    $ramGb = Convert-BytesToGigabytes -Bytes $TotalMemoryBytes
+    $gpuText = (($Gpus | ForEach-Object { [string]$_.Name }) -join " ")
+    $hasDedicatedGpu = $gpuText -match '(?i)nvidia|quadro|geforce|rtx|gtx|radeon|arc'
+    $hasWorkstationGpu = $gpuText -match '(?i)quadro|radeon\s+pro|firepro|rtx\s+a\d'
+    $hasGamingGpu = $gpuText -match '(?i)rtx|gtx|geforce|radeon\s+rx'
+    $hasFastStorage = @($DiskReports | Where-Object { [string]$_.mediaType -match '(?i)SSD|NVMe' -or [string]$_.name -match '(?i)SSD|NVMe' }).Count -gt 0
+    $batteryWearKnown = @($BatteryReports | Where-Object { $null -ne $_.wearPercent -or $null -ne $_.cycleCount }).Count -gt 0
+    $batteryUnknown = $BatteryReports.Count -gt 0 -and -not $batteryWearKnown
+    $isPerformanceCpu = $cpuName -match '(?i)\bi7|\bi9|ryzen\s+[79]|xeon|ultra\s+[79]' -or $cores -ge 6
+
+    $primary = "Office / School / General Productivity"
+    if ($hasWorkstationGpu -and $ramGb -ge 24 -and $isPerformanceCpu) {
+        $primary = "Developer / Creator Workstation + Light Gaming"
+    }
+    elseif ($hasGamingGpu -and $ramGb -ge 16 -and $isPerformanceCpu) {
+        $primary = "Gaming / Creator Laptop"
+    }
+    elseif ($isPerformanceCpu -and $ramGb -ge 16 -and $hasFastStorage) {
+        $primary = "Developer / Technician Workstation"
+    }
+
+    $strongFits = New-Object System.Collections.Generic.List[string]
+    [void]$strongFits.Add("Office/school/productivity")
+    [void]$strongFits.Add("Web, streaming, and general multitasking")
+    if ($isPerformanceCpu -and $ramGb -ge 16) {
+        [void]$strongFits.Add("Software development, WSL, diagnostics, repair tools")
+        [void]$strongFits.Add("Technician/refurbisher workflows")
+    }
+    if ($hasDedicatedGpu) {
+        [void]$strongFits.Add("Light gaming and older AAA titles")
+        [void]$strongFits.Add("Light-to-medium content creation")
+    }
+    if ($hasWorkstationGpu) {
+        [void]$strongFits.Add("CAD/workstation tasks")
+    }
+
+    $weakFits = New-Object System.Collections.Generic.List[string]
+    if (-not $hasGamingGpu) {
+        [void]$weakFits.Add("Modern AAA gaming at high settings")
+    }
+    if (-not $hasDedicatedGpu -or $ramGb -lt 32) {
+        [void]$weakFits.Add("Heavy AI/GPU rendering")
+    }
+    if ($batteryUnknown) {
+        [void]$weakFits.Add("Long battery sessions until battery wear/runtime is verified")
+    }
+
+    $upgradeAdvice = New-Object System.Collections.Generic.List[string]
+    if ($ramGb -gt 0 -and $ramGb -lt 16) {
+        [void]$upgradeAdvice.Add("Upgrade to at least 16 GB RAM before resale or development workloads.")
+    }
+    if (-not $hasFastStorage) {
+        [void]$upgradeAdvice.Add("Install or verify SSD/NVMe storage before listing.")
+    }
+    if ($batteryUnknown) {
+        [void]$upgradeAdvice.Add("Run battery report/vendor diagnostics before advertising unplugged runtime.")
+    }
+    if ($upgradeAdvice.Count -eq 0) {
+        [void]$upgradeAdvice.Add("Clean install/update drivers, verify thermals, photograph condition, and include charger details.")
+    }
+
+    $confidence = "High"
+    if ($null -eq $Processor -or $ramGb -le 0 -or $Gpus.Count -eq 0 -or $DiskReports.Count -eq 0) {
+        $confidence = "Medium"
+    }
+    if ($batteryUnknown) {
+        $confidence = if ($confidence -eq "High") { "Medium" } else { $confidence }
+    }
+
+    $listing = if ($hasGamingGpu) {
+        "Market as an entry/mid gaming laptop; include tested games/settings if possible."
+    }
+    elseif ($hasWorkstationGpu -or $primary -match "Workstation") {
+        "Market as a mobile workstation/dev laptop, not primarily as a gaming laptop."
+    }
+    else {
+        "Market as a budget school/office laptop; emphasize SSD, clean Windows install, and verified battery if available."
+    }
+
+    [ordered]@{
+        primaryFit = $primary
+        machineClass = if ($hasWorkstationGpu) { "Mobile Workstation" } elseif ($hasGamingGpu) { "Gaming Laptop" } elseif ($BatteryReports.Count -gt 0) { "Business/Consumer Laptop" } else { "Desktop PC / Mini PC" }
+        confidence = $confidence
+        strongFits = @($strongFits)
+        weakFits = @($weakFits)
+        exampleWorkloads = @("Roblox/Minecraft/indie games", "Office/school/productivity", "WSL/diagnostics/repair tools", "Older AAA titles when GPU/thermals allow")
+        upgradeFirstAdvice = @($upgradeAdvice)
+        listingPositioning = $listing
+        reasons = @(
+            [ordered]@{ text = ("{0}-core / {1}-thread CPU signal" -f $cores, $threads); evidence = $cpuName },
+            [ordered]@{ text = ("{0:g} GB RAM" -f $ramGb); evidence = "Win32_ComputerSystem/PhysicalMemory" },
+            [ordered]@{ text = if ($hasFastStorage) { "SSD/NVMe storage detected" } else { "SSD/NVMe storage not confirmed" }; evidence = (($DiskReports | ForEach-Object { ("{0} {1}" -f $_.name, $_.mediaType) }) -join "; ") },
+            [ordered]@{ text = if ($hasDedicatedGpu) { "Dedicated GPU detected" } else { "Dedicated GPU not detected" }; evidence = $gpuText },
+            [ordered]@{ text = if ($batteryUnknown) { "Battery wear/runtime confidence is lower because wear data was not exposed" } else { "Battery data available or no battery reported" }; evidence = "Battery report/WMI" }
+        )
+    }
+}
+
+function New-MachineClassReport {
+    param(
+        [object]$ComputerSystem,
+        [object]$Processor,
+        [Nullable[double]]$TotalMemoryBytes,
+        [object[]]$Gpus,
+        [object[]]$DiskReports,
+        [object[]]$BatteryReports
+    )
+
+    $manufacturer = if ($null -ne $ComputerSystem) { [string]$ComputerSystem.Manufacturer } else { "" }
+    $model = if ($null -ne $ComputerSystem) { [string]$ComputerSystem.Model } else { "" }
+    $text = ("{0} {1}" -f $manufacturer, $model).Trim()
+    $gpuText = (($Gpus | ForEach-Object { [string]$_.Name }) -join " ")
+    $cpuName = Get-ProcessorName -Processor $Processor
+    $ramGb = Convert-BytesToGigabytes -Bytes $TotalMemoryBytes
+    $isLaptop = $BatteryReports.Count -gt 0 -or $text -match '(?i)latitude|thinkpad|elitebook|probook|zbook|precision|inspiron|pavilion|ideapad|xps|legion|rog|tuf|omen|victus|nitro|predator|notebook|laptop|surface'
+    $hasWorkstationGpu = $gpuText -match '(?i)quadro|rtx\s+a\d|radeon\s+pro|firepro'
+    $hasGamingGpu = $gpuText -match '(?i)geforce|gtx|rtx|radeon\s+rx'
+    $scores = [ordered]@{
+        "Business Laptop" = 0
+        "Consumer Laptop" = 0
+        "Gaming Laptop" = 0
+        "Mobile Workstation" = 0
+        "Desktop Workstation" = 0
+        "Desktop PC" = 0
+        "Mini PC" = 0
+        "All-in-One" = 0
+        "Server / Homelab" = 0
+        "Repair / Parts Machine" = 0
+    }
+    $signals = New-Object System.Collections.Generic.List[object]
+    $addScore = {
+        param([string]$Key, [int]$Amount)
+        if ($scores.Contains($Key)) { $scores[$Key] = [int]$scores[$Key] + $Amount }
+    }
+    $addSignal = {
+        param([string]$Name, [string]$Value, [int]$Weight, [string]$Source)
+        if (-not [string]::IsNullOrWhiteSpace($Value)) {
+            [void]$signals.Add([ordered]@{ name = $Name; value = $Value; weight = $Weight; source = $Source })
+        }
+    }
+
+    & $addSignal "OEM/model line" $text 10 "Win32_ComputerSystem"
+    if ($isLaptop) {
+        & $addScore "Business Laptop" 10
+        & $addScore "Consumer Laptop" 8
+        & $addScore "Mobile Workstation" 8
+        & $addSignal "Battery/mobile chassis signal" $(if ($BatteryReports.Count -gt 0) { "Battery present" } else { "Laptop model-line hint" }) 12 "Battery/model heuristic"
+    }
+    else {
+        & $addScore "Desktop PC" 18
+        & $addSignal "No battery signal" "No battery exposed; likely desktop/mini/server unless model says otherwise." 8 "Battery inventory"
+    }
+
+    if ($text -match '(?i)precision|zbook|thinkpad\s*p|thinkpadp|p\d{2}\b' -or $hasWorkstationGpu) {
+        & $addScore $(if ($isLaptop) { "Mobile Workstation" } else { "Desktop Workstation" }) 48
+        & $addSignal "Workstation signal" $(if ($hasWorkstationGpu) { $gpuText } else { $text }) 48 "GPU/model heuristic"
+    }
+    if ($text -match '(?i)latitude|thinkpad\s*[tx]|elitebook|probook|surface\s+pro|xps') {
+        & $addScore "Business Laptop" 38
+        & $addSignal "Business-class OEM line" $text 38 "Model heuristic"
+    }
+    if ($text -match '(?i)omen|legion|rog|tuf|victus|nitro|predator|alienware|razer|msi' -or ($isLaptop -and $hasGamingGpu -and -not $hasWorkstationGpu)) {
+        & $addScore "Gaming Laptop" 42
+        & $addSignal "Gaming signal" $(if ($hasGamingGpu) { $gpuText } else { $text }) 42 "GPU/model heuristic"
+    }
+    if ($text -match '(?i)inspiron|pavilion|ideapad|vivobook|aspire|envy') {
+        & $addScore "Consumer Laptop" 34
+        & $addSignal "Consumer OEM line" $text 34 "Model heuristic"
+    }
+    if ($text -match '(?i)optiplex|elitedesk|thinkcentre|prodesk|vostro' -and -not $isLaptop) {
+        & $addScore "Desktop PC" 30
+        & $addScore "Server / Homelab" $(if ($ramGb -ge 32) { 12 } else { 6 })
+        & $addSignal "Business desktop OEM line" $text 30 "Model heuristic"
+    }
+    if ($text -match '(?i)mini|micro|tiny|nuc|deskmini|beelink|minisforum') {
+        & $addScore "Mini PC" 58
+        & $addSignal "Mini PC line/chassis hint" $text 44 "Model heuristic"
+    }
+    if ($text -match '(?i)all.in.one|aio|inspiron\s+one|ideacentre\s+aio|pavilion\s+all') {
+        & $addScore "All-in-One" 44
+        & $addSignal "All-in-one model hint" $text 44 "Model heuristic"
+    }
+    if ($cpuName -match '(?i)xeon|epyc' -or $ramGb -ge 64 -or $DiskReports.Count -ge 3) {
+        & $addScore "Server / Homelab" 28
+        & $addSignal "Server/homelab signal" ("{0}; {1:g} GB RAM; {2} disk(s)" -f $cpuName, $ramGb, $DiskReports.Count) 28 "CPU/RAM/storage heuristic"
+    }
+
+    $ranked = @($scores.GetEnumerator() | Sort-Object -Property @{ Expression = { $_.Value }; Descending = $true }, @{ Expression = { $_.Name }; Ascending = $true })
+    $best = $ranked | Select-Object -First 1
+    $primary = if ($best.Value -ge 24) { [string]$best.Name } else { "Unknown / Mixed" }
+    $secondary = @($ranked | Where-Object { $_.Name -ne $primary -and $_.Value -ge [math]::Max(18, ([int]$best.Value - 14)) } | Select-Object -First 3 | ForEach-Object { [string]$_.Name })
+    $confidence = if ($best.Value -ge 58) { "High" } elseif ($best.Value -ge 34) { "Medium" } else { "Low" }
+    $note = switch ($primary) {
+        "Mobile Workstation" { "Classified as a mobile workstation because workstation model/GPU/RAM signals dominate."; break }
+        "Gaming Laptop" { "Classified as a gaming laptop only when gaming model/GPU signals dominate."; break }
+        "Business Laptop" { "Business-class laptop signals are stronger than consumer/gaming signals."; break }
+        "Consumer Laptop" { "Consumer laptop model-line signals dominate."; break }
+        "Mini PC" { "Mini/micro chassis signals dominate."; break }
+        "Server / Homelab" { "Server/homelab signals come from CPU/RAM/storage layout; verify chassis and cooling manually."; break }
+        default { "Signals are mixed or incomplete; verify chassis/model manually." }
+    }
+
+    [ordered]@{
+        primaryClass = $primary
+        secondaryClasses = @($secondary)
+        confidence = $confidence
+        technicianNote = $note
+        signals = @($signals | Sort-Object weight -Descending | Select-Object -First 8)
+    }
+}
+
+function New-SensorReading {
+    param(
+        [string]$Name,
+        [string]$Category,
+        [string]$Value,
+        [string]$Unit,
+        [string]$Status,
+        [string]$Confidence,
+        [string]$Source,
+        [bool]$IsLive,
+        [bool]$IsInferred,
+        [bool]$IsUnavailable,
+        [string]$UnavailableReason,
+        [string]$TechnicianNote
+    )
+
+    [ordered]@{
+        name = $Name
+        category = $Category
+        value = if ([string]::IsNullOrWhiteSpace($Value)) { "Not exposed" } else { $Value }
+        unit = $Unit
+        status = $Status
+        confidence = $Confidence
+        source = $Source
+        lastUpdatedUtc = (Get-Date).ToUniversalTime().ToString("o")
+        isLive = $IsLive
+        isInferred = $IsInferred
+        isUnavailable = $IsUnavailable
+        unavailableReason = $UnavailableReason
+        technicianNote = $TechnicianNote
+    }
+}
+
+function New-SensorGroup {
+    param([string]$Category, [object[]]$Readings)
+    $known = @($Readings | Where-Object { -not $_.isUnavailable }).Count
+    [ordered]@{
+        category = $Category
+        knownFields = $known
+        totalFields = $Readings.Count
+        summary = ("{0}/{1} fields known" -f $known, $Readings.Count)
+        readings = @($Readings)
+    }
+}
+
+function New-SensorMatrixReport {
+    param(
+        [object]$Processor,
+        [object[]]$Gpus,
+        [object[]]$DiskReports,
+        [object[]]$BatteryReports,
+        [object]$SecurityReport,
+        [object]$SecureBootInfo,
+        [object]$TpmInfo,
+        [int]$PhysicalAdapterCount,
+        [int]$VirtualAdapterCount,
+        [bool]$InternetCheck
+    )
+
+    $cpuReadings = @(
+        New-SensorReading "CPU model" "CPU" (Get-ProcessorName -Processor $Processor) "" "Ready" "High" "WMI/CIM Win32_Processor" $false $false $false "" "Processor identity is inventory data, not a live sensor."
+        New-SensorReading "CPU cores" "CPU" $(if ($null -ne $Processor) { [string]$Processor.NumberOfCores } else { "" }) "cores" $(if ($null -ne $Processor) { "Ready" } else { "Unknown" }) $(if ($null -ne $Processor) { "High" } else { "Low" }) "WMI/CIM Win32_Processor.NumberOfCores" $false $false ($null -eq $Processor) "ProbeFailed" "Core count is unavailable only if the processor probe failed."
+        New-SensorReading "CPU temperature" "CPU" "" "C" "Unknown" "Low" "ForgerEMS safe scan" $false $false $true "RequiresExternalProvider" "Windows did not expose CPU package temperature in the safe scan."
+        New-SensorReading "CPU package power" "CPU" "" "W" "Unknown" "Low" "ForgerEMS safe scan" $false $false $true "RequiresExternalProvider" "Package power usually needs vendor counters or optional deep sensor provider."
+    )
+
+    $gpuReadings = New-Object System.Collections.Generic.List[object]
+    foreach ($gpu in @($Gpus | Select-Object -First 3)) {
+        [void]$gpuReadings.Add((New-SensorReading "GPU" "GPU" ([string]$gpu.Name) "" "Ready" "High" "WMI/CIM Win32_VideoController" $false $false $false "" ("Driver: {0}; type: {1}" -f $gpu.DriverVersion, (Get-GpuType -Name ([string]$gpu.Name)))))
+    }
+    if ($gpuReadings.Count -eq 0) {
+        [void]$gpuReadings.Add((New-SensorReading "GPU inventory" "GPU" "" "" "Unknown" "Low" "WMI/CIM Win32_VideoController" $false $false $true "NotExposedByFirmware" "No GPU list was exposed in the scan."))
+    }
+    [void]$gpuReadings.Add((New-SensorReading "GPU temperature" "GPU" "" "C" "Unknown" "Low" "ForgerEMS safe scan" $false $false $true "RequiresVendorDriver" "GPU temperature often requires vendor driver counters or deep sensor mode."))
+    [void]$gpuReadings.Add((New-SensorReading "GPU clocks/load" "GPU" "" "" "Unknown" "Low" "ForgerEMS safe scan" $false $false $true "RequiresExternalProvider" "GPU clocks/load need driver counters or optional deep sensor provider."))
+
+    $batteryReadings = New-Object System.Collections.Generic.List[object]
+    if ($BatteryReports.Count -eq 0) {
+        [void]$batteryReadings.Add((New-SensorReading "Battery" "Battery" "" "" "NotExposed" "Low" "Win32_Battery/powercfg" $false $false $true "NotApplicable" "No battery exposed; normal for desktops/mini PCs."))
+    }
+    else {
+        $battery = $BatteryReports[0]
+        [void]$batteryReadings.Add((New-SensorReading "Battery charge" "Battery" ([string]$battery.estimatedChargeRemaining) "%" "Ready" "Medium" "Win32_Battery/powercfg" $true $false $false "" "Charge can be live-ish but may lag Windows reporting."))
+        [void]$batteryReadings.Add((New-SensorReading "Battery wear" "Battery" $(if ($null -ne $battery.wearPercent) { [string]$battery.wearPercent } else { "" }) "%" $(if ($null -ne $battery.wearPercent) { "Ready" } else { "Unknown" }) $(if ($null -ne $battery.wearPercent) { "High" } else { "Low" }) "powercfg /batteryreport" $false $false ($null -eq $battery.wearPercent) "NotExposedByFirmware" "Firmware/Windows did not expose battery wear; do not treat as failure."))
+        [void]$batteryReadings.Add((New-SensorReading "Battery cycle count" "Battery" $(if ($null -ne $battery.cycleCount) { [string]$battery.cycleCount } else { "" }) "cycles" $(if ($null -ne $battery.cycleCount) { "Ready" } else { "Unknown" }) $(if ($null -ne $battery.cycleCount) { "High" } else { "Low" }) "powercfg /batteryreport" $false $false ($null -eq $battery.cycleCount) "NotExposedByFirmware" "Cycle count is often hidden by firmware."))
+        [void]$batteryReadings.Add((New-SensorReading "Battery discharge rate" "Battery" "" "W" "Unknown" "Low" "ForgerEMS safe scan" $false $false $true "NotExposedByFirmware" "Discharge rate was not normalized by the safe scan."))
+    }
+
+    $storageReadings = New-Object System.Collections.Generic.List[object]
+    foreach ($disk in @($DiskReports | Select-Object -First 4)) {
+        [void]$storageReadings.Add((New-SensorReading "Disk" "Storage" ("{0} {1} {2}" -f $disk.name, $disk.size, $disk.mediaType) "" "Ready" "High" "MSFT_PhysicalDisk / Win32_DiskDrive" $false $false $false "" ("Health: {0}; status: {1}" -f $disk.health, $disk.status)))
+        [void]$storageReadings.Add((New-SensorReading ("{0} temperature" -f $disk.name) "Storage" $(if ($null -ne $disk.temperatureC) { [string]$disk.temperatureC } else { "" }) "C" $(if ($null -ne $disk.temperatureC) { "Ready" } else { "Unknown" }) $(if ($null -ne $disk.temperatureC) { "High" } else { "Low" }) "SMART/NVMe health where exposed" $false $false ($null -eq $disk.temperatureC) "NotExposedByFirmware" "Storage temperature is often hidden by USB bridges or firmware."))
+        [void]$storageReadings.Add((New-SensorReading ("{0} wear" -f $disk.name) "Storage" $(if ($null -ne $disk.wearPercent) { [string]$disk.wearPercent } else { "" }) "%" $(if ($null -ne $disk.wearPercent) { "Ready" } else { "Unknown" }) $(if ($null -ne $disk.wearPercent) { "High" } else { "Low" }) "SMART/NVMe wear where exposed" $false $false ($null -eq $disk.wearPercent) "NotExposedByFirmware" "Wear data is not exposed by every disk/bridge."))
+    }
+    if ($storageReadings.Count -eq 0) {
+        [void]$storageReadings.Add((New-SensorReading "Storage inventory" "Storage" "" "" "Unknown" "Low" "Storage probe" $false $false $true "ProbeFailed" "No storage devices were exposed in the scan."))
+    }
+
+    $networkReadings = @(
+        New-SensorReading "Internet connectivity" "Network" $(if ($InternetCheck) { "Working" } else { "Not confirmed" }) "" "Ready" "Medium" "Connectivity/default-route summary" $false $false $false "" "Connectivity is summarized from route/DNS/probe behavior."
+        New-SensorReading "Physical adapters" "Network" ([string]$PhysicalAdapterCount) "adapters" "Ready" "High" "Get-NetAdapter / Win32_NetworkAdapter" $false $false $false "" ""
+        New-SensorReading "Virtual adapters" "Network" ([string]$VirtualAdapterCount) "adapters" "Ready" "High" "Get-NetAdapter / classification" $false $false $false "" ""
+        New-SensorReading "Wi-Fi signal/generation" "Network" "" "" "Unknown" "Low" "ForgerEMS safe scan" $false $false $true "NotExposedByFirmware" "Wi-Fi signal/generation is shown only when Windows exposes adapter details."
+    )
+
+    $tpmSensorStatus = if ([string]::IsNullOrWhiteSpace([string]$TpmInfo.status) -or [string]$TpmInfo.status -eq "UNKNOWN") { "Unknown" } elseif ([string]$TpmInfo.status -eq "READY") { "Ready" } else { "Warning" }
+    $secureBootSensorStatus = if ([string]::IsNullOrWhiteSpace([string]$SecureBootInfo.status) -or [string]$SecureBootInfo.status -eq "UNKNOWN") { "Unknown" } elseif ([string]$SecureBootInfo.status -eq "READY") { "Ready" } else { "Warning" }
+    $securityReadings = @(
+        New-SensorReading "TPM" "Security" ([string]$TpmInfo.friendlyDisplayText) "" $tpmSensorStatus $(if ($tpmSensorStatus -eq "Unknown") { "Low" } else { "Medium" }) "Get-Tpm / WMI fallback" $false $false ($tpmSensorStatus -eq "Unknown") "NotExposedByFirmware" "Unknown TPM state should be verified in BIOS/UEFI before calling it failed."
+        New-SensorReading "Secure Boot" "Security" ([string]$SecureBootInfo.friendlyDisplayText) "" $secureBootSensorStatus $(if ($secureBootSensorStatus -eq "Unknown") { "Low" } else { "Medium" }) "Confirm-SecureBootUEFI / registry fallback" $false $false ($secureBootSensorStatus -eq "Unknown") "PermissionDenied" "Unknown Secure Boot does not prove disabled."
+        New-SensorReading "Defender/Firewall" "Security" ("Defender AV: {0}; Firewall: {1}" -f $SecurityReport.antivirusEnabled, $SecurityReport.firewallEnabled) "" "Ready" "High" "Get-MpComputerStatus / firewall profile" $false $false $false "" ""
+    )
+
+    $usbReadings = @(
+        New-SensorReading "USB controller inventory" "USB" "" "" "NotExposed" "Low" "USB Intelligence" $false $false $true "NotApplicable" "USB controller/device speed details are collected by USB Intelligence when a target is selected."
+        New-SensorReading "USB benchmark" "USB" "" "" "NotExposed" "Low" "USB Builder benchmark" $false $false $true "NotApplicable" "USB read/write benchmark appears only after a safe target benchmark is run."
+    )
+    $coolingReadings = @(
+        New-SensorReading "Fan RPM" "Cooling" "" "RPM" "Unknown" "Low" "ForgerEMS safe scan" $false $false $true "RequiresVendorDriver" "Windows/firmware did not expose fan RPM. That does not mean the fan is broken."
+        New-SensorReading "Fan curve/control" "Cooling" "" "" "Unknown" "Low" "ForgerEMS safe scan" $false $false $true "UnsupportedHardware" "ForgerEMS does not change fan control."
+    )
+
+    $groups = @(
+        New-SensorGroup "CPU" $cpuReadings
+        New-SensorGroup "GPU" ($gpuReadings.ToArray())
+        New-SensorGroup "Battery" ($batteryReadings.ToArray())
+        New-SensorGroup "Storage" ($storageReadings.ToArray())
+        New-SensorGroup "Network" $networkReadings
+        New-SensorGroup "Security" $securityReadings
+        New-SensorGroup "USB" $usbReadings
+        New-SensorGroup "Cooling" $coolingReadings
+    )
+    $known = @($groups | ForEach-Object { $_.knownFields } | Measure-Object -Sum).Sum
+    $total = @($groups | ForEach-Object { $_.totalFields } | Measure-Object -Sum).Sum
+    $confidence = if ($total -gt 0 -and ($known / $total) -ge 0.7) { "High" } elseif ($total -gt 0 -and ($known / $total) -ge 0.45) { "Medium" } else { "Low" }
+    [ordered]@{
+        groups = @($groups)
+        confidence = $confidence
+        coverageSummary = (($groups | ForEach-Object { ("{0}: {1}/{2} fields known" -f $_.category, $_.knownFields, $_.totalFields) }) -join "; ")
+        deepSensorModeNote = "Some sensors require admin access, firmware support, vendor drivers, or an optional reviewed sensor provider."
     }
 }
 
@@ -732,9 +1115,16 @@ if ($secureBootInfo.value -eq $false) {
     Add-Recommendation -Recommendations $recommendations -Text "Secure Boot is disabled. Confirm this is intentional before trusting boot-chain security."
     Add-UniqueText -Items $obviousProblems -Text "Secure Boot is disabled."
 }
-if ($tpmInfo.present -eq $false -or ($tpmInfo.present -eq $true -and $tpmInfo.ready -ne $true)) {
-    Add-Recommendation -Recommendations $recommendations -Text "TPM is missing or not ready. Review device security and BitLocker readiness."
-    Add-UniqueText -Items $obviousProblems -Text "TPM is missing or not ready."
+if ($tpmInfo.present -eq $false) {
+    Add-Recommendation -Recommendations $recommendations -Text "TPM was not detected. Confirm firmware security settings before Windows 11 readiness claims."
+    Add-UniqueText -Items $obviousProblems -Text "TPM was not detected."
+}
+elseif ($tpmInfo.present -eq $true -and $tpmInfo.ready -ne $true) {
+    Add-Recommendation -Recommendations $recommendations -Text "TPM is present but not ready. Verify firmware TPM settings before Windows 11 readiness claims."
+    Add-UniqueText -Items $obviousProblems -Text "TPM is present but not ready."
+}
+elseif ($null -eq $tpmInfo.present -or $null -eq $tpmInfo.ready) {
+    Add-Recommendation -Recommendations $recommendations -Text "Verify TPM in BIOS/UEFI or vendor diagnostics; Windows did not expose enough data to confirm readiness."
 }
 
 $gpuStatus = if ($gpus.Count -gt 0) { "READY" } else { "UNKNOWN" }
@@ -950,7 +1340,7 @@ $networkReport = @($networkAdapters | ForEach-Object {
         gatewayPresent = $hasGateway
         isVirtual = $isVirtual
         isDefaultRoute = $isDefaultRoute
-        adapterRole = if ($isVirtual) { "Virtual adapter" } elseif ($description -match "(?i)wi-fi|wireless|wlan|802\.11") { "Wi-Fi" } else { "Physical adapter" }
+        adapterRole = if ($isVirtual) { "VirtualAdapter" } elseif ($isDefaultRoute -or ($hasGateway -and -not $hasApipa)) { "ActivePhysicalInternet" } elseif ($description -match "(?i)wi-fi|wireless|wlan|802\.11") { "PhysicalDisconnected/Wi-Fi" } else { "PhysicalDisconnected" }
         wifiSignalPercent = if ($description -match "(?i)wi-fi|wireless|wlan|802\.11" -and $wifiState.connected) { $wifiState.signalPercent } else { $null }
         wifiDisplay = if ($description -match "(?i)wi-fi|wireless|wlan|802\.11") { $wifiState.friendlyDisplayText } else { "Not a Wi-Fi adapter" }
     }
@@ -1015,7 +1405,7 @@ else {
     }
 }
 $virtualIgnoredDisplay = if ($virtualNetworkReport.Count -gt 0) {
-    "Virtual adapters ignored: {0}" -f (($virtualNetworkReport | Select-Object -ExpandProperty name) -join ", ")
+    "Virtual adapters ignored: {0}" -f ((@($virtualNetworkReport | ForEach-Object { [string]$_.name }) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join ", ")
 }
 else {
     "Virtual adapters ignored: none"
@@ -1162,6 +1552,35 @@ $flipValue = New-FlipValueReport `
     -BatteryReports $batteryReports `
     -Problems $obviousProblems
 
+$deviceFit = New-DeviceFitReport `
+    -ComputerSystem $computerSystem `
+    -OperatingSystem $operatingSystem `
+    -Processor $processor `
+    -TotalMemoryBytes $totalMemoryBytes `
+    -Gpus $gpus `
+    -DiskReports $diskReports `
+    -BatteryReports $batteryReports
+
+$machineClass = New-MachineClassReport `
+    -ComputerSystem $computerSystem `
+    -Processor $processor `
+    -TotalMemoryBytes $totalMemoryBytes `
+    -Gpus $gpus `
+    -DiskReports $diskReports `
+    -BatteryReports $batteryReports
+
+$sensorMatrix = New-SensorMatrixReport `
+    -Processor $processor `
+    -Gpus $gpus `
+    -DiskReports $diskReports `
+    -BatteryReports $batteryReports `
+    -SecurityReport $securityReport `
+    -SecureBootInfo $secureBootInfo `
+    -TpmInfo $tpmInfo `
+    -PhysicalAdapterCount $physicalNetworkReport.Count `
+    -VirtualAdapterCount $virtualNetworkReport.Count `
+    -InternetCheck ([bool]$internetCheck)
+
 $report = [ordered]@{
     schemaVersion = 1
     product = "ForgerEMS"
@@ -1233,12 +1652,17 @@ $report = [ordered]@{
         wifi = $wifiState
         physicalAdapters = $physicalNetworkReport
         virtualAdapters = $virtualNetworkReport
+        physicalAdapterCount = $physicalNetworkReport.Count
+        virtualAdapterCount = $virtualNetworkReport.Count
         virtualAdaptersIgnored = $virtualIgnoredDisplay
         adapters = $networkReport
     }
     security = $securityReport
     obviousProblems = @($obviousProblems)
     flipValue = $flipValue
+    machineClass = $machineClass
+    sensorMatrix = $sensorMatrix
+    deviceFit = $deviceFit
     recommendations = @($recommendations)
     reportPaths = [ordered]@{
         json = $jsonPath
@@ -1271,6 +1695,28 @@ $markdown = New-Object System.Collections.Generic.List[string]
 [void]$markdown.Add(("- RAM: {0}; configured {1}; rated {2}; {3}; upgrade path: {4} ({5})" -f $report.summary.ramInstalledDisplay, $report.summary.ramConfiguredSpeedDisplay, $report.summary.ramModuleRatedSpeedDisplay, $report.summary.ramSlotsDisplay, $report.summary.ramUpgradePath, $report.summary.ramStatus))
 [void]$markdown.Add(("- GPU: {0}" -f (($report.summary.gpus | ForEach-Object { ("{0}: {1} driver {2}" -f $_.type, $_.name, $_.driverVersion) }) -join "; ")))
 [void]$markdown.Add("")
+[void]$markdown.Add("## Machine Class / Hardware X-Ray")
+[void]$markdown.Add(("- Machine class: {0} ({1} confidence)" -f $report.machineClass.primaryClass, $report.machineClass.confidence))
+[void]$markdown.Add(("- Secondary classes: {0}" -f (($report.machineClass.secondaryClasses | Where-Object { $_ }) -join "; ")))
+[void]$markdown.Add(("- Technician note: {0}" -f $report.machineClass.technicianNote))
+[void]$markdown.Add(("- Sensor coverage: {0}" -f $report.sensorMatrix.coverageSummary))
+[void]$markdown.Add(("- Sensor confidence: {0}" -f $report.sensorMatrix.confidence))
+[void]$markdown.Add(("- Deep sensor note: {0}" -f $report.sensorMatrix.deepSensorModeNote))
+[void]$markdown.Add("")
+[void]$markdown.Add("### Machine Class Signals")
+foreach ($signal in $report.machineClass.signals) {
+    [void]$markdown.Add(("- {0}: {1} (weight {2}; source {3})" -f $signal.name, $signal.value, $signal.weight, $signal.source))
+}
+[void]$markdown.Add("")
+[void]$markdown.Add("### Sensor Availability Matrix")
+foreach ($group in $report.sensorMatrix.groups) {
+    [void]$markdown.Add(("#### {0} ({1}/{2} fields known)" -f $group.category, $group.knownFields, $group.totalFields))
+    foreach ($reading in $group.readings) {
+        $value = if ($reading.isUnavailable) { ("{0}: {1}" -f $reading.unavailableReason, $reading.technicianNote) } else { ("{0}{1}" -f $reading.value, $(if ($reading.unit) { " " + $reading.unit } else { "" })) }
+        [void]$markdown.Add(("- {0}: {1} [{2}, confidence {3}, source {4}]" -f $reading.name, $value, $reading.status, $reading.confidence, $reading.source))
+    }
+}
+[void]$markdown.Add("")
 [void]$markdown.Add("## Flip Value")
 [void]$markdown.Add(("- Estimated resale range: {0}" -f $report.flipValue.estimatedResaleRange))
 [void]$markdown.Add(("- Recommended list price: {0}" -f $report.flipValue.recommendedListPrice))
@@ -1299,6 +1745,21 @@ foreach ($item in $report.flipValue.suggestedUpgradeRecommendations) {
 [void]$markdown.Add("### Pricing Providers")
 foreach ($provider in $report.flipValue.pricingProviders) {
     [void]$markdown.Add(("- {0}: {1}" -f $provider.name, $provider.status))
+}
+[void]$markdown.Add("")
+[void]$markdown.Add("## Best Use / Device Fit")
+[void]$markdown.Add(("- Primary fit: {0}" -f $report.deviceFit.primaryFit))
+[void]$markdown.Add(("- Machine class: {0}" -f $report.deviceFit.machineClass))
+[void]$markdown.Add(("- Confidence: {0}" -f $report.deviceFit.confidence))
+[void]$markdown.Add(("- Strong fits: {0}" -f (($report.deviceFit.strongFits | Where-Object { $_ }) -join "; ")))
+[void]$markdown.Add(("- Weak fits: {0}" -f (($report.deviceFit.weakFits | Where-Object { $_ }) -join "; ")))
+[void]$markdown.Add(("- Example workloads: {0}" -f (($report.deviceFit.exampleWorkloads | Where-Object { $_ }) -join "; ")))
+[void]$markdown.Add(("- Upgrade-first advice: {0}" -f (($report.deviceFit.upgradeFirstAdvice | Where-Object { $_ }) -join "; ")))
+[void]$markdown.Add(("- Listing angle: {0}" -f $report.deviceFit.listingPositioning))
+[void]$markdown.Add("")
+[void]$markdown.Add("### Device Fit Reasons")
+foreach ($reason in $report.deviceFit.reasons) {
+    [void]$markdown.Add(("- {0} ({1})" -f $reason.text, $reason.evidence))
 }
 [void]$markdown.Add("")
 [void]$markdown.Add("## Disk Health")

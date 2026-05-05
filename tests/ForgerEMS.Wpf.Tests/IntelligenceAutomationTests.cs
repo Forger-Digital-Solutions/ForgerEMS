@@ -160,6 +160,136 @@ public sealed class IntelligenceAutomationTests
     }
 
     [Fact]
+    public void UnknownFirmwareFieldsLowerConfidenceMoreThanHealth()
+    {
+        var profile = new SystemProfile
+        {
+            Manufacturer = "Dell",
+            Model = "Precision 5540",
+            Cpu = "Intel Core i7-9850H",
+            RamTotal = "32 GB",
+            RamTotalGb = 32,
+            OverallStatus = "READY",
+            DiskStatus = "READY",
+            BatteryStatus = "UNKNOWN",
+            RamStatus = "READY",
+            TpmPresent = null,
+            TpmReady = null,
+            TpmStatus = "UNKNOWN",
+            SecureBoot = null,
+            SecureBootStatus = "UNKNOWN",
+            InternetCheck = true,
+            HasActivePhysicalInternetAdapter = true,
+            Gpus = [new SystemGpuProfile { Name = "NVIDIA Quadro T2000", GpuKind = "Dedicated" }],
+            Disks = [new SystemDiskProfile { Name = "Samsung 990 Pro", MediaType = "NVMe SSD", Health = "Healthy", Status = "READY" }]
+        };
+
+        var health = SystemHealthEvaluator.Evaluate(profile);
+
+        Assert.True(health.HealthScore >= 80);
+        Assert.True(health.ConfidenceScore < 100);
+        Assert.Contains(health.DetectedIssues, issue => issue.Contains("TPM state is unknown", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void VirtualBoxHostOnlyApipaDoesNotCreateCriticalNetworkPenalty()
+    {
+        using var doc = JsonDocument.Parse(
+            """
+            {
+              "overallStatus":"READY",
+              "diskStatus":"READY",
+              "batteryStatus":"READY",
+              "summary":{"ramTotal":"32 GB","ramStatus":"READY","tpmInfo":{"status":"READY"},"secureBootInfo":{"status":"READY"},"tpmPresent":true,"tpmReady":true,"secureBoot":true},
+              "network":{
+                "status":"READY",
+                "internetCheck":true,
+                "adapters":[
+                  {"name":"Ethernet","description":"Intel Ethernet","adapterRole":"ActivePhysicalInternet","apipaDetected":false,"gatewayPresent":true,"isVirtual":false},
+                  {"name":"VirtualBox Host-Only Network","description":"VirtualBox Ethernet Adapter","adapterRole":"VirtualAdapter","apipaDetected":true,"gatewayPresent":false,"isVirtual":true}
+                ]
+              },
+              "flipValue":{"confidenceScore":0.6,"valueDrivers":[],"valueReducers":[],"suggestedUpgradeRecommendations":[]},
+              "disks":[],
+              "batteries":[],
+              "obviousProblems":[],
+              "recommendations":[]
+            }
+            """);
+
+        var profile = SystemProfileMapper.FromJson(doc.RootElement);
+        var health = SystemHealthEvaluator.Evaluate(profile);
+
+        Assert.Equal(0, profile.ApipaAdapterCount);
+        Assert.Equal(0, profile.MissingGatewayAdapterCount);
+        Assert.True(health.HealthScore >= 80);
+    }
+
+    [Fact]
+    public void AutomationSummaryCountsAdaptersAndNamesGpus()
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), $"si-merge-gpu-{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(
+                tmp,
+                """
+                {
+                  "overallStatus":"READY",
+                  "diskStatus":"READY",
+                  "batteryStatus":"READY",
+                  "summary":{
+                    "manufacturer":"Dell",
+                    "model":"Precision 5540",
+                    "cpu":"Intel Core i7-9850H",
+                    "ramTotal":"32 GB",
+                    "ramStatus":"READY",
+                    "tpmPresent":null,
+                    "tpmReady":null,
+                    "secureBoot":null,
+                    "tpmInfo":{"status":"UNKNOWN","friendlyDisplayText":"TPM status unavailable"},
+                    "secureBootInfo":{"status":"UNKNOWN","friendlyDisplayText":"Unknown - requires admin or unavailable"},
+                    "gpus":[
+                      {"name":"Intel UHD 630","type":"Integrated","driverVersion":"1"},
+                      {"name":"NVIDIA Quadro T2000","type":"Dedicated","driverVersion":"2"}
+                    ]
+                  },
+                  "network":{
+                    "status":"READY",
+                    "internetCheck":true,
+                    "physicalAdapters":[{"name":"Ethernet"}],
+                    "virtualAdapters":[{"name":"VirtualBox Host-Only"}],
+                    "adapters":[]
+                  },
+                  "flipValue":{"confidenceScore":0.6,"valueDrivers":[],"valueReducers":[],"suggestedUpgradeRecommendations":[]},
+                  "disks":[],
+                  "batteries":[],
+                  "obviousProblems":[],
+                  "recommendations":[]
+                }
+                """);
+
+            Assert.True(SystemIntelligenceAutomationMerger.TryMerge(tmp));
+            using var doc = JsonDocument.Parse(File.ReadAllText(tmp));
+            var summary = doc.RootElement.GetProperty("forgerAutomation").GetProperty("summaryLine").GetString();
+
+            Assert.Contains("1 physical / 1 virtual", summary);
+            Assert.Contains("NVIDIA Quadro T2000", summary);
+            Assert.DoesNotContain("GPUs: Unknown", summary);
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(tmp);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
     public void KyraIntentRouter_UsbSlowRoutesToUsbBuilder()
     {
         Assert.Equal(KyraIntent.USBBuilderHelp, KyraIntentRouter.DetectIntent("Why is my USB stick so slow?"));

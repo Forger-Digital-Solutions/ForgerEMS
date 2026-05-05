@@ -189,5 +189,82 @@ public sealed class MachineIntelligenceResaleEngineTests
         Assert.DoesNotContain("ABC123456789", draft.Title, StringComparison.Ordinal);
         Assert.Contains("redacted", draft.Title, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void FlipValueOfflineHeuristicReturnsRangeConfidenceAndAssumptions()
+    {
+        var result = new FlipValueEngine().Estimate(new FlipValueRequest
+        {
+            SystemProfile = PrecisionProfile(),
+            Condition = FlipValueCondition.Good,
+            ChargerIncluded = true
+        });
+
+        Assert.True(result.Low > 0);
+        Assert.True(result.High >= result.Expected);
+        Assert.NotEmpty(result.Assumptions);
+        Assert.Contains(result.Assumptions, item => item.Contains("Location not configured", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("not configured", result.ProviderStatus, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void FlipValueActiveListingProviderIsAskingPriceEvidenceNotSold()
+    {
+        var result = new FlipValueEngine([new FakeActiveEbayProvider()]).Estimate(new FlipValueRequest
+        {
+            SystemProfile = PrecisionProfile(),
+            Location = new LocationProfile { City = "Charlotte", StateOrRegion = "NC", PostalCode = "28202" }
+        });
+
+        Assert.Contains(result.Assumptions, item => item.Contains("asking prices", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Reasons, reason => reason.Contains("0 sold", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(2, result.CompsUsed);
+    }
+
+    [Fact]
+    public void FlipValueLocationMissingLowersConfidenceButDoesNotFail()
+    {
+        var comps = new[]
+        {
+            new FlipValueComparable { Provider = "Manual", Title = "A", Price = 300m, IsSoldComp = true },
+            new FlipValueComparable { Provider = "Manual", Title = "B", Price = 320m, IsSoldComp = true },
+            new FlipValueComparable { Provider = "Manual", Title = "C", Price = 340m, IsSoldComp = true },
+            new FlipValueComparable { Provider = "Manual", Title = "D", Price = 360m, IsSoldComp = true }
+        };
+
+        var result = new FlipValueEngine([new ManualCompImportFlipValueProvider(comps)]).Estimate(new FlipValueRequest
+        {
+            SystemProfile = PrecisionProfile()
+        });
+
+        Assert.True(result.Expected > 0);
+        Assert.Equal("Location not configured; national/offline basis", result.LocationBasis);
+        Assert.NotEqual(ResaleConfidenceLevel.High, result.Confidence);
+    }
+
+    private static SystemProfile PrecisionProfile() => new()
+    {
+        Manufacturer = "Dell",
+        Model = "Precision 5540",
+        Cpu = "Intel Core i7-9850H",
+        RamTotal = "32 GB",
+        RamTotalGb = 32,
+        OperatingSystem = "Windows 11 Pro",
+        Gpus = [new SystemGpuProfile { Name = "NVIDIA Quadro T2000", GpuKind = "Dedicated" }],
+        Disks = [new SystemDiskProfile { Name = "Samsung 990 Pro", MediaType = "NVMe SSD", Size = "1 TB", Health = "Healthy", Status = "READY" }]
+    };
+
+    private sealed class FakeActiveEbayProvider : IFlipValueProvider
+    {
+        public string Name => "eBay active listings";
+        public bool IsConfigured => true;
+        public bool UsesSoldComps => false;
+
+        public IReadOnlyList<FlipValueComparable> GetComparables(FlipValueRequest request) =>
+        [
+            new FlipValueComparable { Provider = Name, Title = "Dell Precision 5540 active listing", Price = 420m, IsSoldComp = false },
+            new FlipValueComparable { Provider = Name, Title = "Precision 5540 Quadro active listing", Price = 460m, IsSoldComp = false }
+        ];
+    }
 }
 

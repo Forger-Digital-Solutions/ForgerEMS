@@ -31,14 +31,20 @@ public static class SystemIntelligenceAutomationMerger
             var profile = SystemProfileMapper.FromJson(doc.RootElement);
             var health = SystemHealthEvaluator.Evaluate(profile);
             var recs = RecommendationEngine.Generate(profile, health);
+            var machineClass = MachineClassifier.Classify(profile);
+            var sensorMatrix = SensorMatrixBuilder.Build(profile);
+            var deviceFit = new DeviceFitEngine().Evaluate(profile);
 
-            var automation = BuildAutomationNode(doc.RootElement, profile, health, recs);
+            var automation = BuildAutomationNode(doc.RootElement, profile, health, recs, deviceFit, machineClass, sensorMatrix);
             var root = JsonNode.Parse(text)?.AsObject();
             if (root is null)
             {
                 return false;
             }
 
+            root["deviceFit"] = JsonSerializer.SerializeToNode(deviceFit, SerializerOptions);
+            root["machineClass"] = JsonSerializer.SerializeToNode(machineClass, SerializerOptions);
+            root["sensorMatrix"] = JsonSerializer.SerializeToNode(sensorMatrix, SerializerOptions);
             root["forgerAutomation"] = JsonSerializer.SerializeToNode(automation, SerializerOptions);
             File.WriteAllText(reportPath, root.ToJsonString(new JsonSerializerOptions
             {
@@ -59,7 +65,10 @@ public static class SystemIntelligenceAutomationMerger
         JsonElement root,
         SystemProfile profile,
         SystemHealthEvaluation health,
-        IReadOnlyList<string> recs)
+        IReadOnlyList<string> recs,
+        DeviceFitResult deviceFit,
+        MachineClassResult machineClass,
+        SensorMatrixResult sensorMatrix)
     {
         var issues = new List<object>();
         foreach (var issue in health.DetectedIssues.Where(i =>
@@ -77,16 +86,19 @@ public static class SystemIntelligenceAutomationMerger
             });
         }
 
-        var breakdown = BuildHealthBreakdown(health.HealthScore, profile, issues.Count);
+        var breakdown = BuildHealthBreakdown(health, profile, issues.Count);
 
         var norm = BuildNormalizedHardware(root, profile);
 
         var summary =
             $"Health {health.HealthScore}/100. " +
+            $"Confidence {health.ConfidenceScore}/100. " +
             $"{norm.CpuTier}. " +
             $"GPUs: {string.Join(", ", norm.GpuClasses)}. " +
             $"Boot volume: {norm.BootVolume}. " +
-            $"Network: {norm.NetworkAdapterSummary}.";
+            $"Network: {norm.NetworkAdapterSummary}. " +
+            $"Machine class: {machineClass.PrimaryClass}. " +
+            $"Best use: {deviceFit.PrimaryFit}.";
 
         return new
         {
@@ -95,16 +107,45 @@ public static class SystemIntelligenceAutomationMerger
             summaryLine = summary,
             healthScore = health.HealthScore,
             healthScoreBreakdown = breakdown,
+            deviceFitSummary = new
+            {
+                primaryFit = deviceFit.PrimaryFit,
+                machineClass = deviceFit.MachineClass,
+                confidence = deviceFit.Confidence,
+                strongFits = deviceFit.StrongFits.Take(5).ToArray(),
+                weakFits = deviceFit.WeakFits.Take(4).ToArray(),
+                listingPositioning = deviceFit.ListingPositioning
+            },
+            machineClassSummary = new
+            {
+                primaryClass = machineClass.PrimaryClass,
+                confidence = machineClass.Confidence,
+                secondaryClasses = machineClass.SecondaryClasses.Take(3).ToArray(),
+                note = machineClass.TechnicianNote
+            },
+            sensorCoverageSummary = new
+            {
+                confidence = sensorMatrix.Confidence,
+                coverage = sensorMatrix.CoverageSummary,
+                groups = sensorMatrix.Groups.Select(group => new
+                {
+                    group.Category,
+                    group.KnownFields,
+                    group.TotalFields,
+                    group.Summary
+                }).ToArray(),
+                note = sensorMatrix.DeepSensorModeNote
+            },
             issues,
             recommendedActions = recs.ToArray(),
             normalizedHardware = norm
         };
     }
 
-    private static object[] BuildHealthBreakdown(int score, SystemProfile profile, int issueCount)
+    private static object[] BuildHealthBreakdown(SystemHealthEvaluation health, SystemProfile profile, int issueCount)
     {
-        return
-        [
+        var rows = new List<object>
+        {
             new
             {
                 factor = "Overall scan status",
@@ -118,14 +159,24 @@ public static class SystemIntelligenceAutomationMerger
                 rationale = issueCount == 0
                     ? "No issues were promoted from the evaluator."
                     : $"{issueCount} issue row(s) were generated for Kyra and diagnostics."
-            },
-            new
-            {
-                factor = "Final health score",
-                points = score,
-                rationale = "Composite 0-100 score from SystemHealthEvaluator (higher is healthier)."
             }
-        ];
+        };
+
+        rows.AddRange(health.Categories.Select(category => new
+        {
+            factor = category.Category,
+            points = category.Score,
+            rationale = $"{category.Status}, confidence {category.Confidence}: {string.Join("; ", category.Reasons.Take(2))}"
+        }));
+
+        rows.Add(new
+        {
+            factor = "Final health score",
+            points = health.HealthScore,
+            rationale = "Composite 0-100 score from SystemHealthEvaluator. Unknown/not exposed data reduces confidence more than health."
+        });
+
+        return rows.ToArray();
     }
 
     private static ForgerNormalizedHardwareSummary BuildNormalizedHardware(JsonElement root, SystemProfile profile)
@@ -190,11 +241,25 @@ public static class SystemIntelligenceAutomationMerger
 
     private static (int physical, int virtualAdapters) CountAdapterRoles(JsonElement root)
     {
-        if (!root.TryGetProperty("network", out var net) ||
-            !net.TryGetProperty("adapters", out var adapters) ||
-            adapters.ValueKind != JsonValueKind.Array)
+        if (!root.TryGetProperty("network", out var net))
         {
             return (0, 0);
+        }
+
+        var explicitPhys = net.TryGetProperty("physicalAdapters", out var physicalAdapters) && physicalAdapters.ValueKind == JsonValueKind.Array
+            ? physicalAdapters.GetArrayLength()
+            : (int?)null;
+        var explicitVirt = net.TryGetProperty("virtualAdapters", out var virtualAdapters) && virtualAdapters.ValueKind == JsonValueKind.Array
+            ? virtualAdapters.GetArrayLength()
+            : (int?)null;
+        if (explicitPhys.HasValue && explicitVirt.HasValue)
+        {
+            return (explicitPhys.Value, explicitVirt.Value);
+        }
+
+        if (!net.TryGetProperty("adapters", out var adapters) || adapters.ValueKind != JsonValueKind.Array)
+        {
+            return (explicitPhys ?? 0, explicitVirt ?? 0);
         }
 
         var phys = 0;
@@ -202,12 +267,22 @@ public static class SystemIntelligenceAutomationMerger
         foreach (var a in adapters.EnumerateArray())
         {
             var role = GetJsonString(a, "adapterRole");
-            if (role.Contains("Virtual", StringComparison.OrdinalIgnoreCase))
+            var name = GetJsonString(a, "name");
+            var description = GetJsonString(a, "description");
+            if (role.Contains("Virtual", StringComparison.OrdinalIgnoreCase) ||
+                role.Contains("VPN", StringComparison.OrdinalIgnoreCase) ||
+                role.Contains("Host-Only", StringComparison.OrdinalIgnoreCase) ||
+                SystemIntelligenceFormatter.ShouldIgnoreAdapterForWarnings(name, description))
             {
                 virt++;
             }
             else if (role.Contains("Physical", StringComparison.OrdinalIgnoreCase) ||
-                     role.Contains("Wi-Fi", StringComparison.OrdinalIgnoreCase))
+                     role.Contains("Wi-Fi", StringComparison.OrdinalIgnoreCase) ||
+                     role.Contains("ActivePhysical", StringComparison.OrdinalIgnoreCase))
+            {
+                phys++;
+            }
+            else
             {
                 phys++;
             }
@@ -223,20 +298,51 @@ public static class SystemIntelligenceAutomationMerger
         {
             return profile.Gpus.Count == 0
                 ? ["Unknown"]
-                : profile.Gpus.Select(_ => "Unknown").ToArray();
+                : profile.Gpus.Select(gpu => ClassifyGpuForSummary(gpu.Name, gpu.GpuKind)).ToArray();
         }
 
         var list = new List<string>();
         foreach (var g in gpus.EnumerateArray())
         {
             var t = GetJsonString(g, "type");
+            var name = GetJsonString(g, "name");
             if (!string.IsNullOrWhiteSpace(t) && !string.Equals(t, "unknown", StringComparison.OrdinalIgnoreCase))
             {
-                list.Add(t);
+                list.Add($"{t}: {name}");
+            }
+            else if (!string.IsNullOrWhiteSpace(name) && !string.Equals(name, "unknown", StringComparison.OrdinalIgnoreCase))
+            {
+                list.Add(ClassifyGpuForSummary(name, t));
             }
         }
 
         return list.Count > 0 ? list.ToArray() : ["Unknown"];
+    }
+
+    private static string ClassifyGpuForSummary(string name, string type)
+    {
+        if (!string.IsNullOrWhiteSpace(type) && !type.Equals("unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"{type}: {name}";
+        }
+
+        if (name.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("Quadro", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("RTX", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("GTX", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("Radeon", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Dedicated: {name}";
+        }
+
+        if (name.Contains("Intel", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("UHD", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("Iris", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Integrated: {name}";
+        }
+
+        return name;
     }
 
     private static string InferCpuTier(string cpu)

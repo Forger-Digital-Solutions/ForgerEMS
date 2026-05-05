@@ -191,6 +191,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _systemIntelligenceNetworkCardText = "UNKNOWN";
     private string _systemIntelligenceSecurityCardText = "UNKNOWN";
     private string _systemIntelligenceFlipValueCardText = "Run a system scan to generate local flip-value guidance.";
+    private string _systemIntelligenceDeviceFitCardText = "Run a system scan to estimate best-use/device fit.";
+    private string _systemIntelligenceHardwareXrayCardText = "Run a system scan to build machine class and sensor exposure coverage.";
     private string _systemIntelligenceStaleBannerText = string.Empty;
     private string _systemIntelligenceAutomationLineText = string.Empty;
     private Brush _systemIntelligenceStatusBackground = RunningBackground;
@@ -1302,6 +1304,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         get => _systemIntelligenceFlipValueCardText;
         private set => SetProperty(ref _systemIntelligenceFlipValueCardText, value);
+    }
+
+    public string SystemIntelligenceDeviceFitCardText
+    {
+        get => _systemIntelligenceDeviceFitCardText;
+        private set => SetProperty(ref _systemIntelligenceDeviceFitCardText, value);
+    }
+
+    public string SystemIntelligenceHardwareXrayCardText
+    {
+        get => _systemIntelligenceHardwareXrayCardText;
+        private set => SetProperty(ref _systemIntelligenceHardwareXrayCardText, value);
     }
 
     public Brush SystemIntelligenceStatusBackground
@@ -2749,21 +2763,38 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void CopySystemSummary()
     {
-        var summary = string.Join(
-            Environment.NewLine,
-            new[]
+        var reportPath = Path.Combine(GetRuntimeReportsDirectory(), "system-intelligence-latest.json");
+        string summary;
+        try
+        {
+            if (File.Exists(reportPath))
             {
-                $"Status: {SystemIntelligenceStatusText}",
-                SystemIntelligenceLastScanText,
-                SystemIntelligenceSystemCardText,
-                SystemIntelligenceComputeCardText,
-                SystemIntelligenceStorageCardText,
-                SystemIntelligenceBatteryCardText,
-                SystemIntelligenceNetworkCardText,
-                SystemIntelligenceSecurityCardText,
-                "Recommendations:",
-                string.Join(Environment.NewLine, SystemIntelligenceRecommendations.Select(item => "- " + item))
-            });
+                using var document = JsonDocument.Parse(File.ReadAllText(reportPath));
+                summary = SystemIntelligenceQuickReadBuilder.Build(document.RootElement);
+            }
+            else
+            {
+                summary = "ForgerEMS System Intelligence — Quick Read" + Environment.NewLine +
+                          "Machine: Run System Intelligence first" + Environment.NewLine +
+                          "Health: Unknown | Confidence: Low" + Environment.NewLine +
+                          "Best Use: Unknown until scan completes" + Environment.NewLine +
+                          "Flip Value: Unknown | Basis: scan not available" + Environment.NewLine +
+                          "Key Strengths: scan not available" + Environment.NewLine +
+                          "Watch-outs: no current report loaded" + Environment.NewLine +
+                          "Next Action: Run System Scan, then copy the quick read again.";
+            }
+        }
+        catch
+        {
+            summary = "ForgerEMS System Intelligence — Quick Read" + Environment.NewLine +
+                      "Machine: Report parse failed" + Environment.NewLine +
+                      "Health: Unknown | Confidence: Low" + Environment.NewLine +
+                      "Best Use: Unknown until report is regenerated" + Environment.NewLine +
+                      "Flip Value: Unknown | Basis: report parse failed" + Environment.NewLine +
+                      "Key Strengths: unavailable" + Environment.NewLine +
+                      "Watch-outs: saved report could not be parsed" + Environment.NewLine +
+                      "Next Action: Rerun System Scan, then copy the quick read again.";
+        }
 
         Clipboard.SetText(SensitiveDataRedactor.SanitizeForSupportShare(summary));
         AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Safe summary copied to clipboard (sanitized for sharing).", LogSeverity.Success));
@@ -4655,6 +4686,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             SystemIntelligenceNetworkCardText = SystemIntelligenceNetworkText;
             SystemIntelligenceSecurityCardText = SystemIntelligenceSecurityText;
             SystemIntelligenceFlipValueCardText = BuildFlipValueSummary(root);
+            SystemIntelligenceDeviceFitCardText = BuildDeviceFitSummary(root);
+            SystemIntelligenceHardwareXrayCardText = BuildHardwareXraySummary(root);
             SystemIntelligenceReportPathText = $"Report: {reportPath}";
             RefreshCopilotContextText(root);
 
@@ -5239,7 +5272,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var parts = batteries.EnumerateArray()
             .Select(battery => $"{GetJsonString(battery, "name", "Battery")} {GetJsonInt(battery, "estimatedChargeRemaining")}% charge, design {GetJsonString(battery, "designCapacityDisplay", "Not exposed by firmware/Windows")}, full {GetJsonString(battery, "fullChargeCapacityDisplay", "Not exposed by firmware/Windows")}, wear {GetJsonString(battery, "wearDisplay", "Battery wear: Not exposed by firmware/Windows")}, cycles {GetJsonString(battery, "cycleCountDisplay", "Not exposed by firmware/Windows")}, AC {FormatNullableBool(GetJsonNullableBool(battery, "acConnected"))} ({GetJsonString(battery, "healthDisplay", GetJsonString(battery, "status", "UNKNOWN"))})")
             .ToArray();
-        return $"Battery: {FormatList(parts, "present, details unavailable")}";
+        var notExposed = parts.Any(part => part.Contains("Not exposed", StringComparison.OrdinalIgnoreCase));
+        var note = notExposed
+            ? " Firmware/Windows did not expose some battery wear/cycle fields; verify with battery report or vendor diagnostics before treating it as failure."
+            : string.Empty;
+        return $"Battery: {FormatList(parts, "present, details unavailable")}.{note}";
     }
 
     private static string BuildNetworkSummary(JsonElement root)
@@ -5253,17 +5290,24 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var internet = GetJsonString(network, "internetDisplay", GetJsonBool(network, "internetCheck") ? "Internet: Working" : "Internet: Check failed");
         var defaultRoute = GetJsonProviderDisplay(network, "defaultRoute", "Default route: not detected");
         var virtualIgnored = GetJsonString(network, "virtualAdaptersIgnored", "Virtual adapters ignored: none");
-        var adapterProperty = network.TryGetProperty("physicalAdapters", out var physicalAdapters) && physicalAdapters.ValueKind == JsonValueKind.Array
+        var physicalCount = network.TryGetProperty("physicalAdapters", out var physicalAdapters) && physicalAdapters.ValueKind == JsonValueKind.Array
+            ? physicalAdapters.GetArrayLength()
+            : CountAdaptersByKind(network, virtualAdapters: false);
+        var virtualCount = network.TryGetProperty("virtualAdapters", out var virtualAdapters) && virtualAdapters.ValueKind == JsonValueKind.Array
+            ? virtualAdapters.GetArrayLength()
+            : CountAdaptersByKind(network, virtualAdapters: true);
+        var adapterProperty = physicalAdapters.ValueKind == JsonValueKind.Array
             ? physicalAdapters
             : network.TryGetProperty("adapters", out var allAdapters)
                 ? allAdapters
                 : default;
         if (adapterProperty.ValueKind != JsonValueKind.Array || adapterProperty.GetArrayLength() == 0)
         {
-            return $"Network: {status}. {internet}. {defaultRoute}. No active physical adapter detected. {virtualIgnored}.";
+            return $"Network: {status}. {internet}. {defaultRoute}. {physicalCount} physical / {virtualCount} virtual adapters detected. No active physical adapter detected. {virtualIgnored}.";
         }
 
         var parts = adapterProperty.EnumerateArray()
+            .Where(adapter => !ShouldTreatAdapterAsVirtual(adapter))
             .Select(adapter =>
             {
                 var ips = adapter.TryGetProperty("ipAddresses", out var ipArray) && ipArray.ValueKind == JsonValueKind.Array
@@ -5281,7 +5325,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             })
             .Take(3)
             .ToArray();
-        return $"Network: {status}. {internet}. {defaultRoute}. {FormatList(parts, "No active physical adapter detected")}. {virtualIgnored}.";
+        var virtualNote = virtualCount > 0
+            ? $"{virtualIgnored}; host-only/VPN/virtual adapters are informational unless they are the active internet route"
+            : virtualIgnored;
+        var adapterSummary = FormatList(parts, "No active physical adapter detected");
+        return $"Network: {status}. {internet}. {defaultRoute}. Adapters: {physicalCount} physical / {virtualCount} virtual. Active physical: {adapterSummary}. {virtualNote}.";
     }
 
     private static string BuildSecuritySummary(JsonElement root)
@@ -5296,12 +5344,28 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var realtime = GetJsonNullableBool(security, "realTimeProtectionEnabled");
         var firewall = GetJsonNullableBool(security, "firewallEnabled");
         var products = GetJsonStringArray(security, "avProducts");
+        var summary = root.TryGetProperty("summary", out var summaryElement) ? summaryElement : default;
+        var secureBoot = summary.ValueKind != JsonValueKind.Undefined
+            ? GetJsonProviderDisplay(summary, "secureBootInfo", "Secure Boot: Unknown")
+            : "Secure Boot: Unknown";
+        var secureBootStatus = summary.ValueKind != JsonValueKind.Undefined
+            ? GetJsonProviderStatus(summary, "secureBootInfo")
+            : "UNKNOWN";
+        var tpm = summary.ValueKind != JsonValueKind.Undefined
+            ? GetJsonProviderDisplay(summary, "tpmInfo", "TPM: Unknown")
+            : "TPM: Unknown";
+        var tpmStatus = summary.ValueKind != JsonValueKind.Undefined
+            ? GetJsonProviderStatus(summary, "tpmInfo")
+            : "UNKNOWN";
         var bitLocker = security.TryGetProperty("bitLockerSummary", out _)
             ? GetJsonProviderDisplay(security, "bitLockerSummary", "unavailable")
             : security.TryGetProperty("bitLockerVolumes", out var bitLockerVolumes) && bitLockerVolumes.ValueKind == JsonValueKind.Array
             ? FormatList(bitLockerVolumes.EnumerateArray().Select(volume => $"{GetJsonString(volume, "mountPoint", "Volume")} {GetJsonString(volume, "protectionStatus", "UNKNOWN")}"), "unavailable")
             : "unavailable";
-        return $"Security: {status}. Defender AV: {FormatNullableBool(avEnabled)}. Real-time: {FormatNullableBool(realtime)}. Firewall: {FormatNullableBool(firewall)}. Registered AV: {FormatList(products, "none detected")}. BitLocker: {bitLocker}";
+        var verificationNote = IsUnknownProviderStatus(tpmStatus) || IsUnknownProviderStatus(secureBootStatus)
+            ? " Unknown firmware fields are verification items, not confirmed failures."
+            : string.Empty;
+        return $"Security: {status}. Defender AV: {FormatNullableBool(avEnabled)}. Real-time: {FormatNullableBool(realtime)}. Firewall: {FormatNullableBool(firewall)}. TPM: {tpm}. Secure Boot: {secureBoot}. Registered AV: {FormatList(products, "none detected")}. BitLocker: {bitLocker}.{verificationNote}";
     }
 
     private static string BuildFlipValueSummary(JsonElement root)
@@ -5318,6 +5382,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var parts = GetJsonString(flipValue, "partsRepairPrice", "UNKNOWN");
         var confidence = GetJsonString(flipValue, "confidenceScore", "UNKNOWN");
         var providerStatus = GetJsonString(flipValue, "providerStatus", "Pricing provider not configured");
+        var locationBasis = GetJsonString(flipValue, "locationBasis", "Location not configured; national/offline heuristic basis");
         var title = GetJsonString(flipValue, "suggestedListingTitle", "UNKNOWN");
         var missingInfo = flipValue.TryGetProperty("missingInfoNeeded", out var missingInfoArray) && missingInfoArray.ValueKind == JsonValueKind.Array
             ? FormatList(missingInfoArray.EnumerateArray().Select(item => item.GetString() ?? string.Empty).Take(3), "none")
@@ -5333,13 +5398,172 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             : "none";
 
         return
-            $"Estimate type: {estimateType}{Environment.NewLine}" +
-            $"Range: {range}; list {list}; quick-sale {quick}; parts/repair {parts}{Environment.NewLine}" +
-            $"Confidence: {confidence}; providers: {providerStatus}{Environment.NewLine}" +
-            $"Comps/API status: {apiStatus}; missing info: {missingInfo}{Environment.NewLine}" +
-            $"Drivers: {drivers}{Environment.NewLine}" +
-            $"Reducers: {reducers}{Environment.NewLine}" +
+            $"Estimate: {range} (list {list}; quick-sale {quick}; parts/repair {parts}){Environment.NewLine}" +
+            $"Confidence: {confidence} | Source: {estimateType} | API: {apiStatus}{Environment.NewLine}" +
+            $"Top drivers: {drivers}{Environment.NewLine}" +
+            $"Top reducers: {reducers}{Environment.NewLine}" +
+            $"Missing before confident pricing: {missingInfo}{Environment.NewLine}" +
             $"Listing title: {title}";
+    }
+
+    private static string BuildDeviceFitSummary(JsonElement root)
+    {
+        if (root.TryGetProperty("deviceFit", out var deviceFit) && deviceFit.ValueKind == JsonValueKind.Object)
+        {
+            var primary = GetJsonString(deviceFit, "primaryFit", "Unknown / needs scan");
+            var machineClass = GetJsonString(deviceFit, "machineClass", "Unknown / Mixed");
+            var confidence = GetJsonString(deviceFit, "confidence", "Low");
+            var strongFits = deviceFit.TryGetProperty("strongFits", out var strongArray) && strongArray.ValueKind == JsonValueKind.Array
+                ? FormatList(strongArray.EnumerateArray().Select(item => item.GetString() ?? string.Empty).Take(5), "needs more data")
+                : "needs more data";
+            var weakFits = deviceFit.TryGetProperty("weakFits", out var weakArray) && weakArray.ValueKind == JsonValueKind.Array
+                ? FormatList(weakArray.EnumerateArray().Select(item => item.GetString() ?? string.Empty).Take(4), "none obvious")
+                : "none obvious";
+            var examples = deviceFit.TryGetProperty("exampleWorkloads", out var exampleArray) && exampleArray.ValueKind == JsonValueKind.Array
+                ? FormatList(exampleArray.EnumerateArray().Select(item => item.GetString() ?? string.Empty).Take(6), "no workload examples available")
+                : "no workload examples available";
+            var upgrades = deviceFit.TryGetProperty("upgradeFirstAdvice", out var upgradeArray) && upgradeArray.ValueKind == JsonValueKind.Array
+                ? FormatList(upgradeArray.EnumerateArray().Select(item => item.GetString() ?? string.Empty).Take(3), "verify condition and drivers")
+                : "verify condition and drivers";
+            var listing = GetJsonString(deviceFit, "listingPositioning", "Market around verified specs and disclose unknowns.");
+
+            return
+                $"Primary fit: {primary}{Environment.NewLine}" +
+                $"Machine class: {machineClass}{Environment.NewLine}" +
+                $"Confidence: {confidence}{Environment.NewLine}" +
+                $"Strong fits: {strongFits}{Environment.NewLine}" +
+                $"Watch-outs: {weakFits}{Environment.NewLine}" +
+                $"Examples: {examples}{Environment.NewLine}" +
+                $"Upgrade/listing advice: {upgrades}{Environment.NewLine}" +
+                $"Listing angle: {listing}";
+        }
+
+        try
+        {
+            var profile = SystemProfileMapper.FromJson(root);
+            return DeviceFitEngine.FormatCard(new DeviceFitEngine().Evaluate(profile));
+        }
+        catch
+        {
+            return "Best Use / Device Fit: run System Intelligence again to generate fit guidance.";
+        }
+    }
+
+    private static string BuildHardwareXraySummary(JsonElement root)
+    {
+        if (root.TryGetProperty("machineClass", out var machineClass) && machineClass.ValueKind == JsonValueKind.Object &&
+            root.TryGetProperty("sensorMatrix", out var sensorMatrix) && sensorMatrix.ValueKind == JsonValueKind.Object)
+        {
+            var primary = GetJsonString(machineClass, "primaryClass", "Unknown / Mixed");
+            var confidence = GetJsonString(machineClass, "confidence", "Low");
+            var note = GetJsonString(machineClass, "technicianNote", "Signals are incomplete; verify manually.");
+            var secondary = machineClass.TryGetProperty("secondaryClasses", out var secondaryArray) && secondaryArray.ValueKind == JsonValueKind.Array
+                ? FormatList(secondaryArray.EnumerateArray().Select(item => item.GetString() ?? string.Empty).Take(3), "none")
+                : "none";
+            var coverage = GetJsonString(sensorMatrix, "coverageSummary", string.Empty);
+            if (string.IsNullOrWhiteSpace(coverage) && sensorMatrix.TryGetProperty("groups", out var groups) && groups.ValueKind == JsonValueKind.Array)
+            {
+                coverage = FormatList(groups.EnumerateArray().Select(group =>
+                    $"{GetJsonString(group, "category", "Group")}: {GetJsonString(group, "knownFields", "0")}/{GetJsonString(group, "totalFields", "0")} fields known"), "No coverage data");
+            }
+
+            var live = FindLiveSensorNames(sensorMatrix);
+            var missing = FindUnavailableSensorNotes(sensorMatrix);
+            var deepNote = GetJsonString(sensorMatrix, "deepSensorModeNote", "Some sensors require admin access, firmware support, vendor drivers, or optional reviewed providers.");
+
+            return
+                $"Machine class: {primary} ({confidence}){Environment.NewLine}" +
+                $"Secondary: {secondary}{Environment.NewLine}" +
+                $"Sensor coverage: {coverage}{Environment.NewLine}" +
+                $"Live sensors: {live}{Environment.NewLine}" +
+                $"Missing/limited sensors: {missing}{Environment.NewLine}" +
+                "Status guide: Unknown = lower confidence; NotExposed = firmware/driver/permission limit; Inferred = derived signal; Failure = explicit warning/critical evidence only." + Environment.NewLine +
+                $"Note: {note} {deepNote}";
+        }
+
+        try
+        {
+            var profile = SystemProfileMapper.FromJson(root);
+            var classification = MachineClassifier.Classify(profile);
+            var sensors = SensorMatrixBuilder.Build(profile);
+            return
+                $"Machine class: {classification.PrimaryClass} ({classification.Confidence}){Environment.NewLine}" +
+                $"Secondary: {FormatList(classification.SecondaryClasses.Take(3), "none")}{Environment.NewLine}" +
+                $"Sensor coverage: {sensors.CoverageSummary}{Environment.NewLine}" +
+                $"Live sensors: {FormatList(sensors.Groups.SelectMany(g => g.Readings).Where(r => r.IsLive).Select(r => r.Name).Take(5), "none exposed in safe scan")}{Environment.NewLine}" +
+                $"Missing/limited sensors: {FormatList(sensors.Groups.SelectMany(g => g.Readings).Where(r => r.IsUnavailable).Select(r => $"{r.Name} ({r.UnavailableReason})").Take(5), "none obvious")}{Environment.NewLine}" +
+                $"Note: {classification.TechnicianNote} {sensors.DeepSensorModeNote}";
+        }
+        catch
+        {
+            return "Hardware X-Ray: run System Intelligence again to generate machine class and sensor coverage.";
+        }
+    }
+
+    private static string FindLiveSensorNames(JsonElement sensorMatrix)
+    {
+        if (!sensorMatrix.TryGetProperty("groups", out var groups) || groups.ValueKind != JsonValueKind.Array)
+        {
+            return "none exposed in safe scan";
+        }
+
+        var names = new List<string>();
+        foreach (var reading in EnumerateSensorReadings(groups))
+        {
+            if (reading.TryGetProperty("isLive", out var live) &&
+                live.ValueKind == JsonValueKind.True)
+            {
+                var name = GetJsonString(reading, "name", string.Empty);
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    names.Add(name);
+                }
+            }
+        }
+
+        return FormatList(names.Take(5), "none exposed in safe scan");
+    }
+
+    private static string FindUnavailableSensorNotes(JsonElement sensorMatrix)
+    {
+        if (!sensorMatrix.TryGetProperty("groups", out var groups) || groups.ValueKind != JsonValueKind.Array)
+        {
+            return "none summarized";
+        }
+
+        var notes = new List<string>();
+        foreach (var reading in EnumerateSensorReadings(groups))
+        {
+            if (reading.TryGetProperty("isUnavailable", out var unavailable) &&
+                unavailable.ValueKind == JsonValueKind.True)
+            {
+                var name = GetJsonString(reading, "name", string.Empty);
+                var reason = GetJsonString(reading, "unavailableReason", "Unknown");
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    notes.Add($"{name} ({reason})");
+                }
+            }
+        }
+
+        return FormatList(notes.Take(6), "none summarized");
+    }
+
+    private static IEnumerable<JsonElement> EnumerateSensorReadings(JsonElement groups)
+    {
+        foreach (var group in groups.EnumerateArray())
+        {
+            if (!group.TryGetProperty("readings", out var readings) ||
+                readings.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            foreach (var reading in readings.EnumerateArray())
+            {
+                yield return reading;
+            }
+        }
     }
 
     private void RefreshCopilotContextText()
@@ -5375,7 +5599,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 $"RAM: {GetJsonString(summary, "ramInstalledDisplay", GetJsonString(summary, "ramTotal", "Unknown RAM"))} @ {GetJsonString(summary, "ramConfiguredSpeedDisplay", GetJsonString(summary, "ramSpeed", "Configured speed not reported"))}{Environment.NewLine}" +
                 $"GPU: {FormatList(GetJsonGpuDisplayArray(summary, "gpus"), "Unknown GPU")}{Environment.NewLine}" +
                 $"Battery: {SystemIntelligenceBatteryText}{Environment.NewLine}" +
-                $"Storage: {SystemIntelligenceDiskHealthText}";
+                $"Storage: {SystemIntelligenceDiskHealthText}{Environment.NewLine}" +
+                $"Best use: {ShortenForSummary(SystemIntelligenceDeviceFitCardText)}{Environment.NewLine}" +
+                $"Hardware X-Ray: {ShortenForSummary(SystemIntelligenceHardwareXrayCardText)}";
         }
 
         CopilotContextText = BuildCopilotUsbContext(summaryText);
@@ -5400,6 +5626,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var battery = SystemIntelligenceBatteryCardText.StartsWith("UNKNOWN", StringComparison.OrdinalIgnoreCase)
             ? "Run scan for battery health"
             : ShortenForSummary(SystemIntelligenceBatteryCardText);
+        var deviceFit = SystemIntelligenceDeviceFitCardText.StartsWith("Run a system scan", StringComparison.OrdinalIgnoreCase)
+            ? "Run scan for device-fit guidance"
+            : ShortenForSummary(SystemIntelligenceDeviceFitCardText);
+        var hardwareXray = SystemIntelligenceHardwareXrayCardText.StartsWith("Run a system scan", StringComparison.OrdinalIgnoreCase)
+            ? "Run scan for machine class and sensor coverage"
+            : ShortenForSummary(SystemIntelligenceHardwareXrayCardText);
         var usb = SelectedUsbTarget is null
             ? "none selected"
             : $"{SelectedUsbTarget.RootPath} {SelectedUsbTarget.LabelDisplay}; {SelectedUsbTarget.DisplayTotalBytes}; {SelectedUsbTarget.SelectionStatusText}";
@@ -5412,6 +5644,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             $"- GPU: {gpu}{Environment.NewLine}" +
             $"- Storage: {storage}{Environment.NewLine}" +
             $"- Battery: {battery}{Environment.NewLine}" +
+            $"- Best use: {deviceFit}{Environment.NewLine}" +
+            $"- Hardware X-Ray: {hardwareXray}{Environment.NewLine}" +
             $"- USB: {usb}";
     }
 
@@ -5455,6 +5689,53 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         return GetJsonString(property, "friendlyDisplayText", fallback);
+    }
+
+    private static string GetJsonProviderStatus(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.Object)
+        {
+            return "UNKNOWN";
+        }
+
+        return GetJsonString(property, "status", "UNKNOWN");
+    }
+
+    private static bool IsUnknownProviderStatus(string status) =>
+        string.IsNullOrWhiteSpace(status) ||
+        status.Equals("UNKNOWN", StringComparison.OrdinalIgnoreCase) ||
+        status.Equals("NOT_EXPOSED", StringComparison.OrdinalIgnoreCase) ||
+        status.Equals("NOTEXPOSED", StringComparison.OrdinalIgnoreCase);
+
+    private static int CountAdaptersByKind(JsonElement network, bool virtualAdapters)
+    {
+        if (!network.TryGetProperty("adapters", out var adapters) || adapters.ValueKind != JsonValueKind.Array)
+        {
+            return 0;
+        }
+
+        return adapters.EnumerateArray().Count(adapter => ShouldTreatAdapterAsVirtual(adapter) == virtualAdapters);
+    }
+
+    private static bool ShouldTreatAdapterAsVirtual(JsonElement adapter)
+    {
+        if (GetJsonBool(adapter, "isVirtual"))
+        {
+            return true;
+        }
+
+        var role = GetJsonString(adapter, "adapterRole", string.Empty);
+        if (role.Contains("virtual", StringComparison.OrdinalIgnoreCase) ||
+            role.Contains("host-only", StringComparison.OrdinalIgnoreCase) ||
+            role.Contains("vpn", StringComparison.OrdinalIgnoreCase) ||
+            role.Contains("loopback", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return SystemIntelligenceFormatter.ShouldIgnoreAdapterForWarnings(
+            GetJsonString(adapter, "name", string.Empty),
+            GetJsonString(adapter, "description", string.Empty));
     }
 
     private static int GetJsonInt(JsonElement element, string propertyName)

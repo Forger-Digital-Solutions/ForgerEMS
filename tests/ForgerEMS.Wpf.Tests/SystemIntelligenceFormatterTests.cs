@@ -51,4 +51,30 @@ public sealed class SystemIntelligenceFormatterTests
         Assert.Equal("TPM present but not ready", SystemIntelligenceFormatter.FormatTpmFriendly(true, true, false, false));
         Assert.Equal("TPM not detected", SystemIntelligenceFormatter.FormatTpmFriendly(false, false, false, false));
     }
+
+    [Fact]
+    public void EvidenceFieldDistinguishesUnavailableFromFailure()
+    {
+        var field = new IntelligenceEvidenceField
+        {
+            Value = "Unknown",
+            Status = IntelligenceFieldStatus.NotExposed,
+            Confidence = IntelligenceConfidence.Low,
+            Evidence = "Confirm-SecureBootUEFI failed",
+            TechnicianNote = "Verify in firmware before treating as disabled."
+        };
+
+        Assert.True(field.IsUnavailable);
+        Assert.False(field.IsConfirmedFailure);
+    }
+
+    [Fact]
+    public void SupportReportRedactorRemovesKeysSerialsAndPaths()
+    {
+        var redacted = SystemIntelligenceReportRedactor.RedactSupportReport(@"serial number: ABC12345 product key: XXXXX-YYYYY path=C:\Users\Daddy_FDS\Secret");
+
+        Assert.DoesNotContain("ABC12345", redacted, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("YYYYY", redacted, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Daddy_FDS", redacted, StringComparison.OrdinalIgnoreCase);
+    }
 }
