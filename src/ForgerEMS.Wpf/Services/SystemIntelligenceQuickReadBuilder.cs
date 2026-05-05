@@ -28,7 +28,7 @@ public static class SystemIntelligenceQuickReadBuilder
         {
             "ForgerEMS System Intelligence — Quick Read",
             $"Machine: {JoinNonEmpty(" ", profile.Manufacturer, profile.Model)} — {machineClass.PrimaryClass}",
-            $"Health: {health.HealthScore}/100 {HealthStatusLabel(profile, health)} | Confidence: {ConfidenceLabel(health.ConfidenceScore)}",
+            $"Health: {health.HealthScore}/100 {HealthStatusLabel(profile, health)} | Scan Confidence: {ConfidenceLabel(health.ConfidenceScore)}",
             $"Best Use: {deviceFit.PrimaryFit}",
             $"Flip Value: {NormalizeRange(flipValue.EstimatedResaleRange)} | Basis: {BuildFlipBasis(flipValue)}",
             $"Key Strengths: {JoinList(strengths, "core specs captured")}",

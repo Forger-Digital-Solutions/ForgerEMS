@@ -12,6 +12,7 @@ public sealed class SystemIntelligenceQuickReadBuilderTests
 
         Assert.Contains("Machine:", summary);
         Assert.Contains("Health:", summary);
+        Assert.Contains("Scan Confidence:", summary);
         Assert.Contains("Best Use:", summary);
         Assert.Contains("Flip Value:", summary);
         Assert.Contains("Key Strengths:", summary);
