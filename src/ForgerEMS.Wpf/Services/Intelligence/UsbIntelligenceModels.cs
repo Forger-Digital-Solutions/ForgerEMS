@@ -87,6 +87,14 @@ public sealed class UsbIntelligenceBenchmarkResult
 
     public long ReadElapsedMs { get; init; }
 
+    public bool ReadLikelyCached { get; init; }
+
+    public bool ReadIsEstimate { get; init; }
+
+    public string BenchmarkConfidence { get; init; } = string.Empty;
+
+    public string AccuracyWarning { get; init; } = string.Empty;
+
     public static UsbIntelligenceBenchmarkResult Failed(string message, UsbNativeBenchmarkEndKind endKind = UsbNativeBenchmarkEndKind.IoOrSystemError) =>
         new()
         {

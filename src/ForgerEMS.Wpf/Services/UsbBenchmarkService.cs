@@ -68,6 +68,14 @@ public sealed class UsbBenchmarkResult
 
     public long ReadElapsedMs { get; init; }
 
+    public bool ReadLikelyCached { get; init; }
+
+    public bool ReadIsEstimate { get; init; }
+
+    public string BenchmarkConfidence { get; init; } = string.Empty;
+
+    public string AccuracyWarning { get; init; } = string.Empty;
+
     public string TargetTopologyFingerprint { get; init; } = string.Empty;
 
     public string UiSummaryLine { get; init; } = string.Empty;
@@ -181,8 +189,17 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
             {
                 onOutput?.Invoke(new LogLine(
                     DateTimeOffset.Now,
-                    $"[OK] USB benchmark completed. runId={runId:N} native: write {native.WriteSpeedMBps:0.0} MB/s, read {native.ReadSpeedMBps:0.0} MB/s ({native.Classification}).",
+                    $"[OK] USB benchmark completed. runId={runId:N} native: write {native.WriteSpeedMBps:0.0} MB/s, read {native.ReadSpeedMBps:0.0} MB/s ({native.Classification}; confidence={native.BenchmarkConfidence}).",
                     LogSeverity.Success));
+                if (native.ReadLikelyCached || native.ReadIsEstimate)
+                {
+                    onOutput?.Invoke(new LogLine(
+                        DateTimeOffset.Now,
+                        $"[WARN] USB benchmark read speed may be cached. runId={runId:N} {native.AccuracyWarning}",
+                        LogSeverity.Warning,
+                        channel: LiveLogChannel.Diagnostics));
+                }
+
                 return MapNativeToLegacy(native, runId, startedAt, identity.TopologyFingerprint);
             }
 
@@ -296,7 +313,7 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
         }
 
 PowerShellFallback:
-        var testSizeMb = target.FreeBytes >= 512L * 1024 * 1024 ? 128 : 64;
+        var testSizeMb = UsbBenchmarkAccuracy.SelectTestSizeMb(target.FreeBytes);
         if (target.FreeBytes < (testSizeMb + 128L) * 1024 * 1024)
         {
             var nowF = DateTimeOffset.UtcNow;
@@ -385,11 +402,26 @@ PowerShellFallback:
         var legacyTag = document.RootElement.GetProperty("Classification").GetString() ?? "Unknown";
         var finishedAt = DateTimeOffset.Now;
         var (measClass, conf, _) = UsbMeasurementClassifier.Classify(writeSpeed, readSpeed, null);
+        var accuracy = UsbBenchmarkAccuracy.Assess(writeSpeed, readSpeed, null, target);
+        var adjustedConfidence = Math.Clamp(conf - accuracy.ConfidencePenalty, 20, 95);
+        var readDisplay = $"{readSpeed.ToString("0.0", CultureInfo.InvariantCulture)} MB/s{accuracy.ReadDisplaySuffix}";
+        var summarySuffix = accuracy.ReadLikelyCached || accuracy.ReadIsEstimate
+            ? " Read may be cached; treat read speed as an estimate."
+            : string.Empty;
 
         onOutput?.Invoke(new LogLine(
             DateTimeOffset.Now,
-            $"[OK] USB benchmark completed (PowerShell path). runId={runId:N} write={writeSpeed:0.0} MB/s read={readSpeed:0.0} MB/s size={testSizeMb} MB",
+            $"[OK] USB benchmark completed (PowerShell path). runId={runId:N} write={writeSpeed:0.0} MB/s read={readSpeed:0.0} MB/s size={testSizeMb} MB confidence={accuracy.ConfidenceLabel}",
             LogSeverity.Success));
+        if (accuracy.ReadLikelyCached || accuracy.ReadIsEstimate)
+        {
+            onOutput?.Invoke(new LogLine(
+                DateTimeOffset.Now,
+                $"[WARN] USB benchmark read speed may be cached. runId={runId:N} {accuracy.Reason}",
+                LogSeverity.Warning,
+                channel: LiveLogChannel.Diagnostics));
+        }
+
         var byteCount = (long)testSizeMb * 1024L * 1024L;
         return new UsbBenchmarkResult
         {
@@ -398,9 +430,9 @@ PowerShellFallback:
             Status = "Complete",
             Summary =
                 $"USB benchmark complete: {measClass} (legacy tag {legacyTag})",
-            Details = $"{testSizeMb} MB sequential file speed check. Write {writeSpeed:0.0} MB/s, read {readSpeed:0.0} MB/s.",
+            Details = $"{testSizeMb} MB file speed check. Write {writeSpeed:0.0} MB/s, read {readSpeed:0.0} MB/s. Confidence: {accuracy.ConfidenceLabel}.{summarySuffix}",
             WriteSpeedDisplay = $"{writeSpeed.ToString("0.0", CultureInfo.InvariantCulture)} MB/s",
-            ReadSpeedDisplay = $"{readSpeed.ToString("0.0", CultureInfo.InvariantCulture)} MB/s",
+            ReadSpeedDisplay = readDisplay,
             TestSizeMb = testSizeMb,
             LastTestedAt = finishedAt,
             Classification = legacyTag,
@@ -408,14 +440,23 @@ PowerShellFallback:
             ReadSpeedMBps = readSpeed,
             BenchmarkDurationMs = 0,
             IntelligenceMeasurementClass = measClass.ToString(),
-            IntelligenceConfidenceScore = conf,
+            IntelligenceConfidenceScore = adjustedConfidence,
             ResultKind = UsbBenchmarkResultKind.Completed,
             StartedAtUtc = startedAt,
             CompletedAtUtc = finishedAt,
             ActualBytesWritten = byteCount,
             ActualBytesRead = byteCount,
             TargetTopologyFingerprint = identity.TopologyFingerprint,
-            UiSummaryLine = UsbBenchmarkUiMessages.BuildUiSummary(UsbBenchmarkResultKind.Completed, readSpeed, writeSpeed)
+            ReadLikelyCached = accuracy.ReadLikelyCached,
+            ReadIsEstimate = accuracy.ReadIsEstimate,
+            BenchmarkConfidence = accuracy.ConfidenceLabel,
+            AccuracyWarning = accuracy.Reason,
+            UiSummaryLine = UsbBenchmarkUiMessages.BuildUiSummary(
+                UsbBenchmarkResultKind.Completed,
+                readSpeed,
+                writeSpeed,
+                accuracy.ConfidenceLabel,
+                accuracy.ReadLikelyCached || accuracy.ReadIsEstimate)
         };
     }
 
@@ -432,7 +473,7 @@ PowerShellFallback:
             Summary = $"USB benchmark complete: {native.Classification}",
             Details = native.SummaryLine,
             WriteSpeedDisplay = $"{native.WriteSpeedMBps.ToString("0.0", CultureInfo.InvariantCulture)} MB/s",
-            ReadSpeedDisplay = $"{native.ReadSpeedMBps.ToString("0.0", CultureInfo.InvariantCulture)} MB/s",
+            ReadSpeedDisplay = $"{native.ReadSpeedMBps.ToString("0.0", CultureInfo.InvariantCulture)} MB/s{(native.ReadLikelyCached || native.ReadIsEstimate ? " (cache suspected)" : string.Empty)}",
             TestSizeMb = native.TestSizeMb,
             LastTestedAt = native.Timestamp,
             Classification = native.Classification.ToString(),
@@ -448,11 +489,17 @@ PowerShellFallback:
             ActualBytesRead = native.ActualBytesRead,
             WriteElapsedMs = native.WriteElapsedMs,
             ReadElapsedMs = native.ReadElapsedMs,
+            ReadLikelyCached = native.ReadLikelyCached,
+            ReadIsEstimate = native.ReadIsEstimate,
+            BenchmarkConfidence = native.BenchmarkConfidence,
+            AccuracyWarning = native.AccuracyWarning,
             TargetTopologyFingerprint = topologyFingerprint,
             UiSummaryLine = UsbBenchmarkUiMessages.BuildUiSummary(
                 UsbBenchmarkResultKind.Completed,
                 native.ReadSpeedMBps,
-                native.WriteSpeedMBps)
+                native.WriteSpeedMBps,
+                native.BenchmarkConfidence,
+                native.ReadLikelyCached || native.ReadIsEstimate)
         };
 
     private static string BuildBenchmarkCommand(string rootPath, int testSizeMb)
@@ -468,10 +515,17 @@ PowerShellFallback:
             $rng.NextBytes($buffer)
             $targetBytes = [int64]$sizeMb * 1MB
             $written = [int64]0
+            $writeOptions = [System.IO.FileOptions](([int][System.IO.FileOptions]::WriteThrough) -bor ([int][System.IO.FileOptions]::SequentialScan))
             try {
                 Write-Host ('[INFO] USB benchmark writing temporary file: ' + $path)
                 $writeWatch = [System.Diagnostics.Stopwatch]::StartNew()
-                $stream = [System.IO.File]::Open($path, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+                $stream = [System.IO.FileStream]::new(
+                    $path,
+                    [System.IO.FileMode]::CreateNew,
+                    [System.IO.FileAccess]::Write,
+                    [System.IO.FileShare]::None,
+                    $buffer.Length,
+                    $writeOptions)
                 try {
                     while ($written -lt $targetBytes) {
                         $remaining = $targetBytes - $written
@@ -487,14 +541,37 @@ PowerShellFallback:
                 $writeWatch.Stop()
                 $writeMbps = [Math]::Round(($targetBytes / 1MB) / [Math]::Max($writeWatch.Elapsed.TotalSeconds, 0.001), 1)
 
-                Write-Host ('[INFO] USB benchmark reading temporary file.')
+                Write-Host ('[INFO] USB benchmark reading temporary file with randomized offsets.')
                 $readBuffer = New-Object byte[] (4MB)
                 $readBytes = [int64]0
+                $blocks = [int][Math]::Max(1, [Math]::Floor($targetBytes / $readBuffer.Length))
+                $offsets = New-Object int64[] $blocks
+                for ($i = 0; $i -lt $blocks; $i++) { $offsets[$i] = [int64]$i * $readBuffer.Length }
+                $shuffle = [System.Random]::new(31627)
+                for ($i = $offsets.Length - 1; $i -gt 0; $i--) {
+                    $j = $shuffle.Next($i + 1)
+                    $tmp = $offsets[$i]
+                    $offsets[$i] = $offsets[$j]
+                    $offsets[$j] = $tmp
+                }
                 $readWatch = [System.Diagnostics.Stopwatch]::StartNew()
-                $stream = [System.IO.File]::Open($path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
+                $stream = [System.IO.FileStream]::new(
+                    $path,
+                    [System.IO.FileMode]::Open,
+                    [System.IO.FileAccess]::Read,
+                    [System.IO.FileShare]::Read,
+                    $readBuffer.Length,
+                    [System.IO.FileOptions]::RandomAccess)
                 try {
-                    while (($count = $stream.Read($readBuffer, 0, $readBuffer.Length)) -gt 0) {
-                        $readBytes += $count
+                    foreach ($offset in $offsets) {
+                        [void]$stream.Seek($offset, [System.IO.SeekOrigin]::Begin)
+                        $remaining = [int64][Math]::Min($readBuffer.Length, $targetBytes - $offset)
+                        while ($remaining -gt 0) {
+                            $count = $stream.Read($readBuffer, 0, [int][Math]::Min($readBuffer.Length, $remaining))
+                            if ($count -le 0) { break }
+                            $readBytes += $count
+                            $remaining -= $count
+                        }
                     }
                 }
                 finally {

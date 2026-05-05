@@ -23,7 +23,7 @@ This is **Public Preview / prerelease** software: behavior and packaging can cha
 | Feature | What it does |
 |--------|----------------|
 | **USB Builder** | Guided flows to verify, prepare, and update Ventoy-oriented USB maintenance media, with managed downloads and careful drive selection. |
-| **USB Intelligence** | Measure read/write on a **safe removable** target, map **which physical USB port** you used, and get practical guidance from benchmarks and topology hints (best-effort; varies by PC). |
+| **USB Intelligence** | Measure write/read on a **safe removable** target, flag likely cached read samples honestly, map **which physical USB port** you used, and get practical guidance from benchmarks and topology hints (best-effort; varies by PC). |
 | **System Intelligence** | Local scan summaries — hardware and health-oriented cards you can use before a repair or resale prep. |
 | **Diagnostics** | Unified health checklist, file/link safety helpers, and technician-oriented tools (including WSL-related helpers where applicable). |
 | **Toolkit Manager** | Manifest-driven health for what is on your USB; clear paths when something must be supplied manually. |

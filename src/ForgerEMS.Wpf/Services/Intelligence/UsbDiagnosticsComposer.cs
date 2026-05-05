@@ -73,7 +73,15 @@ public static class UsbDiagnosticsComposer
         var bench = snapshot.SelectedTargetBenchmark;
         if (bench is { Succeeded: true })
         {
-            if (bench.Classification == UsbSpeedMeasurementClass.Bottleneck)
+            if (bench.ReadLikelyCached || bench.ReadIsEstimate)
+            {
+                issues.Add(new UsbDiagnosticIssue
+                {
+                    Severity = DiagnosticSeverityLevel.Warning,
+                    Message = "Benchmark read speed may be cached; trust the measured write speed more than the read number."
+                });
+            }
+            else if (bench.Classification == UsbSpeedMeasurementClass.Bottleneck)
             {
                 issues.Add(new UsbDiagnosticIssue
                 {
@@ -116,7 +124,8 @@ public static class UsbDiagnosticsComposer
         var recommendWithBench = recommendLine;
         if (bench is { Succeeded: true } && !string.IsNullOrWhiteSpace(bench.SummaryLine))
         {
-            recommendWithBench = $"{recommendWithBench} Measured: {bench.WriteSpeedMBps:0.0}/{bench.ReadSpeedMBps:0.0} MB/s ({bench.Classification}).".Trim();
+            var readNote = bench.ReadLikelyCached || bench.ReadIsEstimate ? " read may be cached" : string.Empty;
+            recommendWithBench = $"{recommendWithBench} Measured: {bench.WriteSpeedMBps:0.0}/{bench.ReadSpeedMBps:0.0} MB/s ({bench.Classification}{readNote}).".Trim();
         }
 
         var riskSummary = rec is null

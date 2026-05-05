@@ -3994,6 +3994,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             ActualBytesRead = source.ActualBytesRead,
             WriteElapsedMs = source.WriteElapsedMs,
             ReadElapsedMs = source.ReadElapsedMs,
+            ReadLikelyCached = source.ReadLikelyCached,
+            ReadIsEstimate = source.ReadIsEstimate,
+            BenchmarkConfidence = source.BenchmarkConfidence,
+            AccuracyWarning = source.AccuracyWarning,
             TargetTopologyFingerprint = source.TargetTopologyFingerprint,
             UiSummaryLine = UsbBenchmarkUiMessages.BuildUiSummary(kind, 0, 0)
         };

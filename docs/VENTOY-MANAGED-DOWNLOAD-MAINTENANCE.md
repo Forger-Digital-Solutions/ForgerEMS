@@ -8,6 +8,11 @@ Current safe count: `16`
 the official direct artifact, checksum coverage, and non-gated flow all stay
 intact.
 
+Manual/info-only page shortcuts are allowed to grow independently of the safe
+bucket. They are intentional when an upstream download is dynamic, license-
+sensitive, architecture-specific, or better verified by a technician at the
+vendor page.
+
 ## Health Snapshot
 
 - Total safe items: `16`
@@ -95,6 +100,17 @@ Demote a safe item back to `review-first` when any of these become true:
 
 Do not patch around those conditions with scraper URLs, third-party mirrors,
 repacks, or unofficial checksum sites just to preserve automation.
+
+## Manual Shortcut Rules
+
+- Use official project/vendor domains only.
+- Prefer stable download or release index pages over direct dynamic installer
+  URLs when the upstream changes filenames frequently.
+- Keep Microsoft runtimes, browsers, Hiren's BootCD PE, HWiNFO, Windows media
+  flows, and similar license/terms-sensitive entries as manual/info-only.
+- For 7-Zip, use `https://7-zip.org/`; do not substitute lookalike domains.
+- For rolling ISOs such as Arch, use the official download page so the operator
+  sees the current checksum/signature guidance.
 
 ## Operator Decision Guide
 

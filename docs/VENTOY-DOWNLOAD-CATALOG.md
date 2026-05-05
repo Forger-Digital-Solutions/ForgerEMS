@@ -81,9 +81,19 @@ Status note:
 
 - `Windows 11 Download Page`
 - `Windows 10 Download Page`
+- `Debian Live Images Download Page`
+- `Arch Linux Download Page`
+- `FreeDOS Download Page`
+- `Fedora Workstation Download Page`
 - `CrystalDiskMark Download Page`
 - `Samsung Magician Download Page`
 - `WD Dashboard Download Page`
+- `7-Zip Download Page`
+- `Nmap Download Page`
+- `Microsoft Visual C++ Redistributable Download Page`
+- `.NET 8 Desktop Runtime Download Page`
+- `Firefox All Languages Download Page`
+- `Chrome Enterprise Browser Download Page`
 - `MediCat Download Page`
 - `Sergei Strelec WinPE Info`
 - `Ultimate Boot CD Download Page`
@@ -119,6 +129,29 @@ Status note:
 - `CrystalDiskInfo` stays on a pinned manifest SHA-256 because the official
   vendor flow exposes a versioned artifact but not a machine-readable checksum
   file or per-asset digest endpoint.
+- Manual/runtime/browser shortcuts intentionally stay as `page` entries. The
+  upstream flows are dynamic, license-sensitive, architecture-sensitive, or
+  better verified by a human at install time.
+
+## 2026 Candidate Decisions
+
+| Candidate | Decision | Reason |
+| --- | --- | --- |
+| `Debian Live ISO` | `manual/info-only` | Official Debian live page offers multiple flavors plus checksum/signature guidance; keep human choice. |
+| `Fedora Workstation ISO` | `manual/info-only` | Official Fedora page tracks the current release and architecture choices. |
+| `Arch Linux ISO` | `manual/info-only` | Monthly rolling ISO; official page publishes checksums/signatures, so avoid stale pinned direct links. |
+| `Hiren's BootCD PE` | `manual/info-only` | Existing official shortcut retained for licensing/provenance caution. |
+| `Windows Media Creation Tool / Windows ISO` | `manual/info-only` | Existing Microsoft official Windows 10/11 shortcuts retained. |
+| `Microsoft Sysinternals Suite` | `manual/info-only` | Existing Microsoft Learn shortcut retained; do not bundle blindly. |
+| `Nmap / Zenmap` | `manual/info-only` | Official Nmap page includes installer, Npcap, signatures/hashes, and license notes. |
+| `HWiNFO` | `manual/info-only` | Existing shortcut retained because business/commercial licensing applies. |
+| `7-Zip` | `manual/info-only` | Official `7-zip.org` shortcut added; avoid lookalike domains. |
+| `Firefox / Chrome offline installers` | `manual/info-only` | Official selectors require platform/channel/terms choices. |
+| `Visual C++ Redistributables` | `manual/info-only` | Microsoft license and architecture selection should remain explicit. |
+| `.NET Desktop Runtime` | `manual/info-only` | Official Microsoft page tracks current servicing builds and architectures. |
+| `Ubuntu current/previous LTS` | `managed current LTS + manual page` | Existing managed Ubuntu LTS item retained; page shortcut covers operator choice. |
+| `MemTest86+` | `managed download` | Existing official versioned artifact has checksum coverage. |
+| `FreeDOS` | `manual/info-only` | Useful for legacy firmware/DOS workflows, but boot mode and package choice are operator-specific. |
 
 ## Fragility And Fallbacks
 

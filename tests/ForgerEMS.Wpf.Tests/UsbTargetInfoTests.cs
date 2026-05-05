@@ -40,6 +40,29 @@ public sealed class UsbTargetInfoTests
     }
 
     [Fact]
+    public void UsbSafetyBlocksEfiPartitionEvenWhenRemovable()
+    {
+        var target = new UsbTargetInfo
+        {
+            RootPath = "E:\\",
+            Label = "EFI",
+            TotalBytes = 260L * 1024 * 1024,
+            FreeBytes = 120L * 1024 * 1024,
+            FileSystem = "FAT32",
+            DriveType = "Removable",
+            BusType = "USB",
+            IsLikelyUsb = true,
+            IsRemovableMedia = true,
+            IsSelectable = false,
+            IsEfiSystemPartition = true,
+            IsUndersizedPartition = true
+        };
+
+        Assert.NotNull(UsbTargetSafety.GetExecutionBlockReason(target));
+        Assert.False(UsbTargetSafety.IsSafeForBenchmark(target, out _));
+    }
+
+    [Fact]
     public void UsbSafetyBlocksBenchmarkWhenFreeSpaceTooLow()
     {
         var target = new UsbTargetInfo
@@ -79,6 +102,30 @@ public sealed class UsbTargetInfoTests
         Assert.False(UsbTargetSafety.IsSafeForBenchmark(target, out var benchmarkReason));
         Assert.False(string.IsNullOrWhiteSpace(benchmarkReason));
         Assert.Contains("Windows OS drive", benchmarkReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void UsbSafetyBlocksInjectedUnsafeSystemDriveEvenIfMarkedUsb()
+    {
+        var target = new UsbTargetInfo
+        {
+            DriveLetter = "C:",
+            RootPath = "C:\\",
+            Label = "Windows",
+            TotalBytes = 512L * 1024 * 1024 * 1024,
+            FreeBytes = 200L * 1024 * 1024 * 1024,
+            FileSystem = "NTFS",
+            DriveType = "Removable",
+            BusType = "USB",
+            IsLikelyUsb = true,
+            IsRemovableMedia = true,
+            IsSelectable = true,
+            IsLargeDataPartition = true,
+            IsPreferredUsbTarget = true
+        };
+
+        Assert.Contains("Windows OS drive", UsbTargetSafety.GetExecutionBlockReason(target), StringComparison.OrdinalIgnoreCase);
+        Assert.False(UsbTargetSafety.IsSafeForBenchmark(target, out _));
     }
 
     [Fact]
@@ -156,6 +203,58 @@ public sealed class UsbTargetInfoTests
         Assert.DoesNotContain("system disk metadata", target.SafetyReasonText, StringComparison.OrdinalIgnoreCase);
         Assert.True(UsbTargetSafety.IsSafeForBenchmark(target, out var benchReason));
         Assert.True(string.IsNullOrWhiteSpace(benchReason));
+    }
+
+    [Fact]
+    public void VentoyDataPartition_IsAllowedDespiteWeirdBootFlag_WhenOtherwiseSafe()
+    {
+        var target = new UsbTargetInfo
+        {
+            RootPath = "E:\\",
+            Label = "Ventoy",
+            TotalBytes = 119L * 1024 * 1024 * 1024,
+            FreeBytes = 80L * 1024 * 1024 * 1024,
+            FileSystem = "exFAT",
+            DriveType = "Fixed USB",
+            BusType = "USB",
+            IsLikelyUsb = true,
+            IsRemovableMedia = false,
+            IsSelectable = true,
+            IsSystemDrive = false,
+            IsBootDrive = true,
+            IsEfiSystemPartition = false,
+            IsUndersizedPartition = false,
+            HasVentoyCompanionEfiPartition = true,
+            IsLargeDataPartition = true,
+            IsPreferredUsbTarget = true
+        };
+
+        Assert.Null(UsbTargetSafety.GetExecutionBlockReason(target));
+        Assert.True(UsbTargetSafety.IsSafeForBenchmark(target, out var reason));
+        Assert.True(string.IsNullOrWhiteSpace(reason));
+    }
+
+    [Fact]
+    public void UsbSsdEnclosure_IsBenchmarkSafeWhenUsbLargeAndNonSystem()
+    {
+        var target = new UsbTargetInfo
+        {
+            RootPath = "G:\\",
+            Label = "TOOLSSD",
+            TotalBytes = 512L * 1024 * 1024 * 1024,
+            FreeBytes = 400L * 1024 * 1024 * 1024,
+            FileSystem = "exFAT",
+            DriveType = "Fixed",
+            BusType = "USB",
+            DeviceModel = "Portable SSD",
+            IsLikelyUsb = true,
+            IsRemovableMedia = false,
+            IsSelectable = true,
+            IsLargeDataPartition = true
+        };
+
+        Assert.True(UsbTargetSafety.IsSafeForBenchmark(target, out var reason));
+        Assert.True(string.IsNullOrWhiteSpace(reason));
     }
 
     [Fact]

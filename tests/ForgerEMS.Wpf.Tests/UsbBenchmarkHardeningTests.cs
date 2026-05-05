@@ -80,7 +80,7 @@ public sealed class UsbBenchmarkHardeningTests
         }
     }
 
-    private static UsbTargetInfo BenchmarkTarget() =>
+    private static UsbTargetInfo BenchmarkTarget(string deviceModel = "") =>
         new()
         {
             DriveLetter = "E:",
@@ -197,6 +197,87 @@ public sealed class UsbBenchmarkHardeningTests
         Assert.Contains("40.5", s);
         Assert.Contains("Read", s);
         Assert.Contains("Write", s);
+    }
+
+    [Fact]
+    public void UiMessages_CachedReadWarningDoesNotCertifyReadSpeed()
+    {
+        var s = UsbBenchmarkUiMessages.BuildUiSummary(
+            UsbBenchmarkResultKind.Completed,
+            4536.4,
+            58.2,
+            "Read may be cached",
+            readMayBeCached: true);
+
+        Assert.Contains("Write 58.2 MB/s measured", s, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Read 4536.4 MB/s may be cached", s, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BenchmarkAccuracy_FlagsImpossibleCachedReadSpeed()
+    {
+        var target = BenchmarkTarget("USB Flash Drive");
+
+        var assessment = UsbBenchmarkAccuracy.Assess(
+            writeMbps: 58.2,
+            readMbps: 4536.4,
+            UsbSpeedClassification.Usb3,
+            target);
+
+        Assert.True(assessment.ReadLikelyCached);
+        Assert.True(assessment.ReadIsEstimate);
+        Assert.Contains("plausible", assessment.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BenchmarkAccuracy_DoesNotFlagPlausibleUsbSsdReadSpeed()
+    {
+        var target = BenchmarkTarget("Portable SSD");
+
+        var assessment = UsbBenchmarkAccuracy.Assess(
+            writeMbps: 720,
+            readMbps: 980,
+            UsbSpeedClassification.UsbC,
+            target);
+
+        Assert.False(assessment.ReadLikelyCached);
+        Assert.Equal("Measured", assessment.ConfidenceLabel);
+    }
+
+    [Fact]
+    public void BenchmarkAccuracy_SelectsLargerSamplesWhenFreeSpaceAllows()
+    {
+        Assert.Equal(64, UsbBenchmarkAccuracy.SelectTestSizeMb(300L * 1024 * 1024));
+        Assert.Equal(128, UsbBenchmarkAccuracy.SelectTestSizeMb(1L * 1024 * 1024 * 1024));
+        Assert.Equal(512, UsbBenchmarkAccuracy.SelectTestSizeMb(4L * 1024 * 1024 * 1024));
+        Assert.Equal(1024, UsbBenchmarkAccuracy.SelectTestSizeMb(16L * 1024 * 1024 * 1024));
+    }
+
+    [Fact]
+    public void ProfileSync_PreservesCachedReadConfidence()
+    {
+        var result = new UsbBenchmarkResult
+        {
+            Succeeded = true,
+            Status = "Complete",
+            WriteSpeedMBps = 58.2,
+            ReadSpeedMBps = 4536.4,
+            TestSizeMb = 1024,
+            IntelligenceMeasurementClass = UsbSpeedMeasurementClass.Usb3.ToString(),
+            IntelligenceConfidenceScore = 45,
+            ReadLikelyCached = true,
+            ReadIsEstimate = true,
+            BenchmarkConfidence = "Read may be cached",
+            AccuracyWarning = "Read sample exceeded plausible USB limit."
+        };
+
+        var profileResult = UsbBenchmarkProfileSync.FromServiceResult(result);
+
+        Assert.NotNull(profileResult);
+        Assert.True(profileResult!.ReadLikelyCached);
+        Assert.True(profileResult.ReadIsEstimate);
+        Assert.Equal("Read may be cached", profileResult.BenchmarkConfidence);
+        Assert.True(profileResult.ConfidenceScore <= 45);
     }
 
     [Fact]
