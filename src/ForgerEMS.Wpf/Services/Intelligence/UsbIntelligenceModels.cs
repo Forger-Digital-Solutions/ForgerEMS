@@ -207,7 +207,15 @@ public sealed class UsbDeviceInfo
 
     public string LocationPathHash { get; set; } = string.Empty;
 
+    public string LocationInformationHash { get; set; } = string.Empty;
+
+    public string LocationPathsHash { get; set; } = string.Empty;
+
+    public string ContainerIdHash { get; set; } = string.Empty;
+
     public string VolumeIdentityHash { get; set; } = string.Empty;
+
+    public string BusReportedSpeed { get; set; } = string.Empty;
 
     public string FriendlyLocation { get; set; } = string.Empty;
 

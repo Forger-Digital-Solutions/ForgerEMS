@@ -159,7 +159,7 @@ public static class UsbBenchmarkUiMessages
         return endKind switch
         {
             UsbNativeBenchmarkEndKind.ValidationBlocked => UsbBenchmarkResultKind.BlockedBySafety,
-            UsbNativeBenchmarkEndKind.OperationCanceled => UsbBenchmarkResultKind.CancelledByUser,
+            UsbNativeBenchmarkEndKind.OperationCanceled => UsbBenchmarkResultKind.UnknownFailed,
             UsbNativeBenchmarkEndKind.IoOrSystemError => UsbBenchmarkResultKind.IoFailed,
             _ => UsbBenchmarkResultKind.UnknownFailed
         };

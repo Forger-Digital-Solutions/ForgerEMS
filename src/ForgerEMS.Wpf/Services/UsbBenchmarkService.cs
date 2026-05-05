@@ -160,9 +160,18 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
 
         var letter = string.IsNullOrWhiteSpace(target.DriveLetter) ? "?" : target.DriveLetter.TrimEnd('\\');
         var tokenAlreadyCancelled = cancellationToken.IsCancellationRequested;
+        if (tokenAlreadyCancelled)
+        {
+            onOutput?.Invoke(new LogLine(
+                DateTimeOffset.Now,
+                $"[WARN] USB benchmark received a pre-cancelled token before measurement start. runId={runId:N}; replacing with a clean benchmark token.",
+                LogSeverity.Warning));
+            cancellationToken = CancellationToken.None;
+        }
+
         onOutput?.Invoke(new LogLine(
             DateTimeOffset.Now,
-            $"[INFO] USB benchmark requested. runId={runId:N} drive={letter} label=\"{target.LabelDisplay}\" fs={target.FileSystem} capacity={target.DisplayTotalBytes} free={target.DisplayFreeBytes} safety={target.SafetyStatusText} tokenPreCancelled={(tokenAlreadyCancelled ? "yes" : "no")}",
+            $"[INFO] USB benchmark requested. runId={runId:N} drive={letter} label=\"{target.LabelDisplay}\" fs={target.FileSystem} capacity={target.DisplayTotalBytes} free={target.DisplayFreeBytes} safety={target.SafetyStatusText} tokenPreCancelled={(tokenAlreadyCancelled ? "replaced" : "no")}",
             LogSeverity.Info));
         onOutput?.Invoke(new LogLine(DateTimeOffset.Now, "[INFO] Running native USB file benchmark (measurement-based).", LogSeverity.Info));
         try

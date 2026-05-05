@@ -13,7 +13,10 @@ public enum UsbPortMappingMatchKind
     VolumeIdentityPortChange = 3,
 
     /// <summary>Volume identity matches but WMI correlation key drifted between snapshots.</summary>
-    ReEnumeratedSameVolume = 4
+    ReEnumeratedSameVolume = 4,
+
+    /// <summary>Same selected volume, but only weaker Windows topology evidence changed.</summary>
+    WeakTopologyEvidencePortChange = 5
 }
 
 public sealed class UsbPortMappingResolution
@@ -38,7 +41,8 @@ public sealed class UsbPortMappingResolution
     public bool UsedLimitedConfidenceFallback =>
         MatchKind is UsbPortMappingMatchKind.SameDriveLetterPortChange
             or UsbPortMappingMatchKind.VolumeIdentityPortChange
-            or UsbPortMappingMatchKind.ReEnumeratedSameVolume;
+            or UsbPortMappingMatchKind.ReEnumeratedSameVolume
+            or UsbPortMappingMatchKind.WeakTopologyEvidencePortChange;
 }
 
 public static class UsbMappingPortResolution
@@ -96,7 +100,18 @@ public static class UsbMappingPortResolution
                 b2,
                 a2,
                 "Medium",
-                "Possible match found, but confidence is limited (same drive letter, port heuristic changed).");
+                    "Possible match found, but confidence is limited (same drive letter, port heuristic changed).");
+        }
+
+        if (selectedTarget is not null &&
+            TryMatchByWeakTopologyEvidence(before.Devices, after.Devices, selectedTarget, out var b6, out var a6))
+        {
+            return BuildSuccess(
+                UsbPortMappingMatchKind.WeakTopologyEvidencePortChange,
+                b6,
+                a6,
+                "Low",
+                "Windows exposed only limited USB topology, but the selected drive's location evidence changed.");
         }
 
         return new UsbPortMappingResolution
@@ -222,6 +237,79 @@ public static class UsbMappingPortResolution
         before = b;
         after = a;
         return true;
+    }
+
+    private static bool TryMatchByWeakTopologyEvidence(
+        IReadOnlyList<UsbDeviceInfo> beforeDevices,
+        IReadOnlyList<UsbDeviceInfo> afterDevices,
+        UsbTargetInfo target,
+        out UsbDeviceInfo before,
+        out UsbDeviceInfo after)
+    {
+        before = null!;
+        after = null!;
+        var letter = NormalizeLetter(target.DriveLetter);
+        if (string.IsNullOrEmpty(letter))
+        {
+            return false;
+        }
+
+        var b = beforeDevices.FirstOrDefault(d =>
+            !string.IsNullOrWhiteSpace(d.DriveLetter) &&
+            string.Equals(NormalizeLetter(d.DriveLetter), letter, StringComparison.OrdinalIgnoreCase));
+        var a = afterDevices.FirstOrDefault(d =>
+            !string.IsNullOrWhiteSpace(d.DriveLetter) &&
+            string.Equals(NormalizeLetter(d.DriveLetter), letter, StringComparison.OrdinalIgnoreCase));
+        if (b is null || a is null)
+        {
+            return false;
+        }
+
+        if (!LikelySameSelectedVolume(b, a, target))
+        {
+            return false;
+        }
+
+        if (!HasWeakTopologyChange(b, a))
+        {
+            return false;
+        }
+
+        before = b;
+        after = a;
+        return true;
+    }
+
+    private static bool LikelySameSelectedVolume(UsbDeviceInfo before, UsbDeviceInfo after, UsbTargetInfo target)
+    {
+        if (!string.IsNullOrWhiteSpace(before.VolumeIdentityHash) &&
+            string.Equals(before.VolumeIdentityHash, after.VolumeIdentityHash, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        var label = target.LabelDisplay;
+        return !string.IsNullOrWhiteSpace(label) &&
+               before.FriendlyName.Contains(label, StringComparison.OrdinalIgnoreCase) &&
+               after.FriendlyName.Contains(label, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasWeakTopologyChange(UsbDeviceInfo before, UsbDeviceInfo after)
+    {
+        static bool Changed(string? a, string? b) =>
+            !string.IsNullOrWhiteSpace(a) &&
+            !string.IsNullOrWhiteSpace(b) &&
+            !string.Equals(a, b, StringComparison.Ordinal);
+
+        return Changed(before.LocationPathHash, after.LocationPathHash) ||
+               Changed(before.LocationInformationHash, after.LocationInformationHash) ||
+               Changed(before.LocationPathsHash, after.LocationPathsHash) ||
+               Changed(before.ParentDeviceIdHash, after.ParentDeviceIdHash) ||
+               Changed(before.HubKey, after.HubKey) ||
+               Changed(before.ControllerKey, after.ControllerKey) ||
+               Changed(before.ContainerIdHash, after.ContainerIdHash) ||
+               Changed(before.BusReportedSpeed, after.BusReportedSpeed) ||
+               before.InferredSpeed != after.InferredSpeed;
     }
 
     private static bool TryMatchByVolumeIdentity(

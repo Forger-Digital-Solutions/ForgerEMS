@@ -348,7 +348,7 @@ public sealed class UsbMappingWizardAndResolutionTests
             await vm.DetectPortChangeAsync();
             Assert.True(vm.DetectionSuccess);
             Assert.True(vm.ShowDetectSuccessDetails);
-            Assert.Contains("Port change", vm.DetectChangePrimaryStatus, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("confidence", vm.DetectChangePrimaryStatus, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -493,6 +493,107 @@ public sealed class UsbMappingWizardAndResolutionTests
         Assert.True(res.Success);
         Assert.Equal(UsbPortMappingMatchKind.SameDriveLetterPortChange, res.MatchKind);
         Assert.True(res.UsedLimitedConfidenceFallback);
+    }
+
+    [Fact]
+    public void UsbMappingPortResolution_SameDeviceCountChangedLocationPath_MapsWithLowConfidence()
+    {
+        var before = new UsbTopologySnapshot
+        {
+            GeneratedUtc = DateTimeOffset.UtcNow,
+            Devices =
+            [
+                new UsbDeviceInfo
+                {
+                    FriendlyName = "Vendor USB (Ventoy)",
+                    DriveLetter = "E:",
+                    InferredSpeed = UsbSpeedClassification.Usb3,
+                    StableDeviceKey = "same-device",
+                    StablePortKey = "same-port-key",
+                    LocationPathHash = "loc-a",
+                    VolumeIdentityHash = "vol-1",
+                    IsRemovableMassStorage = true
+                }
+            ]
+        };
+        var after = new UsbTopologySnapshot
+        {
+            GeneratedUtc = DateTimeOffset.UtcNow,
+            Devices =
+            [
+                new UsbDeviceInfo
+                {
+                    FriendlyName = "Vendor USB (Ventoy)",
+                    DriveLetter = "E:",
+                    InferredSpeed = UsbSpeedClassification.Usb3,
+                    StableDeviceKey = "same-device",
+                    StablePortKey = "same-port-key",
+                    LocationPathHash = "loc-b",
+                    VolumeIdentityHash = "vol-1",
+                    IsRemovableMassStorage = true
+                }
+            ]
+        };
+
+        var res = UsbMappingPortResolution.Resolve(before, after, MakeRemovable("E:", "Ventoy"));
+
+        Assert.True(res.Success);
+        Assert.Equal(UsbPortMappingMatchKind.WeakTopologyEvidencePortChange, res.MatchKind);
+        Assert.Equal("Low", res.ConfidenceTier);
+    }
+
+    [Fact]
+    public async Task UsbMappingWizard_SameIdentityWeakTopologyFallsBackToManualLabel()
+    {
+        var intel = new IdenticalTopologyUsbIntelligence();
+        var root = Path.Combine(Path.GetTempPath(), $"fe-wiz-weak-{Guid.NewGuid():N}");
+        try
+        {
+            var store = new UsbMachineProfileStore(root);
+            var target = MakeRemovable("E:", "Data");
+            var vm = new UsbMappingWizardViewModel(
+                intel,
+                store,
+                () => [target],
+                detectOperationTimeoutOverride: TimeSpan.FromSeconds(15));
+            vm.StartMappingCommand.Execute(null);
+            vm.SelectedDevice = vm.DeviceOptions[0];
+            vm.ContinueSelectDeviceCommand.Execute(null);
+            vm.CaptureCurrentPortCommand.Execute(null);
+            vm.NextAfterCaptureCommand.Execute(null);
+            vm.UserConfirmedUsbMoved = true;
+            await vm.DetectPortChangeAsync();
+
+            Assert.False(vm.DetectionSuccess);
+            Assert.Contains("Manual label", vm.FailureMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.True(vm.UseCurrentPortAnywayCommand.CanExecute(null));
+            Assert.True(vm.SaveManualLabelPathCommand.CanExecute(null));
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, true);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public void UsbMappingWizard_DebugDetailsFollowBuildDiagnosticsMode()
+    {
+        var vm = new UsbMappingWizardViewModel(
+            new StubUsbIntelligence(),
+            new UsbMachineProfileStore(Path.Combine(Path.GetTempPath(), $"fe-wiz-debug-{Guid.NewGuid():N}")),
+            () => [MakeRemovable("E:", "Data")]);
+
+#if DEBUG
+        Assert.False(vm.ShowDetectChangeDebugDetails);
+#else
+        Assert.False(vm.ShowDetectChangeDebugDetails);
+#endif
     }
 
     [Fact]

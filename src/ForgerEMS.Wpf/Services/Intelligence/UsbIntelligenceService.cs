@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Management;
@@ -472,7 +473,11 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
             var parent = ParentPnpPath(pnp);
             d.ParentDeviceIdHash = string.IsNullOrEmpty(parent) ? string.Empty : UsbIdentityHasher.Sha256Hex(parent);
             d.HubKey = ExtractHubKey(pnp);
-            d.LocationPathHash = TryQueryLocationHash(pnp);
+            var pnpTopology = TryQueryPnpTopologyHashes(pnp);
+            d.LocationPathHash = pnpTopology.LocationHash;
+            d.LocationInformationHash = pnpTopology.LocationInformationHash;
+            d.LocationPathsHash = pnpTopology.LocationPathsHash;
+            d.ContainerIdHash = pnpTopology.ContainerIdHash;
             d.StableDeviceKey = UsbIdentityHasher.Sha256Hex(
                 $"{d.VolumeIdentityHash}|{d.FriendlyName}|{d.DeviceInstanceIdHash}");
             d.FriendlyLocation = string.IsNullOrWhiteSpace(d.DriveLetter)
@@ -610,27 +615,27 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
         return string.Empty;
     }
 
-    private static string TryQueryLocationHash(string pnp)
+    private static (string LocationHash, string LocationInformationHash, string LocationPathsHash, string ContainerIdHash) TryQueryPnpTopologyHashes(string pnp)
     {
         if (string.IsNullOrWhiteSpace(pnp))
         {
-            return string.Empty;
+            return (string.Empty, string.Empty, string.Empty, string.Empty);
         }
 
         try
         {
             var esc = pnp.Replace("\\", "\\\\").Replace("'", "''");
             using var searcher =
-                new ManagementObjectSearcher($"SELECT Location FROM Win32_PnPEntity WHERE PNPDeviceID='{esc}'");
+                new ManagementObjectSearcher($"SELECT * FROM Win32_PnPEntity WHERE PNPDeviceID='{esc}'");
             foreach (ManagementObject o in searcher.Get())
             {
                 using (o)
                 {
-                    var loc = $"{o["Location"]}";
-                    if (!string.IsNullOrWhiteSpace(loc))
-                    {
-                        return UsbIdentityHasher.Sha256Hex(loc);
-                    }
+                    return (
+                        HashProperty(o, "Location"),
+                        HashProperty(o, "LocationInformation"),
+                        HashProperty(o, "LocationPaths"),
+                        HashProperty(o, "ContainerID"));
                 }
             }
         }
@@ -639,7 +644,28 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
             // ignore
         }
 
-        return string.Empty;
+        return (string.Empty, string.Empty, string.Empty, string.Empty);
+    }
+
+    private static string HashProperty(ManagementObject obj, string propertyName)
+    {
+        try
+        {
+            if (obj.Properties[propertyName]?.Value is null)
+            {
+                return string.Empty;
+            }
+
+            var value = obj.Properties[propertyName].Value;
+            var text = value is Array values
+                ? string.Join("|", values.Cast<object>().Select(item => Convert.ToString(item, CultureInfo.InvariantCulture)))
+                : Convert.ToString(value, CultureInfo.InvariantCulture);
+            return string.IsNullOrWhiteSpace(text) ? string.Empty : UsbIdentityHasher.Sha256Hex(text);
+        }
+        catch
+        {
+            return string.Empty;
+        }
     }
 
     private static string? ResolveDriveLetterForDisk(string diskDeviceId)

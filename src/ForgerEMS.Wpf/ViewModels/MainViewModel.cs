@@ -113,6 +113,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private enum UsbBenchmarkHostInterruptKind
     {
         None,
+        UserRequested,
         SelectionChanged,
         AppShutdown
     }
@@ -421,6 +422,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         OpenUsbMappingWizardCommand = new RelayCommand(OpenUsbMappingWizard);
         RunUsbIntelligenceBenchmarkCommand =
             new AsyncRelayCommand(RunUsbIntelligenceBenchmarkAsync, CanRunUsbIntelligenceBenchmark);
+        CancelUsbIntelligenceBenchmarkCommand =
+            new RelayCommand(CancelActiveUsbBenchmark, IsAnyUsbBenchmarkActive);
         AskCopilotWarningCommand = new AsyncRelayCommand(() => AskCopilotAsync("/warning"), () => !IsCopilotGenerating);
         AskCopilotListingCommand = new AsyncRelayCommand(() => AskCopilotAsync("/listing facebook"), () => !IsCopilotGenerating);
         AskCopilotLiveToolsCommand = new AsyncRelayCommand(() => AskCopilotAsync("/provider"), () => !IsCopilotGenerating);
@@ -636,6 +639,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public RelayCommand OpenUsbMappingWizardCommand { get; }
 
     public AsyncRelayCommand RunUsbIntelligenceBenchmarkCommand { get; }
+
+    public RelayCommand CancelUsbIntelligenceBenchmarkCommand { get; }
 
     public AsyncRelayCommand AskCopilotWarningCommand { get; }
 
@@ -2096,6 +2101,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private bool IsManualUsbBenchmarkActive() =>
         _manualUsbBenchmarkCts is { Token.IsCancellationRequested: false };
 
+    private bool IsAnyUsbBenchmarkActive() =>
+        _manualUsbBenchmarkCts is { Token.IsCancellationRequested: false } ||
+        _autoUsbBenchmarkCts is { Token.IsCancellationRequested: false };
+
     private void CancelManualUsbBenchmarkCtsOnly()
     {
         try
@@ -2142,6 +2151,32 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _autoUsbBenchmarkCts = null;
     }
 
+    private CancellationTokenSource CreateFreshUsbBenchmarkCts(bool isAutomatic, string targetRootPath)
+    {
+        var cts = new CancellationTokenSource();
+        if (cts.Token.IsCancellationRequested)
+        {
+            AppendLog(new LogLine(
+                DateTimeOffset.Now,
+                $"[WARN] USB benchmark CTS was pre-cancelled before start for {targetRootPath}; replacing it.",
+                LogSeverity.Warning,
+                channel: LiveLogChannel.Diagnostics));
+            cts.Dispose();
+            cts = new CancellationTokenSource();
+        }
+
+        if (isAutomatic)
+        {
+            _autoUsbBenchmarkCts = cts;
+        }
+        else
+        {
+            _manualUsbBenchmarkCts = cts;
+        }
+
+        return cts;
+    }
+
     private void CancelUsbBenchmarksForSelectionChange()
     {
         _usbBenchmarkHostInterruptKind = UsbBenchmarkHostInterruptKind.SelectionChanged;
@@ -2156,12 +2191,46 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return false;
         }
 
+        if (IsAnyUsbBenchmarkActive())
+        {
+            return false;
+        }
+
         if (string.Equals(SelectedUsbTarget.BenchmarkStatus, "Testing", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
         return UsbTargetSafety.IsSafeForBenchmark(SelectedUsbTarget, out _);
+    }
+
+    private void CancelActiveUsbBenchmark()
+    {
+        _usbBenchmarkHostInterruptKind = UsbBenchmarkHostInterruptKind.UserRequested;
+        var cancelled = false;
+        try
+        {
+            if (_manualUsbBenchmarkCts is { Token.IsCancellationRequested: false })
+            {
+                _manualUsbBenchmarkCts.Cancel();
+                cancelled = true;
+            }
+            else if (_autoUsbBenchmarkCts is { Token.IsCancellationRequested: false })
+            {
+                _autoUsbBenchmarkCts.Cancel();
+                cancelled = true;
+            }
+        }
+        catch (ObjectDisposedException)
+        {
+            // The run finished while the cancel button was being processed.
+        }
+
+        AppendLog(new LogLine(
+            DateTimeOffset.Now,
+            cancelled ? "[INFO] Benchmark cancel requested." : "[INFO] Benchmark cancel ignored: no benchmark is running.",
+            LogSeverity.Info));
+        RaiseCommandStates();
     }
 
     private void CancelScheduledAutomaticUsbBenchmark()
@@ -3962,6 +4031,39 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         };
     }
 
+    private UsbBenchmarkResultKind ClassifyBenchmarkCancellation(string targetAtStartPath, bool isAutomatic)
+    {
+        if (isAutomatic)
+        {
+            return UsbBenchmarkResultKind.CancelledByHost;
+        }
+
+        var interrupt = _usbBenchmarkHostInterruptKind;
+        _usbBenchmarkHostInterruptKind = UsbBenchmarkHostInterruptKind.None;
+        if (!IsUsbRootStillPresent(targetAtStartPath))
+        {
+            return UsbBenchmarkResultKind.DeviceRemoved;
+        }
+
+        if (interrupt == UsbBenchmarkHostInterruptKind.UserRequested)
+        {
+            return UsbBenchmarkResultKind.CancelledByUser;
+        }
+
+        if (interrupt == UsbBenchmarkHostInterruptKind.AppShutdown)
+        {
+            return UsbBenchmarkResultKind.CancelledByHost;
+        }
+
+        if (interrupt == UsbBenchmarkHostInterruptKind.SelectionChanged ||
+            !UsbRootPathsEqual(SelectedUsbTarget?.RootPath, targetAtStartPath))
+        {
+            return UsbBenchmarkResultKind.TargetChanged;
+        }
+
+        return UsbBenchmarkResultKind.CancelledByHost;
+    }
+
     private async Task AutoBenchmarkSelectedUsbSafeAsync(bool isAutomatic = true)
     {
         if (!isAutomatic)
@@ -4059,18 +4161,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (isAutomatic)
         {
             CancelAutoUsbBenchmarkCtsOnly();
-            ownedCts = new CancellationTokenSource();
-            _autoUsbBenchmarkCts = ownedCts;
         }
         else
         {
             CancelManualUsbBenchmarkCtsOnly();
-            ownedCts = new CancellationTokenSource();
-            _manualUsbBenchmarkCts = ownedCts;
         }
 
         _usbBenchmarkHostInterruptKind = UsbBenchmarkHostInterruptKind.None;
-        var benchmarkToken = ownedCts!.Token;
 
         try
         {
@@ -4100,6 +4197,30 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             try
             {
+                ownedCts = CreateFreshUsbBenchmarkCts(isAutomatic, targetAtStartPath);
+                var benchmarkToken = ownedCts.Token;
+                if (benchmarkToken.IsCancellationRequested)
+                {
+                    AppendLog(new LogLine(
+                        DateTimeOffset.Now,
+                        $"[WARN] USB benchmark token was cancelled before start for {targetAtStartPath}; creating a clean run token.",
+                        LogSeverity.Warning,
+                        channel: LiveLogChannel.Diagnostics));
+                    if (isAutomatic && ReferenceEquals(_autoUsbBenchmarkCts, ownedCts))
+                    {
+                        _autoUsbBenchmarkCts = null;
+                    }
+                    else if (!isAutomatic && ReferenceEquals(_manualUsbBenchmarkCts, ownedCts))
+                    {
+                        _manualUsbBenchmarkCts = null;
+                    }
+
+                    ownedCts.Dispose();
+                    ownedCts = CreateFreshUsbBenchmarkCts(isAutomatic, targetAtStartPath);
+                    benchmarkToken = ownedCts.Token;
+                }
+
+                RaiseCommandStates();
                 var liveTarget = TryGetUsbTargetByRootPath(targetAtStartPath) ?? target;
                 var serviceResult = await _usbBenchmarkService.RunSequentialBenchmarkAsync(liveTarget, AppendLog, benchmarkToken);
                 var result = ReconcileUsbBenchmarkWithLockedIdentity(
@@ -4108,6 +4229,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                     targetAtStartPath,
                     TryGetUsbTargetByRootPath,
                     isAutomatic);
+                if (result.ResultKind == UsbBenchmarkResultKind.CancelledByUser &&
+                    benchmarkToken.IsCancellationRequested)
+                {
+                    var classified = ClassifyBenchmarkCancellation(targetAtStartPath, isAutomatic);
+                    if (classified != UsbBenchmarkResultKind.CancelledByUser)
+                    {
+                        result = BuildUsbBenchmarkReclassified(result, classified);
+                    }
+                }
 
                 var liveAfter = TryGetUsbTargetByRootPath(targetAtStartPath) ?? liveTarget;
 
@@ -4180,27 +4310,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 }
                 else
                 {
-                    var interrupt = _usbBenchmarkHostInterruptKind;
-                    _usbBenchmarkHostInterruptKind = UsbBenchmarkHostInterruptKind.None;
-                    UsbBenchmarkResultKind interruptKind;
-                    if (!IsUsbRootStillPresent(targetAtStartPath))
-                    {
-                        interruptKind = UsbBenchmarkResultKind.DeviceRemoved;
-                    }
-                    else if (interrupt == UsbBenchmarkHostInterruptKind.AppShutdown)
-                    {
-                        interruptKind = UsbBenchmarkResultKind.CancelledByHost;
-                    }
-                    else if (interrupt == UsbBenchmarkHostInterruptKind.SelectionChanged ||
-                             !UsbRootPathsEqual(SelectedUsbTarget?.RootPath, targetAtStartPath))
-                    {
-                        interruptKind = UsbBenchmarkResultKind.TargetChanged;
-                    }
-                    else
-                    {
-                        interruptKind = UsbBenchmarkResultKind.CancelledByUser;
-                    }
-
+                    var interruptKind = ClassifyBenchmarkCancellation(targetAtStartPath, isAutomatic: false);
                     var cooperative = BuildManualBenchmarkCooperativeCancelResult(
                         interruptKind,
                         Guid.NewGuid(),
@@ -8263,6 +8373,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         SaveUsbMappingLabelCommand.RaiseCanExecuteChanged();
         OpenUsbMappingWizardCommand.RaiseCanExecuteChanged();
         RunUsbIntelligenceBenchmarkCommand.RaiseCanExecuteChanged();
+        CancelUsbIntelligenceBenchmarkCommand.RaiseCanExecuteChanged();
         CheckForUpdatesNowCommand.RaiseCanExecuteChanged();
         AppUpdateDownloadInstallerCommand.RaiseCanExecuteChanged();
         AppUpdateDownloadAdvancedInstallerCommand.RaiseCanExecuteChanged();

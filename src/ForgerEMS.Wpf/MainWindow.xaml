@@ -1688,6 +1688,11 @@
                                 <Button Margin="0,0,8,4"
                                         Padding="10,6"
                                         Style="{StaticResource SecondaryButtonStyle}"
+                                        Content="Cancel Benchmark"
+                                        Command="{Binding CancelUsbIntelligenceBenchmarkCommand}" />
+                                <Button Margin="0,0,8,4"
+                                        Padding="10,6"
+                                        Style="{StaticResource SecondaryButtonStyle}"
                                         Content="Open USB Mapping Wizard"
                                         Command="{Binding OpenUsbMappingWizardCommand}" />
                             </WrapPanel>
@@ -3308,4 +3313,3 @@
         </Grid>
     </Grid>
 </Window>
-
