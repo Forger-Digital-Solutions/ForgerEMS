@@ -234,6 +234,7 @@ public static class UsbPortLabelResolver
         }
 
         record.UserLabel = label.Trim();
+        record.NormalizedLabelKey = UsbPortLabelNormalizer.NormalizeKey(record.UserLabel);
         record.StablePortKey = device.StablePortKey;
         record.DeviceIdentityKey = BuildDeviceIdentityKey(device);
         record.PortTopologyKey = BuildPortTopologyKey(device);

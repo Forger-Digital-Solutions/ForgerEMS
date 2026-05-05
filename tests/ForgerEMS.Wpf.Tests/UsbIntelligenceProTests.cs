@@ -426,13 +426,13 @@ public sealed class UsbIntelligenceProTests
             Assert.True(inf.Success);
             var rec = Assert.Single(profile.KnownPorts);
             Assert.Equal("port-new", rec.StablePortKey);
-            Assert.Equal("front-left USB-A", rec.UserLabel);
+            Assert.Equal("Front Left USB-A", rec.UserLabel);
             Assert.True(rec.MappingConfidenceScore > 0);
 
             var profile2 = store.LoadOrCreate();
             var rec2 = profile2.KnownPorts.FirstOrDefault(p => p.StablePortKey == "port-new");
             Assert.NotNull(rec2);
-            Assert.Equal("front-left USB-A", rec2!.UserLabel);
+            Assert.Equal("Front Left USB-A", rec2!.UserLabel);
         }
         finally
         {
@@ -493,6 +493,104 @@ public sealed class UsbIntelligenceProTests
         Assert.DoesNotContain("USBSTOR", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("PHYSICALDRIVE", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("SENSITIVE_SERIAL", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void UsbPortLabelNormalizer_TreatsUsbCSpacingAndHyphenVariantsAsSameKey()
+    {
+        Assert.Equal(UsbPortLabelNormalizer.NormalizeKey("LT USB C"), UsbPortLabelNormalizer.NormalizeKey("LT USB-C"));
+        Assert.Equal(UsbPortLabelNormalizer.NormalizeKey("rt usb c"), UsbPortLabelNormalizer.NormalizeKey("RT USB-C"));
+        Assert.Equal("LT USB-C", UsbPortLabelNormalizer.CanonicalizeDisplay("lt usb c"));
+        Assert.Equal("RT USB-C", UsbPortLabelNormalizer.CanonicalizeDisplay("RT USB C"));
+    }
+
+    [Fact]
+    public void UsbMachineProfileStore_MergesDuplicateNormalizedPortLabels()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"fe-usb-label-merge-{Guid.NewGuid():N}");
+        try
+        {
+            var store = new UsbMachineProfileStore(root);
+            var profile = store.LoadOrCreate();
+            var leftA = new UsbKnownPortRecord { MappingId = "a", UserLabel = "LT USB C", LastSeenUtc = DateTimeOffset.UtcNow.AddMinutes(-5) };
+            var leftB = new UsbKnownPortRecord
+            {
+                MappingId = "b",
+                UserLabel = "LT USB-C",
+                LastSeenUtc = DateTimeOffset.UtcNow,
+                LastBenchmark = new UsbIntelligenceBenchmarkResult
+                {
+                    Succeeded = true,
+                    WriteSpeedMBps = 61,
+                    ReadSpeedMBps = 100,
+                    Timestamp = DateTimeOffset.UtcNow,
+                    SummaryLine = "bench"
+                }
+            };
+            profile.KnownPorts.Add(leftA);
+            profile.KnownPorts.Add(leftB);
+
+            store.Save(profile);
+            var reloaded = store.LoadOrCreate();
+
+            var rec = Assert.Single(reloaded.KnownPorts);
+            Assert.Equal("LT USB-C", rec.UserLabel);
+            Assert.Equal(UsbPortLabelNormalizer.NormalizeKey("LT USB-C"), rec.NormalizedLabelKey);
+            Assert.Equal(61, rec.LastBenchmark!.WriteSpeedMBps);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public void UsbGuidedMappingWorkflow_DuplicateNormalizedLabelUpdatesExistingRecord()
+    {
+        UsbPortLabelResolver.ResetSessionStateForTests();
+        var root = Path.Combine(Path.GetTempPath(), $"fe-usb-map-dupe-{Guid.NewGuid():N}");
+        try
+        {
+            var store = new UsbMachineProfileStore(root);
+            var profile = store.LoadOrCreate();
+            var wf = new UsbGuidedMappingWorkflow();
+            wf.StartMappingSession();
+            wf.CaptureBeforeSnapshot(new UsbTopologySnapshot
+            {
+                GeneratedUtc = DateTimeOffset.UtcNow,
+                Devices = [TestUsbDevice("Y:", "dev-y", "old", seenCount: 1, locationPathHash: "loc-old")],
+                SummaryLine = "before"
+            });
+            wf.CaptureAfterSnapshot(new UsbTopologySnapshot
+            {
+                GeneratedUtc = DateTimeOffset.UtcNow,
+                Devices = [TestUsbDevice("Y:", "dev-y", "new", seenCount: 1, locationPathHash: "loc-new")],
+                SummaryLine = "after"
+            });
+
+            Assert.True(wf.TrySaveMappingLabel(profile, store, "LT USB C", out _, out var err1), err1);
+            Assert.True(wf.TrySaveMappingLabel(profile, store, "LT USB-C", out _, out var err2), err2);
+
+            Assert.Single(profile.KnownPorts);
+            Assert.Equal("LT USB-C", profile.KnownPorts[0].UserLabel);
+            Assert.Equal(UsbPortLabelNormalizer.NormalizeKey("LT USB C"), profile.KnownPorts[0].NormalizedLabelKey);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
+            }
+            catch
+            {
+            }
+        }
     }
 
     [Fact]
@@ -685,7 +783,7 @@ public sealed class UsbIntelligenceProTests
 
             Assert.True(ok, err);
             var rec = Assert.Single(profile.KnownPorts);
-            Assert.Equal("RT USB C", rec.UserLabel);
+            Assert.Equal("RT USB-C", rec.UserLabel);
             Assert.NotNull(rec.LastBenchmark);
             Assert.True(rec.LastBenchmark!.AttachedToVerifiedPort);
             Assert.False(profile.UnverifiedBenchmarkByDriveLetter.ContainsKey("Q"));

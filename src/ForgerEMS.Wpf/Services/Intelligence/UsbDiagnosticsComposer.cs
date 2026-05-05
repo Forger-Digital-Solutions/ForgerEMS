@@ -193,8 +193,13 @@ public static class UsbDiagnosticsComposer
                 : string.Empty;
         }
 
-        var label = string.IsNullOrWhiteSpace(ranked.UserLabel) ? "labeled port" : ranked.UserLabel.Trim();
-        return $"Best measured port: {label} (~{ranked.LastBenchmark!.WriteSpeedMBps:0.0} MB/s write).";
+        var bestBenchmark = ranked.LastBenchmark!;
+        var label = !string.IsNullOrWhiteSpace(ranked.UserLabel)
+            ? ranked.UserLabel.Trim()
+            : !string.IsNullOrWhiteSpace(bestBenchmark.AttachedPortLabel)
+                ? bestBenchmark.AttachedPortLabel.Trim()
+                : "Unverified current port";
+        return $"Best measured port: {label} (~{bestBenchmark.WriteSpeedMBps:0.0} MB/s write).";
     }
 
     private static DiagnosticSeverityLevel MapOverall(List<UsbDiagnosticIssue> issues)

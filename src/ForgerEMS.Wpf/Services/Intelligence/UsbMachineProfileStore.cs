@@ -36,6 +36,7 @@ public sealed class UsbMachineProfileStore
                 var profile = JsonSerializer.Deserialize<UsbMachineProfile>(json, JsonOptions);
                 if (profile is not null && !string.IsNullOrWhiteSpace(profile.MachineFingerprintHash))
                 {
+                    UsbPortLabelNormalizer.NormalizeProfile(profile);
                     return profile;
                 }
             }
@@ -59,6 +60,7 @@ public sealed class UsbMachineProfileStore
 
     public void Save(UsbMachineProfile profile)
     {
+        UsbPortLabelNormalizer.NormalizeProfile(profile);
         profile.LastUpdatedUtc = DateTimeOffset.UtcNow;
         var dir = Path.GetDirectoryName(_profilePath);
         if (!string.IsNullOrEmpty(dir))

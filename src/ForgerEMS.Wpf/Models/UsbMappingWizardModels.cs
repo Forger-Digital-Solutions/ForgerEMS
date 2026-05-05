@@ -51,7 +51,11 @@ public sealed class UsbMappingWizardDeviceOption
 
 public sealed class UsbSavedPortLabelOption
 {
+    public required string MappingId { get; init; }
+
     public required string Label { get; init; }
+
+    public required string NormalizedLabelKey { get; init; }
 
     public string LastSeenDisplay { get; init; } = "Last seen: —";
 
@@ -59,7 +63,7 @@ public sealed class UsbSavedPortLabelOption
 
     public string VerificationDisplay { get; init; } = "Needs confirmation";
 
-    public string ConfirmButtonText => "Confirm " + Label;
+    public string ConfirmButtonText => "Confirm";
 }
 
 public sealed class UsbMappingWizardResult

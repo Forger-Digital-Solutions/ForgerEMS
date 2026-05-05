@@ -88,7 +88,9 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         TryAgainCommand = new AsyncRelayCommand(TryDetectionAgainAsync, () => CanRetry);
         UseCurrentPortAnywayCommand = new RelayCommand(UseCurrentPortAnyway, () => !_detectionSuccess && SelectedDevice is not null && !IsAnalyzingPortChange);
         SaveManualLabelPathCommand = new RelayCommand(UseCurrentPortAnyway, () => !_detectionSuccess && SelectedDevice is not null && !IsAnalyzingPortChange);
-        ConfirmSavedPortLabelCommand = new RelayCommand<string>(ConfirmSavedPortLabel, label => !string.IsNullOrWhiteSpace(label) && SelectedDevice is not null && !IsAnalyzingPortChange);
+        ConfirmSavedPortLabelCommand = new RelayCommand<string>(ConfirmSavedPortLabel, mappingId => !string.IsNullOrWhiteSpace(mappingId) && SelectedDevice is not null && !IsAnalyzingPortChange);
+        RenameSavedPortLabelCommand = new RelayCommand<string>(RenameSavedPortLabel, mappingId => !string.IsNullOrWhiteSpace(mappingId) && !string.IsNullOrWhiteSpace(PortLabelDraft) && !IsAnalyzingPortChange);
+        DeleteSavedPortLabelCommand = new RelayCommand<string>(DeleteSavedPortLabel, mappingId => !string.IsNullOrWhiteSpace(mappingId) && !IsAnalyzingPortChange);
         BackFromDetectCommand = new RelayCommand(BackFromDetect, () => IsDetectStep && !IsAnalyzingPortChange);
         SavePortLabelCommand = new RelayCommand(SavePortLabel, () => !string.IsNullOrWhiteSpace(PortLabelDraft));
         CloseCommand = new RelayCommand(() => CloseRequested?.Invoke(this, true));
@@ -109,6 +111,8 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
     public RelayCommand UseCurrentPortAnywayCommand { get; }
     public RelayCommand SaveManualLabelPathCommand { get; }
     public RelayCommand<string> ConfirmSavedPortLabelCommand { get; }
+    public RelayCommand<string> RenameSavedPortLabelCommand { get; }
+    public RelayCommand<string> DeleteSavedPortLabelCommand { get; }
     public RelayCommand BackFromDetectCommand { get; }
     public RelayCommand SavePortLabelCommand { get; }
     public RelayCommand CloseCommand { get; }
@@ -332,6 +336,7 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
             if (SetProperty(ref _portLabelDraft, value))
             {
                 SavePortLabelCommand.RaiseCanExecuteChanged();
+                RenameSavedPortLabelCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -541,7 +546,9 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
                 : "weak topology; confirm when connected";
             SavedPortLabels.Add(new UsbSavedPortLabelOption
             {
-                Label = rec.UserLabel!.Trim(),
+                MappingId = rec.MappingId,
+                Label = UsbPortLabelNormalizer.CanonicalizeDisplay(rec.UserLabel),
+                NormalizedLabelKey = rec.NormalizedLabelKey,
                 LastSeenDisplay = "Last seen: " + lastSeen,
                 LastBenchmarkDisplay = "Benchmark: " + benchmark,
                 VerificationDisplay = verification
@@ -550,6 +557,8 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
 
         OnPropertyChanged(nameof(HasSavedPortLabels));
         ConfirmSavedPortLabelCommand.RaiseCanExecuteChanged();
+        RenameSavedPortLabelCommand.RaiseCanExecuteChanged();
+        DeleteSavedPortLabelCommand.RaiseCanExecuteChanged();
     }
 
     private async Task DetectPortChangeCoreAsync()
@@ -859,14 +868,15 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         NextToLabelCommand.RaiseCanExecuteChanged();
     }
 
-    private void ConfirmSavedPortLabel(string? label)
+    private void ConfirmSavedPortLabel(string? mappingId)
     {
-        if (string.IsNullOrWhiteSpace(label))
+        var option = SavedPortLabels.FirstOrDefault(p => string.Equals(p.MappingId, mappingId, StringComparison.Ordinal));
+        if (option is null)
         {
             return;
         }
 
-        PortLabelDraft = label.Trim();
+        PortLabelDraft = option.Label;
         _pendingSaveMode = UsbPortMappingSaveMode.CurrentPortForSelectedTarget;
         ConfidenceTierDisplay = "Manual";
         DetectionSuccess = true;
@@ -874,6 +884,68 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         DetectionDetail = "Manual confirmation mode. Windows could not distinguish the physical port, so this label is user-confirmed for the current connection.";
         RecommendationDisplay = "Benchmark results can now attach to this confirmed label for the active USB connection.";
         SavePortLabel();
+    }
+
+    private void RenameSavedPortLabel(string? mappingId)
+    {
+        if (string.IsNullOrWhiteSpace(mappingId) || string.IsNullOrWhiteSpace(PortLabelDraft))
+        {
+            return;
+        }
+
+        var profile = _profileStore.LoadOrCreate();
+        var rec = profile.KnownPorts.FirstOrDefault(p => string.Equals(p.MappingId, mappingId, StringComparison.Ordinal));
+        if (rec is null)
+        {
+            FailureMessage = "Saved label was not found. Refresh the wizard and try again.";
+            return;
+        }
+
+        var display = UsbPortLabelNormalizer.CanonicalizeDisplay(PortLabelDraft);
+        var key = UsbPortLabelNormalizer.NormalizeKey(display);
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            FailureMessage = "Enter a new label first.";
+            return;
+        }
+
+        var collision = profile.KnownPorts.FirstOrDefault(p =>
+            !string.Equals(p.MappingId, rec.MappingId, StringComparison.Ordinal) &&
+            string.Equals(p.NormalizedLabelKey, key, StringComparison.Ordinal));
+        if (collision is not null)
+        {
+            FailureMessage = $"A saved label already uses {display}. The duplicate will be merged safely.";
+        }
+
+        rec.UserLabel = display;
+        rec.NormalizedLabelKey = key;
+        rec.UpdatedUtc = DateTimeOffset.UtcNow;
+        _profileStore.Save(profile);
+        ReloadSavedPortLabels();
+        StartupDiagnosticLog.AppendLine(
+            $"[UsbMappingWizard] savedPortLabelRenamed mappingId={rec.MappingId} normalizedKeyHash={SafeHash(key)}");
+    }
+
+    private void DeleteSavedPortLabel(string? mappingId)
+    {
+        if (string.IsNullOrWhiteSpace(mappingId))
+        {
+            return;
+        }
+
+        var profile = _profileStore.LoadOrCreate();
+        var rec = profile.KnownPorts.FirstOrDefault(p => string.Equals(p.MappingId, mappingId, StringComparison.Ordinal));
+        if (rec is null)
+        {
+            return;
+        }
+
+        var deletedLabel = rec.UserLabel?.Trim() ?? "(unlabeled)";
+        profile.KnownPorts.Remove(rec);
+        _profileStore.Save(profile);
+        ReloadSavedPortLabels();
+        StartupDiagnosticLog.AppendLine(
+            $"[UsbMappingWizard] savedPortLabelDeleted mappingId={mappingId} labelHash={SafeHash(deletedLabel)}");
     }
 
     private void ClearDetectionStateForRetry()
@@ -957,7 +1029,7 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
     private void SavePortLabel()
     {
         var profile = _profileStore.LoadOrCreate();
-        var label = PortLabelDraft.Trim();
+        var label = UsbPortLabelNormalizer.CanonicalizeDisplay(PortLabelDraft);
         if (!_workflow.TrySaveMappingLabel(
                 profile,
                 _profileStore,
@@ -971,6 +1043,7 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
             return;
         }
 
+        ReloadSavedPortLabels();
         var target = SelectedUsbTarget;
         DoneResult = new UsbMappingWizardResult
         {
@@ -1035,6 +1108,8 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         UseCurrentPortAnywayCommand.RaiseCanExecuteChanged();
         SaveManualLabelPathCommand.RaiseCanExecuteChanged();
         ConfirmSavedPortLabelCommand.RaiseCanExecuteChanged();
+        RenameSavedPortLabelCommand.RaiseCanExecuteChanged();
+        DeleteSavedPortLabelCommand.RaiseCanExecuteChanged();
         BackFromDetectCommand.RaiseCanExecuteChanged();
         SavePortLabelCommand.RaiseCanExecuteChanged();
         MapAnotherPortCommand.RaiseCanExecuteChanged();

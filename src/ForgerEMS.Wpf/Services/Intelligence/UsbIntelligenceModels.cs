@@ -134,6 +134,8 @@ public sealed class UsbKnownPortRecord
 
     public string? UserLabel { get; set; }
 
+    public string NormalizedLabelKey { get; set; } = string.Empty;
+
     public UsbIntelligenceBenchmarkResult? LastBenchmark { get; set; }
 
     public DateTimeOffset? LastSeenUtc { get; set; }

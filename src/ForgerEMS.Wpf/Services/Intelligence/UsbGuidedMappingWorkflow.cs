@@ -188,14 +188,18 @@ public sealed class UsbGuidedMappingWorkflow
         int mapConf,
         DateTimeOffset afterGeneratedUtc)
     {
+        var canonicalLabel = UsbPortLabelNormalizer.CanonicalizeDisplay(trimmedLabel);
+        var normalizedKey = UsbPortLabelNormalizer.NormalizeKey(canonicalLabel);
+        UsbPortLabelNormalizer.NormalizeProfile(profile);
         var rec = profile.KnownPorts.FirstOrDefault(p =>
-            string.Equals(p.UserLabel?.Trim(), trimmedLabel, StringComparison.OrdinalIgnoreCase));
+            string.Equals(p.NormalizedLabelKey, normalizedKey, StringComparison.Ordinal));
         if (rec is null)
         {
             rec = new UsbKnownPortRecord
             {
                 MappingId = Guid.NewGuid().ToString("N"),
-                StablePortKey = afterMatch.StablePortKey
+                StablePortKey = afterMatch.StablePortKey,
+                NormalizedLabelKey = normalizedKey
             };
             profile.KnownPorts.Add(rec);
         }
@@ -203,7 +207,7 @@ public sealed class UsbGuidedMappingWorkflow
         rec.LastSeenUtc = afterGeneratedUtc;
         rec.LastMappingSuggestion = lastMappingSuggestionLine;
         rec.Confidence = Math.Max(rec.Confidence, Math.Min(95, mapConf));
-        UsbPortLabelResolver.StampManualLabel(rec, afterMatch, trimmedLabel, mapConf, afterGeneratedUtc);
+        UsbPortLabelResolver.StampManualLabel(rec, afterMatch, canonicalLabel, mapConf, afterGeneratedUtc);
 
         var letter = UsbPortLabelResolver.NormalizeDriveLetter(afterMatch.DriveLetter);
         if (!string.IsNullOrWhiteSpace(letter) &&
@@ -212,7 +216,7 @@ public sealed class UsbGuidedMappingWorkflow
             rec.LastBenchmark = UsbPortLabelResolver.WithPortAttachment(
                 unverifiedBenchmark,
                 attachedToVerifiedPort: true,
-                trimmedLabel,
+                canonicalLabel,
                 UsbPortLabelValidity.CurrentSessionManual);
             profile.UnverifiedBenchmarkByDriveLetter.Remove(letter);
         }
@@ -222,7 +226,7 @@ public sealed class UsbGuidedMappingWorkflow
             profile.KnownStablePortKeys.Add(afterMatch.StablePortKey);
         }
 
-        profile.UserLabelsPlaceholder = trimmedLabel;
+        profile.UserLabelsPlaceholder = canonicalLabel;
         store.Save(profile);
     }
 }
