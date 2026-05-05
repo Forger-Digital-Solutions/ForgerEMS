@@ -391,13 +391,62 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
             $extractRoot = {{ToSingleQuotedPowerShellLiteral(extractRoot)}}
             $expectedSha256 = {{ToSingleQuotedPowerShellLiteral(expectedSha256)}}
 
+            $runtimeCandidates = @(
+                (Join-Path (Get-Location).Path 'ForgerEMS.Runtime.ps1'),
+                (Join-Path (Get-Location).Path 'backend\ForgerEMS.Runtime.ps1')
+            ) | Select-Object -Unique
+
+            $runtimeLoaded = $false
+            foreach ($candidate in $runtimeCandidates) {
+                if (Test-Path -LiteralPath $candidate) {
+                    . $candidate
+                    $runtimeLoaded = $true
+                    break
+                }
+            }
+
+            if (-not $runtimeLoaded -or -not (Get-Command -Name Get-ForgerSha256 -ErrorAction SilentlyContinue)) {
+                throw 'Could not load the ForgerEMS SHA-256 helper needed to verify the Ventoy package.'
+            }
+
+            function Write-ForgerHashProviderLog {
+                param([Parameter(Mandatory = $true)][string]$Path)
+
+                $provider = Get-ForgerLastHashProvider
+                if ([string]::IsNullOrWhiteSpace($provider)) {
+                    $provider = 'Unknown'
+                }
+
+                $friendlyProvider = switch ($provider) {
+                    'DotNetFallback' { 'Built-in .NET (large-file safe)' }
+                    'Get-FileHash' { 'Windows Get-FileHash' }
+                    default { $provider }
+                }
+
+                $safePath = Get-ForgerSafePathForLog -Path $Path
+                Write-Host ('[INFO] SHA256 hash provider: ' + $friendlyProvider + ' file=' + $safePath)
+            }
+
+            function Get-VerifiedVentoyPackageHash {
+                param([Parameter(Mandatory = $true)][string]$Path)
+
+                try {
+                    $hash = Get-ForgerSha256 -LiteralPath $Path
+                    Write-ForgerHashProviderLog -Path $Path
+                    return $hash
+                }
+                catch {
+                    throw ('Could not verify Ventoy package checksum. ' + $_.Exception.Message)
+                }
+            }
+
             $packageDirectory = Split-Path -Parent $packagePath
             New-Item -ItemType Directory -Path $packageDirectory -Force | Out-Null
             New-Item -ItemType Directory -Path $extractRoot -Force | Out-Null
 
             $needsDownload = $true
             if (Test-Path -LiteralPath $packagePath) {
-                $existingHash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+                $existingHash = Get-VerifiedVentoyPackageHash -Path $packagePath
                 if ($existingHash -eq $expectedSha256) {
                     Write-Host '[OK] Reusing cached official Ventoy package.'
                     $needsDownload = $false
@@ -417,7 +466,7 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
                     Invoke-WebRequest -Uri $packageUrl -OutFile $packagePath -UseBasicParsing -Headers @{ 'User-Agent' = 'ForgerEMS-Wpf/1.0' }
                 }
 
-                $actualHash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+                $actualHash = Get-VerifiedVentoyPackageHash -Path $packagePath
                 if ($actualHash -ne $expectedSha256) {
                     throw ('SHA-256 mismatch for Ventoy package. Expected ' + $expectedSha256 + ' but received ' + $actualHash + '.')
                 }

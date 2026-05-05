@@ -39,6 +39,20 @@ public sealed class UsbBenchmarkHardeningTests
         }
     }
 
+    private sealed class StubPowerShellRunnerService(PowerShellRunResult result) : IPowerShellRunnerService
+    {
+        public int RunCount { get; private set; }
+
+        public Task<PowerShellRunResult> RunAsync(
+            PowerShellRunRequest request,
+            Action<LogLine>? onOutput = null,
+            CancellationToken cancellationToken = default)
+        {
+            RunCount++;
+            return Task.FromResult(result);
+        }
+    }
+
     private static MainViewModel BuildBenchmarkViewModel(CapturingBenchmarkService benchmarkService, UsbTargetInfo target)
     {
         var powerShell = new PowerShellRunnerService();
@@ -340,5 +354,46 @@ public sealed class UsbBenchmarkHardeningTests
         Assert.DoesNotContain(
             vm.Logs.Select(line => line.Text),
             line => line.Contains("Benchmark cancelled by user", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task UsbBenchmarkService_MissingDriveRootSkipsNativeAndPowerShellFallback()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "fe-missing-usb-" + Guid.NewGuid().ToString("N")) + Path.DirectorySeparatorChar;
+        var target = new UsbTargetInfo
+        {
+            DriveLetter = root,
+            RootPath = root,
+            Label = "Ventoy",
+            FileSystem = "exFAT",
+            TotalBytes = 128L * 1024 * 1024 * 1024,
+            FreeBytes = 100L * 1024 * 1024 * 1024,
+            DriveType = "Removable",
+            BusType = "USB",
+            IsLikelyUsb = true,
+            IsRemovableMedia = true,
+            IsSystemDrive = false,
+            IsBootDrive = false,
+            IsEfiSystemPartition = false,
+            IsUndersizedPartition = false,
+            IsSelectable = true
+        };
+        var runner = new StubPowerShellRunnerService(new PowerShellRunResult
+        {
+            ExitCode = 1,
+            StandardErrorText = "A device which does not exist was specified."
+        });
+        var service = new UsbBenchmarkService(runner);
+        var logs = new List<string>();
+
+        var result = await service.RunSequentialBenchmarkAsync(
+            target,
+            line => logs.Add(line.Text));
+
+        Assert.Equal(0, runner.RunCount);
+        Assert.False(result.Succeeded);
+        Assert.Equal(UsbBenchmarkResultKind.DeviceRemoved, result.ResultKind);
+        Assert.Contains("USB target is no longer available", result.Details, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(logs, line => line.Contains("USB target unavailable", StringComparison.OrdinalIgnoreCase));
     }
 }

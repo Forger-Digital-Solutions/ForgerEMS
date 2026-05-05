@@ -166,6 +166,15 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
             };
         }
 
+        if (!TryValidateTargetAvailableForBenchmark(target, out var unavailableReason))
+        {
+            onOutput?.Invoke(new LogLine(
+                DateTimeOffset.Now,
+                $"[WARN] USB target unavailable - refresh or reconnect the USB. runId={runId:N} reason={unavailableReason}",
+                LogSeverity.Warning));
+            return BuildTargetUnavailableResult(runId, startedAt, identity.TopologyFingerprint, unavailableReason);
+        }
+
         var letter = string.IsNullOrWhiteSpace(target.DriveLetter) ? "?" : target.DriveLetter.TrimEnd('\\');
         var tokenAlreadyCancelled = cancellationToken.IsCancellationRequested;
         if (tokenAlreadyCancelled)
@@ -229,6 +238,16 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
                     TargetTopologyFingerprint = identity.TopologyFingerprint,
                     UiSummaryLine = UsbBenchmarkUiMessages.BuildUiSummary(UsbBenchmarkResultKind.CancelledByUser, 0, 0)
                 };
+            }
+
+            if (native.EndKind == UsbNativeBenchmarkEndKind.IoOrSystemError &&
+                IsUnavailableDeviceFailure(native.SummaryLine))
+            {
+                onOutput?.Invoke(new LogLine(
+                    DateTimeOffset.Now,
+                    $"[WARN] USB disconnected or unavailable during native benchmark. runId={runId:N}",
+                    LogSeverity.Warning));
+                return BuildTargetUnavailableResult(runId, startedAt, identity.TopologyFingerprint, "USB disconnected or unavailable during benchmark.");
             }
 
             if (native.EndKind == UsbNativeBenchmarkEndKind.OperationCanceled)
@@ -306,6 +325,15 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
         }
         catch (Exception ex)
         {
+            if (IsUnavailableDeviceFailure(ex))
+            {
+                onOutput?.Invoke(new LogLine(
+                    DateTimeOffset.Now,
+                    $"[WARN] USB disconnected or unavailable during native benchmark. runId={runId:N}",
+                    LogSeverity.Warning));
+                return BuildTargetUnavailableResult(runId, startedAt, identity.TopologyFingerprint, "USB disconnected or unavailable during benchmark.");
+            }
+
             onOutput?.Invoke(new LogLine(
                 DateTimeOffset.Now,
                 $"[WARN] Native benchmark error: {ex.Message}; falling back to PowerShell.",
@@ -313,6 +341,15 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
         }
 
 PowerShellFallback:
+        if (!TryValidateTargetAvailableForBenchmark(target, out unavailableReason))
+        {
+            onOutput?.Invoke(new LogLine(
+                DateTimeOffset.Now,
+                $"[WARN] USB target unavailable before PowerShell fallback - refresh or reconnect the USB. runId={runId:N} reason={unavailableReason}",
+                LogSeverity.Warning));
+            return BuildTargetUnavailableResult(runId, startedAt, identity.TopologyFingerprint, unavailableReason);
+        }
+
         var testSizeMb = UsbBenchmarkAccuracy.SelectTestSizeMb(target.FreeBytes);
         if (target.FreeBytes < (testSizeMb + 128L) * 1024 * 1024)
         {
@@ -351,6 +388,16 @@ PowerShellFallback:
         if (!result.Succeeded || string.IsNullOrWhiteSpace(result.StandardOutputText))
         {
             var nowPs = DateTimeOffset.UtcNow;
+            var combinedOutput = (result.StandardOutputText + Environment.NewLine + result.StandardErrorText).Trim();
+            if (IsUnavailableDeviceFailure(combinedOutput))
+            {
+                onOutput?.Invoke(new LogLine(
+                    DateTimeOffset.Now,
+                    $"[WARN] USB disconnected or unavailable during PowerShell benchmark fallback. runId={runId:N}",
+                    LogSeverity.Warning));
+                return BuildTargetUnavailableResult(runId, startedAt, identity.TopologyFingerprint, "USB disconnected or unavailable during benchmark.");
+            }
+
             return new UsbBenchmarkResult
             {
                 RunId = runId,
@@ -501,6 +548,103 @@ PowerShellFallback:
                 native.BenchmarkConfidence,
                 native.ReadLikelyCached || native.ReadIsEstimate)
         };
+
+    private static UsbBenchmarkResult BuildTargetUnavailableResult(
+        Guid runId,
+        DateTimeOffset startedAt,
+        string topologyFingerprint,
+        string detail)
+    {
+        var now = DateTimeOffset.UtcNow;
+        const string friendlyDetail = "USB target is no longer available. Unplug/replug or refresh USB targets.";
+        return new UsbBenchmarkResult
+        {
+            RunId = runId,
+            Succeeded = false,
+            Status = "Device removed",
+            Summary = "USB target unavailable",
+            Details = string.IsNullOrWhiteSpace(detail) ? friendlyDetail : $"{friendlyDetail} {detail}",
+            ReadSpeedDisplay = "Unavailable",
+            WriteSpeedDisplay = "Unavailable",
+            LastTestedAt = now,
+            ResultKind = UsbBenchmarkResultKind.DeviceRemoved,
+            CancellationSource = UsbBenchmarkCancellationSource.DeviceRemoved,
+            StartedAtUtc = startedAt,
+            CompletedAtUtc = now,
+            TargetTopologyFingerprint = topologyFingerprint,
+            UiSummaryLine = UsbBenchmarkUiMessages.BuildUiSummary(UsbBenchmarkResultKind.DeviceRemoved, 0, 0)
+        };
+    }
+
+    private static bool TryValidateTargetAvailableForBenchmark(UsbTargetInfo target, out string reason)
+    {
+        reason = string.Empty;
+        var targetRoot = target.RootPath;
+        if (string.IsNullOrWhiteSpace(targetRoot))
+        {
+            reason = "Target root path is not valid.";
+            return false;
+        }
+
+        if (!Directory.Exists(targetRoot))
+        {
+            reason = "Drive root is not mounted.";
+            return false;
+        }
+
+        var root = Path.GetPathRoot(targetRoot);
+        if (string.IsNullOrWhiteSpace(root))
+        {
+            reason = "Target root path is not valid.";
+            return false;
+        }
+
+        try
+        {
+            var drive = new DriveInfo(root);
+            if (!drive.IsReady)
+            {
+                reason = "Drive is not ready.";
+                return false;
+            }
+
+            if (drive.AvailableFreeSpace < 1)
+            {
+                reason = "Drive does not report writable free space.";
+                return false;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            reason = NormalizeUnavailableDeviceDetail(ex.Message);
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsUnavailableDeviceFailure(Exception ex) =>
+        IsUnavailableDeviceFailure(ex.Message) ||
+        (ex.InnerException is not null && IsUnavailableDeviceFailure(ex.InnerException));
+
+    private static bool IsUnavailableDeviceFailure(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return false;
+        }
+
+        return message.Contains("device which does not exist", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("device is not ready", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("not ready", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("drive root is not mounted", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("cannot find the drive", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("path does not exist", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("not mounted", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeUnavailableDeviceDetail(string message) =>
+        IsUnavailableDeviceFailure(message) ? "USB disconnected or unavailable." : message;
 
     private static string BuildBenchmarkCommand(string rootPath, int testSizeMb)
     {

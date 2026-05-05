@@ -3729,7 +3729,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         try
         {
             var result = await _ventoyIntegrationService.InstallOrUpdateAsync(_backendContext, selectedUsbTarget, AppendLog);
-            await RefreshVentoyStatusAsync();
 
             if (result.Succeeded)
             {
@@ -3766,6 +3765,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
         finally
         {
+            try
+            {
+                await RefreshUsbTargetsAsync();
+                AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] USB targets refreshed after Ventoy install/update action.", LogSeverity.Info, channel: LiveLogChannel.Diagnostics));
+            }
+            catch (Exception refreshException)
+            {
+                AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] USB target refresh after Ventoy action failed: {refreshException.Message}", LogSeverity.Warning));
+            }
+
             IsBusy = false;
             ResetProgressSoon();
         }

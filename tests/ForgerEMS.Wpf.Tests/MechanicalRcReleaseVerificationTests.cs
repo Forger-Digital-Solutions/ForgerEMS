@@ -158,15 +158,31 @@ public sealed class MechanicalRcReleaseVerificationTests
         var update = File.ReadAllText(Path.Combine(RepoRoot, "backend", "Update-ForgerEMS.ps1"));
         var health = File.ReadAllText(Path.Combine(RepoRoot, "backend", "ToolkitManager", "Get-ForgerEMSToolkitHealth.ps1"));
         var buildBackend = File.ReadAllText(Path.Combine(RepoRoot, "tools", "build-backend-release.ps1"));
+        var ventoyIntegration = File.ReadAllText(Path.Combine(RepoRoot, "src", "ForgerEMS.Wpf", "Services", "VentoyIntegrationService.cs"));
 
         Assert.DoesNotContain("(Get-FileHash", verify, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("(Get-FileHash", update, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("(Get-FileHash", health, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("(Get-FileHash", buildBackend, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("(Get-FileHash", ventoyIntegration, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Get-ForgerSha256", verify, StringComparison.Ordinal);
         Assert.Contains("Get-ForgerSha256", update, StringComparison.Ordinal);
         Assert.Contains("Get-ForgerSha256", health, StringComparison.Ordinal);
         Assert.Contains("Get-ForgerSha256", buildBackend, StringComparison.Ordinal);
+        Assert.Contains("Get-ForgerSha256", ventoyIntegration, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void VentoyInstallPreparation_UsesRuntimeHashHelperAndFriendlyFallbackLogs()
+    {
+        var text = File.ReadAllText(Path.Combine(RepoRoot, "src", "ForgerEMS.Wpf", "Services", "VentoyIntegrationService.cs"));
+
+        Assert.Contains("ForgerEMS.Runtime.ps1", text, StringComparison.Ordinal);
+        Assert.Contains("Get-VerifiedVentoyPackageHash", text, StringComparison.Ordinal);
+        Assert.Contains("Get-ForgerSha256", text, StringComparison.Ordinal);
+        Assert.Contains("Built-in .NET (large-file safe)", text, StringComparison.Ordinal);
+        Assert.Contains("Could not verify Ventoy package checksum", text, StringComparison.Ordinal);
+        Assert.Contains("SHA-256 mismatch for Ventoy package", text, StringComparison.Ordinal);
     }
 
     [Fact]
