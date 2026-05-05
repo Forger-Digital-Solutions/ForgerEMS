@@ -3051,7 +3051,7 @@
                                                     Visibility="{Binding AppUpdateSettingsIgnoredVisibility}" />
                                             <CheckBox Margin="0,10,0,0"
                                                       IsChecked="{Binding VerboseLiveLogs, Mode=TwoWay}"
-                                                      Content="Verbose Live Logs (show Kyra routing and diagnostics lines in the sidebar)" />
+                                                      Content="Verbose Live Logs (show every line in Live Logs, including Kyra routing and diagnostics)" />
                                             <Button Margin="0,10,0,0"
                                                     MinWidth="120"
                                                     HorizontalAlignment="Left"

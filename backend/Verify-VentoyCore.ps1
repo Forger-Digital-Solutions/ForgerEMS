@@ -1837,6 +1837,13 @@ if ($script:ManagedRevalidationLatestRoot) {
 }
 
 $failedCount = @($results | Where-Object { $_.Status -eq "FAIL" }).Count
+$passedCount = @($results | Where-Object { $_.Status -eq "PASS" }).Count
+
+Write-Status "--- ACTION SUMMARY ---" "OK"
+Write-Status ("Checks passed: $passedCount | failed: $failedCount") "OK"
+Write-Status ("Warnings: " + $script:WarningCount) "INFO"
+$backendReadiness = if ($failedCount -eq 0) { "READY" } else { "FAILED" }
+Write-Status ("Backend readiness: " + $backendReadiness) $(if ($failedCount -eq 0) { "OK" } else { "ERROR" })
 
 if ($script:VerificationSubstDrive) {
     & subst.exe $script:VerificationSubstDrive /D 2>$null

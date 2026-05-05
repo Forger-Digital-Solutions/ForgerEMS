@@ -96,6 +96,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private Visibility _appUpdateViewReleaseNotesVisibility = Visibility.Visible;
     private Visibility _appUpdateDiagnosticsHintVisibility = Visibility.Collapsed;
     private bool _verboseLiveLogs;
+    private UsbManagedHeartbeatPhase _usbManagedHeartbeatPhase = UsbManagedHeartbeatPhase.Unknown;
     private CancellationTokenSource? _usbMonitorCancellation;
     private CancellationTokenSource? _manualUsbBenchmarkCts;
     private CancellationTokenSource? _autoUsbBenchmarkCts;
@@ -4463,6 +4464,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         LastCommandText = $"{request.DisplayName} -> {Path.GetFileName(request.ScriptPath ?? "inline command")}";
 
         var startedAt = DateTimeOffset.Now;
+        _usbManagedHeartbeatPhase = UsbManagedHeartbeatPhase.Unknown;
         AppendLifecycleStart(request.DisplayName, SelectedUsbTarget);
 
         AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] Working directory: {request.WorkingDirectory}", LogSeverity.Info));
@@ -4481,7 +4483,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         IsBusy = true;
         try
         {
-            var runResult = await _powerShellRunnerService.RunAsync(request, AppendLog);
+            var effectiveRequest = WithOptionalManagedDownloadHeartbeat(request);
+            var runResult = await _powerShellRunnerService.RunAsync(effectiveRequest, AppendLog);
             var parsed = _scriptStatusParser.Parse(action, request.DisplayName, runResult);
 
             await LoadManagedSummaryAsync();
@@ -8436,9 +8439,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void AppendLog(LogLine line)
     {
+        var redacted = CopilotRedactor.Redact(line.Text, enabled: true);
+        var normalizedForDisplay = UsbLogDisplayNormalizer.NormalizeHashProviderLabels(redacted);
         var sanitized = new LogLine(
             line.Timestamp,
-            CopilotRedactor.Redact(line.Text, enabled: true),
+            normalizedForDisplay,
             line.Severity,
             line.IsErrorStream,
             line.Channel);
@@ -8508,18 +8513,38 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void RefreshLogsText()
     {
-        var visibleLines = Logs.Where(IsVisibleLogLine).Select(item => item.DisplayText).ToArray();
-        LogsText = string.Join(Environment.NewLine, visibleLines);
-        RecentLogsText = visibleLines.Length == 0
-            ? "No log output yet."
-            : string.Join(Environment.NewLine, visibleLines.TakeLast(12));
+        var fullVisible = Logs.Where(IsVisibleInFullLogViewer).ToArray();
+        LogsText = string.Join(Environment.NewLine, fullVisible.Select(item => item.DisplayText));
+
+        if (VerboseLiveLogs)
+        {
+            RecentLogsText = fullVisible.Length == 0
+                ? "No log output yet."
+                : string.Join(Environment.NewLine, fullVisible.Select(item => item.DisplayText).TakeLast(12));
+        }
+        else
+        {
+            var sidebarLines = new List<string>();
+            foreach (var item in fullVisible)
+            {
+                if (UsbBuilderLiveLogPresentation.TryGetConciseSidebarLine(item, VerboseLiveLogs, out var compact) &&
+                    !string.IsNullOrWhiteSpace(compact))
+                {
+                    sidebarLines.Add(compact);
+                }
+            }
+
+            RecentLogsText = sidebarLines.Count == 0
+                ? "No concise status yet. Open View Full Logs for complete output, or enable Verbose Live Logs."
+                : string.Join(Environment.NewLine, sidebarLines.TakeLast(12));
+        }
+
         CopyLogsCommand.RaiseCanExecuteChanged();
     }
 
-    private bool IsVisibleLogLine(LogLine line)
+    private bool IsVisibleInFullLogViewer(LogLine line)
     {
-        if (!VerboseLiveLogs &&
-            (line.Channel == LiveLogChannel.KyraDetail || line.Channel == LiveLogChannel.Diagnostics))
+        if (!VerboseLiveLogs && line.Channel == LiveLogChannel.KyraDetail)
         {
             return false;
         }
@@ -8531,6 +8556,47 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             "Warning" => line.Severity == LogSeverity.Warning,
             "Error" => line.Severity == LogSeverity.Error,
             _ => true
+        };
+    }
+
+    private PowerShellRunRequest WithOptionalManagedDownloadHeartbeat(PowerShellRunRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.ProgressItemName) ||
+            request.HeartbeatKind != PowerShellHeartbeatKind.Download)
+        {
+            return request;
+        }
+
+        return new PowerShellRunRequest
+        {
+            DisplayName = request.DisplayName,
+            WorkingDirectory = request.WorkingDirectory,
+            ScriptPath = request.ScriptPath,
+            InlineCommand = request.InlineCommand,
+            Arguments = request.Arguments,
+            ProgressItemName = request.ProgressItemName,
+            HeartbeatKind = request.HeartbeatKind,
+            BuildDownloadHeartbeatMessage = idle => BuildUsbManagedDownloadHeartbeatMessage(request.ProgressItemName!, idle)
+        };
+    }
+
+    private string? BuildUsbManagedDownloadHeartbeatMessage(string itemName, TimeSpan idleSinceLastOutput)
+    {
+        var secs = Math.Max(1, (int)idleSinceLastOutput.TotalSeconds);
+        return _usbManagedHeartbeatPhase switch
+        {
+            UsbManagedHeartbeatPhase.CheckingExisting =>
+                $"[INFO] {itemName}: still working — checking existing file ({secs}s since last log line).",
+            UsbManagedHeartbeatPhase.Downloading =>
+                $"[INFO] {itemName}: still working — downloading ({secs}s since last log line).",
+            UsbManagedHeartbeatPhase.HashingLargeFile =>
+                $"[INFO] {itemName}: still working — hashing a large ISO / computing checksum ({secs}s since last log line; large files can take several minutes).",
+            UsbManagedHeartbeatPhase.VerifyingChecksum =>
+                $"[INFO] {itemName}: still working — verifying checksum ({secs}s since last log line).",
+            UsbManagedHeartbeatPhase.WritingFinal =>
+                $"[INFO] {itemName}: still working — writing files to USB ({secs}s since last log line).",
+            _ =>
+                $"[INFO] {itemName}: still working — waiting on toolkit scripts ({secs}s since last log line). May be downloading, hashing a large ISO, or verifying checksums."
         };
     }
 
@@ -8606,6 +8672,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         var normalized = text.Trim();
+        var inferred = UsbBuilderLiveLogPresentation.InferHeartbeatPhase(normalized);
+        if (inferred != UsbManagedHeartbeatPhase.Unknown)
+        {
+            _usbManagedHeartbeatPhase = inferred;
+        }
+
         UpdateProgressStage(normalized);
         UpdateProgressItem(normalized);
         UpdateProgressTransfer(normalized);
@@ -8638,6 +8710,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         if (normalized.Contains("Downloading", StringComparison.OrdinalIgnoreCase) ||
             normalized.Contains("still in progress (no byte progress reported yet)", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Contains("still working", StringComparison.OrdinalIgnoreCase) ||
             normalized.Contains("Toolkit health scan still running", StringComparison.OrdinalIgnoreCase))
         {
             SetProgress(0, indeterminate: true);
@@ -8658,6 +8731,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private void UpdateProgressStage(string text)
     {
         var stage = text.Contains("Downloading", StringComparison.OrdinalIgnoreCase) ? "Downloading" :
+            text.Contains("SHA256 hash provider:", StringComparison.OrdinalIgnoreCase) ? "Hashing / verifying" :
             text.Contains("toolkit items", StringComparison.OrdinalIgnoreCase) && text.Contains("Scanned", StringComparison.OrdinalIgnoreCase) ? "Toolkit health scan" :
             text.Contains("Toolkit health scan still running", StringComparison.OrdinalIgnoreCase) ? "Toolkit health scan" :
             text.Contains("Verifying", StringComparison.OrdinalIgnoreCase) ? "Verifying" :

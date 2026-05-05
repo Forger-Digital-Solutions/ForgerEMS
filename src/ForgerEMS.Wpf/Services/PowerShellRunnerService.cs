@@ -129,9 +129,24 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
                     continue;
                 }
 
-                var heartbeatText = request.HeartbeatKind == PowerShellHeartbeatKind.LongRunningScan
-                    ? $"[INFO] Toolkit health scan still running (no new log lines for {idleBeforeHeartbeat.TotalSeconds:0}s) — scanning toolkit items…"
-                    : $"[INFO] Downloading {request.ProgressItemName}... still in progress (no byte progress reported yet).";
+                string heartbeatText;
+                if (request.HeartbeatKind == PowerShellHeartbeatKind.LongRunningScan)
+                {
+                    heartbeatText =
+                        $"[INFO] Toolkit health scan still running (no new log lines for {idleBeforeHeartbeat.TotalSeconds:0}s) — scanning toolkit items…";
+                }
+                else if (request.BuildDownloadHeartbeatMessage is not null &&
+                         !string.IsNullOrWhiteSpace(request.ProgressItemName))
+                {
+                    var idleSinceOutput = DateTimeOffset.UtcNow - lastOutputUtc;
+                    heartbeatText = request.BuildDownloadHeartbeatMessage.Invoke(idleSinceOutput)
+                                    ?? $"[INFO] {request.ProgressItemName}: still working (no script output for {Math.Max(1, (int)idleSinceOutput.TotalSeconds)}s).";
+                }
+                else
+                {
+                    heartbeatText =
+                        $"[INFO] {request.ProgressItemName}: still working (no script output for {idleBeforeHeartbeat.TotalSeconds:0}s) — may be downloading, hashing a large ISO, or verifying checksums.";
+                }
 
                 var skipDuplicate = false;
                 lock (sync)
@@ -202,7 +217,13 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
             return true;
         }
 
-        return trimmed.StartsWith("[INFO] Downloading", StringComparison.OrdinalIgnoreCase) &&
+        if (trimmed.StartsWith("[INFO]", StringComparison.OrdinalIgnoreCase) &&
+            trimmed.Contains("still working", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return trimmed.StartsWith("[INFO]", StringComparison.OrdinalIgnoreCase) &&
                trimmed.Contains("still in progress (no byte progress reported yet)", StringComparison.OrdinalIgnoreCase);
     }
 
