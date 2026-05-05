@@ -33,20 +33,50 @@ public sealed class UsbPortLabelStatus
 public static class UsbPortLabelResolver
 {
     private static readonly string CurrentSessionId = Guid.NewGuid().ToString("N");
+    private static readonly object SessionStateLock = new();
     private static readonly HashSet<string> RemovedDriveLetters = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, long> ConnectionEpochByDriveLetter = new(StringComparer.OrdinalIgnoreCase);
 
     private const int VerifiedScoreThreshold = 75;
     private const int AmbiguousScoreGap = 12;
 
-    public static void MarkDriveRemoved(string? rootOrDriveLetter)
+    public static long MarkDriveRemoved(string? rootOrDriveLetter)
     {
         var letter = NormalizeDriveLetter(rootOrDriveLetter);
-        if (!string.IsNullOrWhiteSpace(letter))
+        if (string.IsNullOrWhiteSpace(letter))
         {
-            lock (RemovedDriveLetters)
-            {
-                RemovedDriveLetters.Add(letter);
-            }
+            return 0;
+        }
+
+        lock (SessionStateLock)
+        {
+            var nextEpoch = GetOrCreateConnectionEpochLocked(letter) + 1;
+            ConnectionEpochByDriveLetter[letter] = nextEpoch;
+            RemovedDriveLetters.Add(letter);
+            return nextEpoch;
+        }
+    }
+
+    public static long GetCurrentConnectionEpoch(string? rootOrDriveLetter)
+    {
+        var letter = NormalizeDriveLetter(rootOrDriveLetter);
+        if (string.IsNullOrWhiteSpace(letter))
+        {
+            return 0;
+        }
+
+        lock (SessionStateLock)
+        {
+            return GetOrCreateConnectionEpochLocked(letter);
+        }
+    }
+
+    internal static void ResetSessionStateForTests()
+    {
+        lock (SessionStateLock)
+        {
+            RemovedDriveLetters.Clear();
+            ConnectionEpochByDriveLetter.Clear();
         }
     }
 
@@ -61,6 +91,7 @@ public static class UsbPortLabelResolver
         var currentTopologyKey = BuildPortTopologyKey(current);
         var currentHasStrongTopology = HasStrongPortTopologyEvidence(current);
         var removedObserved = WasDriveRemovalObserved(current.DriveLetter);
+        var currentConnectionEpoch = GetCurrentConnectionEpoch(current.DriveLetter);
 
         var candidates = profile.KnownPorts
             .Where(p => !string.IsNullOrWhiteSpace(p.UserLabel))
@@ -76,7 +107,8 @@ public static class UsbPortLabelResolver
         }
 
         var labels = candidates.Select(c => c.Label).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        var session = candidates.FirstOrDefault(c => IsCurrentSessionManual(c.Record, current, currentTopologyKey, removedObserved));
+        var expiredManualSession = candidates.Any(c => IsExpiredCurrentSessionManual(c.Record, current, removedObserved, currentConnectionEpoch));
+        var session = candidates.FirstOrDefault(c => IsCurrentSessionManual(c.Record, current, currentTopologyKey, removedObserved, currentConnectionEpoch));
         if (session.Record is not null)
         {
             return new UsbPortLabelStatus
@@ -90,7 +122,10 @@ public static class UsbPortLabelResolver
                 ReasonLine = session.Record.HasStrongPortTopologyEvidence
                     ? "Manual label is bound to this current connection and has topology evidence."
                     : "Reconnect verification: weak — Windows may not expose enough topology to auto-detect this port later.",
-                ReasonCodes = session.ReasonCodes.Append("manual-label-current-session").ToArray(),
+                ReasonCodes = session.ReasonCodes
+                    .Append("manual-label-current-session")
+                    .Append($"connection-epoch-{currentConnectionEpoch}")
+                    .ToArray(),
                 CandidateLabels = labels
             };
         }
@@ -113,7 +148,9 @@ public static class UsbPortLabelResolver
                 LastKnownRecord = best.Record,
                 StatusLine = $"Current port: {best.Label} verified",
                 ReasonLine = "Saved topology matches the current USB connection.",
-                ReasonCodes = best.ReasonCodes.Append("topology-match").ToArray(),
+                ReasonCodes = AddExpiredSessionReasons(best.ReasonCodes, expiredManualSession, removedObserved)
+                    .Append("topology-match")
+                    .ToArray(),
                 CandidateLabels = labels
             };
         }
@@ -127,7 +164,9 @@ public static class UsbPortLabelResolver
                 LastKnownRecord = best.Record,
                 StatusLine = "Current port: Ambiguous match",
                 ReasonLine = $"Possible labels: {string.Join(", ", labels.Take(4))}. Recommended: Open USB Mapping Wizard.",
-                ReasonCodes = best.ReasonCodes.Append("ambiguous-weak-matches").ToArray(),
+                ReasonCodes = AddExpiredSessionReasons(best.ReasonCodes, expiredManualSession, removedObserved)
+                    .Append("ambiguous-weak-matches")
+                    .ToArray(),
                 CandidateLabels = labels
             };
         }
@@ -141,7 +180,10 @@ public static class UsbPortLabelResolver
                 LastKnownRecord = best.Record,
                 StatusLine = "Current port: Port change suspected",
                 ReasonLine = $"Last known label: {best.Label}. Open USB Mapping Wizard or update the manual label.",
-                ReasonCodes = best.ReasonCodes.Append("topology-changed").Append("stale-manual-label-not-reused").ToArray(),
+                ReasonCodes = AddExpiredSessionReasons(best.ReasonCodes, expiredManualSession, removedObserved)
+                    .Append("topology-changed")
+                    .Append("stale-manual-label-not-reused")
+                    .ToArray(),
                 CandidateLabels = labels
             };
         }
@@ -153,9 +195,11 @@ public static class UsbPortLabelResolver
                 : UsbPortLabelValidity.TopologyUnavailable,
             LastKnownLabel = best.Label,
             LastKnownRecord = best.Record,
-            StatusLine = removedObserved ? "Current port: Unknown / needs mapping" : "Current port: Needs verification",
+            StatusLine = removedObserved || expiredManualSession
+                ? "Current port: Unverified after reconnect"
+                : "Current port: Needs verification",
             ReasonLine = $"Last known label: {best.Label}. Save/update a manual label to attach this connection to a physical port.",
-            ReasonCodes = best.ReasonCodes
+            ReasonCodes = AddExpiredSessionReasons(best.ReasonCodes, expiredManualSession, removedObserved)
                 .Append(currentHasStrongTopology ? "topology-unmatched" : "topology-unavailable")
                 .Append("stale-manual-label-not-reused")
                 .ToArray(),
@@ -199,13 +243,14 @@ public static class UsbPortLabelResolver
         record.LastManualLabelSessionId = CurrentSessionId;
         record.LabelConfirmedAtUtc = confirmedAtUtc;
         record.LabelConfirmedDeviceSeenCount = device.SeenCount;
-        record.LabelConfirmedDriveLetter = NormalizeDriveLetter(device.DriveLetter);
+        var letter = NormalizeDriveLetter(device.DriveLetter);
+        record.LabelConfirmedDriveLetter = letter;
+        record.LastManualLabelConnectionEpoch = GetCurrentConnectionEpoch(letter);
         record.MappingConfidenceScore = mappingConfidence;
 
-        var letter = NormalizeDriveLetter(device.DriveLetter);
         if (!string.IsNullOrWhiteSpace(letter))
         {
-            lock (RemovedDriveLetters)
+            lock (SessionStateLock)
             {
                 RemovedDriveLetters.Remove(letter);
             }
@@ -317,10 +362,17 @@ public static class UsbPortLabelResolver
         UsbKnownPortRecord record,
         UsbDeviceInfo current,
         string currentTopologyKey,
-        bool removedObserved)
+        bool removedObserved,
+        long currentConnectionEpoch)
     {
         if (removedObserved ||
             !string.Equals(record.LastManualLabelSessionId, CurrentSessionId, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (record.LastManualLabelConnectionEpoch <= 0 ||
+            record.LastManualLabelConnectionEpoch != currentConnectionEpoch)
         {
             return false;
         }
@@ -336,6 +388,52 @@ public static class UsbPortLabelResolver
         }
 
         return current.SeenCount <= Math.Max(1, record.LabelConfirmedDeviceSeenCount) + 1;
+    }
+
+    private static bool IsExpiredCurrentSessionManual(
+        UsbKnownPortRecord record,
+        UsbDeviceInfo current,
+        bool removedObserved,
+        long currentConnectionEpoch)
+    {
+        if (!string.Equals(record.LastManualLabelSessionId, CurrentSessionId, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (!string.Equals(record.LabelConfirmedDriveLetter, NormalizeDriveLetter(current.DriveLetter), StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return removedObserved ||
+               record.LastManualLabelConnectionEpoch <= 0 ||
+               record.LastManualLabelConnectionEpoch != currentConnectionEpoch;
+    }
+
+    private static IEnumerable<string> AddExpiredSessionReasons(
+        IEnumerable<string> reasons,
+        bool expiredManualSession,
+        bool removedObserved)
+    {
+        foreach (var reason in reasons)
+        {
+            yield return reason;
+        }
+
+        if (!expiredManualSession)
+        {
+            yield break;
+        }
+
+        if (removedObserved)
+        {
+            yield return "manual-session-expired-on-removal";
+            yield return "reconnect-observed";
+        }
+
+        yield return "manual-session-epoch-mismatch";
+        yield return "stale-current-label-invalidated";
     }
 
     private static UsbPortCandidateScore ScoreCandidate(
@@ -437,10 +535,21 @@ public static class UsbPortLabelResolver
             return false;
         }
 
-        lock (RemovedDriveLetters)
+        lock (SessionStateLock)
         {
             return RemovedDriveLetters.Contains(letter);
         }
+    }
+
+    private static long GetOrCreateConnectionEpochLocked(string letter)
+    {
+        if (ConnectionEpochByDriveLetter.TryGetValue(letter, out var epoch) && epoch > 0)
+        {
+            return epoch;
+        }
+
+        ConnectionEpochByDriveLetter[letter] = 1;
+        return 1;
     }
 
     private readonly record struct UsbPortCandidateScore(

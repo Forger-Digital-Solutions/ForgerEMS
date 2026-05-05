@@ -6412,7 +6412,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(4), cancellationToken).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);
                 if (cancellationToken.IsCancellationRequested || _isBusy || _refreshingUsbTargets || _benchmarksInProgress.Count > 0)
                 {
                     continue;

@@ -119,6 +119,7 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
                 $"status={portLabelStatus.Validity} " +
                 $"currentLabel={(string.IsNullOrWhiteSpace(portLabelStatus.CurrentLabel) ? "none" : "present")} " +
                 $"lastKnownLabel={(string.IsNullOrWhiteSpace(portLabelStatus.LastKnownLabel) ? "none" : "present")} " +
+                $"currentConnectionEpoch={UsbPortLabelResolver.GetCurrentConnectionEpoch(match.DriveLetter)} " +
                 $"benchmarkAttachedToVerifiedPort={portLabelStatus.CanAttachBenchmarkToVerifiedPort} " +
                 $"savedMappedPortCount={options.MachineProfile?.KnownPorts?.Count(p => !string.IsNullOrWhiteSpace(p.UserLabel)) ?? 0} " +
                 $"candidateLabels={string.Join(",", portLabelStatus.CandidateLabels)} " +
