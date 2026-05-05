@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using VentoyToolkitSetup.Wpf.Configuration;
 
 namespace VentoyToolkitSetup.Wpf.Services;
 
@@ -79,6 +81,8 @@ public sealed class SensorMatrixResult
 {
     public IReadOnlyList<SensorGroup> Groups { get; init; } = Array.Empty<SensorGroup>();
 
+    public IReadOnlyList<SensorProviderManifest> SensorProviders { get; init; } = Array.Empty<SensorProviderManifest>();
+
     public string Confidence { get; init; } = "Medium";
 
     public string DeepSensorModeNote { get; init; } =
@@ -94,11 +98,126 @@ public sealed class SensorProviderResult
 {
     public string ProviderName { get; init; } = string.Empty;
 
+    public string ProviderVersion { get; init; } = "1.0";
+
+    public string ProviderKind { get; init; } = "Unknown";
+
     public bool IsEnabled { get; init; }
+
+    public bool IsBundled { get; init; }
+
+    public bool RequiresAdmin { get; init; }
+
+    public bool RequiresThirdPartyLicenseNotice { get; init; }
+
+    public bool IsReadOnly { get; init; } = true;
+
+    public string TrustLevel { get; init; } = SensorProviderTrustLevels.ExperimentalDisabled;
+
+    public string RuntimeMode { get; init; } = SensorProviderRuntimeModes.Disabled;
+
+    public SensorProviderCapabilities Capabilities { get; init; } = SensorProviderCapabilities.None;
+
+    public string FailureReason { get; init; } = string.Empty;
+
+    public DateTimeOffset LastRunUtc { get; init; } = DateTimeOffset.UtcNow;
 
     public IReadOnlyList<SensorReading> Readings { get; init; } = Array.Empty<SensorReading>();
 
     public IReadOnlyList<string> Notes { get; init; } = Array.Empty<string>();
+
+    public ThirdPartyNotice? ThirdPartyNotice { get; init; }
+}
+
+public static class SensorProviderTrustLevels
+{
+    public const string BuiltInWindows = "BuiltInWindows";
+    public const string BundledReviewed = "BundledReviewed";
+    public const string VendorDetected = "VendorDetected";
+    public const string AdminRequired = "AdminRequired";
+    public const string ExperimentalDisabled = "ExperimentalDisabled";
+}
+
+public static class SensorProviderRuntimeModes
+{
+    public const string DefaultSafe = "DefaultSafe";
+    public const string DeepSensorReadOnly = "DeepSensorReadOnly";
+    public const string AdminReadOnly = "AdminReadOnly";
+    public const string Disabled = "Disabled";
+}
+
+public sealed class SensorProviderCapabilities
+{
+    public static SensorProviderCapabilities None => new()
+    {
+        SupportedCapabilities = Array.Empty<string>(),
+        MissingCapabilities = Array.Empty<string>(),
+        ReadOnlyGuarantees =
+        [
+            "No fan control",
+            "No voltage control",
+            "No clock control",
+            "No BIOS or firmware writes"
+        ]
+    };
+
+    public IReadOnlyList<string> SupportedCapabilities { get; init; } = Array.Empty<string>();
+
+    public IReadOnlyList<string> MissingCapabilities { get; init; } = Array.Empty<string>();
+
+    public IReadOnlyList<string> ReadOnlyGuarantees { get; init; } = Array.Empty<string>();
+}
+
+public sealed class ThirdPartyNotice
+{
+    public string Name { get; init; } = string.Empty;
+
+    public string Version { get; init; } = string.Empty;
+
+    public string License { get; init; } = string.Empty;
+
+    public string ProjectUrl { get; init; } = string.Empty;
+
+    public string BundledPath { get; init; } = string.Empty;
+
+    public string SourceOfferOrNotice { get; init; } = string.Empty;
+
+    public bool ModifiedFilesDisclosureNeeded { get; init; }
+}
+
+public sealed class SensorProviderManifest
+{
+    public string ProviderName { get; init; } = string.Empty;
+
+    public string ProviderVersion { get; init; } = "1.0";
+
+    public string ProviderKind { get; init; } = string.Empty;
+
+    public bool IsBundled { get; init; }
+
+    public bool IsEnabled { get; init; }
+
+    public bool RequiresAdmin { get; init; }
+
+    public bool RequiresThirdPartyLicenseNotice { get; init; }
+
+    public bool IsReadOnly { get; init; } = true;
+
+    public SensorProviderCapabilities Capabilities { get; init; } = SensorProviderCapabilities.None;
+
+    public string TrustLevel { get; init; } = SensorProviderTrustLevels.ExperimentalDisabled;
+
+    public string RuntimeMode { get; init; } = SensorProviderRuntimeModes.Disabled;
+
+    public string FailureReason { get; init; } = string.Empty;
+
+    public DateTimeOffset LastRunUtc { get; init; } = DateTimeOffset.UtcNow;
+
+    public IReadOnlyList<SensorReading> Readings { get; init; } = Array.Empty<SensorReading>();
+
+    public IReadOnlyList<string> TechnicianNotes { get; init; } = Array.Empty<string>();
+
+    public ThirdPartyNotice? ThirdPartyNotice { get; init; }
 }
 
 public interface IHardwareSensorProvider
@@ -110,22 +229,324 @@ public interface IHardwareSensorProvider
 
 public sealed class WindowsBuiltInSensorProvider : IHardwareSensorProvider
 {
-    public string Name => "Windows built-in normalized profile";
+    public string Name => "Windows Native";
 
     public SensorProviderResult Read(SystemProfile profile)
     {
-        var matrix = SensorMatrixBuilder.Build(profile);
+        _ = profile;
         return new SensorProviderResult
         {
             ProviderName = Name,
+            ProviderVersion = "1.0",
+            ProviderKind = "WindowsBuiltInSensorProvider",
             IsEnabled = true,
-            Readings = matrix.Groups.SelectMany(group => group.Readings).ToArray(),
+            IsBundled = true,
+            IsReadOnly = true,
+            TrustLevel = SensorProviderTrustLevels.BuiltInWindows,
+            RuntimeMode = SensorProviderRuntimeModes.DefaultSafe,
+            Capabilities = new SensorProviderCapabilities
+            {
+                SupportedCapabilities =
+                [
+                    "WMI/CIM hardware inventory",
+                    "Storage reliability counters where Windows exposes them",
+                    "powercfg/Win32_Battery battery fields",
+                    "Performance counters where safe",
+                    "GPU inventory through Windows APIs",
+                    "Security posture APIs",
+                    "ForgerEMS USB Intelligence evidence"
+                ],
+                MissingCapabilities =
+                [
+                    "CPU package temperature on many systems",
+                    "GPU temperature on many systems",
+                    "Fan RPM without vendor/deep provider support",
+                    "Package power without vendor/deep provider support"
+                ],
+                ReadOnlyGuarantees = SensorProviderCapabilities.None.ReadOnlyGuarantees
+            },
+            Readings = Array.Empty<SensorReading>(),
             Notes =
             [
                 "Uses ForgerEMS normalized WMI/CIM/registry/powercfg/report fields already collected by System Intelligence.",
+                "Does not require internet or user-downloaded tools.",
                 "Does not perform unsafe hardware probing."
             ]
         };
+    }
+}
+
+public class BundledDeepSensorProvider : IHardwareSensorProvider
+{
+    public string Name => "Bundled Deep Sensor Provider";
+
+    public SensorProviderResult Read(SystemProfile profile)
+    {
+        _ = profile;
+        var packaged = SensorProviderRegistry.IsBundledDeepProviderPackaged();
+        return new SensorProviderResult
+        {
+            ProviderName = Name,
+            ProviderVersion = "0.1-shell",
+            ProviderKind = "LibreHardwareMonitorSensorProviderShell",
+            IsEnabled = false,
+            IsBundled = packaged,
+            RequiresThirdPartyLicenseNotice = true,
+            IsReadOnly = true,
+            TrustLevel = packaged ? SensorProviderTrustLevels.BundledReviewed : SensorProviderTrustLevels.ExperimentalDisabled,
+            RuntimeMode = SensorProviderRuntimeModes.Disabled,
+            FailureReason = packaged
+                ? BuildDeepProviderDisabledReason()
+                : BuildDeepProviderNotPackagedReason(),
+            Capabilities = new SensorProviderCapabilities
+            {
+                SupportedCapabilities =
+                [
+                    "Future read-only CPU temperature",
+                    "Future read-only CPU package power",
+                    "Future read-only GPU temperature/clocks/load",
+                    "Future read-only fan RPM when exposed",
+                    "Future read-only storage temperature/wear"
+                ],
+                MissingCapabilities =
+                [
+                    "Disabled pending review",
+                    "Requires bundled provider assembly",
+                    "May require admin or vendor driver support"
+                ],
+                ReadOnlyGuarantees = SensorProviderCapabilities.None.ReadOnlyGuarantees
+            },
+            Notes =
+            [
+                "Disabled by default for beta safety.",
+                packaged
+                    ? "Bundled deep sensor provider: available, disabled pending review."
+                    : "Bundled deep sensor provider: not packaged in this build.",
+                $"Deep Sensor Mode setting: {ForgerEmsEnvironmentConfiguration.DeepSensorMode}.",
+                "Future reviewed providers must ship inside ForgerEMS and be read-only.",
+                "ForgerEMS does not expose fan control, voltage control, overclocking, undervolting, or BIOS-write actions."
+            ],
+            ThirdPartyNotice = new ThirdPartyNotice
+            {
+                Name = "LibreHardwareMonitor",
+                Version = "review-pending",
+                License = "MPL-2.0 review required before bundling",
+                ProjectUrl = "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor",
+                BundledPath = "providers/sensors/ForgerEMS.SensorProviders.LibreHardwareMonitor.dll",
+                SourceOfferOrNotice = "Include THIRD-PARTY-NOTICES.txt and MPL-2.0 license text before bundling; disclose covered-file modifications if any.",
+                ModifiedFilesDisclosureNeeded = false
+            }
+        };
+    }
+
+    private static string BuildDeepProviderDisabledReason() =>
+        ForgerEmsFeatureFlags.DeepSensorModeRequested
+            ? "Deep Sensor Mode was requested, but the bundled provider remains disabled pending license/packaging review and explicit user notice."
+            : "Bundled provider is present but disabled pending license/packaging review and explicit user opt-in.";
+
+    private static string BuildDeepProviderNotPackagedReason() =>
+        ForgerEmsFeatureFlags.DeepSensorModeRequested
+            ? "Deep Sensor Mode was requested, but the provider assembly is not packaged in this build."
+            : "Provider assembly is not packaged in this build.";
+}
+
+public sealed class OptionalDeepSensorProvider : BundledDeepSensorProvider
+{
+}
+
+public static class SensorProviderRegistry
+{
+    public static IReadOnlyList<SensorProviderManifest> BuildDefaultManifests(SystemProfile profile, IReadOnlyList<SensorGroup> builtInGroups)
+    {
+        var providers = new IHardwareSensorProvider[]
+        {
+            new BundledDeepSensorProvider()
+        };
+        var manifests = new List<SensorProviderManifest>
+        {
+            CreateWindowsNativeManifest(builtInGroups)
+        };
+        manifests.AddRange(providers
+            .Select(provider => SensorProviderHost.RunProvider(provider, profile))
+            .ToArray());
+
+        manifests.Add(CreateAdminBridgeManifest());
+        manifests.Add(CreateDriverRoadmapManifest());
+        return manifests;
+    }
+
+    public static bool IsBundledDeepProviderPackaged()
+    {
+        var candidate = Path.Combine(
+            AppContext.BaseDirectory,
+            "providers",
+            "sensors",
+            "ForgerEMS.SensorProviders.LibreHardwareMonitor.dll");
+        return File.Exists(candidate);
+    }
+
+    private static SensorProviderManifest CreateWindowsNativeManifest(IReadOnlyList<SensorGroup> builtInGroups) => new()
+    {
+        ProviderName = "Windows Native",
+        ProviderVersion = "1.0",
+        ProviderKind = "WindowsBuiltInSensorProvider",
+        IsBundled = true,
+        IsEnabled = true,
+        IsReadOnly = true,
+        TrustLevel = SensorProviderTrustLevels.BuiltInWindows,
+        RuntimeMode = SensorProviderRuntimeModes.DefaultSafe,
+        Capabilities = new SensorProviderCapabilities
+        {
+            SupportedCapabilities =
+            [
+                "WMI/CIM hardware inventory",
+                "MSFT_PhysicalDisk and MSFT_StorageReliabilityCounter where Windows exposes them",
+                "powercfg and Win32_Battery fields",
+                "Safe performance counters where useful",
+                "DX/WMI GPU inventory",
+                "Defender/Firewall/BitLocker/TPM/Secure Boot status",
+                "ForgerEMS USB Intelligence evidence"
+            ],
+            MissingCapabilities =
+            [
+                "CPU/GPU temperatures on many systems",
+                "Fan RPM without vendor/deep provider support",
+                "Package power without vendor/deep provider support"
+            ],
+            ReadOnlyGuarantees = SensorProviderCapabilities.None.ReadOnlyGuarantees
+        },
+        Readings = builtInGroups.SelectMany(group => group.Readings).ToArray(),
+        TechnicianNotes =
+        [
+            "Active by default. Uses local Windows APIs and ForgerEMS reports only.",
+            "No internet, cloud service, or user-downloaded sensor tool is required."
+        ]
+    };
+
+    private static SensorProviderManifest CreateAdminBridgeManifest() => new()
+    {
+        ProviderName = "ForgerEMS Admin Sensor Bridge",
+        ProviderVersion = "0.1-design",
+        ProviderKind = "AdminReadOnlyBridgeShell",
+        IsBundled = false,
+        IsEnabled = false,
+        RequiresAdmin = true,
+        IsReadOnly = true,
+        TrustLevel = SensorProviderTrustLevels.AdminRequired,
+        RuntimeMode = SensorProviderRuntimeModes.Disabled,
+        FailureReason = "Design scaffold only; not enabled in this beta.",
+        Capabilities = new SensorProviderCapabilities
+        {
+            SupportedCapabilities =
+            [
+                "Future on-demand admin read-only deep scan IPC"
+            ],
+            MissingCapabilities =
+            [
+                "Signed bridge binary not included",
+                "UAC opt-in not implemented"
+            ],
+            ReadOnlyGuarantees = SensorProviderCapabilities.None.ReadOnlyGuarantees
+        },
+        TechnicianNotes =
+        [
+            "Deep Sensor Mode may require admin access. It only reads supported sensors and does not change fan, voltage, clock, or firmware settings."
+        ]
+    };
+
+    private static SensorProviderManifest CreateDriverRoadmapManifest() => new()
+    {
+        ProviderName = "ForgerEMS Signed Driver Provider",
+        ProviderVersion = "roadmap",
+        ProviderKind = "FutureReadOnlyDriver",
+        IsBundled = false,
+        IsEnabled = false,
+        IsReadOnly = true,
+        TrustLevel = SensorProviderTrustLevels.ExperimentalDisabled,
+        RuntimeMode = SensorProviderRuntimeModes.Disabled,
+        FailureReason = "Not included. Future releases would require Microsoft driver signing and installer-managed distribution.",
+        Capabilities = new SensorProviderCapabilities
+        {
+            SupportedCapabilities =
+            [
+                "Future read-only sensors unavailable to user-mode providers"
+            ],
+            MissingCapabilities =
+            [
+                "No driver included in current beta"
+            ],
+            ReadOnlyGuarantees = SensorProviderCapabilities.None.ReadOnlyGuarantees
+        },
+        TechnicianNotes =
+        [
+            "Driver path is documentation-only for this beta. Users do not need to download it separately."
+        ]
+    };
+}
+
+public static class SensorProviderHost
+{
+    public static SensorProviderManifest RunProvider(IHardwareSensorProvider provider, SystemProfile profile)
+    {
+        try
+        {
+            var result = provider.Read(profile);
+            return FromResult(result);
+        }
+        catch (Exception ex)
+        {
+            return new SensorProviderManifest
+            {
+                ProviderName = provider.Name,
+                ProviderVersion = "unknown",
+                ProviderKind = provider.GetType().Name,
+                IsEnabled = false,
+                IsReadOnly = true,
+                RuntimeMode = SensorProviderRuntimeModes.Disabled,
+                FailureReason = $"Provider probe failed safely: {ex.Message}",
+                TechnicianNotes =
+                [
+                    "Provider failure was contained; missing sensor data is a coverage limitation, not hardware failure."
+                ]
+            };
+        }
+    }
+
+    private static SensorProviderManifest FromResult(SensorProviderResult result) => new()
+    {
+        ProviderName = result.ProviderName,
+        ProviderVersion = result.ProviderVersion,
+        ProviderKind = result.ProviderKind,
+        IsBundled = result.IsBundled,
+        IsEnabled = result.IsEnabled,
+        RequiresAdmin = result.RequiresAdmin,
+        RequiresThirdPartyLicenseNotice = result.RequiresThirdPartyLicenseNotice,
+        IsReadOnly = result.IsReadOnly,
+        TrustLevel = result.TrustLevel,
+        RuntimeMode = result.RuntimeMode,
+        Capabilities = result.Capabilities,
+        FailureReason = result.FailureReason,
+        LastRunUtc = result.LastRunUtc,
+        Readings = result.Readings,
+        TechnicianNotes = result.Notes,
+        ThirdPartyNotice = result.ThirdPartyNotice ?? (result is { RequiresThirdPartyLicenseNotice: true } ? TryGetThirdPartyNotice(result) : null)
+    };
+
+    private static ThirdPartyNotice? TryGetThirdPartyNotice(SensorProviderResult result)
+    {
+        // The bundled deep-provider shell exposes the notice directly through a deterministic provider result.
+        return result.ProviderKind.Contains("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase)
+            ? new ThirdPartyNotice
+            {
+                Name = "LibreHardwareMonitor",
+                Version = "review-pending",
+                License = "MPL-2.0 review required before bundling",
+                ProjectUrl = "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor",
+                BundledPath = "providers/sensors/ForgerEMS.SensorProviders.LibreHardwareMonitor.dll",
+                SourceOfferOrNotice = "Include license text, notices, and covered-source modification disclosure if bundled.",
+                ModifiedFilesDisclosureNeeded = false
+            }
+            : null;
     }
 }
 
@@ -339,6 +760,7 @@ public static class SensorMatrixBuilder
         return new SensorMatrixResult
         {
             Groups = groups,
+            SensorProviders = SensorProviderRegistry.BuildDefaultManifests(profile, groups),
             Confidence = confidenceRatio >= 0.7 ? "High" : confidenceRatio >= 0.45 ? "Medium" : "Low"
         };
     }

@@ -147,6 +147,17 @@ public sealed class HardwareIntelligenceEngineTests
           "recommendations": []
         }
         """);
+        File.WriteAllText(Path.Combine(dir, "usb-intelligence-latest.json"), """
+        {
+          "usbDiagnostics": {
+            "usbProfileKnownPortsCount": 4,
+            "usbCurrentTargetRiskSummary": "Current target risk: Low.",
+            "usbBestKnownPortSummary": "Best measured port: LT USB-C (~60.5 MB/s write).",
+            "lastBenchmark": { "succeeded": true, "summaryLine": "USB benchmark complete: Usb3", "benchmarkConfidence": "Read may be cached" }
+          },
+          "topologyDiff": { "summaryLine": "USB topology: unchanged since last scan." }
+        }
+        """);
 
         Assert.True(SystemIntelligenceAutomationMerger.TryMerge(reportPath));
         using var doc = JsonDocument.Parse(File.ReadAllText(reportPath));
@@ -154,7 +165,89 @@ public sealed class HardwareIntelligenceEngineTests
         Assert.Equal("Mobile Workstation", doc.RootElement.GetProperty("machineClass").GetProperty("primaryClass").GetString());
         Assert.True(doc.RootElement.TryGetProperty("sensorMatrix", out var sensorMatrix));
         Assert.Contains("CPU:", sensorMatrix.GetProperty("coverageSummary").GetString());
+        Assert.True(sensorMatrix.TryGetProperty("sensorProviders", out var providers));
+        Assert.Contains(providers.EnumerateArray(), provider =>
+            provider.GetProperty("providerName").GetString() == "Windows Native" &&
+            provider.GetProperty("isEnabled").GetBoolean());
+        Assert.Contains(providers.EnumerateArray(), provider =>
+            provider.GetProperty("providerName").GetString() == "Bundled Deep Sensor Provider" &&
+            !provider.GetProperty("isEnabled").GetBoolean());
+        Assert.DoesNotContain("USB: 0/3 fields known", sensorMatrix.GetProperty("coverageSummary").GetString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("USB: 5/5 fields known", sensorMatrix.GetProperty("coverageSummary").GetString(), StringComparison.OrdinalIgnoreCase);
         Assert.Equal("Mobile Workstation", doc.RootElement.GetProperty("deviceFit").GetProperty("machineClass").GetString());
+        Assert.Contains("Scan Confidence", doc.RootElement.GetProperty("forgerAutomation").GetProperty("summaryLine").GetString());
+    }
+
+    [Fact]
+    public void OptionalDeepSensorProvider_IsDisabledByDefaultAndReadOnly()
+    {
+        var provider = new OptionalDeepSensorProvider();
+        var result = provider.Read(Profile("Dell", "Precision 5540", "Intel Core i7-9850H", 32, "NVIDIA Quadro T2000", hasBattery: true));
+
+        Assert.False(result.IsEnabled);
+        Assert.Empty(result.Readings);
+        Assert.True(result.IsReadOnly);
+        Assert.True(result.RequiresThirdPartyLicenseNotice);
+        Assert.Equal(SensorProviderRuntimeModes.Disabled, result.RuntimeMode);
+        Assert.Contains(result.Notes, note => note.Contains("Disabled by default", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Notes, note => note.Contains("read-only", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Notes, note => note.Contains("does not expose fan control", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Notes, note => note.Contains("voltage control", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.Notes, note => note.Contains("BIOS-write", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void SensorProviderHost_EnablesWindowsNativeByDefaultAndDoesNotRequireDownloads()
+    {
+        var sensors = SensorMatrixBuilder.Build(Profile("Dell", "Precision 5540", "Intel Core i7-9850H", 32, "NVIDIA Quadro T2000", hasBattery: true));
+        var windows = Assert.Single(sensors.SensorProviders, provider => provider.ProviderName == "Windows Native");
+
+        Assert.True(windows.IsEnabled);
+        Assert.True(windows.IsBundled);
+        Assert.False(windows.RequiresAdmin);
+        Assert.False(windows.RequiresThirdPartyLicenseNotice);
+        Assert.Equal(SensorProviderTrustLevels.BuiltInWindows, windows.TrustLevel);
+        Assert.Equal(SensorProviderRuntimeModes.DefaultSafe, windows.RuntimeMode);
+        Assert.Contains(windows.TechnicianNotes, note => note.Contains("No internet", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(windows.TechnicianNotes, note => note.Contains("user-downloaded", StringComparison.OrdinalIgnoreCase));
+        Assert.NotEmpty(windows.Readings);
+    }
+
+    [Fact]
+    public void SensorProviderRegistry_ListsBundledReviewedDeepProviderShellWithNotice()
+    {
+        var sensors = SensorMatrixBuilder.Build(Profile("Dell", "Precision 5540", "Intel Core i7-9850H", 32, "NVIDIA Quadro T2000", hasBattery: true));
+        var deep = Assert.Single(sensors.SensorProviders, provider => provider.ProviderName == "Bundled Deep Sensor Provider");
+
+        Assert.False(deep.IsEnabled);
+        Assert.True(deep.IsReadOnly);
+        Assert.True(deep.RequiresThirdPartyLicenseNotice);
+        Assert.Equal(SensorProviderRuntimeModes.Disabled, deep.RuntimeMode);
+        Assert.NotNull(deep.ThirdPartyNotice);
+        Assert.Equal("LibreHardwareMonitor", deep.ThirdPartyNotice!.Name);
+        Assert.Contains("MPL", deep.ThirdPartyNotice.License, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not packaged", deep.FailureReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SensorProviderCapabilities_DoNotExposeUnsafeHardwareControl()
+    {
+        var sensors = SensorMatrixBuilder.Build(Profile("Dell", "Precision 5540", "Intel Core i7-9850H", 32, "NVIDIA Quadro T2000", hasBattery: true));
+        var capabilityText = string.Join(" ", sensors.SensorProviders.SelectMany(provider =>
+            provider.Capabilities.SupportedCapabilities
+                .Concat(provider.Capabilities.MissingCapabilities)
+                .Concat(provider.Capabilities.ReadOnlyGuarantees)));
+
+        Assert.DoesNotContain("fan-control", capabilityText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("voltage-control", capabilityText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("clock-control", capabilityText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("overclock", capabilityText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("undervolt", capabilityText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("BIOS-write capability", capabilityText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("No fan control", capabilityText);
+        Assert.Contains("No voltage control", capabilityText);
+        Assert.Contains("No clock control", capabilityText);
+        Assert.Contains("No BIOS or firmware writes", capabilityText);
     }
 
     [Fact]
@@ -186,6 +279,12 @@ public sealed class HardwareIntelligenceEngineTests
         Assert.Contains("New-SensorMatrixReport", text);
         Assert.Contains("## Machine Class / Hardware X-Ray", text);
         Assert.Contains("### Sensor Availability Matrix", text);
+        Assert.Contains("New-SensorProviderReport", text);
+        Assert.Contains("### Sensor Provider Host", text);
+        Assert.Contains("Windows Native", text);
+        Assert.Contains("Bundled Deep Sensor Provider", text);
+        Assert.Contains("ForgerEMS Admin Sensor Bridge", text);
+        Assert.Contains("ForgerEMS Signed Driver Provider", text);
         Assert.Contains("$tpmSensorStatus", text, StringComparison.Ordinal);
         Assert.Contains("$secureBootSensorStatus", text, StringComparison.Ordinal);
         Assert.Contains("Unknown TPM state should be verified in BIOS/UEFI before calling it failed.", text, StringComparison.Ordinal);

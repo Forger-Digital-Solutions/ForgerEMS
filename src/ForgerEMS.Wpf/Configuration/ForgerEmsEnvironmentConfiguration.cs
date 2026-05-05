@@ -102,6 +102,9 @@ public static class ForgerEmsEnvironmentConfiguration
     public static bool EbayEnabled => GetBool("FORGEREMS_EBAY_ENABLED", false);
     public static string ValuationMode => GetString("FORGEREMS_VALUATION_MODE", "offline");
 
+    // System Intelligence sensors
+    public static string DeepSensorMode => GetString("FORGEREMS_DEEP_SENSOR_MODE", "Off");
+
     // Telemetry (default off)
     public static bool TelemetryEnabled => GetBool("FORGEREMS_TELEMETRY_ENABLED", false);
     public static bool CrashReportingEnabled => GetBool("FORGEREMS_CRASH_REPORTING_ENABLED", false);

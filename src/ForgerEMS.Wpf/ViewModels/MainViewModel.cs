@@ -822,6 +822,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public string FeatureMaturityGuideText => FeatureStatusService.BuildFeatureMaturityGuide();
 
+    public string DeepSensorModeSettingsSummary =>
+        $"Deep Sensor Mode: {ForgerEmsEnvironmentConfiguration.DeepSensorMode}. " +
+        "Default is Off. Future bundled reviewed providers are local and read-only; admin mode is optional when needed and never changes fan, voltage, clock, BIOS, or firmware settings.";
+
     public string KyraProviderHubConfigHealthSummary => KyraProviderHubConfigHealthFormatter.BuildSummary();
 
     public string HeaderUsbTargetText => SelectedUsbTarget is null ? "USB: none" : $"USB: {SelectedUsbTarget.RootPath}";
@@ -4597,7 +4601,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 autoSummary.ValueKind == JsonValueKind.String)
             {
                 var autoText = autoSummary.GetString();
-                SystemIntelligenceAutomationLineText = string.IsNullOrWhiteSpace(autoText) ? string.Empty : autoText.Trim();
+                SystemIntelligenceAutomationLineText = string.IsNullOrWhiteSpace(autoText)
+                    ? string.Empty
+                    : NormalizeSystemIntelligenceAutomationLine(autoText.Trim());
             }
             else
             {
@@ -4637,7 +4643,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 var bios = GetJsonString(summary, "bios", "UNKNOWN");
                 var biosDate = GetJsonString(summary, "biosDate", "UNKNOWN");
                 var secureBoot = GetJsonProviderDisplay(summary, "secureBootInfo", FormatNullableBool(GetJsonNullableBool(summary, "secureBoot")));
-                var tpm = GetJsonProviderDisplay(summary, "tpmInfo", $"Present {FormatNullableBool(GetJsonNullableBool(summary, "tpmPresent"))}, Ready {FormatNullableBool(GetJsonNullableBool(summary, "tpmReady"))}");
+                var tpm = FormatTpmForUi(summary, GetJsonProviderDisplay(summary, "tpmInfo", $"Present {FormatNullableBool(GetJsonNullableBool(summary, "tpmPresent"))}, Ready {FormatNullableBool(GetJsonNullableBool(summary, "tpmReady"))}"));
                 var licenseChannel = GetJsonProviderDisplay(summary, "windowsLicense", GetJsonString(summary, "windowsLicenseChannel", "UNKNOWN"));
                 var uptime = GetJsonString(summary, "uptime", "UNKNOWN");
                 var lastBoot = GetJsonString(summary, "lastBoot", "UNKNOWN");
@@ -5250,8 +5256,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             {
                 var interfaceType = GetJsonString(disk, "interfaceType", "UNKNOWN");
                 var mediaType = HumanizeStorageMediaType(interfaceType, GetJsonString(disk, "mediaType", "UNKNOWN"));
-                var temperatureDisplay = GetJsonString(disk, "temperatureDisplay", "Temp: Not exposed");
-                return $"{GetJsonString(disk, "name", "Disk")} | {interfaceType} {mediaType} | {GetJsonString(disk, "size", "UNKNOWN")} | health {GetJsonString(disk, "healthDisplay", GetJsonString(disk, "health", "Health not reported"))} | {temperatureDisplay} | wear {GetJsonString(disk, "wearDisplay", "Wear: Not exposed")} ({GetJsonString(disk, "status", "UNKNOWN")})";
+                var temperatureDisplay = NormalizeMetricLabel(GetJsonString(disk, "temperatureDisplay", "Temp: Not exposed"), "Temp");
+                var wearDisplay = NormalizeMetricLabel(GetJsonString(disk, "wearDisplay", "Wear: Not exposed"), "Wear");
+                var health = BuildDiskHealthPercentText(disk);
+                return $"{GetJsonString(disk, "name", "Disk")} | {interfaceType} {mediaType} | {GetJsonString(disk, "size", "UNKNOWN")} | {health} | {temperatureDisplay} | {wearDisplay} ({GetJsonString(disk, "status", "UNKNOWN")})";
             })
             .ToArray();
         var volumeParts = root.TryGetProperty("volumes", out var volumes) && volumes.ValueKind == JsonValueKind.Array
@@ -5371,13 +5379,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var verificationNote = IsUnknownProviderStatus(tpmStatus) || IsUnknownProviderStatus(secureBootStatus)
             ? " Unknown firmware fields are verification items, not confirmed failures."
             : string.Empty;
-        var tpmText = IsUnknownProviderStatus(tpmStatus)
+        var tpmText = IsUnknownProviderStatus(tpmStatus) || ShouldTreatTpmAsVerificationItem(summary, tpm)
             ? "Not reported by Windows scan. Verify BIOS/UEFI TPM/PTT setting."
             : tpm;
         var secureBootText = IsUnknownProviderStatus(secureBootStatus)
             ? "Unknown — requires admin or unavailable."
             : secureBoot;
-        return $"Security: {status}. Defender AV: {FormatNullableBool(avEnabled)}. Real-time: {FormatNullableBool(realtime)}. Firewall: {FormatNullableBool(firewall)}. TPM: {tpmText}. Secure Boot: {secureBootText}. Registered AV: {FormatList(products, "none detected")}. BitLocker: {bitLocker}.{verificationNote}";
+        var bitLockerText = bitLocker.Equals("unavailable", StringComparison.OrdinalIgnoreCase) ||
+                            bitLocker.Equals("Unknown", StringComparison.OrdinalIgnoreCase) ||
+                            bitLocker.Contains("reason not reported", StringComparison.OrdinalIgnoreCase)
+            ? "Unavailable — Windows did not report a reason."
+            : bitLocker.Replace("Unavailable -", "Unavailable —", StringComparison.Ordinal);
+        return $"Security: {status}. Defender AV: {FormatNullableBool(avEnabled)}. Real-time: {FormatNullableBool(realtime)}. Firewall: {FormatNullableBool(firewall)}. TPM: {tpmText}. Secure Boot: {secureBootText}. Registered AV: {FormatList(products, "none detected")}. BitLocker: {bitLockerText}.{verificationNote}";
     }
 
     private static string BuildFlipValueSummary(JsonElement root)
@@ -5483,19 +5496,25 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 coverage = FormatList(groups.EnumerateArray().Select(group =>
                     $"{GetJsonString(group, "category", "Group")}: {GetJsonString(group, "knownFields", "0")}/{GetJsonString(group, "totalFields", "0")} fields known"), "No coverage data");
             }
+            coverage = ApplyUsbCoverageFromIntelligence(root, coverage);
 
             var live = FindLiveSensorNames(sensorMatrix);
-            var missing = FindUnavailableSensorNotes(sensorMatrix);
             var deepNote = GetJsonString(sensorMatrix, "deepSensorModeNote", "Some sensors require admin access, firmware support, vendor drivers, or optional reviewed providers.");
+            var limited = BuildLimitedSensorCompactSummary(sensorMatrix);
+            var storage = BuildStorageSensorCompactSummary(sensorMatrix);
+            var usb = BuildUsbSensorCompactSummary(root, sensorMatrix);
 
             return
-                $"Machine class: {primary} ({confidence}){Environment.NewLine}" +
+                $"Machine: {primary} ({confidence}){Environment.NewLine}" +
                 (secondary.Equals("none", StringComparison.OrdinalIgnoreCase) ? string.Empty : $"Secondary: {secondary}{Environment.NewLine}") +
-                $"Sensor coverage: {coverage}{Environment.NewLine}" +
-                $"Live sensors available: {live}{Environment.NewLine}" +
-                $"Inventory/diagnostic data available: {GetInventoryDataSummary(sensorMatrix)}{Environment.NewLine}" +
-                $"Missing/limited sensors by category:{Environment.NewLine}{missing}{Environment.NewLine}" +
-                "Status guide: Unknown = lower confidence; NotExposed = firmware/driver/permission limit; Inferred = derived signal; Failure = explicit warning/critical evidence only." + Environment.NewLine +
+                $"Coverage: {CompactCoverageSummary(coverage)}{Environment.NewLine}" +
+                $"Live: {live}{Environment.NewLine}" +
+                $"Sensor Providers: {BuildSensorProviderCompactSummary(sensorMatrix)}{Environment.NewLine}" +
+                $"Inventory: {GetInventoryDataSummary(sensorMatrix)}{Environment.NewLine}" +
+                $"USB: {usb}{Environment.NewLine}" +
+                $"Limited: {limited}{Environment.NewLine}" +
+                $"Storage: {storage}{Environment.NewLine}" +
+                "Guide: Unknown lowers confidence; NotExposed means firmware/driver/permission limit; failure requires explicit evidence." + Environment.NewLine +
                 $"Note: {note} {deepNote}";
         }
 
@@ -5507,9 +5526,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return
                 $"Machine class: {classification.PrimaryClass} ({classification.Confidence}){Environment.NewLine}" +
                 $"Secondary: {FormatList(classification.SecondaryClasses.Take(3), "none")}{Environment.NewLine}" +
-                $"Sensor coverage: {sensors.CoverageSummary}{Environment.NewLine}" +
+                $"Sensor coverage: {CompactCoverageSummary(sensors.CoverageSummary)}{Environment.NewLine}" +
                 $"Live sensors: {FormatList(sensors.Groups.SelectMany(g => g.Readings).Where(r => r.IsLive).Select(r => r.Name).Take(5), "none exposed in safe scan")}{Environment.NewLine}" +
-                $"Missing/limited sensors: {FormatList(sensors.Groups.SelectMany(g => g.Readings).Where(r => r.IsUnavailable).Select(r => $"{r.Name} ({r.UnavailableReason})").Take(5), "none obvious")}{Environment.NewLine}" +
+                $"Sensor Providers: {BuildSensorProviderCompactSummary(sensors)}{Environment.NewLine}" +
+                $"Limited: CPU/GPU temps, fan RPM, package power may require deep/vendor sensor support.{Environment.NewLine}" +
                 $"Note: {classification.TechnicianNote} {sensors.DeepSensorModeNote}";
         }
         catch
@@ -5540,6 +5560,322 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         return FormatList(names.Take(5), "none exposed in safe scan");
+    }
+
+    private static string BuildSensorProviderCompactSummary(JsonElement sensorMatrix)
+    {
+        if (!sensorMatrix.TryGetProperty("sensorProviders", out var providers) || providers.ValueKind != JsonValueKind.Array)
+        {
+            return "Windows Native: Active; Deep Sensor Provider: Off; Admin Bridge: Off; Driver Provider: Not included";
+        }
+
+        var rows = new List<string>();
+        foreach (var provider in providers.EnumerateArray())
+        {
+            var name = GetJsonString(provider, "providerName", "Provider");
+            var enabled = GetJsonBool(provider, "isEnabled");
+            var bundled = GetJsonBool(provider, "isBundled");
+            var mode = GetJsonString(provider, "runtimeMode", "Disabled");
+            var failure = GetJsonString(provider, "failureReason", string.Empty);
+            var label = name switch
+            {
+                var n when n.Contains("Windows", StringComparison.OrdinalIgnoreCase) => "Windows Native",
+                var n when n.Contains("Deep", StringComparison.OrdinalIgnoreCase) => "Deep Sensor Provider",
+                var n when n.Contains("Admin", StringComparison.OrdinalIgnoreCase) => "Admin Bridge",
+                var n when n.Contains("Driver", StringComparison.OrdinalIgnoreCase) => "Driver Provider",
+                _ => name
+            };
+            var status = enabled
+                ? "Active"
+                : bundled
+                    ? "Bundled but disabled"
+                    : label.Equals("Driver Provider", StringComparison.OrdinalIgnoreCase)
+                        ? "Not included"
+                        : "Off";
+            if (!enabled && label.Equals("Deep Sensor Provider", StringComparison.OrdinalIgnoreCase) && failure.Contains("not packaged", StringComparison.OrdinalIgnoreCase))
+            {
+                status = "Not packaged";
+            }
+
+            if (!enabled && mode.Equals("Disabled", StringComparison.OrdinalIgnoreCase))
+            {
+                rows.Add($"{label}: {status}");
+            }
+            else
+            {
+                rows.Add($"{label}: {status}");
+            }
+        }
+
+        return FormatList(rows.Take(4), "Windows Native: Active; Deep Sensor Provider: Off; Admin Bridge: Off; Driver Provider: Not included");
+    }
+
+    private static string BuildSensorProviderCompactSummary(SensorMatrixResult sensors)
+    {
+        var rows = sensors.SensorProviders.Select(provider =>
+        {
+            var label = provider.ProviderName switch
+            {
+                var n when n.Contains("Windows", StringComparison.OrdinalIgnoreCase) => "Windows Native",
+                var n when n.Contains("Deep", StringComparison.OrdinalIgnoreCase) => "Deep Sensor Provider",
+                var n when n.Contains("Admin", StringComparison.OrdinalIgnoreCase) => "Admin Bridge",
+                var n when n.Contains("Driver", StringComparison.OrdinalIgnoreCase) => "Driver Provider",
+                _ => provider.ProviderName
+            };
+            var status = provider.IsEnabled
+                ? "Active"
+                : provider.IsBundled
+                    ? "Bundled but disabled"
+                    : label.Equals("Driver Provider", StringComparison.OrdinalIgnoreCase)
+                        ? "Not included"
+                        : "Off";
+            if (!provider.IsEnabled && label.Equals("Deep Sensor Provider", StringComparison.OrdinalIgnoreCase) && provider.FailureReason.Contains("not packaged", StringComparison.OrdinalIgnoreCase))
+            {
+                status = "Not packaged";
+            }
+
+            return $"{label}: {status}";
+        });
+        return FormatList(rows.Take(4), "Windows Native: Active; Deep Sensor Provider: Off; Admin Bridge: Off; Driver Provider: Not included");
+    }
+
+    private static string NormalizeSystemIntelligenceAutomationLine(string text) =>
+        string.IsNullOrWhiteSpace(text)
+            ? string.Empty
+            : text.Contains("Scan Confidence", StringComparison.Ordinal)
+                ? text
+                : text.Replace("Confidence ", "Scan Confidence ", StringComparison.Ordinal)
+                .Replace("| Confidence:", "| Scan Confidence:", StringComparison.Ordinal);
+
+    private static string FormatTpmForUi(JsonElement summary, string raw)
+    {
+        return ShouldTreatTpmAsVerificationItem(summary, raw)
+            ? "Not reported by Windows scan. Verify BIOS/UEFI TPM/PTT setting."
+            : raw;
+    }
+
+    private static bool ShouldTreatTpmAsVerificationItem(JsonElement summary, string raw)
+    {
+        if (!raw.Contains("TPM not detected", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var source = summary.TryGetProperty("tpmInfo", out var info)
+            ? GetJsonString(info, "source", string.Empty)
+            : string.Empty;
+        var confidence = summary.TryGetProperty("tpmInfo", out info)
+            ? GetJsonString(info, "confidence", string.Empty)
+            : string.Empty;
+
+        // A single Get-Tpm "not detected" result can be firmware/access/reporting ambiguity on business laptops.
+        // Keep the UI as a verification item unless a future report adds stronger multi-source absence evidence.
+        return source.Contains("Get-Tpm", StringComparison.OrdinalIgnoreCase) ||
+               !confidence.Equals("ConfirmedAbsent", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeMetricLabel(string value, string label)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return $"{label}: Not exposed";
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.StartsWith(label + ":", StringComparison.OrdinalIgnoreCase)
+            ? trimmed
+            : $"{label}: {trimmed}";
+    }
+
+    private static string BuildDiskHealthPercentText(JsonElement disk)
+    {
+        if (disk.TryGetProperty("diskHealthPercent", out var hp) && hp.ValueKind == JsonValueKind.Object)
+        {
+            var value = GetJsonString(hp, "value", string.Empty);
+            if (!string.IsNullOrWhiteSpace(value) && !value.Equals("null", StringComparison.OrdinalIgnoreCase))
+            {
+                var source = GetJsonString(hp, "source", "storage reliability data");
+                var confidence = GetJsonString(hp, "confidence", "Medium");
+                var estimated = GetJsonBool(hp, "isEstimated") ? "estimated " : string.Empty;
+                return $"Disk health: {value}% {estimated}from {source} ({confidence})";
+            }
+        }
+
+        var wear = GetJsonDouble(disk, "wearPercent");
+        if (wear.HasValue)
+        {
+            var health = Math.Clamp(100d - wear.Value, 0d, 100d);
+            return $"Disk health: {health:0.#}% estimated from NVMe/SMART wear data";
+        }
+
+        var healthDisplay = GetJsonString(disk, "healthDisplay", GetJsonString(disk, "health", "Health not reported"));
+        return healthDisplay.Contains("Healthy", StringComparison.OrdinalIgnoreCase)
+            ? "Disk health: Healthy; percentage not exposed"
+            : $"Disk health: {healthDisplay}";
+    }
+
+    private static string CompactCoverageSummary(string coverage)
+    {
+        if (string.IsNullOrWhiteSpace(coverage))
+        {
+            return "coverage unavailable";
+        }
+
+        return coverage
+            .Replace("fields known", "known", StringComparison.OrdinalIgnoreCase)
+            .Replace("Storage:", "Storage ", StringComparison.Ordinal)
+            .Replace("Network:", "Network ", StringComparison.Ordinal)
+            .Replace("Cooling:", "Cooling ", StringComparison.Ordinal)
+            .Replace("Security:", "Security ", StringComparison.Ordinal)
+            .Replace("Battery:", "Battery ", StringComparison.Ordinal)
+            .Replace("CPU:", "CPU ", StringComparison.Ordinal)
+            .Replace("GPU:", "GPU ", StringComparison.Ordinal)
+            .Replace("USB:", "USB ", StringComparison.Ordinal);
+    }
+
+    private static string ApplyUsbCoverageFromIntelligence(JsonElement root, string coverage)
+    {
+        var usbKnown = CountUsbIntelligenceEvidence(root);
+        if (usbKnown == 0)
+        {
+            return coverage;
+        }
+
+        var replacement = $"USB: {Math.Min(usbKnown, 3)}/3 fields known";
+        return System.Text.RegularExpressions.Regex.Replace(
+            coverage,
+            "USB:\\s*0/3\\s*fields known",
+            replacement,
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+    }
+
+    private static int CountUsbIntelligenceEvidence(JsonElement root)
+    {
+        var count = 0;
+        if (root.TryGetProperty("usbDiagnostics", out var diag) && diag.ValueKind == JsonValueKind.Object)
+        {
+            if (GetJsonInt(diag, "usbProfileKnownPortsCount") > 0) count++;
+            if (!string.IsNullOrWhiteSpace(GetJsonString(diag, "usbCurrentTargetRiskSummary", string.Empty))) count++;
+            if (!string.IsNullOrWhiteSpace(GetJsonString(diag, "usbBestKnownPortSummary", string.Empty))) count++;
+            if (diag.TryGetProperty("lastBenchmark", out var bench) && bench.ValueKind == JsonValueKind.Object && GetJsonBool(bench, "succeeded")) count++;
+        }
+
+        if (root.TryGetProperty("selectedTargetBenchmark", out var selectedBench) && selectedBench.ValueKind == JsonValueKind.Object && GetJsonBool(selectedBench, "succeeded")) count++;
+        if (root.TryGetProperty("selectedTargetRecommendation", out var rec) && rec.ValueKind == JsonValueKind.Object && !string.IsNullOrWhiteSpace(GetJsonString(rec, "risk", string.Empty))) count++;
+        return count;
+    }
+
+    private static string BuildUsbSensorCompactSummary(JsonElement root, JsonElement sensorMatrix)
+    {
+        var evidence = new List<string>();
+        if (root.TryGetProperty("usbDiagnostics", out var diag) && diag.ValueKind == JsonValueKind.Object)
+        {
+            if (GetJsonInt(diag, "usbProfileKnownPortsCount") > 0)
+            {
+                evidence.Add("mapped ports known");
+            }
+
+            var risk = GetJsonString(diag, "usbCurrentTargetRiskSummary", string.Empty);
+            if (!string.IsNullOrWhiteSpace(risk))
+            {
+                evidence.Add(risk.TrimEnd('.'));
+            }
+
+            var benchmark = GetJsonString(diag, "usbBestKnownPortSummary", string.Empty);
+            if (!string.IsNullOrWhiteSpace(benchmark))
+            {
+                evidence.Add(benchmark);
+            }
+        }
+
+        if (evidence.Count > 0)
+        {
+            return FormatList(evidence.Take(3), "USB Intelligence available");
+        }
+
+        var usbGroup = FindSensorGroup(sensorMatrix, "USB");
+        return usbGroup.HasValue
+            ? $"{GetJsonString(usbGroup.Value, "knownFields", "0")}/{GetJsonString(usbGroup.Value, "totalFields", "0")} USB fields known"
+            : "USB Intelligence not summarized in this report";
+    }
+
+    private static string BuildLimitedSensorCompactSummary(JsonElement sensorMatrix)
+    {
+        var unavailable = GetUnavailableSensorNames(sensorMatrix).ToArray();
+        if (unavailable.Length == 0)
+        {
+            return "no major limited sensors reported";
+        }
+
+        var names = unavailable
+            .Where(name => name.Contains("temperature", StringComparison.OrdinalIgnoreCase) ||
+                           name.Contains("Fan", StringComparison.OrdinalIgnoreCase) ||
+                           name.Contains("power", StringComparison.OrdinalIgnoreCase) ||
+                           name.Contains("load", StringComparison.OrdinalIgnoreCase))
+            .Take(4)
+            .ToArray();
+        return names.Length == 0
+            ? "some sensors need firmware/vendor support"
+            : $"{FormatList(names, "limited sensors")} may require deep/vendor sensor support";
+    }
+
+    private static string BuildStorageSensorCompactSummary(JsonElement sensorMatrix)
+    {
+        var storage = FindSensorGroup(sensorMatrix, "Storage");
+        if (!storage.HasValue)
+        {
+            return "storage sensor coverage unavailable";
+        }
+
+        var unavailable = EnumerateReadingsFromSensorGroup(storage.Value)
+            .Where(r => GetJsonBool(r, "isUnavailable"))
+            .Select(r => GetJsonString(r, "name", string.Empty))
+            .Where(name => name.Contains("temperature", StringComparison.OrdinalIgnoreCase) ||
+                           name.Contains("wear", StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(2)
+            .ToArray();
+        return unavailable.Length == 0
+            ? "health/wear/temp fields exposed where available"
+            : "health good where reported; temp/wear percentage not exposed by current provider";
+    }
+
+    private static JsonElement? FindSensorGroup(JsonElement sensorMatrix, string category)
+    {
+        if (!sensorMatrix.TryGetProperty("groups", out var groups) || groups.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        foreach (var group in groups.EnumerateArray())
+        {
+            if (GetJsonString(group, "category", string.Empty).Equals(category, StringComparison.OrdinalIgnoreCase))
+            {
+                return group;
+            }
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> GetUnavailableSensorNames(JsonElement sensorMatrix)
+    {
+        if (!sensorMatrix.TryGetProperty("groups", out var groups) || groups.ValueKind != JsonValueKind.Array)
+        {
+            yield break;
+        }
+
+        foreach (var reading in EnumerateSensorReadings(groups))
+        {
+            if (GetJsonBool(reading, "isUnavailable"))
+            {
+                var name = GetJsonString(reading, "name", string.Empty);
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    yield return name;
+                }
+            }
+        }
     }
 
     private static string FindUnavailableSensorNotes(JsonElement sensorMatrix)
@@ -5656,7 +5992,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             }
         }
 
-        var merged = evidence.Count == 0 ? rawDrivers : FormatList(evidence.Concat(rawDrivers.Split(';').Select(x => x.Trim())).Where(x => !string.IsNullOrWhiteSpace(x)), "none");
+        var raw = rawDrivers
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(x => !x.Equals("16 GB RAM meets a strong resale baseline.", StringComparison.OrdinalIgnoreCase));
+        var merged = evidence.Count == 0 ? FormatList(raw, "none") : FormatList(evidence.Concat(raw).Where(x => !string.IsNullOrWhiteSpace(x)), "none");
         return merged;
     }
 
@@ -5688,6 +6027,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         var watch = weakFitsText
             .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(item => !item.Equals("none obvious", StringComparison.OrdinalIgnoreCase) &&
+                           !item.Equals("none listed", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         if (root.TryGetProperty("batteries", out var batteries) && batteries.ValueKind == JsonValueKind.Array)
@@ -5734,7 +6075,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _ => list.Where(x => !x.Contains("AAA", StringComparison.OrdinalIgnoreCase))
         };
 
-        return FormatList(filtered.Take(3), "none listed");
+        var fallback = mode.Equals("notideal", StringComparison.OrdinalIgnoreCase)
+            ? "modern AAA gaming at high settings; long unplugged sessions unless battery is replaced/verified; heavy AI/GPU rendering; thermal-heavy workloads unless benchmarked"
+            : "none listed";
+        return FormatList(filtered.Take(3), fallback);
     }
 
     private static string GetInventoryDataSummary(JsonElement sensorMatrix)
@@ -5764,6 +6108,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             {
                 yield return reading;
             }
+        }
+    }
+
+    private static IEnumerable<JsonElement> EnumerateReadingsFromSensorGroup(JsonElement group)
+    {
+        if (!group.TryGetProperty("readings", out var readings) || readings.ValueKind != JsonValueKind.Array)
+        {
+            yield break;
+        }
+
+        foreach (var reading in readings.EnumerateArray())
+        {
+            yield return reading;
         }
     }
 
@@ -5952,6 +6309,27 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         return 0;
+    }
+
+    private static double? GetJsonDouble(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var property))
+        {
+            return null;
+        }
+
+        if (property.ValueKind == JsonValueKind.Number && property.TryGetDouble(out var value))
+        {
+            return value;
+        }
+
+        if (property.ValueKind == JsonValueKind.String &&
+            double.TryParse(property.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+        {
+            return parsed;
+        }
+
+        return null;
     }
 
     private static bool GetJsonBool(JsonElement element, string propertyName)

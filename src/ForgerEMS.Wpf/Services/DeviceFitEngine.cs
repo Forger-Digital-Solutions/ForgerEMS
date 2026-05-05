@@ -127,7 +127,7 @@ public sealed class DeviceFitEngine
             $"Machine class: {result.MachineClass}{Environment.NewLine}" +
             $"Confidence: {result.Confidence}{Environment.NewLine}" +
             $"Strong fits: {Join(result.StrongFits.Take(3), "needs scan")}{Environment.NewLine}" +
-            $"Watch-outs: {Join(result.WeakFits.Take(2), "none obvious")}{Environment.NewLine}" +
+            $"Watch-outs: {Join(result.WeakFits.Take(2), "verify battery/security/thermal limits before listing")}{Environment.NewLine}" +
             $"Examples: {Join(result.ExampleWorkloads.Take(3), "no examples available")}{Environment.NewLine}" +
             $"Upgrade/listing advice: {Join(result.UpgradeFirstAdvice.Take(2), "clean install, update drivers, verify condition")}{Environment.NewLine}" +
             $"Listing angle: {result.ListingPositioning}";
@@ -164,7 +164,7 @@ public sealed class DeviceFitEngine
         var reasons = new List<string>();
         if (signals.CpuScore >= 70) reasons.Add("Strong CPU tier.");
         if (signals.RamGb >= 32) reasons.Add("32 GB+ RAM helps multitasking and pro workflows.");
-        else if (signals.RamGb >= 16) reasons.Add("16 GB RAM meets a practical baseline.");
+        else if (signals.RamGb >= 16) reasons.Add($"{signals.RamGb:0.#} GB RAM meets a practical baseline.");
         if (signals.HasFastStorage) reasons.Add("SSD/NVMe storage improves responsiveness.");
         if (signals.HasDedicatedGpu) reasons.Add("Dedicated GPU expands creator/gaming/workstation fit.");
         if (category.Contains("Travel", StringComparison.OrdinalIgnoreCase) && signals.BatteryUnknown)

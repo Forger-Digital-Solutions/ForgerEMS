@@ -389,6 +389,7 @@
 
         <Style x:Key="SidebarNavButtonStyle" TargetType="Button">
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Focusable" Value="False" />
             <Setter Property="Height" Value="52" />
             <Setter Property="Margin" Value="0,0,0,12" />
             <Setter Property="Padding" Value="16,0" />
@@ -399,6 +400,33 @@
             <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="MinHeight" Value="52" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="NavBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="9"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              RecognizesAccessKey="True" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="NavBorder" Property="Opacity" Value="0.92" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="NavBorder" Property="Opacity" Value="0.86" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="NavBorder" Property="Opacity" Value="0.55" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style x:Key="ActionTileButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
@@ -1968,62 +1996,70 @@
                                                Text="{Binding SystemIntelligenceSummaryText}"
                                                TextWrapping="Wrap" />
 
-                                    <UniformGrid Columns="2" Margin="0,0,0,10">
-                                        <Border Margin="0,0,8,8" Padding="12" Background="#B80A101A" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10">
-                                            <StackPanel>
-                                                <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="System" />
-                                                <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceSystemCardText}" TextWrapping="Wrap" />
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Margin="8,0,0,8" Padding="12" Background="#B80A101A" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10">
-                                            <StackPanel>
-                                                <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="CPU / RAM / GPU" />
-                                                <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceComputeCardText}" TextWrapping="Wrap" />
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Margin="0,0,8,8" Padding="12" Background="#B80A101A" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10">
-                                            <StackPanel>
-                                                <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Storage Health" />
-                                                <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceStorageCardText}" TextWrapping="Wrap" />
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Margin="8,0,0,8" Padding="12" Background="#B80A101A" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10">
-                                            <StackPanel>
-                                                <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Battery" />
-                                                <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceBatteryCardText}" TextWrapping="Wrap" />
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Margin="0,0,8,0" Padding="12" Background="#B80A101A" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10">
-                                            <StackPanel>
-                                                <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Network" />
-                                                <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceNetworkCardText}" TextWrapping="Wrap" />
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Margin="8,0,0,0" Padding="12" Background="#B80A101A" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10">
-                                            <StackPanel>
-                                                <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Security" />
-                                                <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceSecurityCardText}" TextWrapping="Wrap" />
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Margin="0,8,8,0" Padding="12" Background="#B80A101A" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10">
-                                            <StackPanel>
-                                                <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Flip Value" />
-                                                <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceFlipValueCardText}" TextWrapping="Wrap" />
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Margin="8,8,0,0" Padding="12" Background="#B80A101A" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10">
-                                            <StackPanel>
-                                                <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Best Use / Device Fit" />
-                                                <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceDeviceFitCardText}" TextWrapping="Wrap" />
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Margin="0,8,8,0" Padding="12" Background="#B80A101A" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10">
-                                            <StackPanel>
-                                                <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Sensors / Hardware X-Ray" />
-                                                <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceHardwareXrayCardText}" TextWrapping="Wrap" />
-                                            </StackPanel>
-                                        </Border>
-                                    </UniformGrid>
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                            <Border Margin="0,0,0,8" Padding="12" Background="#B80A101A" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10">
+                                                <StackPanel>
+                                                    <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="System" />
+                                                    <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceSystemCardText}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Border>
+                                            <Border Margin="0,0,0,8" Padding="12" Background="#B80A101A" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10">
+                                                <StackPanel>
+                                                    <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Storage Health" />
+                                                    <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceStorageCardText}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Border>
+                                            <Border Margin="0,0,0,8" Padding="12" Background="#B80A101A" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10">
+                                                <StackPanel>
+                                                    <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Network" />
+                                                    <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceNetworkCardText}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Border>
+                                            <Border Margin="0,0,0,8" Padding="12" Background="#B80A101A" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10">
+                                                <StackPanel>
+                                                    <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Flip Value" />
+                                                    <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceFlipValueCardText}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Border>
+                                            <Border Margin="0,0,0,8" Padding="12" Background="#B80A101A" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10">
+                                                <StackPanel>
+                                                    <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Sensors / Hardware X-Ray" />
+                                                    <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceHardwareXrayCardText}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                            <Border Margin="0,0,0,8" Padding="12" Background="#B80A101A" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10">
+                                                <StackPanel>
+                                                    <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="CPU / RAM / GPU" />
+                                                    <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceComputeCardText}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Border>
+                                            <Border Margin="0,0,0,8" Padding="12" Background="#B80A101A" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10">
+                                                <StackPanel>
+                                                    <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Battery" />
+                                                    <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceBatteryCardText}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Border>
+                                            <Border Margin="0,0,0,8" Padding="12" Background="#B80A101A" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10">
+                                                <StackPanel>
+                                                    <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Security" />
+                                                    <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceSecurityCardText}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Border>
+                                            <Border Margin="0,0,0,8" Padding="12" Background="#B80A101A" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10">
+                                                <StackPanel>
+                                                    <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Best Use / Device Fit" />
+                                                    <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceDeviceFitCardText}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
+                                    </Grid>
 
                                     <TextBlock Margin="0,2,0,8"
                                                FontWeight="SemiBold"
@@ -2967,6 +3003,12 @@
                                                        Text="{Binding FeatureMaturityGuideText}"
                                                        TextWrapping="Wrap" />
                                         </ScrollViewer>
+                                    </GroupBox>
+                                    <GroupBox Margin="0,0,0,14" Header="System Intelligence sensors">
+                                        <TextBlock FontSize="11.5"
+                                                   Foreground="{DynamicResource PanelTextBrush}"
+                                                   Text="{Binding DeepSensorModeSettingsSummary}"
+                                                   TextWrapping="Wrap" />
                                     </GroupBox>
                                     <TextBlock Margin="0,0,0,10"
                                                FontSize="12"

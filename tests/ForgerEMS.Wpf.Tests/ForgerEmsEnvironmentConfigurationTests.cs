@@ -23,4 +23,21 @@ public sealed class ForgerEmsEnvironmentConfigurationTests
         Assert.False(ForgerEmsFeatureFlags.TelemetryEnabled);
         Assert.False(ForgerEmsFeatureFlags.CrashReportingEnabled);
     }
+
+    [Fact]
+    public void DeepSensorModeDefaultsOff()
+    {
+        var previous = Environment.GetEnvironmentVariable("FORGEREMS_DEEP_SENSOR_MODE");
+        try
+        {
+            Environment.SetEnvironmentVariable("FORGEREMS_DEEP_SENSOR_MODE", null);
+
+            Assert.Equal("Off", ForgerEmsEnvironmentConfiguration.DeepSensorMode);
+            Assert.False(ForgerEmsFeatureFlags.DeepSensorModeRequested);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FORGEREMS_DEEP_SENSOR_MODE", previous);
+        }
+    }
 }

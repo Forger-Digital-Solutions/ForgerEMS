@@ -458,7 +458,7 @@ function New-FlipValueReport {
     }
     elseif ($ramGb -ge 16) {
         $base += 70
-        Add-UniqueText -Items $valueDrivers -Text "16 GB RAM meets a strong resale baseline."
+        Add-UniqueText -Items $valueDrivers -Text ("{0:0.#} GB RAM meets a strong resale baseline." -f $ramGb)
     }
     elseif ($ramGb -gt 0 -and $ramGb -lt 16) {
         $base -= 35
@@ -849,6 +849,157 @@ function New-SensorGroup {
     }
 }
 
+function New-ThirdPartyNotice {
+    param(
+        [string]$Name,
+        [string]$Version,
+        [string]$License,
+        [string]$ProjectUrl,
+        [string]$BundledPath,
+        [string]$SourceOfferOrNotice,
+        [bool]$ModifiedFilesDisclosureNeeded
+    )
+
+    [ordered]@{
+        name = $Name
+        version = $Version
+        license = $License
+        projectUrl = $ProjectUrl
+        bundledPath = $BundledPath
+        sourceOfferOrNotice = $SourceOfferOrNotice
+        modifiedFilesDisclosureNeeded = $ModifiedFilesDisclosureNeeded
+    }
+}
+
+function New-SensorProviderCapabilities {
+    param(
+        [string[]]$SupportedCapabilities,
+        [string[]]$MissingCapabilities
+    )
+
+    [ordered]@{
+        supportedCapabilities = @($SupportedCapabilities)
+        missingCapabilities = @($MissingCapabilities)
+        readOnlyGuarantees = @(
+            "No fan control"
+            "No voltage control"
+            "No clock control"
+            "No BIOS or firmware writes"
+        )
+    }
+}
+
+function New-SensorProviderManifest {
+    param(
+        [string]$ProviderName,
+        [string]$ProviderVersion,
+        [string]$ProviderKind,
+        [bool]$IsBundled,
+        [bool]$IsEnabled,
+        [bool]$RequiresAdmin,
+        [bool]$RequiresThirdPartyLicenseNotice,
+        [string]$TrustLevel,
+        [string]$RuntimeMode,
+        [object]$Capabilities,
+        [string]$FailureReason,
+        [object[]]$Readings,
+        [string[]]$TechnicianNotes,
+        [object]$ThirdPartyNotice = $null
+    )
+
+    [ordered]@{
+        providerName = $ProviderName
+        providerVersion = $ProviderVersion
+        providerKind = $ProviderKind
+        isBundled = $IsBundled
+        isEnabled = $IsEnabled
+        requiresAdmin = $RequiresAdmin
+        requiresThirdPartyLicenseNotice = $RequiresThirdPartyLicenseNotice
+        isReadOnly = $true
+        trustLevel = $TrustLevel
+        runtimeMode = $RuntimeMode
+        capabilities = $Capabilities
+        failureReason = $FailureReason
+        lastRunUtc = (Get-Date).ToUniversalTime().ToString("o")
+        readings = @($Readings)
+        technicianNotes = @($TechnicianNotes)
+        thirdPartyNotice = $ThirdPartyNotice
+    }
+}
+
+function New-SensorProviderReport {
+    param([object[]]$BuiltInReadings)
+
+    $deepProviderPath = Join-Path -Path $PSScriptRoot -ChildPath "..\..\providers\sensors\ForgerEMS.SensorProviders.LibreHardwareMonitor.dll"
+    $deepPackaged = Test-Path -LiteralPath $deepProviderPath
+    @(
+        New-SensorProviderManifest `
+            -ProviderName "Windows Native" `
+            -ProviderVersion "1.0" `
+            -ProviderKind "WindowsBuiltInSensorProvider" `
+            -IsBundled $true `
+            -IsEnabled $true `
+            -RequiresAdmin $false `
+            -RequiresThirdPartyLicenseNotice $false `
+            -TrustLevel "BuiltInWindows" `
+            -RuntimeMode "DefaultSafe" `
+            -Capabilities (New-SensorProviderCapabilities `
+                -SupportedCapabilities @("WMI/CIM hardware inventory", "MSFT_PhysicalDisk and MSFT_StorageReliabilityCounter where exposed", "powercfg and Win32_Battery fields", "safe performance counters", "DX/WMI GPU inventory", "security posture APIs", "ForgerEMS USB Intelligence evidence") `
+                -MissingCapabilities @("CPU/GPU temperatures on many systems", "Fan RPM without vendor/deep provider support", "Package power without vendor/deep provider support")) `
+            -FailureReason "" `
+            -Readings @($BuiltInReadings) `
+            -TechnicianNotes @("Active by default. Uses local Windows APIs and ForgerEMS reports only.", "No internet, cloud service, or user-downloaded sensor tool is required.")
+
+        New-SensorProviderManifest `
+            -ProviderName "Bundled Deep Sensor Provider" `
+            -ProviderVersion "0.1-shell" `
+            -ProviderKind "LibreHardwareMonitorSensorProviderShell" `
+            -IsBundled $deepPackaged `
+            -IsEnabled $false `
+            -RequiresAdmin $false `
+            -RequiresThirdPartyLicenseNotice $true `
+            -TrustLevel $(if ($deepPackaged) { "BundledReviewed" } else { "ExperimentalDisabled" }) `
+            -RuntimeMode "Disabled" `
+            -Capabilities (New-SensorProviderCapabilities `
+                -SupportedCapabilities @("Future read-only CPU temperature", "Future read-only CPU package power", "Future read-only GPU temperature/clocks/load", "Future read-only fan RPM when exposed", "Future read-only storage temperature/wear") `
+                -MissingCapabilities @("Disabled pending review", "Requires bundled provider assembly", "May require admin or vendor driver support")) `
+            -FailureReason $(if ($deepPackaged) { "Bundled provider is present but disabled pending license/packaging review and explicit user opt-in." } else { "Provider assembly is not packaged in this build." }) `
+            -Readings @() `
+            -TechnicianNotes @("Disabled by default for beta safety.", $(if ($deepPackaged) { "Bundled deep sensor provider: available, disabled pending review." } else { "Bundled deep sensor provider: not packaged in this build." }), "Future reviewed providers must ship inside ForgerEMS and be read-only.", "ForgerEMS does not expose fan control, voltage control, overclocking, undervolting, or BIOS-write actions.") `
+            -ThirdPartyNotice (New-ThirdPartyNotice "LibreHardwareMonitor" "review-pending" "MPL-2.0 review required before bundling" "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor" "providers/sensors/ForgerEMS.SensorProviders.LibreHardwareMonitor.dll" "Include THIRD-PARTY-NOTICES.txt and MPL-2.0 license text before bundling; disclose covered-file modifications if any." $false)
+
+        New-SensorProviderManifest `
+            -ProviderName "ForgerEMS Admin Sensor Bridge" `
+            -ProviderVersion "0.1-design" `
+            -ProviderKind "AdminReadOnlyBridgeShell" `
+            -IsBundled $false `
+            -IsEnabled $false `
+            -RequiresAdmin $true `
+            -RequiresThirdPartyLicenseNotice $false `
+            -TrustLevel "AdminRequired" `
+            -RuntimeMode "Disabled" `
+            -Capabilities (New-SensorProviderCapabilities -SupportedCapabilities @("Future on-demand admin read-only deep scan IPC") -MissingCapabilities @("Signed bridge binary not included", "UAC opt-in not implemented")) `
+            -FailureReason "Design scaffold only; not enabled in this beta." `
+            -Readings @() `
+            -TechnicianNotes @("Deep Sensor Mode may require admin access. It only reads supported sensors and does not change fan, voltage, clock, or firmware settings.")
+
+        New-SensorProviderManifest `
+            -ProviderName "ForgerEMS Signed Driver Provider" `
+            -ProviderVersion "roadmap" `
+            -ProviderKind "FutureReadOnlyDriver" `
+            -IsBundled $false `
+            -IsEnabled $false `
+            -RequiresAdmin $false `
+            -RequiresThirdPartyLicenseNotice $false `
+            -TrustLevel "ExperimentalDisabled" `
+            -RuntimeMode "Disabled" `
+            -Capabilities (New-SensorProviderCapabilities -SupportedCapabilities @("Future read-only sensors unavailable to user-mode providers") -MissingCapabilities @("No driver included in current beta")) `
+            -FailureReason "Not included. Future releases would require Microsoft driver signing and installer-managed distribution." `
+            -Readings @() `
+            -TechnicianNotes @("Driver path is documentation-only for this beta. Users do not need to download it separately.")
+    )
+}
+
 function New-SensorMatrixReport {
     param(
         [object]$Processor,
@@ -860,7 +1011,8 @@ function New-SensorMatrixReport {
         [object]$TpmInfo,
         [int]$PhysicalAdapterCount,
         [int]$VirtualAdapterCount,
-        [bool]$InternetCheck
+        [bool]$InternetCheck,
+        [object]$UsbIntelligenceReport = $null
     )
 
     $cpuReadings = @(
@@ -917,10 +1069,29 @@ function New-SensorMatrixReport {
         New-SensorReading "Defender/Firewall" "Security" ("Defender AV: {0}; Firewall: {1}" -f $SecurityReport.antivirusEnabled, $SecurityReport.firewallEnabled) "" "Ready" "High" "Get-MpComputerStatus / firewall profile" $false $false $false "" ""
     )
 
-    $usbReadings = @(
-        New-SensorReading "USB controller inventory" "USB" "" "" "NotExposed" "Low" "USB Intelligence" $false $false $true "NotApplicable" "USB controller/device speed details are collected by USB Intelligence when a target is selected."
-        New-SensorReading "USB benchmark" "USB" "" "" "NotExposed" "Low" "USB Builder benchmark" $false $false $true "NotApplicable" "USB read/write benchmark appears only after a safe target benchmark is run."
-    )
+    $usbReadings = New-Object System.Collections.Generic.List[object]
+    if ($null -ne $UsbIntelligenceReport) {
+        $usbDiag = $UsbIntelligenceReport.usbDiagnostics
+        if ($null -ne $usbDiag -and $usbDiag.usbProfileKnownPortsCount -gt 0) {
+            [void]$usbReadings.Add((New-SensorReading "USB mapped ports" "USB" ([string]$usbDiag.usbProfileKnownPortsCount) "ports" "Ready" "Medium" "USB Intelligence profile" $false $false $false "" "Saved mapped port labels/profiles are available."))
+        }
+        if ($null -ne $usbDiag -and -not [string]::IsNullOrWhiteSpace([string]$usbDiag.usbCurrentTargetRiskSummary)) {
+            [void]$usbReadings.Add((New-SensorReading "USB target risk" "USB" ([string]$usbDiag.usbCurrentTargetRiskSummary).TrimEnd('.') "" "Ready" "Medium" "USB Intelligence diagnostics" $false $false $false "" "Current safe target risk is summarized by USB Builder."))
+        }
+        if ($null -ne $usbDiag -and -not [string]::IsNullOrWhiteSpace([string]$usbDiag.usbBestKnownPortSummary)) {
+            [void]$usbReadings.Add((New-SensorReading "Best measured port" "USB" ([string]$usbDiag.usbBestKnownPortSummary) "" "Ready" "Medium" "USB Builder benchmark/profile" $false $false $false "" "Best known write speed is based on ForgerEMS benchmark/profile data."))
+        }
+        if ($null -ne $usbDiag -and $null -ne $usbDiag.lastBenchmark -and $usbDiag.lastBenchmark.succeeded) {
+            [void]$usbReadings.Add((New-SensorReading "USB benchmark" "USB" ([string]$usbDiag.lastBenchmark.summaryLine) "" "Ready" "Medium" "USB Builder benchmark" $false $false $false "" ([string]$usbDiag.lastBenchmark.benchmarkConfidence)))
+        }
+        if ($null -ne $UsbIntelligenceReport.topologyDiff -and -not [string]::IsNullOrWhiteSpace([string]$UsbIntelligenceReport.topologyDiff.summaryLine)) {
+            [void]$usbReadings.Add((New-SensorReading "USB topology" "USB" ([string]$UsbIntelligenceReport.topologyDiff.summaryLine) "" "Ready" "Medium" "USB Intelligence topology diff" $false $false $false "" "Topology status was available from the USB Intelligence report."))
+        }
+    }
+    if ($usbReadings.Count -eq 0) {
+        [void]$usbReadings.Add((New-SensorReading "USB controller inventory" "USB" "" "" "NotExposed" "Low" "USB Intelligence" $false $false $true "NotApplicable" "USB controller/device speed details are collected by USB Intelligence when a target is selected."))
+        [void]$usbReadings.Add((New-SensorReading "USB benchmark" "USB" "" "" "NotExposed" "Low" "USB Builder benchmark" $false $false $true "NotApplicable" "USB read/write benchmark appears only after a safe target benchmark is run."))
+    }
     $coolingReadings = @(
         New-SensorReading "Fan RPM" "Cooling" "" "RPM" "Unknown" "Low" "ForgerEMS safe scan" $false $false $true "RequiresVendorDriver" "Windows/firmware did not expose fan RPM. That does not mean the fan is broken."
         New-SensorReading "Fan curve/control" "Cooling" "" "" "Unknown" "Low" "ForgerEMS safe scan" $false $false $true "UnsupportedHardware" "ForgerEMS does not change fan control."
@@ -933,14 +1104,17 @@ function New-SensorMatrixReport {
         New-SensorGroup "Storage" ($storageReadings.ToArray())
         New-SensorGroup "Network" $networkReadings
         New-SensorGroup "Security" $securityReadings
-        New-SensorGroup "USB" $usbReadings
+        New-SensorGroup "USB" ($usbReadings.ToArray())
         New-SensorGroup "Cooling" $coolingReadings
     )
+    $builtInReadings = @($groups | ForEach-Object { $_.readings })
+    $sensorProviders = @(New-SensorProviderReport -BuiltInReadings $builtInReadings)
     $known = @($groups | ForEach-Object { $_.knownFields } | Measure-Object -Sum).Sum
     $total = @($groups | ForEach-Object { $_.totalFields } | Measure-Object -Sum).Sum
     $confidence = if ($total -gt 0 -and ($known / $total) -ge 0.7) { "High" } elseif ($total -gt 0 -and ($known / $total) -ge 0.45) { "Medium" } else { "Low" }
     [ordered]@{
         groups = @($groups)
+        sensorProviders = @($sensorProviders)
         confidence = $confidence
         coverageSummary = (($groups | ForEach-Object { ("{0}: {1}/{2} fields known" -f $_.category, $_.knownFields, $_.totalFields) }) -join "; ")
         deepSensorModeNote = "Some sensors require admin access, firmware support, vendor drivers, or an optional reviewed sensor provider."
@@ -991,6 +1165,12 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 $jsonPath = Join-Path $OutputDirectory "system-intelligence-latest.json"
 $markdownPath = Join-Path $OutputDirectory "flip-report-latest.md"
+$usbIntelligencePath = Join-Path $OutputDirectory "usb-intelligence-latest.json"
+$usbIntelligenceReport = Invoke-Optional {
+    if (Test-Path -LiteralPath $usbIntelligencePath) {
+        Get-Content -LiteralPath $usbIntelligencePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+    }
+}
 $recommendations = New-Object System.Collections.Generic.List[string]
 $obviousProblems = New-Object System.Collections.Generic.List[string]
 
@@ -1141,6 +1321,7 @@ foreach ($disk in $physicalDisks) {
     $operational = [string]($disk.OperationalStatus -join ", ")
     $temperature = if ($null -ne $reliability) { $reliability.Temperature } else { $null }
     $wear = if ($null -ne $reliability) { $reliability.Wear } else { $null }
+    $diskHealthPercent = if ($null -ne $wear) { [math]::Max(0, [math]::Min(100, 100 - [double]$wear)) } else { $null }
     $readErrors = if ($null -ne $reliability) { $reliability.ReadErrorsTotal } else { $null }
     $writeErrors = if ($null -ne $reliability) { $reliability.WriteErrorsTotal } else { $null }
 
@@ -1178,6 +1359,17 @@ foreach ($disk in $physicalDisks) {
         size = Format-Bytes -Bytes ([double]$disk.Size)
         health = if ([string]::IsNullOrWhiteSpace($health)) { "Health not reported" } else { $health }
         healthDisplay = if ([string]::IsNullOrWhiteSpace($health)) { "Health not reported by Windows storage stack" } else { $health }
+        diskHealthPercent = if ($null -ne $diskHealthPercent) {
+            [ordered]@{
+                value = [math]::Round($diskHealthPercent, 1)
+                confidence = "Medium"
+                source = "MSFT_StorageReliabilityCounter.Wear"
+                isEstimated = $true
+                technicianNote = "Estimated as 100 minus Windows-reported wear/percentage-used data. No percentage is invented from Healthy status alone."
+            }
+        } else {
+            $null
+        }
         operationalStatus = $operational
         temperatureC = $temperature
         temperatureDisplay = if ($null -ne $temperature) { "{0} C" -f $temperature } else { "Temp: Not exposed" }
@@ -1579,7 +1771,8 @@ $sensorMatrix = New-SensorMatrixReport `
     -TpmInfo $tpmInfo `
     -PhysicalAdapterCount $physicalNetworkReport.Count `
     -VirtualAdapterCount $virtualNetworkReport.Count `
-    -InternetCheck ([bool]$internetCheck)
+    -InternetCheck ([bool]$internetCheck) `
+    -UsbIntelligenceReport $usbIntelligenceReport
 
 $report = [ordered]@{
     schemaVersion = 1
@@ -1662,6 +1855,7 @@ $report = [ordered]@{
     flipValue = $flipValue
     machineClass = $machineClass
     sensorMatrix = $sensorMatrix
+    sensorProviders = $sensorMatrix.sensorProviders
     deviceFit = $deviceFit
     recommendations = @($recommendations)
     reportPaths = [ordered]@{
@@ -1702,6 +1896,18 @@ $markdown = New-Object System.Collections.Generic.List[string]
 [void]$markdown.Add(("- Sensor coverage: {0}" -f $report.sensorMatrix.coverageSummary))
 [void]$markdown.Add(("- Sensor confidence: {0}" -f $report.sensorMatrix.confidence))
 [void]$markdown.Add(("- Deep sensor note: {0}" -f $report.sensorMatrix.deepSensorModeNote))
+[void]$markdown.Add("")
+[void]$markdown.Add("### Sensor Provider Host")
+foreach ($provider in $report.sensorProviders) {
+    $status = if ($provider.isEnabled) { "Active" } elseif ($provider.isBundled) { "Bundled but disabled" } elseif ($provider.providerName -match "Driver") { "Not included" } else { "Off" }
+    [void]$markdown.Add(("- {0}: {1}; trust {2}; mode {3}; read-only {4}; admin required {5}; bundled {6}" -f $provider.providerName, $status, $provider.trustLevel, $provider.runtimeMode, $provider.isReadOnly, $provider.requiresAdmin, $provider.isBundled))
+    if ($provider.failureReason) {
+        [void]$markdown.Add(("  - Note: {0}" -f $provider.failureReason))
+    }
+    if ($provider.requiresThirdPartyLicenseNotice -and $null -ne $provider.thirdPartyNotice) {
+        [void]$markdown.Add(("  - License notice: {0} {1} ({2}); {3}" -f $provider.thirdPartyNotice.name, $provider.thirdPartyNotice.version, $provider.thirdPartyNotice.license, $provider.thirdPartyNotice.sourceOfferOrNotice))
+    }
+}
 [void]$markdown.Add("")
 [void]$markdown.Add("### Machine Class Signals")
 foreach ($signal in $report.machineClass.signals) {

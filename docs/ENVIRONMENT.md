@@ -69,6 +69,10 @@ Existing provider-specific names (e.g. `OPENAI_API_KEY`) remain documented in `d
 | `FORGEREMS_DIAGNOSTICS_REDACTION_STRICT` | Strict redaction mode (reserved). |
 | `FORGEREMS_ENABLE_DIAGNOSTIC_BUNDLE` | `true`/`false` — disables in-app **Export Support Bundle** when `false`. |
 
+## System Intelligence sensors
+
+- `FORGEREMS_DEEP_SENSOR_MODE` — default `Off`. Reserved values: `Off`, `ReadOnlyLocalSensors`, `AdminReadOnly`. Experimental/bundled deep providers remain disabled unless reviewed, packaged, and explicitly enabled by a future release.
+
 ## Marketplace / valuation (future)
 
 - `FORGEREMS_MARKETPLACE_ENABLED` — default `false`.

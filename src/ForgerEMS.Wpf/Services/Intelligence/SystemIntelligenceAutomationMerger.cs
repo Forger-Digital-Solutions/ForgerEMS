@@ -33,6 +33,7 @@ public static class SystemIntelligenceAutomationMerger
             var recs = RecommendationEngine.Generate(profile, health);
             var machineClass = MachineClassifier.Classify(profile);
             var sensorMatrix = SensorMatrixBuilder.Build(profile);
+            sensorMatrix = ApplyUsbIntelligenceCoverage(reportPath, sensorMatrix);
             var deviceFit = new DeviceFitEngine().Evaluate(profile);
 
             var automation = BuildAutomationNode(doc.RootElement, profile, health, recs, deviceFit, machineClass, sensorMatrix);
@@ -92,7 +93,7 @@ public static class SystemIntelligenceAutomationMerger
 
         var summary =
             $"Health {health.HealthScore}/100. " +
-            $"Confidence {health.ConfidenceScore}/100. " +
+            $"Scan Confidence {health.ConfidenceScore}/100. " +
             $"{norm.CpuTier}. " +
             $"GPUs: {string.Join(", ", norm.GpuClasses)}. " +
             $"Boot volume: {norm.BootVolume}. " +
@@ -133,6 +134,19 @@ public static class SystemIntelligenceAutomationMerger
                     group.KnownFields,
                     group.TotalFields,
                     group.Summary
+                }).ToArray(),
+                providers = sensorMatrix.SensorProviders.Select(provider => new
+                {
+                    provider.ProviderName,
+                    provider.ProviderVersion,
+                    provider.ProviderKind,
+                    provider.IsEnabled,
+                    provider.IsBundled,
+                    provider.RequiresAdmin,
+                    provider.IsReadOnly,
+                    provider.TrustLevel,
+                    provider.RuntimeMode,
+                    provider.FailureReason
                 }).ToArray(),
                 note = sensorMatrix.DeepSensorModeNote
             },
@@ -318,6 +332,114 @@ public static class SystemIntelligenceAutomationMerger
 
         return list.Count > 0 ? list.ToArray() : ["Unknown"];
     }
+
+    private static SensorMatrixResult ApplyUsbIntelligenceCoverage(string reportPath, SensorMatrixResult sensorMatrix)
+    {
+        var usbPath = Path.Combine(Path.GetDirectoryName(reportPath) ?? string.Empty, "usb-intelligence-latest.json");
+        if (!File.Exists(usbPath))
+        {
+            return sensorMatrix;
+        }
+
+        try
+        {
+            using var usbDoc = JsonDocument.Parse(File.ReadAllText(usbPath));
+            var usb = usbDoc.RootElement;
+            var readings = BuildUsbReadings(usb);
+            if (readings.Length == 0)
+            {
+                return sensorMatrix;
+            }
+
+            var known = readings.Count(r => !r.IsUnavailable);
+            var group = new SensorGroup
+            {
+                Category = "USB",
+                KnownFields = known,
+                TotalFields = readings.Length,
+                Summary = $"{known}/{readings.Length} fields known",
+                Readings = readings
+            };
+            var groups = sensorMatrix.Groups
+                .Where(g => !g.Category.Equals("USB", StringComparison.OrdinalIgnoreCase))
+                .Concat([group])
+                .ToArray();
+            var totalKnown = groups.Sum(g => g.KnownFields);
+            var total = groups.Sum(g => g.TotalFields);
+            var confidenceRatio = total == 0 ? 0 : totalKnown / (double)total;
+            return new SensorMatrixResult
+            {
+                Groups = groups,
+                SensorProviders = sensorMatrix.SensorProviders,
+                Confidence = confidenceRatio >= 0.7 ? "High" : confidenceRatio >= 0.45 ? "Medium" : "Low",
+                DeepSensorModeNote = sensorMatrix.DeepSensorModeNote
+            };
+        }
+        catch (Exception ex)
+        {
+            IntelligenceLogWriter.Append("system-intelligence.log", $"USB sensor coverage merge skipped: {ex.Message}");
+            return sensorMatrix;
+        }
+    }
+
+    private static SensorReading[] BuildUsbReadings(JsonElement usb)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var readings = new List<SensorReading>();
+        if (usb.TryGetProperty("usbDiagnostics", out var diag) && diag.ValueKind == JsonValueKind.Object)
+        {
+            var mapped = GetJsonString(diag, "usbProfileKnownPortsCount");
+            if (int.TryParse(mapped, out var mappedCount) && mappedCount > 0)
+            {
+                readings.Add(KnownUsb("USB mapped ports", mapped, "USB Intelligence profile", now, "Saved mapped port labels/profiles are available."));
+            }
+
+            var risk = GetJsonString(diag, "usbCurrentTargetRiskSummary");
+            if (!string.IsNullOrWhiteSpace(risk) && !risk.Equals("unknown", StringComparison.OrdinalIgnoreCase))
+            {
+                readings.Add(KnownUsb("USB target risk", risk.TrimEnd('.'), "USB Intelligence diagnostics", now, "Current safe target risk is summarized by USB Builder."));
+            }
+
+            var best = GetJsonString(diag, "usbBestKnownPortSummary");
+            if (!string.IsNullOrWhiteSpace(best) && !best.Equals("unknown", StringComparison.OrdinalIgnoreCase))
+            {
+                readings.Add(KnownUsb("Best measured port", best, "USB Builder benchmark/profile", now, "Best known write speed is based on ForgerEMS benchmark/profile data."));
+            }
+
+            if (diag.TryGetProperty("lastBenchmark", out var benchmark) &&
+                benchmark.ValueKind == JsonValueKind.Object &&
+                benchmark.TryGetProperty("succeeded", out var succeeded) &&
+                succeeded.ValueKind == JsonValueKind.True)
+            {
+                readings.Add(KnownUsb("USB benchmark", GetJsonString(benchmark, "summaryLine"), "USB Builder benchmark", now, GetJsonString(benchmark, "benchmarkConfidence")));
+            }
+        }
+
+        var topology = usb.TryGetProperty("topologyDiff", out var diff)
+            ? GetJsonString(diff, "summaryLine")
+            : string.Empty;
+        if (!string.IsNullOrWhiteSpace(topology) && !topology.Equals("unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            readings.Add(KnownUsb("USB topology", topology, "USB Intelligence topology diff", now, "Topology status was available from the USB Intelligence report."));
+        }
+
+        return readings
+            .GroupBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .ToArray();
+    }
+
+    private static SensorReading KnownUsb(string name, string value, string source, DateTimeOffset now, string note) => new()
+    {
+        Name = name,
+        Category = "USB",
+        Value = string.IsNullOrWhiteSpace(value) ? "Known" : value,
+        Status = "Ready",
+        Confidence = "Medium",
+        Source = source,
+        LastUpdatedUtc = now,
+        TechnicianNote = note
+    };
 
     private static string ClassifyGpuForSummary(string name, string type)
     {
