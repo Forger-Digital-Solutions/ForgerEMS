@@ -125,7 +125,7 @@ public sealed class UsbMachineProfileStore
                         attachedToVerifiedPort: true,
                         labelStatus.CurrentLabel,
                         labelStatus.Validity);
-                    MergePendingBenchmark(profile, labelStatus.CurrentRecord.StablePortKey, attached, now, d);
+                    MergePendingBenchmark(labelStatus.CurrentRecord, attached, now, d);
                 }
                 else
                 {
@@ -178,26 +178,14 @@ public sealed class UsbMachineProfileStore
     }
 
     private static void MergePendingBenchmark(
-        UsbMachineProfile profile,
-        string stablePortKey,
+        UsbKnownPortRecord rec,
         UsbIntelligenceBenchmarkResult bench,
         DateTimeOffset when,
         UsbDeviceInfo device)
     {
-        if (string.IsNullOrWhiteSpace(stablePortKey))
-        {
-            return;
-        }
-
-        var rec = profile.KnownPorts.FirstOrDefault(p => p.StablePortKey == stablePortKey);
-        if (rec is null)
-        {
-            rec = new UsbKnownPortRecord { StablePortKey = stablePortKey };
-            profile.KnownPorts.Add(rec);
-        }
-
         rec.LastBenchmark = bench;
         rec.LastSeenUtc = when;
+        rec.UpdatedUtc = when;
         rec.Confidence = Math.Max(rec.Confidence, Math.Max(bench.ConfidenceScore, device.ConfidenceScore));
     }
 

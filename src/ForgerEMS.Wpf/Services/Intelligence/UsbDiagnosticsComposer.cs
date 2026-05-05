@@ -178,6 +178,15 @@ public static class UsbDiagnosticsComposer
 
         if (ranked is null)
         {
+            var unverified = profile.UnverifiedBenchmarkByDriveLetter.Values
+                .Where(b => b.Succeeded && b.WriteSpeedMBps > 0)
+                .OrderByDescending(b => b.WriteSpeedMBps)
+                .FirstOrDefault();
+            if (unverified is not null)
+            {
+                return $"Best measured port: Unverified current port (~{unverified.WriteSpeedMBps:0.0} MB/s write; label needed).";
+            }
+
             var labeled = profile.KnownPorts.Count(p => !string.IsNullOrWhiteSpace(p.UserLabel));
             return labeled > 0
                 ? $"{labeled} mapped port(s); benchmark a port to rank them by speed."

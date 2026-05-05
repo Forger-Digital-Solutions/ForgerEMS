@@ -670,6 +670,98 @@ public sealed class UsbIntelligenceProTests
         }
     }
 
+    [Fact]
+    public void UsbPortLabelResolver_MultipleSavedPorts_SelectsMatchingFingerprintNotLastSavedLabel()
+    {
+        var profile = new UsbMachineProfile();
+        var left = TestUsbDevice("R:", "dev-f", "port-left", seenCount: 1, locationPathHash: "loc-left");
+        var right = TestUsbDevice("R:", "dev-f", "port-right", seenCount: 1, locationPathHash: "loc-right");
+        var leftRec = new UsbKnownPortRecord { StablePortKey = left.StablePortKey };
+        var rightRec = new UsbKnownPortRecord { StablePortKey = right.StablePortKey };
+        UsbPortLabelResolver.StampManualLabel(leftRec, left, "LT USB C", 90, DateTimeOffset.UtcNow.AddMinutes(-5));
+        UsbPortLabelResolver.StampManualLabel(rightRec, right, "RT USB C", 90, DateTimeOffset.UtcNow);
+        profile.KnownPorts.Add(leftRec);
+        profile.KnownPorts.Add(rightRec);
+        UsbPortLabelResolver.MarkDriveRemoved("R:");
+
+        var currentLeft = TestUsbDevice("R:", "dev-f", "port-left", seenCount: 3, locationPathHash: "loc-left");
+        var status = UsbPortLabelResolver.Resolve(currentLeft, profile);
+
+        Assert.Equal(UsbPortLabelValidity.VerifiedCurrent, status.Validity);
+        Assert.Equal("LT USB C", status.CurrentLabel);
+        Assert.Contains("RT USB C", status.CandidateLabels);
+    }
+
+    [Fact]
+    public void UsbPortLabelResolver_MultipleSavedPorts_SelectsRightFingerprint()
+    {
+        var profile = new UsbMachineProfile();
+        var left = TestUsbDevice("S:", "dev-g", "port-left", seenCount: 1, locationPathHash: "loc-left");
+        var right = TestUsbDevice("S:", "dev-g", "port-right", seenCount: 1, locationPathHash: "loc-right");
+        var leftRec = new UsbKnownPortRecord { StablePortKey = left.StablePortKey };
+        var rightRec = new UsbKnownPortRecord { StablePortKey = right.StablePortKey };
+        UsbPortLabelResolver.StampManualLabel(leftRec, left, "LT USB C", 90, DateTimeOffset.UtcNow.AddMinutes(-5));
+        UsbPortLabelResolver.StampManualLabel(rightRec, right, "RT USB C", 90, DateTimeOffset.UtcNow);
+        profile.KnownPorts.Add(leftRec);
+        profile.KnownPorts.Add(rightRec);
+        UsbPortLabelResolver.MarkDriveRemoved("S:");
+
+        var currentRight = TestUsbDevice("S:", "dev-g", "port-right", seenCount: 3, locationPathHash: "loc-right");
+        var status = UsbPortLabelResolver.Resolve(currentRight, profile);
+
+        Assert.Equal(UsbPortLabelValidity.VerifiedCurrent, status.Validity);
+        Assert.Equal("RT USB C", status.CurrentLabel);
+    }
+
+    [Fact]
+    public void UsbPortLabelResolver_WeakIdenticalPortEvidence_ReturnsAmbiguousNotLastSaved()
+    {
+        var profile = new UsbMachineProfile();
+        var left = TestUsbDevice("T:", "dev-h", "same-weak-port", seenCount: 1);
+        var right = TestUsbDevice("T:", "dev-h", "same-weak-port", seenCount: 1);
+        var leftRec = new UsbKnownPortRecord();
+        var rightRec = new UsbKnownPortRecord();
+        UsbPortLabelResolver.StampManualLabel(leftRec, left, "LT USB C", 55, DateTimeOffset.UtcNow.AddMinutes(-5));
+        UsbPortLabelResolver.StampManualLabel(rightRec, right, "RT USB C", 55, DateTimeOffset.UtcNow);
+        profile.KnownPorts.Add(leftRec);
+        profile.KnownPorts.Add(rightRec);
+        UsbPortLabelResolver.MarkDriveRemoved("T:");
+
+        var current = TestUsbDevice("T:", "dev-h", "same-weak-port", seenCount: 3);
+        var status = UsbPortLabelResolver.Resolve(current, profile);
+
+        Assert.Equal(UsbPortLabelValidity.Ambiguous, status.Validity);
+        Assert.Null(status.CurrentLabel);
+        Assert.Contains("LT USB C", status.CandidateLabels);
+        Assert.Contains("RT USB C", status.CandidateLabels);
+        Assert.Contains("Ambiguous", status.StatusLine, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void UsbGuidedMappingWorkflow_SavingSecondLabelDoesNotOverwriteFirstLabel()
+    {
+        var profile = new UsbMachineProfile();
+        var left = TestUsbDevice("U:", "dev-i", "same-weak-port", seenCount: 1);
+        var right = TestUsbDevice("U:", "dev-i", "same-weak-port", seenCount: 1);
+        var leftRec = new UsbKnownPortRecord();
+        UsbPortLabelResolver.StampManualLabel(leftRec, left, "LT USB C", 55, DateTimeOffset.UtcNow.AddMinutes(-5));
+        profile.KnownPorts.Add(leftRec);
+
+        var rightRec = profile.KnownPorts.FirstOrDefault(p =>
+            string.Equals(p.UserLabel?.Trim(), "RT USB C", StringComparison.OrdinalIgnoreCase));
+        if (rightRec is null)
+        {
+            rightRec = new UsbKnownPortRecord { MappingId = Guid.NewGuid().ToString("N") };
+            profile.KnownPorts.Add(rightRec);
+        }
+
+        UsbPortLabelResolver.StampManualLabel(rightRec, right, "RT USB C", 55, DateTimeOffset.UtcNow);
+
+        Assert.Equal(2, profile.KnownPorts.Count);
+        Assert.Contains(profile.KnownPorts, p => p.UserLabel == "LT USB C");
+        Assert.Contains(profile.KnownPorts, p => p.UserLabel == "RT USB C");
+    }
+
     private static UsbDeviceInfo TestUsbDevice(
         string driveLetter,
         string stableDeviceKey,

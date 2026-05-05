@@ -188,10 +188,15 @@ public sealed class UsbGuidedMappingWorkflow
         int mapConf,
         DateTimeOffset afterGeneratedUtc)
     {
-        var rec = profile.KnownPorts.FirstOrDefault(p => p.StablePortKey == afterMatch.StablePortKey);
+        var rec = profile.KnownPorts.FirstOrDefault(p =>
+            string.Equals(p.UserLabel?.Trim(), trimmedLabel, StringComparison.OrdinalIgnoreCase));
         if (rec is null)
         {
-            rec = new UsbKnownPortRecord { StablePortKey = afterMatch.StablePortKey };
+            rec = new UsbKnownPortRecord
+            {
+                MappingId = Guid.NewGuid().ToString("N"),
+                StablePortKey = afterMatch.StablePortKey
+            };
             profile.KnownPorts.Add(rec);
         }
 

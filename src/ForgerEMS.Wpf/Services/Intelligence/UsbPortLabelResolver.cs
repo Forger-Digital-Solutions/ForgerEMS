@@ -26,12 +26,17 @@ public sealed class UsbPortLabelStatus
     public string ReasonLine { get; init; } = string.Empty;
 
     public IReadOnlyList<string> ReasonCodes { get; init; } = Array.Empty<string>();
+
+    public IReadOnlyList<string> CandidateLabels { get; init; } = Array.Empty<string>();
 }
 
 public static class UsbPortLabelResolver
 {
     private static readonly string CurrentSessionId = Guid.NewGuid().ToString("N");
     private static readonly HashSet<string> RemovedDriveLetters = new(StringComparer.OrdinalIgnoreCase);
+
+    private const int VerifiedScoreThreshold = 75;
+    private const int AmbiguousScoreGap = 12;
 
     public static void MarkDriveRemoved(string? rootOrDriveLetter)
     {
@@ -57,101 +62,104 @@ public static class UsbPortLabelResolver
         var currentHasStrongTopology = HasStrongPortTopologyEvidence(current);
         var removedObserved = WasDriveRemovalObserved(current.DriveLetter);
 
-        var exact = !string.IsNullOrWhiteSpace(current.StablePortKey)
-            ? profile.KnownPorts.FirstOrDefault(p =>
-                string.Equals(p.StablePortKey, current.StablePortKey, StringComparison.Ordinal) &&
-                !string.IsNullOrWhiteSpace(p.UserLabel))
-            : null;
-
-        var sameDevice = profile.KnownPorts
+        var candidates = profile.KnownPorts
             .Where(p => !string.IsNullOrWhiteSpace(p.UserLabel))
-            .Where(p => SameDevice(p, currentDeviceKey))
-            .OrderByDescending(p => p.LastSeenUtc ?? DateTimeOffset.MinValue)
+            .Select(p => ScoreCandidate(p, current, currentDeviceKey, currentTopologyKey))
+            .Where(c => c.Score > 0)
+            .OrderByDescending(c => c.Score)
+            .ThenByDescending(c => c.Record.UpdatedUtc ?? c.Record.LastSeenUtc ?? DateTimeOffset.MinValue)
             .ToList();
 
-        var candidate = exact ?? sameDevice.FirstOrDefault();
-        if (candidate is null)
+        if (candidates.Count == 0)
         {
             return NoLabel();
         }
 
-        var label = candidate.UserLabel?.Trim();
-        var reasons = new List<string>();
-        if (!string.IsNullOrWhiteSpace(currentDeviceKey) && SameDevice(candidate, currentDeviceKey))
+        var labels = candidates.Select(c => c.Label).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var session = candidates.FirstOrDefault(c => IsCurrentSessionManual(c.Record, current, currentTopologyKey, removedObserved));
+        if (session.Record is not null)
         {
-            reasons.Add("same-device-identity");
-        }
-
-        if (removedObserved)
-        {
-            reasons.Add("reconnect-observed");
-        }
-
-        var savedHasStrongTopology = candidate.HasStrongPortTopologyEvidence &&
-                                     !string.IsNullOrWhiteSpace(candidate.PortTopologyKey);
-        if (savedHasStrongTopology && currentHasStrongTopology)
-        {
-            if (string.Equals(candidate.PortTopologyKey, currentTopologyKey, StringComparison.Ordinal))
-            {
-                reasons.Add("topology-match");
-                return new UsbPortLabelStatus
-                {
-                    Validity = UsbPortLabelValidity.VerifiedCurrent,
-                    CurrentLabel = label,
-                    LastKnownLabel = label,
-                    CurrentRecord = candidate,
-                    LastKnownRecord = candidate,
-                    StatusLine = $"Current port: {label} verified",
-                    ReasonLine = "Saved topology matches the current USB connection.",
-                    ReasonCodes = reasons
-                };
-            }
-
-            reasons.Add("topology-changed");
-            return new UsbPortLabelStatus
-            {
-                Validity = UsbPortLabelValidity.PortChangedSuspected,
-                LastKnownLabel = label,
-                LastKnownRecord = candidate,
-                StatusLine = "Current port: Port change suspected",
-                ReasonLine = $"Last known label: {label}. Open USB Mapping Wizard or update the manual label.",
-                ReasonCodes = reasons
-            };
-        }
-
-        if (IsCurrentSessionManual(candidate, current, currentTopologyKey, removedObserved))
-        {
-            reasons.Add("manual-label-current-session");
             return new UsbPortLabelStatus
             {
                 Validity = UsbPortLabelValidity.CurrentSessionManual,
-                CurrentLabel = label,
-                LastKnownLabel = label,
-                CurrentRecord = candidate,
-                LastKnownRecord = candidate,
-                StatusLine = $"Current port: {label} manually labeled",
-                ReasonLine = "Manual label was saved for this current app session and connection.",
-                ReasonCodes = reasons
+                CurrentLabel = session.Label,
+                LastKnownLabel = session.Label,
+                CurrentRecord = session.Record,
+                LastKnownRecord = session.Record,
+                StatusLine = $"Current port: {session.Label} manually confirmed this session",
+                ReasonLine = session.Record.HasStrongPortTopologyEvidence
+                    ? "Manual label is bound to this current connection and has topology evidence."
+                    : "Reconnect verification: weak — Windows may not expose enough topology to auto-detect this port later.",
+                ReasonCodes = session.ReasonCodes.Append("manual-label-current-session").ToArray(),
+                CandidateLabels = labels
             };
         }
 
-        reasons.Add(currentHasStrongTopology || savedHasStrongTopology
-            ? "topology-unmatched"
-            : "topology-unavailable");
-        reasons.Add("stale-manual-label-not-reused");
+        var best = candidates[0];
+        var close = candidates
+            .Where(c => c.Record != best.Record && best.Score - c.Score <= AmbiguousScoreGap)
+            .ToList();
+
+        if (best.Score >= VerifiedScoreThreshold &&
+            best.StrongTopologyMatched &&
+            !close.Any(c => c.Score >= VerifiedScoreThreshold && c.StrongTopologyMatched))
+        {
+            return new UsbPortLabelStatus
+            {
+                Validity = UsbPortLabelValidity.VerifiedCurrent,
+                CurrentLabel = best.Label,
+                LastKnownLabel = best.Label,
+                CurrentRecord = best.Record,
+                LastKnownRecord = best.Record,
+                StatusLine = $"Current port: {best.Label} verified",
+                ReasonLine = "Saved topology matches the current USB connection.",
+                ReasonCodes = best.ReasonCodes.Append("topology-match").ToArray(),
+                CandidateLabels = labels
+            };
+        }
+
+        if (close.Count > 0)
+        {
+            return new UsbPortLabelStatus
+            {
+                Validity = UsbPortLabelValidity.Ambiguous,
+                LastKnownLabel = best.Label,
+                LastKnownRecord = best.Record,
+                StatusLine = "Current port: Ambiguous match",
+                ReasonLine = $"Possible labels: {string.Join(", ", labels.Take(4))}. Recommended: Open USB Mapping Wizard.",
+                ReasonCodes = best.ReasonCodes.Append("ambiguous-weak-matches").ToArray(),
+                CandidateLabels = labels
+            };
+        }
+
+        if (currentHasStrongTopology && candidates.Any(c => c.Record.HasStrongPortTopologyEvidence))
+        {
+            return new UsbPortLabelStatus
+            {
+                Validity = UsbPortLabelValidity.PortChangedSuspected,
+                LastKnownLabel = best.Label,
+                LastKnownRecord = best.Record,
+                StatusLine = "Current port: Port change suspected",
+                ReasonLine = $"Last known label: {best.Label}. Open USB Mapping Wizard or update the manual label.",
+                ReasonCodes = best.ReasonCodes.Append("topology-changed").Append("stale-manual-label-not-reused").ToArray(),
+                CandidateLabels = labels
+            };
+        }
 
         return new UsbPortLabelStatus
         {
-            Validity = currentHasStrongTopology || savedHasStrongTopology
+            Validity = currentHasStrongTopology || candidates.Any(c => c.Record.HasStrongPortTopologyEvidence)
                 ? UsbPortLabelValidity.NeedsVerification
                 : UsbPortLabelValidity.TopologyUnavailable,
-            LastKnownLabel = label,
-            LastKnownRecord = candidate,
-            StatusLine = removedObserved
-                ? "Current port: Unverified after reconnect"
-                : "Current port: Needs verification",
-            ReasonLine = $"Last known label: {label}. Save/update a manual label to attach this connection to a physical port.",
-            ReasonCodes = reasons
+            LastKnownLabel = best.Label,
+            LastKnownRecord = best.Record,
+            StatusLine = removedObserved ? "Current port: Unknown / needs mapping" : "Current port: Needs verification",
+            ReasonLine = $"Last known label: {best.Label}. Save/update a manual label to attach this connection to a physical port.",
+            ReasonCodes = best.ReasonCodes
+                .Append(currentHasStrongTopology ? "topology-unmatched" : "topology-unavailable")
+                .Append("stale-manual-label-not-reused")
+                .ToArray(),
+            CandidateLabels = labels
         };
     }
 
@@ -162,10 +170,32 @@ public static class UsbPortLabelResolver
         int mappingConfidence,
         DateTimeOffset confirmedAtUtc)
     {
+        if (string.IsNullOrWhiteSpace(record.MappingId))
+        {
+            record.MappingId = Guid.NewGuid().ToString("N");
+        }
+
         record.UserLabel = label.Trim();
+        record.StablePortKey = device.StablePortKey;
         record.DeviceIdentityKey = BuildDeviceIdentityKey(device);
         record.PortTopologyKey = BuildPortTopologyKey(device);
         record.HasStrongPortTopologyEvidence = HasStrongPortTopologyEvidence(device);
+        record.LocationPathHash = device.LocationPathHash;
+        record.LocationPathsHash = device.LocationPathsHash;
+        record.LocationInformationHash = device.LocationInformationHash;
+        record.ControllerKey = device.ControllerKey;
+        record.HubKey = device.HubKey;
+        record.ParentDeviceIdHash = device.ParentDeviceIdHash;
+        record.ParentIdPrefixHash = device.ParentIdPrefixHash;
+        record.UsbControllerAssociationHash = device.UsbControllerAssociationHash;
+        record.UsbHubPathHash = device.UsbHubPathHash;
+        record.UsbHubNameHash = device.UsbHubNameHash;
+        record.ContainerIdHash = device.ContainerIdHash;
+        record.BusReportedSpeed = device.BusReportedSpeed;
+        record.InferredSpeed = device.InferredSpeed;
+        record.MappingSource = record.HasStrongPortTopologyEvidence ? "manual-with-topology" : "manual-weak-topology";
+        record.CreatedUtc ??= confirmedAtUtc;
+        record.UpdatedUtc = confirmedAtUtc;
         record.LastManualLabelSessionId = CurrentSessionId;
         record.LabelConfirmedAtUtc = confirmedAtUtc;
         record.LabelConfirmedDeviceSeenCount = device.SeenCount;
@@ -308,6 +338,97 @@ public static class UsbPortLabelResolver
         return current.SeenCount <= Math.Max(1, record.LabelConfirmedDeviceSeenCount) + 1;
     }
 
+    private static UsbPortCandidateScore ScoreCandidate(
+        UsbKnownPortRecord record,
+        UsbDeviceInfo current,
+        string currentDeviceKey,
+        string currentTopologyKey)
+    {
+        var score = 0;
+        var reasons = new List<string>();
+        var sameDevice = SameDevice(record, currentDeviceKey);
+        if (sameDevice)
+        {
+            score += 10;
+            reasons.Add("same-device-identity");
+        }
+
+        if (!string.IsNullOrWhiteSpace(record.StablePortKey) &&
+            string.Equals(record.StablePortKey, current.StablePortKey, StringComparison.Ordinal))
+        {
+            score += record.HasStrongPortTopologyEvidence ? 20 : 8;
+            reasons.Add("stable-port-key-match");
+        }
+
+        var strongTopologyMatched = false;
+        if (record.HasStrongPortTopologyEvidence &&
+            HasStrongPortTopologyEvidence(current) &&
+            !string.IsNullOrWhiteSpace(record.PortTopologyKey) &&
+            string.Equals(record.PortTopologyKey, currentTopologyKey, StringComparison.Ordinal))
+        {
+            score += 85;
+            strongTopologyMatched = true;
+            reasons.Add("strong-topology-fingerprint-match");
+        }
+        else
+        {
+            AddFieldScore(record.LocationPathHash, current.LocationPathHash, 42, "location-path-match", ref score, reasons);
+            AddFieldScore(record.LocationPathsHash, current.LocationPathsHash, 42, "location-paths-match", ref score, reasons);
+            AddFieldScore(record.UsbControllerAssociationHash, current.UsbControllerAssociationHash, 28, "controller-association-match", ref score, reasons);
+            AddFieldScore(record.UsbHubPathHash, current.UsbHubPathHash, 26, "hub-path-match", ref score, reasons);
+            AddFieldScore(record.ParentDeviceIdHash, current.ParentDeviceIdHash, 22, "parent-device-match", ref score, reasons);
+            AddFieldScore(record.ParentIdPrefixHash, current.ParentIdPrefixHash, 18, "parent-prefix-match", ref score, reasons);
+            AddFieldScore(record.ControllerKey, current.ControllerKey, 12, "controller-match", ref score, reasons);
+            AddFieldScore(record.HubKey, current.HubKey, 10, "hub-match", ref score, reasons);
+            AddFieldScore(record.ContainerIdHash, current.ContainerIdHash, 8, "container-match", ref score, reasons);
+        }
+
+        if (!string.IsNullOrWhiteSpace(record.BusReportedSpeed) &&
+            string.Equals(record.BusReportedSpeed, current.BusReportedSpeed, StringComparison.OrdinalIgnoreCase))
+        {
+            score += 3;
+            reasons.Add("bus-speed-match");
+        }
+
+        if (record.InferredSpeed != UsbSpeedClassification.Unknown &&
+            record.InferredSpeed == current.InferredSpeed)
+        {
+            score += 3;
+            reasons.Add("speed-class-match");
+        }
+
+        if (!sameDevice && !strongTopologyMatched)
+        {
+            score = Math.Min(score, 20);
+        }
+
+        return new UsbPortCandidateScore(
+            record,
+            record.UserLabel?.Trim() ?? string.Empty,
+            score,
+            strongTopologyMatched,
+            reasons);
+    }
+
+    private static void AddFieldScore(
+        string? saved,
+        string? current,
+        int points,
+        string reason,
+        ref int score,
+        List<string> reasons)
+    {
+        if (string.IsNullOrWhiteSpace(saved) ||
+            string.IsNullOrWhiteSpace(current) ||
+            !string.Equals(saved, current, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        score += points;
+        reasons.Add(reason);
+    }
+
     private static bool WasDriveRemovalObserved(string? driveLetter)
     {
         var letter = NormalizeDriveLetter(driveLetter);
@@ -321,4 +442,11 @@ public static class UsbPortLabelResolver
             return RemovedDriveLetters.Contains(letter);
         }
     }
+
+    private readonly record struct UsbPortCandidateScore(
+        UsbKnownPortRecord Record,
+        string Label,
+        int Score,
+        bool StrongTopologyMatched,
+        IReadOnlyList<string> ReasonCodes);
 }

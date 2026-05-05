@@ -61,7 +61,8 @@ public enum UsbPortLabelValidity
     NeedsVerification = 3,
     PortChangedSuspected = 4,
     TopologyUnavailable = 5,
-    ManualLabelRecommended = 6
+    ManualLabelRecommended = 6,
+    Ambiguous = 7
 }
 
 /// <summary>Persisted USB speed sample for Intelligence, diagnostics, and machine profile.</summary>
@@ -127,6 +128,8 @@ public sealed class UsbIntelligenceBenchmarkResult
 
 public sealed class UsbKnownPortRecord
 {
+    public string MappingId { get; set; } = string.Empty;
+
     public string StablePortKey { get; set; } = string.Empty;
 
     public string? UserLabel { get; set; }
@@ -141,11 +144,43 @@ public sealed class UsbKnownPortRecord
 
     public int MappingConfidenceScore { get; set; }
 
+    public DateTimeOffset? CreatedUtc { get; set; }
+
+    public DateTimeOffset? UpdatedUtc { get; set; }
+
+    public string MappingSource { get; set; } = string.Empty;
+
     public string DeviceIdentityKey { get; set; } = string.Empty;
 
     public string PortTopologyKey { get; set; } = string.Empty;
 
     public bool HasStrongPortTopologyEvidence { get; set; }
+
+    public string LocationPathHash { get; set; } = string.Empty;
+
+    public string LocationPathsHash { get; set; } = string.Empty;
+
+    public string LocationInformationHash { get; set; } = string.Empty;
+
+    public string ControllerKey { get; set; } = string.Empty;
+
+    public string HubKey { get; set; } = string.Empty;
+
+    public string ParentDeviceIdHash { get; set; } = string.Empty;
+
+    public string ParentIdPrefixHash { get; set; } = string.Empty;
+
+    public string UsbControllerAssociationHash { get; set; } = string.Empty;
+
+    public string UsbHubPathHash { get; set; } = string.Empty;
+
+    public string UsbHubNameHash { get; set; } = string.Empty;
+
+    public string ContainerIdHash { get; set; } = string.Empty;
+
+    public string BusReportedSpeed { get; set; } = string.Empty;
+
+    public UsbSpeedClassification InferredSpeed { get; set; }
 
     public string? LastManualLabelSessionId { get; set; }
 
