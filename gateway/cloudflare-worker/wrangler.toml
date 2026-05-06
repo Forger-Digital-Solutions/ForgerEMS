@@ -1,0 +1,28 @@
+name = "forgerems-kyra-gateway"
+main = "src/index.ts"
+compatibility_date = "2026-05-06"
+
+# Keep the public workers.dev URL enabled for beta testing.
+workers_dev = true
+
+# Disable generated preview URLs to reduce extra public endpoints.
+preview_urls = false
+
+[vars]
+RELEASE_CHANNEL = "preview"
+DEFAULT_MODEL = "gpt-4o-mini"
+MAX_REQUEST_BYTES = "18000"
+
+# Store secrets with:
+# wrangler secret put BETA_GATEWAY_TOKEN
+# wrangler secret put OPENAI_API_KEY
+# wrangler secret put OPENROUTER_API_KEY
+# wrangler secret put GROQ_API_KEY
+#
+# Optional later, only if the Worker code supports them:
+# wrangler secret put GEMINI_API_KEY
+# wrangler secret put MISTRAL_API_KEY
+# wrangler secret put CEREBRAS_API_KEY
+# wrangler secret put GITHUB_MODELS_TOKEN
+#
+# Never put real provider keys or gateway beta tokens in this file.
