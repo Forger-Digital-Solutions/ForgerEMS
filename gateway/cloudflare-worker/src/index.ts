@@ -6,6 +6,11 @@ export interface Env {
   RELEASE_CHANNEL?: string;
   DEFAULT_MODEL?: string;
   MAX_REQUEST_BYTES?: string;
+  PROVIDER_TIMEOUT_MS?: string;
+  BETA_DAILY_TOKEN_LIMIT?: string;
+  BETA_DAILY_IP_LIMIT?: string;
+  RATE_LIMITS_ENABLED?: string;
+  RATE_LIMIT_KV?: KVNamespace;
 }
 
 type KyraGatewayRequest = {
@@ -69,6 +74,23 @@ export default {
       return json({ ok: false, errorCode: "Unauthorized", message: "Kyra beta gateway token is missing or invalid." }, 401);
     }
 
+    const rateLimit = await evaluateRateLimit(request, env, body.betaToken);
+    if (!rateLimit.ok) {
+      return json(
+        {
+          ok: false,
+          errorCode: "BetaLimitReached",
+          message: "Kyra beta API time is used up for today. Local/offline mode is still available.",
+          retryAfterSeconds: rateLimit.retryAfterSeconds,
+          rateLimit: {
+            remainingToday: 0,
+            resetUtc: rateLimit.resetUtc,
+          },
+        },
+        429,
+      );
+    }
+
     const prompt = sanitizeForProvider(body.userMessage ?? "");
     if (!prompt) {
       return json({ ok: false, errorCode: "EmptyPrompt", message: "Kyra needs a prompt to answer." }, 400);
@@ -99,7 +121,7 @@ export default {
     let lastError = "unknown";
     for (let i = 0; i < providers.length; i++) {
       const provider = providers[i];
-      const result = await callOpenAiCompatible(provider, body, userContent);
+      const result = await callOpenAiCompatible(provider, body, userContent, Number(env.PROVIDER_TIMEOUT_MS ?? "45000"));
       if (result.ok) {
         return json({
           ok: true,
@@ -128,26 +150,37 @@ async function callOpenAiCompatible(
   provider: { baseUrl: string; key: string; model: string },
   body: KyraGatewayRequest,
   userContent: string,
+  providerTimeoutMs: number,
 ): Promise<{ ok: true; message: string } | { ok: false; errorCode: string }> {
-  const response = await fetch(`${provider.baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "authorization": `Bearer ${provider.key}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model: provider.model,
-      messages: [
-        {
-          role: "system",
-          content: `You are Kyra, the ForgerEMS beta assistant. Be concise, useful, and do not ask for secrets. Personality: ${body.personality ?? "bubbly-tech"}.`,
-        },
-        { role: "user", content: userContent },
-      ],
-      max_tokens: Math.min(Math.max(body.maxTokens ?? 1000, 128), 2048),
-      temperature: Math.min(Math.max(body.temperature ?? 0.5, 0), 1),
-    }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort("provider-timeout"), clamp(providerTimeoutMs, 1500, 90000));
+  let response: Response;
+  try {
+    response = await fetch(`${provider.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "authorization": `Bearer ${provider.key}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: provider.model,
+        messages: [
+          {
+            role: "system",
+            content: `You are Kyra, the ForgerEMS beta assistant. Be concise, useful, and do not ask for secrets. Personality: ${body.personality ?? "bubbly-tech"}.`,
+          },
+          { role: "user", content: userContent },
+        ],
+        max_tokens: Math.min(Math.max(body.maxTokens ?? 1000, 128), 2048),
+        temperature: Math.min(Math.max(body.temperature ?? 0.5, 0), 1),
+      }),
+      signal: controller.signal,
+    });
+  } catch {
+    return { ok: false, errorCode: "ProviderTimeoutOrNetwork" };
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     return { ok: false, errorCode: `HTTP_${response.status}` };
@@ -169,4 +202,64 @@ function sanitizeForProvider(value: string): string {
     .replace(/\b(ghp|gho|github_pat)_[A-Za-z0-9_]{20,}\b/gi, "[redacted]")
     .replace(/[A-Za-z]:\\Users\\[^\s\r\n]+/g, "[private path redacted]")
     .slice(0, 16000);
+}
+
+function clamp(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) {
+    return min;
+  }
+
+  return Math.min(Math.max(value, min), max);
+}
+
+async function evaluateRateLimit(
+  request: Request,
+  env: Env,
+  betaToken: string | undefined,
+): Promise<{ ok: true } | { ok: false; retryAfterSeconds?: number; resetUtc?: string }> {
+  const enabled = String(env.RATE_LIMITS_ENABLED ?? "false").toLowerCase() === "true";
+  const kv = env.RATE_LIMIT_KV;
+  if (!enabled || !kv || !betaToken) {
+    return { ok: true };
+  }
+
+  const tokenLimit = Number(env.BETA_DAILY_TOKEN_LIMIT ?? "0");
+  const ipLimit = Number(env.BETA_DAILY_IP_LIMIT ?? "0");
+  if (tokenLimit <= 0 && ipLimit <= 0) {
+    return { ok: true };
+  }
+
+  const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+  const now = new Date();
+  const day = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`;
+  const resetUtc = `${day}T23:59:59Z`;
+  const tokenHash = await sha256Hex(betaToken);
+  const ipHash = await sha256Hex(ip);
+
+  const tokenKey = `rl:token:${day}:${tokenHash}`;
+  const ipKey = `rl:ip:${day}:${ipHash}`;
+  const ttl = Math.max(60, Math.floor((Date.parse(resetUtc) - now.getTime()) / 1000));
+
+  const tokenCount = tokenLimit > 0 ? await incrementDailyCounter(kv, tokenKey, ttl) : 0;
+  const ipCount = ipLimit > 0 ? await incrementDailyCounter(kv, ipKey, ttl) : 0;
+  if ((tokenLimit > 0 && tokenCount > tokenLimit) || (ipLimit > 0 && ipCount > ipLimit)) {
+    return { ok: false, retryAfterSeconds: ttl, resetUtc };
+  }
+
+  return { ok: true };
+}
+
+async function incrementDailyCounter(kv: KVNamespace, key: string, ttlSeconds: number): Promise<number> {
+  const currentRaw = await kv.get(key);
+  const current = Number(currentRaw ?? "0");
+  const next = Number.isFinite(current) && current > 0 ? current + 1 : 1;
+  await kv.put(key, String(next), { expirationTtl: ttlSeconds });
+  return next;
+}
+
+async function sha256Hex(input: string): Promise<string> {
+  const encoded = new TextEncoder().encode(input);
+  const digest = await crypto.subtle.digest("SHA-256", encoded);
+  const bytes = new Uint8Array(digest);
+  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 }

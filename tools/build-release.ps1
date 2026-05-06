@@ -255,6 +255,13 @@ SUPPORT PRIVACY
 - Send logs/screenshots only if comfortable.
 - Do not send product keys, API keys, tokens, passwords, private documents, or sensitive files.
 
+KYRA BETA GATEWAY
+- ForgerEMS v1.2.0 preview/public beta includes Kyra Beta Gateway support.
+- Cloud beta access uses FORGEREMS_KYRA_GATEWAY_URL + FORGEREMS_KYRA_GATEWAY_BETA_TOKEN when configured.
+- No direct AI provider API keys are included in this release.
+- Local/offline Kyra fallback remains available.
+- For operator verification run tools/show-forgerems-env-status.ps1 and tools/audit-config-and-secrets.ps1.
+
 VERIFY INTEGRITY
 Use CHECKSUMS.sha256 from the same release page. Full steps: GitHub repo -> docs/DOWNLOAD_TROUBLESHOOTING.md
 "@
@@ -389,6 +396,11 @@ ForgerDigitalSolutions@outlook.com
 
 Security notice:
 Never send API keys, passwords, serial numbers, private documents, or sensitive personal files.
+
+Kyra beta gateway:
+- Cloud beta access uses ForgerEMS Gateway when configured.
+- This release does not include direct provider API keys.
+- Local/offline fallback remains available.
 
 Deep Sensor Mode:
 - May be enabled by the installer or Settings.

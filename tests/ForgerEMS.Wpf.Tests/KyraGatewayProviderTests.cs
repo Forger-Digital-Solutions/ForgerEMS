@@ -87,6 +87,26 @@ public sealed class KyraGatewayProviderTests
     }
 
     [Fact]
+    public void PlaceholderGatewayTokenIsIgnored()
+    {
+        const string tokenEnv = "FORGEREMS_UT_GATEWAY_TOKEN_PLACEHOLDER";
+        var gateway = new KyraGatewayProvider();
+        var cfg = GatewayConfig(tokenEnv);
+
+        try
+        {
+            Environment.SetEnvironmentVariable(tokenEnv, "REPLACE_WITH_BETA_ACCESS_TOKEN", EnvironmentVariableTarget.Process);
+            var resolved = KyraProviderConfigResolver.ResolveProvider(gateway, cfg);
+            Assert.False(resolved.IsReady);
+            Assert.Equal(KyraProviderCredentialState.Placeholder, resolved.CredentialState);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(tokenEnv, null, EnvironmentVariableTarget.Process);
+        }
+    }
+
+    [Fact]
     public void GatewayTokenIsRedactedInStatus()
     {
         const string tokenEnv = "FORGEREMS_UT_GATEWAY_TOKEN_STATUS";
@@ -147,6 +167,75 @@ public sealed class KyraGatewayProviderTests
             Assert.Equal(KyraProviderFailureReason.RateLimited, result.FailureReason);
             Assert.Contains("used up", result.UserMessage, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("beta-token-limit", result.DiagnosticMessage, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(tokenEnv, null, EnvironmentVariableTarget.Process);
+        }
+    }
+
+    [Fact]
+    public async Task GatewayUnauthorizedResponseStaysSanitized()
+    {
+        const string tokenEnv = "FORGEREMS_UT_GATEWAY_TOKEN_AUTH";
+        var client = new KyraGatewayClient(new HttpClient(new JsonHandler(
+            HttpStatusCode.Unauthorized,
+            """
+            {
+              "ok": false,
+              "errorCode": "Unauthorized",
+              "message": "Kyra beta gateway token is missing or invalid."
+            }
+            """)));
+        var provider = new KyraGatewayProvider(client);
+        var cfg = GatewayConfig(tokenEnv);
+
+        try
+        {
+            Environment.SetEnvironmentVariable(tokenEnv, "beta-token-auth", EnvironmentVariableTarget.Process);
+            var result = await provider.GenerateAsync(
+                new CopilotProviderRequest
+                {
+                    Prompt = "hello",
+                    Settings = new CopilotSettings(),
+                    Context = new CopilotContext { UserQuestion = "hello", Intent = KyraIntent.GeneralTechQuestion },
+                    ProviderConfiguration = cfg
+                },
+                CancellationToken.None);
+
+            Assert.False(result.Succeeded);
+            Assert.Contains("missing or invalid", result.UserMessage, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("beta-token-auth", result.DiagnosticMessage, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(tokenEnv, null, EnvironmentVariableTarget.Process);
+        }
+    }
+
+    [Fact]
+    public async Task GatewayTimeoutFallsBackWithSafeMessage()
+    {
+        const string tokenEnv = "FORGEREMS_UT_GATEWAY_TOKEN_TIMEOUT";
+        var provider = new KyraGatewayProvider(new KyraGatewayClient(new HttpClient(new TimeoutHandler())));
+        var cfg = GatewayConfig(tokenEnv);
+
+        try
+        {
+            Environment.SetEnvironmentVariable(tokenEnv, "beta-token-timeout", EnvironmentVariableTarget.Process);
+            var result = await provider.GenerateAsync(
+                new CopilotProviderRequest
+                {
+                    Prompt = "hello",
+                    Settings = new CopilotSettings(),
+                    Context = new CopilotContext { UserQuestion = "hello", Intent = KyraIntent.GeneralTechQuestion },
+                    ProviderConfiguration = cfg
+                },
+                CancellationToken.None);
+
+            Assert.False(result.Succeeded);
+            Assert.Equal(KyraProviderFailureReason.Timeout, result.FailureReason);
+            Assert.Contains("timed out", result.UserMessage, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -262,6 +351,14 @@ public sealed class KyraGatewayProviderTests
                 Content = new StringContent(body, Encoding.UTF8, "application/json")
             };
             return Task.FromResult(response);
+        }
+    }
+
+    private sealed class TimeoutHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            throw new OperationCanceledException("simulated timeout");
         }
     }
 

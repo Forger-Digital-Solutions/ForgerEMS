@@ -662,6 +662,8 @@
                         <TextBlock FontFamily="Consolas" Text="CLOUDFLARE_ACCOUNT_ID" />
                         <TextBlock FontFamily="Consolas" Text="OPENAI_API_KEY" />
                         <TextBlock FontFamily="Consolas" Text="FORGEREMS_OPENAI_API_KEY" />
+                        <TextBlock FontFamily="Consolas" Text="FORGEREMS_KYRA_GATEWAY_URL" />
+                        <TextBlock FontFamily="Consolas" Text="FORGEREMS_KYRA_GATEWAY_BETA_TOKEN" />
                         <TextBlock FontFamily="Consolas" Text="FORGEREMS_CUSTOM_PROVIDER_API_KEY" />
                         <TextBlock FontFamily="Consolas" Text="ANTHROPIC_API_KEY" />
 

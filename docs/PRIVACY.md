@@ -52,6 +52,7 @@ Default support reports should be redacted where supported, but you should still
 - **Offline / local Kyra** uses built-in rules and optional **local reports** you already generated. **Beta testers are not asked to supply API keys in the app** for this path.  
 - **Optional online** providers are **developer/operator-managed** (environment or deployment configuration). They are **advanced** — not part of the default beta tester checklist.  
 - **ForgerEMS Gateway** beta access sends prompts to a ForgerEMS-managed HTTPS gateway using a revocable beta token. Provider API keys stay server-side and are not shipped in the desktop app. Usage limits may apply during beta.
+- Gateway logs and responses must stay sanitized. Never include beta token values, provider keys, product keys, private documents, or raw support-bundle content in requests, logs, or troubleshooting output.
 - When online paths are enabled and you allow context sharing, **sanitized** text may be sent per **Kyra Advanced** settings — not a dump of your entire disk.
 - **System Intelligence context** may be included in Kyra answers depending on provider/settings. Use offline/local mode when you do not want hardware summaries or report context sent to an online AI provider.
 - **API-first mode** may try configured providers before Local Kyra for normal chat, but missing keys, failures, timeouts, and privacy gates fall back to local/offline answers.
@@ -75,6 +76,8 @@ Full local logs may contain sensitive context. Before you share:
 ## Third-party AI or network endpoints
 
 If an **online** provider is enabled by an operator, prompts and optional context are handled under **that provider’s** terms and your network path. **Offline/local modes** remain available where implemented.
+
+Current beta gateway foundation includes token validation and request-size limits. Durable per-token/per-IP limits should be enabled before broad public beta.
 
 ---
 

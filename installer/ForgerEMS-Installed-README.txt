@@ -37,6 +37,9 @@ Beta safety notes:
 - Always confirm USB drive letter and size before Setup/Update/Ventoy actions.
 - Do not select the tiny EFI/VTOYEFI partition for toolkit staging.
 - Offline Local Kyra works without API keys.
+- Beta cloud Kyra can use FORGEREMS_KYRA_GATEWAY_URL + FORGEREMS_KYRA_GATEWAY_BETA_TOKEN only.
+- No direct provider API keys are included in this release bundle.
+- Gateway beta token is revocable/rotatable and is not a provider API key.
 - Free API providers are optional and may have limits or outages.
 - System context sharing is OFF by default.
 - API keys are session-only in this beta and should be entered in settings fields, not chat.

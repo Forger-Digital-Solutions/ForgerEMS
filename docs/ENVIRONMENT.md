@@ -151,6 +151,8 @@ Session API keys entered in Kyra Advanced are memory-only and override environme
 
 ForgerEMS Beta Gateway lets beta builds use real Kyra API time without shipping owner provider secrets. The desktop app sends prompts to `FORGEREMS_KYRA_GATEWAY_URL` with a revocable beta token. Provider API keys live only in the server-side gateway environment, and gateway usage limits may apply. Local/offline fallback remains available when the gateway is missing, rate-limited, unavailable, or disabled.
 
+Current beta gateway has token validation and request-size limits; durable per-token/per-IP rate limiting should be enabled before broad public beta.
+
 GitHub Models uses one `GITHUB_MODELS_TOKEN` for all configured model IDs. The `DEFAULT`, `FAST`, and `ALT` variables are model choices, not separate secrets. After changing Windows User environment variables, restart ForgerEMS or use the provider/env refresh path so Kyra sees the new values.
 
 ## External Network Access

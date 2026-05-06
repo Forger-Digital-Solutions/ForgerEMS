@@ -151,6 +151,9 @@ Users should review reports before sharing.
 - Keep real `.env`/secret files ignored.
 - Run `tools/audit-config-and-secrets.ps1` before publishing release assets.
 - Do not add raw provider keys to docs, tests, support messages, or screenshots.
+- Treat direct provider keys in `release/current` as release blockers.
+- Treat gateway beta tokens as revocable access tokens and keep them redacted in logs/docs/status output.
+- Verify beta setup uses gateway URL + gateway token only (no owner provider keys shipped to testers).
 
 ### Should fix before paid release
 

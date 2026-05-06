@@ -1,0 +1,12 @@
+{
+  "name": "forgerems-kyra-gateway-worker",
+  "private": true,
+  "version": "0.1.0",
+  "description": "ForgerEMS Kyra beta gateway Cloudflare Worker starter.",
+  "scripts": {
+    "deploy": "npx wrangler@latest deploy",
+    "check": "npx wrangler@latest check",
+    "tail": "npx wrangler@latest tail",
+    "secrets:list": "npx wrangler@latest secret list"
+  }
+}

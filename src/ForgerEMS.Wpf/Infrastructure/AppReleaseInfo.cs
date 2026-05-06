@@ -10,7 +10,7 @@ internal static class AppReleaseInfo
 
     /// <summary>Short footer / welcome subtitle (single line preferred).</summary>
     public const string ReleaseIdentifier =
-        "ForgerEMS v1.2.0 Public Preview \u2014 technician USB toolkit, System Intelligence, Kyra (offline-first)";
+        "ForgerEMS v1.2.0 Public Preview \u2014 technician USB toolkit, System Intelligence, Kyra (offline-first + beta gateway)";
 
     public const string PublicPreviewBannerLine =
         "ForgerEMS Public Preview \u2014 built for technicians, rebuilders, and power users.";

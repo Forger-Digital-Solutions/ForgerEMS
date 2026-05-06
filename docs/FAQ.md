@@ -46,6 +46,13 @@ When API-first mode is enabled, Kyra tries configured providers in priority orde
 
 Placeholder values such as `REPLACE_ME`, `YOUR_*`, `local-model-name`, or `example.local` are ignored and do not count as configured providers. For installed-app testing, use Windows **User** environment variables and check them with `tools/show-forgerems-env-status.ps1`.
 
+### Kyra Beta Gateway quick answers
+
+- Beta users only need gateway vars (`FORGEREMS_KYRA_GATEWAY_URL` and `FORGEREMS_KYRA_GATEWAY_BETA_TOKEN`) when cloud access is enabled.
+- Direct provider keys are optional BYOK and are not required for default beta.
+- Gateway beta tokens are revocable and can be rotated quickly.
+- If gateway limit is reached, Kyra can return a friendly beta-limit message and still fall back to local/offline.
+
 ---
 
 ## Why does Kyra say it does not have live data?

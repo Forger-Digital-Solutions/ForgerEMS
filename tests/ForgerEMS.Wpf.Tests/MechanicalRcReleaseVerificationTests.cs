@@ -56,6 +56,8 @@ public sealed class MechanicalRcReleaseVerificationTests
         Assert.Contains("DOWNLOAD THE ZIP", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("NOT THE EXE", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ForgerEMS-Beta-v", text, StringComparison.Ordinal);
+        Assert.Contains("Kyra Beta Gateway", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("No direct AI provider API keys are included", text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -216,6 +218,24 @@ public sealed class MechanicalRcReleaseVerificationTests
         Assert.Contains("DeepSensorModeConsentNotice", settingsXaml, StringComparison.Ordinal);
         Assert.Contains("MPL-2.0", policy, StringComparison.Ordinal);
         Assert.Contains("Modified MPL-covered files: none", policy, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CloudflareWorkerStarter_DocumentsNoSecretsAndRateLimitScaffold()
+    {
+        var workerReadme = File.ReadAllText(Path.Combine(RepoRoot, "gateway", "cloudflare-worker", "README.md"));
+        var workerGitIgnore = File.ReadAllText(Path.Combine(RepoRoot, "gateway", "cloudflare-worker", ".gitignore"));
+        var workerPackage = File.ReadAllText(Path.Combine(RepoRoot, "gateway", "cloudflare-worker", "package.json"));
+
+        Assert.Contains("Current beta gateway has token validation and request-size limits", workerReadme, StringComparison.Ordinal);
+        Assert.Contains("durable per-token/per-IP rate limiting should be enabled before broad public beta", workerReadme, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("npx wrangler@latest secret put BETA_GATEWAY_TOKEN", workerReadme, StringComparison.Ordinal);
+        Assert.Contains("401/403", workerReadme, StringComparison.Ordinal);
+        Assert.Contains("429", workerReadme, StringComparison.Ordinal);
+        Assert.Contains("500/503", workerReadme, StringComparison.Ordinal);
+        Assert.Contains("wrangler.toml", workerGitIgnore, StringComparison.Ordinal);
+        Assert.Contains(".dev.vars", workerGitIgnore, StringComparison.Ordinal);
+        Assert.Contains("wrangler@latest deploy", workerPackage, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string RunPowerShell(string command) =>

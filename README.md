@@ -27,11 +27,20 @@ This is **Public Preview / prerelease** software: behavior and packaging can cha
 | **System Intelligence** | Local scan summaries with Hardware X-Ray sensor coverage, health scoring, FlipValue, Best Use / Device Fit, and honest Unknown/NotExposed handling before repair or resale prep. |
 | **Diagnostics** | Unified health checklist, file/link safety helpers, and technician-oriented tools (including WSL-related helpers where applicable). |
 | **Toolkit Manager** | Manifest-driven health for what is on your USB; clear paths when something must be supplied manually. |
-| **Kyra** | In-app assistant: **offline local** answers first; optional online help only when your environment already enables it (operators). **Beta testers are not asked to supply API keys in the app.** |
+| **Kyra** | In-app assistant: offline local answers first, with optional **Kyra Beta Gateway** cloud access via gateway URL + revocable beta token. **Beta testers are not asked to supply direct provider API keys.** |
 
 More context: [docs/ABOUT_FORGEREMS.md](docs/ABOUT_FORGEREMS.md) · Behavior notes: [KYRA_BEHAVIOR_SPEC.md](KYRA_BEHAVIOR_SPEC.md) (repository root).
 
 **Hardware X-Ray / Deep Sensor Mode:** Deep Sensor Mode is optional and uses bundled local read-only hardware sensors when enabled, including LibreHardwareMonitorLib where packaged. No separate LibreHardwareMonitor download is required. ForgerEMS does not control fans, voltages, clocks, overclocking, undervolting, BIOS, or firmware. Unavailable readings are coverage limits, not failures.
+
+## Kyra Beta Gateway
+
+- Beta cloud access can use `FORGEREMS_KYRA_GATEWAY_URL` + `FORGEREMS_KYRA_GATEWAY_BETA_TOKEN`.
+- Desktop app never needs owner provider keys for this beta path.
+- Provider keys stay server-side only as Cloudflare Worker secrets.
+- System context sharing is off by default and only sends sanitized summary when enabled.
+- Local/offline fallback remains available if gateway is missing, rate-limited, or unavailable.
+- Do not paste provider keys or beta tokens in docs, screenshots, logs, support email, or Kyra chat.
 
 ---
 

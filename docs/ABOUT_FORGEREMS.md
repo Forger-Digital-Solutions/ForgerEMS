@@ -54,6 +54,8 @@ Repair and resale workflows still waste hours on **wrong USB ports**, **mystery 
 
 Kyra helps with **system diagnostics explanations**, **USB guidance**, **upgrade and release orientation** (pointing to official docs and GitHub Releases), and **toolkit/manifest questions** using **local context** first. It is **not** a general-purpose live web browser; live public data only appears where a **specific integrated tool** exists. It may **suggest** reputable external sources when that is the honest answer.
 
+Public beta can optionally use the ForgerEMS Kyra Gateway so testers can access limited cloud Kyra time without receiving owner provider API keys. Gateway access uses a revocable beta token and preserves local/offline fallback.
+
 ---
 
 ## Beta status

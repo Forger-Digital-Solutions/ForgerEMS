@@ -77,6 +77,21 @@ Set-FdsEnv "FORGEREMS_KYRA_GATEWAY_SHARE_SYSTEM_CONTEXT" "false"
 
 Do not put provider API keys in the desktop app, installer, release ZIP, registry defaults, docs, source code, or tester Windows User env vars.
 
+### Rotation / revoke
+
+- Rotate the worker secret `BETA_GATEWAY_TOKEN` and redeploy the worker.
+- Update beta user token distribution out-of-band.
+- Revoke compromised tokens by replacing/removing them server-side; old tokens should return 401.
+
+### Troubleshooting (redacted-only)
+
+- `401/403`: token mismatch/revoked or missing worker secret.
+- `429`: beta limit reached.
+- `413`: request too large.
+- `500/503`: provider secret missing or provider outage.
+
+Never print beta token values, provider key values, request auth headers, or raw secret-bearing logs.
+
 ---
 
 ## LM Studio (local OpenAI-compatible server)

@@ -6,11 +6,22 @@ compatibility_date = "2026-05-06"
 RELEASE_CHANNEL = "preview"
 DEFAULT_MODEL = "gpt-4o-mini"
 MAX_REQUEST_BYTES = "18000"
+PROVIDER_TIMEOUT_MS = "45000"
+RATE_LIMITS_ENABLED = "false"
+BETA_DAILY_TOKEN_LIMIT = "0"
+BETA_DAILY_IP_LIMIT = "0"
+# Bind this only when enabling durable rate limits:
+# [[kv_namespaces]]
+# binding = "RATE_LIMIT_KV"
+# id = "REPLACE_ME_KV_NAMESPACE_ID"
 
 # Store secrets with:
 # wrangler secret put BETA_GATEWAY_TOKEN
 # wrangler secret put OPENAI_API_KEY
 # wrangler secret put OPENROUTER_API_KEY
 # wrangler secret put GROQ_API_KEY
+#
+# Rotation: replace BETA_GATEWAY_TOKEN and redeploy.
+# Revoke: delete/rotate BETA_GATEWAY_TOKEN and disable affected beta users.
 #
 # Never put real provider keys or gateway beta tokens in this file.
