@@ -529,7 +529,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public IReadOnlyList<string> ToolkitCategoryFilterOptions { get; } = ["All categories", "Windows", "Linux", "Recovery", "Diagnostics", "USB Builders"];
 
-    public IReadOnlyList<string> CopilotModeOptions { get; } = ["Offline Local", "Free API Pool", "Hybrid", "Online/API", "BYOK", "Ask First"];
+    public IReadOnlyList<string> CopilotModeOptions { get; } = ["ForgerEMS Beta Gateway", "BYOK", "Local Only", "Offline Only", "Free API Pool", "Hybrid", "Online/API", "Ask First"];
 
     public AsyncRelayCommand RefreshAllCommand { get; }
 
@@ -7218,6 +7218,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         CopilotOnlineStatusText = mode switch
         {
+            CopilotMode.ForgerEmsBetaGateway => anyOnlineConfigured
+                ? "Kyra Mode: ForgerEMS Beta Gateway - gateway first, then BYOK/local/offline fallback."
+                : "ForgerEMS Gateway not configured. Local Kyra is active.",
             CopilotMode.FreeApiPool => anyOnlineConfigured
                 ? "Kyra Mode: Free API Pool - using configured free-tier providers with local fallback."
                 : "Online provider not configured. Local Kyra is active. (Free API Pool selected but no provider is configured yet.)",
@@ -7305,6 +7308,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         return mode switch
         {
+            "ForgerEMS Beta Gateway" => CopilotMode.ForgerEmsBetaGateway,
+            "Local Only" => CopilotMode.OfflineOnly,
+            "Offline Only" => CopilotMode.OfflineOnly,
             "Offline Local" => CopilotMode.OfflineOnly,
             "Free API Pool" => CopilotMode.FreeApiPool,
             "Hybrid" => CopilotMode.HybridAuto,
@@ -7322,6 +7328,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         return mode switch
         {
+            CopilotMode.ForgerEmsBetaGateway => "ForgerEMS Beta Gateway",
             CopilotMode.FreeApiPool => "Free API Pool",
             CopilotMode.BringYourOwnKey => "BYOK",
             CopilotMode.ForgerEmsCloudFuture => "Online/API",

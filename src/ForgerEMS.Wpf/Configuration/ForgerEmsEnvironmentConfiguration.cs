@@ -54,6 +54,32 @@ public static class ForgerEmsEnvironmentConfiguration
         return Math.Clamp(n, min, max);
     }
 
+    private static bool GetConfigBool(string name, bool defaultValue)
+    {
+        var v = VentoyToolkitSetup.Wpf.Services.KyraProviderConfigResolver.ResolveNamedValue(name, "");
+        if (string.IsNullOrWhiteSpace(v))
+        {
+            return defaultValue;
+        }
+
+        if (bool.TryParse(v, out var b))
+        {
+            return b;
+        }
+
+        return int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)
+            ? n != 0
+            : defaultValue;
+    }
+
+    private static int GetConfigInt(string name, int defaultValue, int min = int.MinValue, int max = int.MaxValue)
+    {
+        var v = VentoyToolkitSetup.Wpf.Services.KyraProviderConfigResolver.ResolveNamedValue(name, "");
+        return int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)
+            ? Math.Clamp(n, min, max)
+            : defaultValue;
+    }
+
     // Core
     public static string ForgerEmsEnv => GetString("FORGEREMS_ENV", "Production");
     public static string ReleaseChannel => GetString("FORGEREMS_RELEASE_CHANNEL", "preview");
@@ -79,7 +105,7 @@ public static class ForgerEmsEnvironmentConfiguration
     public static bool KyraApiFirst => GetBool("FORGEREMS_KYRA_API_FIRST", true);
     public static string KyraProviderPriority => GetString(
         "FORGEREMS_KYRA_PROVIDER_PRIORITY",
-        "openai-compatible,custom,openrouter,groq,gemini,anthropic,mistral,cerebras,github-models,cloudflare,lmstudio,ollama,offline");
+        "forgerems-gateway,openai-compatible,custom,openrouter,groq,gemini,anthropic,mistral,cerebras,github-models,cloudflare,lmstudio,ollama,offline");
     public static int KyraProviderTimeoutSeconds => GetInt("FORGEREMS_KYRA_PROVIDER_TIMEOUT_SECONDS", 60, 3, 120);
     public static bool KyraConsensusMode => GetBool("FORGEREMS_KYRA_CONSENSUS_MODE", false);
     public static string KyraMemoryMode => GetString("FORGEREMS_KYRA_MEMORY_MODE", "session");
@@ -87,6 +113,24 @@ public static class ForgerEmsEnvironmentConfiguration
     public static int KyraMaxContextTurns => GetInt("FORGEREMS_KYRA_MAX_CONTEXT_TURNS", 100, 1, 200);
     public static int KyraContextMaxChars => GetInt("FORGEREMS_KYRA_CONTEXT_MAX_CHARS", 12000, 1000, 50000);
     public static string KyraPersonality => GetString("FORGEREMS_KYRA_PERSONALITY", "bubbly-tech");
+
+    public static string KyraGatewayUrl =>
+        VentoyToolkitSetup.Wpf.Services.KyraProviderConfigResolver.ResolveNamedValue(
+            VentoyToolkitSetup.Wpf.Services.CopilotProviderEnvironmentVariableNames.KyraGatewayUrl,
+            "");
+
+    public static bool KyraGatewayBetaTokenPresent =>
+        VentoyToolkitSetup.Wpf.Services.KyraProviderConfigResolver.ResolveNamedCredential(
+            VentoyToolkitSetup.Wpf.Services.CopilotProviderEnvironmentVariableNames.KyraGatewayBetaToken) is not VentoyToolkitSetup.Wpf.Services.KyraProviderCredentialState.Missing and not VentoyToolkitSetup.Wpf.Services.KyraProviderCredentialState.Placeholder;
+
+    public static int KyraGatewayTimeoutSeconds => GetConfigInt("FORGEREMS_KYRA_GATEWAY_TIMEOUT_SECONDS", 60, 3, 120);
+
+    public static int KyraGatewayDailyRequestLimit => GetConfigInt("FORGEREMS_KYRA_GATEWAY_DAILY_REQUEST_LIMIT", 0, 0, 10000);
+
+    public static bool KyraGatewayShareSystemContext => GetConfigBool("FORGEREMS_KYRA_GATEWAY_SHARE_SYSTEM_CONTEXT", false);
+
+    public static bool KyraGatewayConfigured =>
+        !string.IsNullOrWhiteSpace(KyraGatewayUrl) && KyraGatewayBetaTokenPresent;
 
     public static string OpenAiBaseUrl => GetConfigString("FORGEREMS_OPENAI_BASE_URL", "");
     public static string OpenAiModel => GetConfigString("FORGEREMS_OPENAI_MODEL", "");
@@ -108,6 +152,24 @@ public static class ForgerEmsEnvironmentConfiguration
         VentoyToolkitSetup.Wpf.Services.KyraProviderConfigResolver.ResolveNamedCredential("FORGEREMS_GEMINI_API_KEY") is not VentoyToolkitSetup.Wpf.Services.KyraProviderCredentialState.Missing and not VentoyToolkitSetup.Wpf.Services.KyraProviderCredentialState.Placeholder ||
         VentoyToolkitSetup.Wpf.Services.KyraProviderConfigResolver.ResolveNamedCredential("GEMINI_API_KEY") is not VentoyToolkitSetup.Wpf.Services.KyraProviderCredentialState.Missing and not VentoyToolkitSetup.Wpf.Services.KyraProviderCredentialState.Placeholder;
     public static string GeminiModel => GetConfigString("FORGEREMS_GEMINI_MODEL", "");
+
+    public static string GitHubModelsDefaultModel =>
+        VentoyToolkitSetup.Wpf.Services.KyraProviderConfigResolver.ResolveNamedValue(
+            VentoyToolkitSetup.Wpf.Services.CopilotProviderEnvironmentVariableNames.GitHubModelsDefaultModel,
+            "");
+
+    public static string GitHubModelsFastModel =>
+        VentoyToolkitSetup.Wpf.Services.KyraProviderConfigResolver.ResolveNamedValue(
+            VentoyToolkitSetup.Wpf.Services.CopilotProviderEnvironmentVariableNames.GitHubModelsFastModel,
+            "");
+
+    public static string GitHubModelsAltModel =>
+        VentoyToolkitSetup.Wpf.Services.KyraProviderConfigResolver.ResolveNamedValue(
+            VentoyToolkitSetup.Wpf.Services.CopilotProviderEnvironmentVariableNames.GitHubModelsAltModel,
+            "");
+
+    public static string GitHubModelsPrimaryModel =>
+        VentoyToolkitSetup.Wpf.Services.GitHubModelsProviderConfig.FromEnvironment().PrimaryModel;
 
     public static string CustomProviderBaseUrl => GetConfigString("FORGEREMS_CUSTOM_PROVIDER_BASE_URL", "");
     public static string CustomProviderModel => GetConfigString("FORGEREMS_CUSTOM_PROVIDER_MODEL", "");

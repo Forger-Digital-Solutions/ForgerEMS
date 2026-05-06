@@ -12,8 +12,11 @@ function Test-PlaceholderValue {
     param([AllowNull()][string]$Value)
     if ([string]::IsNullOrWhiteSpace($Value)) { return $false }
     $v = $Value.Trim()
-    if ($v -match '^(?i:REPLACE_ME|REPLACE_MODEL_NAME|local-model-name|model-name|changeme|TODO|sk-REPLACE_ME)$') { return $true }
+    if ($v -match '^(?i:REPLACE_ME|REPLACE_WITH_BETA_ACCESS_TOKEN|REPLACE_MODEL_NAME|local-model-name|model-name|changeme|TODO|sk-REPLACE_ME)$') { return $true }
+    if ($v -like "REPLACE_*") { return $true }
     if ($v -like "YOUR_*") { return $true }
+    if ($v -like "PASTE_*") { return $true }
+    if ($v -match '(?i)REPLACE_ME') { return $true }
     if ($v -match '(?i)example\.local') { return $true }
     return $false
 }
@@ -83,6 +86,11 @@ $forgerNames = @(
     "FORGEREMS_KYRA_API_FIRST",
     "FORGEREMS_KYRA_PROVIDER",
     "FORGEREMS_KYRA_PROVIDER_PRIORITY",
+    "FORGEREMS_KYRA_GATEWAY_URL",
+    "FORGEREMS_KYRA_GATEWAY_BETA_TOKEN",
+    "FORGEREMS_KYRA_GATEWAY_TIMEOUT_SECONDS",
+    "FORGEREMS_KYRA_GATEWAY_DAILY_REQUEST_LIMIT",
+    "FORGEREMS_KYRA_GATEWAY_SHARE_SYSTEM_CONTEXT",
     "FORGEREMS_KYRA_CONSENSUS_MODE",
     "FORGEREMS_KYRA_SHARE_SYSTEM_CONTEXT",
     "FORGEREMS_KYRA_MEMORY_MODE",
@@ -145,6 +153,13 @@ foreach ($name in $generic) {
 }
 
 Write-Section "PROVIDER READINESS"
+$gatewayUrl = Test-ValidBaseUrl (Get-UserEnvValue "FORGEREMS_KYRA_GATEWAY_URL")
+$gatewayToken = Get-KeyReadyState @("FORGEREMS_KYRA_GATEWAY_BETA_TOKEN")
+if ($gatewayUrl -ne "Ready") { "ForgerEMS Gateway: $gatewayUrl" }
+elseif ($gatewayToken -eq "Ready") { "ForgerEMS Gateway: Ready" }
+elseif ($gatewayToken -eq "Placeholder") { "ForgerEMS Gateway: Placeholder token" }
+else { "ForgerEMS Gateway: Missing beta token" }
+
 $openAi = Get-KeyReadyState @("FORGEREMS_OPENAI_API_KEY", "OPENAI_API_KEY")
 "OpenAI-compatible: $openAi"
 

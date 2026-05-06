@@ -60,13 +60,21 @@ public static class KyraProviderConfigResolver
 
         var v = value.Trim();
         return v.Equals("REPLACE_ME", StringComparison.OrdinalIgnoreCase) ||
+               v.Equals("REPLACE_WITH_BETA_ACCESS_TOKEN", StringComparison.OrdinalIgnoreCase) ||
                v.Equals("REPLACE_MODEL_NAME", StringComparison.OrdinalIgnoreCase) ||
                v.Equals("local-model-name", StringComparison.OrdinalIgnoreCase) ||
                v.Equals("model-name", StringComparison.OrdinalIgnoreCase) ||
                v.Equals("changeme", StringComparison.OrdinalIgnoreCase) ||
                v.Equals("TODO", StringComparison.OrdinalIgnoreCase) ||
                v.Equals("sk-REPLACE_ME", StringComparison.OrdinalIgnoreCase) ||
+               v.StartsWith("REPLACE_", StringComparison.OrdinalIgnoreCase) ||
                v.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase) ||
+               v.StartsWith("PASTE_", StringComparison.OrdinalIgnoreCase) ||
+               v.Equals("sample", StringComparison.OrdinalIgnoreCase) ||
+               v.Equals("example", StringComparison.OrdinalIgnoreCase) ||
+               v.StartsWith("sample-", StringComparison.OrdinalIgnoreCase) ||
+               v.StartsWith("example-", StringComparison.OrdinalIgnoreCase) ||
+               v.Contains("REPLACE_ME", StringComparison.OrdinalIgnoreCase) ||
                v.Contains("example.local", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -93,6 +101,10 @@ public static class KyraProviderConfigResolver
         if (endpointState == KyraProviderEndpointState.EmbeddedCredentials)
         {
             reason = "base URL contains embedded credentials";
+        }
+        else if (endpointState == KyraProviderEndpointState.Missing)
+        {
+            reason = "base URL is missing";
         }
         else if (endpointState == KyraProviderEndpointState.InvalidUrl)
         {
@@ -196,6 +208,34 @@ public static class KyraProviderConfigResolver
         return string.Empty;
     }
 
+    public static string ResolveNamedValue(string name, string defaultValue = "")
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return defaultValue;
+        }
+
+        var user = SafeGet(name, EnvironmentVariableTarget.User);
+        if (!IsMissingOrPlaceholder(user))
+        {
+            return user!.Trim();
+        }
+
+        var process = SafeGet(name, EnvironmentVariableTarget.Process);
+        if (!IsMissingOrPlaceholder(process))
+        {
+            return process!.Trim();
+        }
+
+        var machine = SafeGet(name, EnvironmentVariableTarget.Machine);
+        if (!IsMissingOrPlaceholder(machine))
+        {
+            return machine!.Trim();
+        }
+
+        return IsMissingOrPlaceholder(defaultValue) ? string.Empty : defaultValue.Trim();
+    }
+
     public static KyraProviderCredentialState ResolveNamedCredential(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -294,6 +334,7 @@ public static class KyraProviderConfigResolver
         foreach (var fallback in providerId.ToLowerInvariant() switch
         {
             "openai-compatible" => ["FORGEREMS_OPENAI_API_KEY", "OPENAI_API_KEY"],
+            "forgerems-gateway" => SingleDefaultFallback(configuredName, CopilotProviderEnvironmentVariableNames.KyraGatewayBetaToken),
             "custom-openai-compatible" => CustomCredentialFallbacks(baseUrl),
             "gemini-free" => ["FORGEREMS_GEMINI_API_KEY", "GEMINI_API_KEY"],
             "anthropic-claude" => ["FORGEREMS_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY"],

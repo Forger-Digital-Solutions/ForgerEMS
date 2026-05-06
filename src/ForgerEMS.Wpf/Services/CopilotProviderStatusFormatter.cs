@@ -19,17 +19,20 @@ public static class CopilotProviderStatusFormatter
             : providerConfig.ApiKeyEnvironmentVariable;
 
         var resolution = KyraProviderConfigResolver.ResolveCredentialState(provider.Id, envVar, providerConfig.BaseUrl);
+        var label = provider.Id.Equals(KyraGatewayProvider.ProviderId, StringComparison.OrdinalIgnoreCase)
+            ? "Gateway token source"
+            : "Key source";
         if (resolution == KyraProviderCredentialState.Missing)
         {
-            return "Key source: not configured";
+            return $"{label}: not configured";
         }
 
         if (resolution == KyraProviderCredentialState.Placeholder)
         {
-            return "Key source: placeholder ignored";
+            return $"{label}: placeholder ignored";
         }
 
-        return $"Key source — {DescribeCredentialState(resolution)}";
+        return $"{label} — {DescribeCredentialState(resolution)}";
     }
 
     public static string BuildStatusLabel(ICopilotProvider provider, CopilotProviderConfiguration providerConfig)
@@ -79,6 +82,36 @@ public static class CopilotProviderStatusFormatter
             }
 
             return $"Ready — API key via {DescribeCredentialState(keyResolution)}; account ID via {DescribeCredentialState(account)}.";
+        }
+
+        if (provider.Id.Equals("github-models", StringComparison.OrdinalIgnoreCase))
+        {
+            var token = KyraProviderConfigResolver.ResolveCredentialState(provider.Id, providerConfig.ApiKeyEnvironmentVariable, providerConfig.BaseUrl);
+            var models = GitHubModelsProviderConfig.FromEnvironment();
+            var tokenText = token is KyraProviderCredentialState.Missing or KyraProviderCredentialState.Placeholder
+                ? token == KyraProviderCredentialState.Placeholder ? "placeholder ignored" : "missing"
+                : "configured";
+
+            return $"GitHub Models — Token: {tokenText}; Default model: {SlotState(models.DefaultModel)}; Fast model: {SlotState(models.FastModel)}; Alt model: {SlotState(models.AltModel)}; Active routing: enabled.";
+        }
+
+        if (provider.Id.Equals(KyraGatewayProvider.ProviderId, StringComparison.OrdinalIgnoreCase))
+        {
+            var config = KyraGatewayProviderConfig.FromProviderConfiguration(providerConfig);
+            var tokenText = config.TokenState switch
+            {
+                KyraProviderCredentialState.Missing => "MISSING",
+                KyraProviderCredentialState.Placeholder => "PLACEHOLDER",
+                _ => "SET"
+            };
+            var host = string.IsNullOrWhiteSpace(config.GatewayHost) ? "not set" : config.GatewayHost;
+            var context = config.ShareSystemContext ? "on" : "off";
+            if (config.UrlState != KyraProviderEndpointState.Ready)
+            {
+                return $"ForgerEMS Gateway — URL: {DescribeUrlState(config.UrlState)}; Beta token: {tokenText}; Context sharing: {context}; Active routing: enabled.";
+            }
+
+            return $"ForgerEMS Gateway — Host: {host}; Beta token: {tokenText}; Context sharing: {context}; Active routing: enabled.";
         }
 
         if (IsPlaceholderProvider(provider))
@@ -136,6 +169,20 @@ public static class CopilotProviderStatusFormatter
             KyraProviderCredentialState.Present => "environment",
             KyraProviderCredentialState.InvalidFormatMaybe => "present (format may be invalid)",
             _ => "not configured"
+        };
+
+    private static string SlotState(string value) =>
+        KyraProviderConfigResolver.IsMissingOrPlaceholder(value) ? "missing" : "configured";
+
+    private static string DescribeUrlState(KyraProviderEndpointState state) =>
+        state switch
+        {
+            KyraProviderEndpointState.Missing => "MISSING",
+            KyraProviderEndpointState.Placeholder => "PLACEHOLDER",
+            KyraProviderEndpointState.InvalidUrl => "INVALID",
+            KyraProviderEndpointState.EmbeddedCredentials => "INVALID",
+            KyraProviderEndpointState.Ready => "ready",
+            _ => "not set"
         };
 
     private static string DescribeEnvTier(KyraCredentialSource source)

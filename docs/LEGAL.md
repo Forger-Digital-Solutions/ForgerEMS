@@ -19,7 +19,7 @@ ForgerEMS **does not** implement a background “phone home” telemetry product
 - The app **does not** harvest or upload **API keys** or **passwords** you might use elsewhere on your PC.  
 - **Session-only** credentials used inside the app for optional online Kyra paths are described in [PRIVACY.md](PRIVACY.md) and operator documentation; they are **not** written to ordinary settings files as a default design goal for those paths.
 
-**Expected network use (not hidden “analytics”):** HTTPS calls to **GitHub** when you use **in-app update checks**, and calls to **third-party AI endpoints** only when an operator has enabled those Kyra providers. See [UPDATE_SYSTEM.md](UPDATE_SYSTEM.md) and [KYRA_PROVIDER_ENVIRONMENT_SETUP.md](KYRA_PROVIDER_ENVIRONMENT_SETUP.md).
+**Expected network use (not hidden “analytics”):** HTTPS calls to **GitHub** when you use **in-app update checks**, calls to the **ForgerEMS Gateway** when beta Gateway mode is configured, and calls to **third-party AI endpoints** only when an operator has enabled those Kyra providers. See [UPDATE_SYSTEM.md](UPDATE_SYSTEM.md) and [KYRA_PROVIDER_ENVIRONMENT_SETUP.md](KYRA_PROVIDER_ENVIRONMENT_SETUP.md).
 
 Normal workflows store **logs and reports on your machine** under `%LOCALAPPDATA%\ForgerEMS\`. **You** choose what to email for support.
 
@@ -74,7 +74,7 @@ Hardware, diagnostics, Hardware X-Ray sensor coverage, and resale-oriented summa
 
 ## Optional online providers
 
-Kyra can use offline/local answers by default. If an operator enables online AI/API providers, prompts and optional sanitized context may be sent to the configured provider under that provider's terms. Do not paste API keys, tokens, passwords, product keys, private documents, or sensitive customer data into Kyra or support messages.
+Kyra can use offline/local answers by default. If an operator enables ForgerEMS Gateway or online AI/API providers, prompts and optional sanitized context may be sent to the configured gateway/provider under that service's terms. Provider API keys must not be embedded in the desktop app, installer, release ZIP, appsettings, `.env.example`, docs, source code, or registry defaults. Do not paste API keys, tokens, passwords, product keys, private documents, or sensitive customer data into Kyra or support messages.
 
 ---
 

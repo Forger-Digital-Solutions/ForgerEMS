@@ -1,0 +1,16 @@
+name = "forgerems-kyra-gateway"
+main = "src/index.ts"
+compatibility_date = "2026-05-06"
+
+[vars]
+RELEASE_CHANNEL = "preview"
+DEFAULT_MODEL = "gpt-4o-mini"
+MAX_REQUEST_BYTES = "18000"
+
+# Store secrets with:
+# wrangler secret put BETA_GATEWAY_TOKEN
+# wrangler secret put OPENAI_API_KEY
+# wrangler secret put OPENROUTER_API_KEY
+# wrangler secret put GROQ_API_KEY
+#
+# Never put real provider keys or gateway beta tokens in this file.

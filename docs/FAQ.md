@@ -40,9 +40,9 @@ It is the **supported entry point** after you extract the release ZIP. It walks 
 
 **No — not for normal beta use.** Kyra works **offline** with built-in rules and optional **local** reports you already generated (for example System Intelligence). The app **does not prompt beta testers to paste API keys** for basic help.
 
-Optional **online** models only appear when an **operator** has already configured the machine or deployment (advanced). Operators: [KYRA_PROVIDER_ENVIRONMENT_SETUP.md](KYRA_PROVIDER_ENVIRONMENT_SETUP.md).
+Optional **online** models only appear when an **operator** has already configured the machine or deployment (advanced). Beta builds may use **ForgerEMS Gateway** so testers get limited Kyra API time without receiving owner provider API keys. Operators: [KYRA_PROVIDER_ENVIRONMENT_SETUP.md](KYRA_PROVIDER_ENVIRONMENT_SETUP.md).
 
-When API-first mode is enabled, Kyra tries configured providers in priority order and skips missing keys, disabled providers, failed calls, and timeouts. Local/offline Kyra remains the fallback.
+When API-first mode is enabled, Kyra tries configured providers in priority order. For beta Gateway mode, it tries `forgerems-gateway` first, then BYOK/local/offline fallback if configured. Missing keys, placeholders, disabled providers, failed calls, rate limits, and timeouts are skipped or handled safely.
 
 Placeholder values such as `REPLACE_ME`, `YOUR_*`, `local-model-name`, or `example.local` are ignored and do not count as configured providers. For installed-app testing, use Windows **User** environment variables and check them with `tools/show-forgerems-env-status.ps1`.
 

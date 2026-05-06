@@ -103,6 +103,7 @@ public static class KyraCopilotResponseBuilder
             CopilotProviderType.CloudflareWorkersAi => KyraResponseSource.CloudflareWorkersAi,
             CopilotProviderType.OpenAICompatible or CopilotProviderType.CustomOpenAICompatible => KyraResponseSource.OpenAi,
             CopilotProviderType.AnthropicClaude => KyraResponseSource.Anthropic,
+            CopilotProviderType.ForgerEmsGateway => KyraResponseSource.ForgerEmsGateway,
             CopilotProviderType.LmStudioLocal => KyraResponseSource.LmStudio,
             CopilotProviderType.OllamaLocal => KyraResponseSource.Ollama,
             _ => KyraResponseSource.LocalKyra

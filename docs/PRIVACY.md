@@ -17,7 +17,7 @@ Under normal, **offline-first** use:
 
 **In-app update checks** query **public GitHub Releases** metadata over HTTPS when you use Settings or scheduled checks — that is GitHub’s API, not a private Forger “telemetry” endpoint. See [UPDATE_SYSTEM.md](UPDATE_SYSTEM.md).
 
-**Optional online Kyra** may contact **third-party** AI endpoints when enabled by an operator; that traffic is governed by those providers’ policies, not by “hidden” ForgerEMS analytics.
+**Optional online Kyra** may contact the **ForgerEMS Gateway** or third-party AI endpoints when enabled by an operator; that traffic is governed by the gateway/provider configuration and is not hidden ForgerEMS analytics.
 
 ---
 
@@ -51,6 +51,7 @@ Default support reports should be redacted where supported, but you should still
 
 - **Offline / local Kyra** uses built-in rules and optional **local reports** you already generated. **Beta testers are not asked to supply API keys in the app** for this path.  
 - **Optional online** providers are **developer/operator-managed** (environment or deployment configuration). They are **advanced** — not part of the default beta tester checklist.  
+- **ForgerEMS Gateway** beta access sends prompts to a ForgerEMS-managed HTTPS gateway using a revocable beta token. Provider API keys stay server-side and are not shipped in the desktop app. Usage limits may apply during beta.
 - When online paths are enabled and you allow context sharing, **sanitized** text may be sent per **Kyra Advanced** settings — not a dump of your entire disk.
 - **System Intelligence context** may be included in Kyra answers depending on provider/settings. Use offline/local mode when you do not want hardware summaries or report context sent to an online AI provider.
 - **API-first mode** may try configured providers before Local Kyra for normal chat, but missing keys, failures, timeouts, and privacy gates fall back to local/offline answers.

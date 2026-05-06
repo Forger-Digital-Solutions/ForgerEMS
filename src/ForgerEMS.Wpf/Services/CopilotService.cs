@@ -32,6 +32,7 @@ public enum KyraProviderConfigurationMode
 public enum CopilotMode
 {
     OfflineOnly,
+    ForgerEmsBetaGateway,
     OnlineAssisted,
     HybridAuto,
     OnlineWhenAvailable,
@@ -62,12 +63,14 @@ public enum CopilotProviderType
     GitHubModels,
     CloudflareWorkersAi,
     HuggingFaceInference,
+    ForgerEmsGateway,
     ForgerEmsCloud
 }
 
 public enum KyraProviderMode
 {
     OfflineLocal,
+    ForgerEMSBetaGateway,
     FreeApiPool,
     Hybrid,
     OnlineApi,
@@ -88,6 +91,7 @@ public enum KyraProviderKind
     HuggingFace,
     OpenAI,
     Anthropic,
+    ForgerEMSGateway,
     ForgerEMSCloud
 }
 
@@ -263,7 +267,7 @@ public sealed class CopilotSettings
     public bool ApiFirstRouting { get; set; } = true;
 
     public string ProviderPriorityCsv { get; set; } =
-        "openai-compatible,custom,openrouter,groq,gemini,anthropic,mistral,cerebras,github-models,cloudflare,lmstudio,ollama,offline";
+        "forgerems-gateway,openai-compatible,custom,openrouter,groq,gemini,anthropic,mistral,cerebras,github-models,cloudflare,lmstudio,ollama,offline";
 
     /// <summary>Future testing hook; off by default to avoid surprise token burn.</summary>
     public bool ConsensusMode { get; set; }
@@ -397,6 +401,8 @@ public sealed class CopilotContext
 
 public sealed class CopilotProviderRequest
 {
+    public string AppVersion { get; init; } = string.Empty;
+
     public string Prompt { get; init; } = string.Empty;
 
     public CopilotContext Context { get; init; } = new();
@@ -433,6 +439,7 @@ public enum KyraResponseSource
     CloudflareWorkersAi,
     OpenAi,
     Anthropic,
+    ForgerEmsGateway,
     LmStudio,
     Ollama
 }
@@ -904,6 +911,7 @@ public static class KyraProviderPriority
 {
     public static readonly string[] DefaultOrder =
     [
+        "forgerems-gateway",
         "openai-compatible",
         "custom-openai-compatible",
         "openrouter-free",
@@ -2402,12 +2410,13 @@ public sealed class CopilotProviderRegistry : ICopilotProviderRegistry
         Providers =
         [
             new LocalOfflineCopilotProvider(),
+            new KyraGatewayProvider(),
             new GeminiCopilotProvider(),
             new OpenAiStyleCopilotProvider("groq-free", "Groq (Free Tier)", CopilotProviderType.GroqApi, "Free API pool", false, "https://api.groq.com/openai/v1", "llama-3.1-8b-instant", "GROQ_API_KEY", "Groq free-tier via OpenAI-compatible API."),
             new OpenAiStyleCopilotProvider("cerebras-free", "Cerebras (Free Tier)", CopilotProviderType.CerebrasApi, "Free API pool", false, "https://api.cerebras.ai/v1", "llama3.1-8b", "CEREBRAS_API_KEY", "Cerebras free inference via OpenAI-compatible API."),
             new OpenAiStyleCopilotProvider("openrouter-free", "OpenRouter Free", CopilotProviderType.OpenRouterFree, "Free API pool", false, "https://openrouter.ai/api/v1", "openrouter/auto", "OPENROUTER_API_KEY", "OpenRouter free model routing."),
             new OpenAiStyleCopilotProvider("mistral-free", "Mistral (Eval/BYOK)", CopilotProviderType.MistralApi, "Free API pool", false, "https://api.mistral.ai/v1", "mistral-small-latest", "MISTRAL_API_KEY", "Mistral API provider (free/eval depends on account plan)."),
-            new OpenAiStyleCopilotProvider("github-models", "GitHub Models", CopilotProviderType.GitHubModels, "Free API pool", false, "https://models.inference.ai.azure.com", "gpt-4o-mini", "GITHUB_MODELS_TOKEN", "GitHub Models endpoint provider."),
+            new OpenAiStyleCopilotProvider("github-models", "GitHub Models", CopilotProviderType.GitHubModels, "Free API pool", false, "https://models.inference.ai.azure.com", ForgerEmsEnvironmentConfiguration.GitHubModelsPrimaryModel, CopilotProviderEnvironmentVariableNames.GitHubModels, "GitHub Models endpoint provider with routed model slots. Optional model env vars: FORGEREMS_GITHUB_MODELS_DEFAULT_MODEL, FORGEREMS_GITHUB_MODELS_FAST_MODEL, FORGEREMS_GITHUB_MODELS_ALT_MODEL."),
             new OpenAiStyleCopilotProvider("cloudflare-workers-ai", "Cloudflare Workers AI", CopilotProviderType.CloudflareWorkersAi, "Free API pool", false, "https://api.cloudflare.com/client/v4/accounts", "@cf/meta/llama-3.1-8b-instruct", "CLOUDFLARE_API_KEY", "Cloudflare Workers AI (endpoint shape may require account-specific route)."),
             new StubCopilotProvider(CopilotProviderType.HuggingFaceInference, "huggingface-inference", "Hugging Face Inference Providers", "Free API pool", "Placeholder provider: endpoint/model compatibility varies by provider route."),
             new OpenAICompatibleCopilotProvider(),
@@ -2483,7 +2492,7 @@ public sealed class CopilotService : ICopilotService
         var settings = request.Settings ?? new CopilotSettings();
         _lastSettingsForMemory = settings;
         EnsureProviderDefaults(settings);
-        UseOnlineAI = settings.Mode is CopilotMode.OnlineAssisted or CopilotMode.HybridAuto or CopilotMode.OnlineWhenAvailable;
+        UseOnlineAI = settings.Mode is CopilotMode.ForgerEmsBetaGateway or CopilotMode.OnlineAssisted or CopilotMode.HybridAuto or CopilotMode.OnlineWhenAvailable;
         return await _kyraOrchestrator.GenerateReplyAsync(request, cancellationToken).ConfigureAwait(false);
     }
 
@@ -2733,6 +2742,7 @@ public sealed class CopilotService : ICopilotService
 
         var providerRequest = new CopilotProviderRequest
         {
+            AppVersion = request.AppVersion,
             Prompt = request.Prompt,
             Context = providerContext,
             Settings = settings,
@@ -3442,7 +3452,14 @@ public sealed class CopilotSettingsStore : ICopilotSettingsStore
         settings.PersonalityProfile = string.IsNullOrWhiteSpace(settings.PersonalityProfile)
             ? ForgerEmsEnvironmentConfiguration.KyraPersonality
             : settings.PersonalityProfile;
-        if (ForgerEmsEnvironmentConfiguration.KyraOnlineEnabled && settings.Mode == CopilotMode.OfflineOnly)
+        if (ForgerEmsEnvironmentConfiguration.KyraOnlineEnabled &&
+            ForgerEmsEnvironmentConfiguration.KyraGatewayConfigured &&
+            ForgerEmsEnvironmentConfiguration.KyraProvider.Equals("forgerems-gateway", StringComparison.OrdinalIgnoreCase) &&
+            settings.Mode == CopilotMode.OfflineOnly)
+        {
+            settings.Mode = CopilotMode.ForgerEmsBetaGateway;
+        }
+        else if (ForgerEmsEnvironmentConfiguration.KyraOnlineEnabled && settings.Mode == CopilotMode.OfflineOnly)
         {
             settings.Mode = CopilotMode.HybridAuto;
         }
@@ -3648,6 +3665,11 @@ public sealed class OpenAiStyleCopilotProvider : ICopilotProvider
             };
         }
 
+        if (Id.Equals("github-models", StringComparison.OrdinalIgnoreCase))
+        {
+            return await GenerateGitHubModelsAsync(request, apiKey, cancellationToken).ConfigureAwait(false);
+        }
+
         var baseUrl = request.ProviderConfiguration.BaseUrl.TrimEnd('/');
         var payload = new
         {
@@ -3692,6 +3714,123 @@ public sealed class OpenAiStyleCopilotProvider : ICopilotProvider
                 UsedOnlineData = true,
                 UserMessage = text,
                 DiagnosticMessage = $"{DisplayName} response."
+            };
+    }
+
+    private async Task<CopilotProviderResult> GenerateGitHubModelsAsync(
+        CopilotProviderRequest request,
+        string apiKey,
+        CancellationToken cancellationToken)
+    {
+        var modelConfig = GitHubModelsProviderConfig.FromEnvironment();
+        var selectedRoute = GitHubModelsRouteSelector.SelectRoute(request);
+        var attempts = GitHubModelsRouteSelector.BuildAttemptPlan(modelConfig, selectedRoute);
+        if (attempts.Count == 0)
+        {
+            return new CopilotProviderResult
+            {
+                Succeeded = false,
+                FailureReason = KyraProviderFailureReason.NotConfigured,
+                UserMessage = "GitHub Models has no usable model configured. Offline fallback is available.",
+                DiagnosticMessage = GitHubModelsRouteSelector.BuildSafeDiagnostic(GitHubModelRoute.Fallback, GitHubModelsProviderConfig.BuiltInFallbackModel, true, modelConfig.ConfiguredModelsCount)
+            };
+        }
+
+        CopilotProviderResult? lastResult = null;
+        GitHubModelChoice? lastChoice = null;
+        var lastIndex = 0;
+        for (var i = 0; i < attempts.Count; i++)
+        {
+            var choice = attempts[i];
+            var result = await SendGitHubModelsAttemptAsync(request, apiKey, choice.ModelId, cancellationToken).ConfigureAwait(false);
+            var fallbackUsed = i > 0 || choice.Route != selectedRoute;
+            var diagnostic = GitHubModelsRouteSelector.BuildSafeDiagnostic(choice.Route, choice.ModelId, fallbackUsed, modelConfig.ConfiguredModelsCount);
+
+            if (result.Succeeded)
+            {
+                return new CopilotProviderResult
+                {
+                    Succeeded = true,
+                    UsedOnlineData = result.UsedOnlineData,
+                    UserMessage = result.UserMessage,
+                    DiagnosticMessage = diagnostic
+                };
+            }
+
+            lastResult = result;
+            lastChoice = choice;
+            lastIndex = i;
+            if (!GitHubModelsRouteSelector.ShouldRetryWithNextModel(result))
+            {
+                break;
+            }
+        }
+
+        var finalChoice = lastChoice ?? attempts[^1];
+        var finalRoute = finalChoice.Route;
+        var finalModel = finalChoice.ModelId;
+        var finalDiagnostic = GitHubModelsRouteSelector.BuildSafeDiagnostic(finalRoute, finalModel, lastIndex > 0 || finalRoute != selectedRoute, modelConfig.ConfiguredModelsCount);
+        return new CopilotProviderResult
+        {
+            Succeeded = false,
+            IsTransientFailure = lastResult?.IsTransientFailure ?? false,
+            FailureReason = lastResult?.FailureReason ?? KyraProviderFailureReason.Unknown,
+            UserMessage = lastResult?.UserMessage ?? "GitHub Models returned an error. Offline fallback is available.",
+            DiagnosticMessage = $"{finalDiagnostic}; all model attempts failed; last={(lastResult?.DiagnosticMessage ?? "unknown")}"
+        };
+    }
+
+    private async Task<CopilotProviderResult> SendGitHubModelsAttemptAsync(
+        CopilotProviderRequest request,
+        string apiKey,
+        string modelId,
+        CancellationToken cancellationToken)
+    {
+        var baseUrl = request.ProviderConfiguration.BaseUrl.TrimEnd('/');
+        var payload = new
+        {
+            model = modelId,
+            messages = new object[]
+            {
+                new { role = "system", content = PromptTemplates.GetSystemPrompt(request.Context.PromptMode) },
+                new { role = "user", content = KyraPromptBuilder.BuildOnlinePrompt(request.Context, includeSystemContext: true) }
+            },
+            max_tokens = Math.Clamp(request.ProviderConfiguration.MaxOutputTokens, 128, 2048),
+            temperature = 0.3
+        };
+
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/chat/completions");
+        httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        httpRequest.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+        using var response = await HttpClient.SendAsync(httpRequest, cancellationToken).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            return new CopilotProviderResult
+            {
+                Succeeded = false,
+                IsTransientFailure = (int)response.StatusCode is 408 or 429 or >= 500,
+                FailureReason = ClassifyFailureReason(response.StatusCode, body),
+                UserMessage = "GitHub Models returned an error. Offline fallback is available.",
+                DiagnosticMessage = $"HTTP {(int)response.StatusCode}"
+            };
+        }
+
+        var text = ExtractChatCompletionText(body);
+        return string.IsNullOrWhiteSpace(text)
+            ? new CopilotProviderResult
+            {
+                Succeeded = false,
+                FailureReason = KyraProviderFailureReason.Unknown,
+                UserMessage = "GitHub Models returned an empty response. Offline fallback is available.",
+                DiagnosticMessage = "Empty response text."
+            }
+            : new CopilotProviderResult
+            {
+                Succeeded = true,
+                UsedOnlineData = true,
+                UserMessage = text,
+                DiagnosticMessage = "GitHub Models response."
             };
     }
 

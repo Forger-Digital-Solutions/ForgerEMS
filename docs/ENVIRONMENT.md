@@ -4,7 +4,7 @@ This file documents supported and reserved ForgerEMS environment variables for v
 
 General app configuration is local-first. Environment variables are optional operator/developer overrides unless stated otherwise.
 
-Placeholder values such as `REPLACE_ME`, `YOUR_*`, `REPLACE_MODEL_NAME`, `local-model-name`, `model-name`, `example.local`, `sk-REPLACE_ME`, `changeme`, and `TODO` are treated as **not configured**. They are examples only and must not make Kyra mark a provider ready.
+Placeholder values such as `REPLACE_ME`, `REPLACE_WITH_BETA_ACCESS_TOKEN`, `YOUR_*`, `PASTE_*`, `REPLACE_MODEL_NAME`, `local-model-name`, `model-name`, `example.local`, `sk-REPLACE_ME`, `changeme`, and `TODO` are treated as **not configured**. They are examples only and must not make Kyra mark a provider ready.
 
 For installed-app testing, persistent variables are Windows **User** environment variables. Use `tools/show-forgerems-env-status.ps1` to inspect User env readiness without printing raw secrets.
 
@@ -59,12 +59,17 @@ Deep Sensor Mode has explicit consent precedence:
 | `FORGEREMS_UPDATE_USER_AGENT` | No | `ForgerEMS` | GitHub HTTP client | User-Agent header | Yes | Do not include secrets. |
 | `FORGEREMS_UPDATE_TIMEOUT_SECONDS` | No | `20` | GitHub HTTP client | Release list timeout | Yes | Clamped 5-120. |
 | `FORGEREMS_KYRA_MODE` | No | `hybrid` | Kyra config | Mode hint | Yes | Offline/local is available without keys. |
-| `FORGEREMS_KYRA_PROVIDER` | No | `offline` | Kyra config | Provider hint | Yes | Examples: `offline`, `openai-compatible`, `lmstudio`, `ollama`. |
+| `FORGEREMS_KYRA_PROVIDER` | No | `offline` | Kyra config | Provider hint | Yes | Examples: `forgerems-gateway`, `offline`, `openai-compatible`, `lmstudio`, `ollama`. |
 | `FORGEREMS_KYRA_ONLINE_ENABLED` | No | `false` | Kyra config | Gate online provider use | Yes | Online providers may send prompt/context to configured provider. |
 | `FORGEREMS_KYRA_SHARE_SYSTEM_CONTEXT` | No | `false` | Kyra config | Allow sanitized system context sharing | Yes | Keep off unless user/operator intentionally enables. |
 | `FORGEREMS_KYRA_REQUIRE_LOCAL_FACTS` | No | `true` | Kyra config | Prefer grounded local reports | Yes | Not a secret. |
 | `FORGEREMS_KYRA_API_FIRST` | No | `true` | Kyra routing | Try configured API providers before Local Kyra when mode/privacy allow | Yes | Offline fallback still remains available. |
-| `FORGEREMS_KYRA_PROVIDER_PRIORITY` | No | `openai-compatible,custom,openrouter,groq,gemini,anthropic,mistral,cerebras,github-models,cloudflare,lmstudio,ollama,offline` | Kyra routing | Provider fallback order | Yes | Does not call every provider; missing keys are skipped. |
+| `FORGEREMS_KYRA_PROVIDER_PRIORITY` | No | `forgerems-gateway,openai-compatible,custom,openrouter,groq,gemini,anthropic,mistral,cerebras,github-models,cloudflare,lmstudio,ollama,offline` | Kyra routing | Provider fallback order | Yes | Does not call every provider; missing keys are skipped. |
+| `FORGEREMS_KYRA_GATEWAY_URL` | No | empty | Kyra Gateway | HTTPS gateway endpoint | Yes, host only in UI | Beta gateway URL. Rejects placeholders, invalid URLs, and embedded credentials. |
+| `FORGEREMS_KYRA_GATEWAY_BETA_TOKEN` | Gateway secret | empty | Kyra Gateway | Revocable beta access token | Never expose | Not a provider API key. Redacted in UI/logs/env status. |
+| `FORGEREMS_KYRA_GATEWAY_TIMEOUT_SECONDS` | No | `60` | Kyra Gateway | Gateway timeout | Yes | Clamped 3-120. |
+| `FORGEREMS_KYRA_GATEWAY_DAILY_REQUEST_LIMIT` | No | empty | Kyra Gateway | Optional local client hint | Yes | Server-side limits remain authoritative. |
+| `FORGEREMS_KYRA_GATEWAY_SHARE_SYSTEM_CONTEXT` | No | `false` | Kyra Gateway | Gateway-specific sanitized context gate | Yes | Requires `FORGEREMS_KYRA_SHARE_SYSTEM_CONTEXT=true` too. |
 | `FORGEREMS_KYRA_PROVIDER_TIMEOUT_SECONDS` | No | `60` | Kyra routing | Provider call timeout | Yes | Clamped 3-120. |
 | `FORGEREMS_KYRA_CONSENSUS_MODE` | No | `false` | Kyra routing | Future multi-provider comparison gate | Yes | Disabled to avoid surprise token/API usage. |
 | `FORGEREMS_KYRA_MEMORY_MODE` | No | `session` | Kyra memory | Memory mode hint | Yes | Session memory is local. |
@@ -126,6 +131,8 @@ These are optional operator/BYOK variables used by Kyra Advanced providers. Offl
 
 | Variable | Provider | Required? | Sends data off-device? | Safe to expose? |
 |----------|----------|-----------|------------------------|-----------------|
+| `FORGEREMS_KYRA_GATEWAY_URL` | ForgerEMS Beta Gateway | Optional | Yes, to the gateway | Host only; do not include credentials |
+| `FORGEREMS_KYRA_GATEWAY_BETA_TOKEN` | ForgerEMS Beta Gateway | Optional gateway token | Yes, to the gateway | Never expose; revocable beta token |
 | `OPENAI_API_KEY` | OpenAI/OpenAI-compatible | Optional | Yes, when provider enabled | Never expose |
 | `ANTHROPIC_API_KEY` | Anthropic | Optional | Yes, when provider enabled | Never expose |
 | `GEMINI_API_KEY` | Google Gemini | Optional | Yes, when provider enabled | Never expose |
@@ -134,10 +141,17 @@ These are optional operator/BYOK variables used by Kyra Advanced providers. Offl
 | `CEREBRAS_API_KEY` | Cerebras | Optional | Yes, when provider enabled | Never expose |
 | `MISTRAL_API_KEY` | Mistral | Optional | Yes, when provider enabled | Never expose |
 | `GITHUB_MODELS_TOKEN` | GitHub Models | Optional | Yes, when provider enabled | Never expose |
+| `FORGEREMS_GITHUB_MODELS_DEFAULT_MODEL` | GitHub Models | Optional | Yes, when provider enabled | Model ID only; example `openai/gpt-5` |
+| `FORGEREMS_GITHUB_MODELS_FAST_MODEL` | GitHub Models | Optional | Yes, when provider enabled | Model ID only; example `deepseek/DeepSeek-V3-0324` |
+| `FORGEREMS_GITHUB_MODELS_ALT_MODEL` | GitHub Models | Optional | Yes, when provider enabled | Model ID only; example `meta/Llama-4-Scout-17B-16E-Instruct` |
 | `CLOUDFLARE_API_KEY` | Cloudflare Workers AI | Optional | Yes, when provider enabled | Never expose |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Workers AI | Optional | Yes, when provider enabled | Treat as sensitive account metadata |
 
 Session API keys entered in Kyra Advanced are memory-only and override environment variables for that app session. Do not paste real provider keys into docs, screenshots, tickets, or support email.
+
+ForgerEMS Beta Gateway lets beta builds use real Kyra API time without shipping owner provider secrets. The desktop app sends prompts to `FORGEREMS_KYRA_GATEWAY_URL` with a revocable beta token. Provider API keys live only in the server-side gateway environment, and gateway usage limits may apply. Local/offline fallback remains available when the gateway is missing, rate-limited, unavailable, or disabled.
+
+GitHub Models uses one `GITHUB_MODELS_TOKEN` for all configured model IDs. The `DEFAULT`, `FAST`, and `ALT` variables are model choices, not separate secrets. After changing Windows User environment variables, restart ForgerEMS or use the provider/env refresh path so Kyra sees the new values.
 
 ## External Network Access
 
@@ -146,6 +160,7 @@ Session API keys entered in Kyra Advanced are memory-only and override environme
 | GitHub Releases update checker | User/app update check | No | Repo owner/repo, User-Agent | Reports unavailable/update error; no install without user action. |
 | Managed download catalog | USB Builder/Toolkit managed downloads | No | URL request to official source/manifest URL | Falls back or marks item manual/failed; checksum verification remains required where configured. |
 | Backend revalidation | Operator runs `Verify-VentoyCore.ps1 -RevalidateManagedDownloads` | No | HEAD/HTTP requests to official URLs | Writes local revalidation artifacts. |
+| Kyra ForgerEMS Gateway | Beta gateway mode enabled/configured | Gateway beta token, not provider API keys | Prompt plus optional sanitized context if both context-sharing gates are enabled | Falls back to BYOK/local/offline when unavailable or limited. |
 | Kyra online providers | User/operator enables online provider and sends prompt | Provider-dependent | Prompt plus optional sanitized context if enabled | Falls back/error message; Offline Local remains available. |
 | LM Studio/Ollama | User runs local server/provider | No cloud key | Localhost requests | Provider shown unavailable if local service is stopped. |
 | FlipValue/eBay/marketplace shells | Future/disabled by default | Future | None today unless future provider enabled | Offline heuristic fallback remains. |

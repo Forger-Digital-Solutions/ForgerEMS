@@ -158,7 +158,7 @@ function Get-RedactedPreview {
 
 function Is-PlaceholderLine {
     param([Parameter(Mandatory)][string] $Line)
-    return $Line -match '(?i)REPLACE_ME|REPLACE_MODEL_NAME|YOUR_[A-Z0-9_]+|local-model-name|model-name|changeme|TODO|fake-|example|placeholder|sample|dummy|not-a-real|redaction fixture|SECRET123'
+    return $Line -match '(?i)REPLACE_ME|REPLACE_WITH_BETA_ACCESS_TOKEN|REPLACE_MODEL_NAME|REPLACE_[A-Z0-9_]+|YOUR_[A-Z0-9_]+|PASTE_[A-Z0-9_]+|local-model-name|model-name|changeme|TODO|fake-|example|placeholder|sample|dummy|not-a-real|redaction fixture|SECRET123'
 }
 
 $secretFindings = [System.Collections.Generic.List[object]]::new()
@@ -210,12 +210,13 @@ Get-ChildItem -LiteralPath $RepoRoot -Recurse -File -Force | ForEach-Object {
             $regex = [string] $entry.Value
             foreach ($match in [regex]::Matches($line, $regex)) {
                 $isPlaceholder = (Is-PlaceholderLine $line) -or ($relative -match '(?i)(^|[\\/])tests[\\/]|\.Tests[\\/]')
+                $isReleasePath = $relative -match '(?i)(^|[\\/])(release|dist|installer)([\\/]|$)|appsettings|\.env$'
                 $secretFindings.Add([pscustomobject]@{
                         Path          = $relative
                         Line          = $i + 1
                         Pattern       = $patternId
                         Preview       = Get-RedactedPreview $match.Value
-                        Classification = if ($isPlaceholder) { 'Placeholder/sample or test fixture' } else { 'Potential secret - review required' }
+                        Classification = if ($isPlaceholder) { 'Placeholder/sample or test fixture' } elseif ($isReleasePath) { 'Release blocker - provider secret in shipped/config path' } else { 'Potential secret - review required' }
                     })
             }
         }
@@ -264,12 +265,13 @@ $report.Add("")
 $report.Add("Notes")
 $report.Add("- This is a heuristic local scan, not a formal security audit.")
 $report.Add("- Values are redacted. Do not paste real API keys, tokens, passwords, product keys, serial numbers, or private documents into support messages.")
+$report.Add("- Provider API keys in release assets, appsettings, installer defaults, or .env files are release blockers. Gateway beta tokens are redacted and must be revocable.")
 $report.Add("- For deeper release gates, optional tools such as gitleaks or trufflehog may be run locally by maintainers; this script does not require them.")
 
 [System.IO.File]::WriteAllLines($outputPath, $report)
 $report | ForEach-Object { Write-Output $_ }
 
-$reviewRequired = $secretFindings | Where-Object { $_.Classification -eq 'Potential secret - review required' }
+$reviewRequired = $secretFindings | Where-Object { $_.Classification -eq 'Potential secret - review required' -or $_.Classification -like 'Release blocker*' }
 if ($Strict -and $reviewRequired.Count -gt 0) {
     Write-Error "Strict mode: potential secret-like findings require review. See $outputPath"
     exit 1

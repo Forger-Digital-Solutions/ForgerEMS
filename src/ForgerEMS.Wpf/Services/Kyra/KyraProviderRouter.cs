@@ -199,6 +199,7 @@ public static class KyraProviderRouter
 
             if (!provider.CanHandle(new CopilotProviderRequest
                 {
+                    AppVersion = request.AppVersion,
                     Prompt = request.Prompt,
                     Context = context,
                     Settings = settings,
@@ -215,7 +216,7 @@ public static class KyraProviderRouter
     private static Dictionary<string, int> BuildPriority(string? csv)
     {
         var source = string.IsNullOrWhiteSpace(csv)
-            ? "openai-compatible,custom,openrouter,groq,gemini,anthropic,mistral,cerebras,github-models,cloudflare,lmstudio,ollama,offline"
+            ? "forgerems-gateway,openai-compatible,custom,openrouter,groq,gemini,anthropic,mistral,cerebras,github-models,cloudflare,lmstudio,ollama,offline"
             : csv;
         var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var parts = source.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -233,6 +234,7 @@ public static class KyraProviderRouter
     private static string ProviderAlias(ICopilotProvider provider) =>
         provider.Id switch
         {
+            "forgerems-gateway" => "forgerems-gateway",
             "custom-openai-compatible" => "custom",
             "openrouter-free" => "openrouter",
             "groq-free" => "groq",
@@ -262,6 +264,7 @@ public static class KyraProviderRouter
 
         var bonus = provider.Id switch
         {
+            "forgerems-gateway" => 10,
             "gemini-free" => 7,
             "openrouter-free" => 6,
             "github-models" => 5,
@@ -289,7 +292,7 @@ public static class KyraProviderRouter
             return provider.Id switch
             {
                 "gemini-free" or "groq-free" or "cerebras-free" or "openrouter-free" => KyraModelCapability.FastChat,
-                "github-models" or "mistral-free" => KyraModelCapability.DeepReasoning,
+                "github-models" or "mistral-free" or "forgerems-gateway" => KyraModelCapability.DeepReasoning,
                 _ => KyraModelCapability.FastChat
             };
         }

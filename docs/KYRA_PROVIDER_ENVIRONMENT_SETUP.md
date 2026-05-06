@@ -56,6 +56,29 @@ After changing **user** or **machine** variables in Windows, use **Refresh Provi
 
 ---
 
+## ForgerEMS Beta Gateway
+
+For beta builds, ForgerEMS can route Kyra through a small HTTPS gateway so testers get limited real API time without receiving third-party provider API keys.
+
+- The desktop app calls `FORGEREMS_KYRA_GATEWAY_URL`.
+- The desktop app may store a revocable `FORGEREMS_KYRA_GATEWAY_BETA_TOKEN`.
+- Provider secrets such as OpenAI, OpenRouter, Groq, Gemini, Anthropic, Mistral, Cerebras, or GitHub tokens belong only in the server-side gateway secret store.
+- Gateway context sharing is off unless both `FORGEREMS_KYRA_SHARE_SYSTEM_CONTEXT=true` and `FORGEREMS_KYRA_GATEWAY_SHARE_SYSTEM_CONTEXT=true`.
+- Local/offline fallback remains available when the gateway is missing, rate-limited, timed out, or down.
+
+```powershell
+Set-FdsEnv "FORGEREMS_KYRA_PROVIDER" "forgerems-gateway"
+Set-FdsEnv "FORGEREMS_KYRA_ONLINE_ENABLED" "true"
+Set-FdsEnv "FORGEREMS_KYRA_GATEWAY_URL" "https://REPLACE_ME.workers.dev"
+Set-FdsEnv "FORGEREMS_KYRA_GATEWAY_BETA_TOKEN" "REPLACE_WITH_BETA_ACCESS_TOKEN"
+Set-FdsEnv "FORGEREMS_KYRA_GATEWAY_TIMEOUT_SECONDS" "60"
+Set-FdsEnv "FORGEREMS_KYRA_GATEWAY_SHARE_SYSTEM_CONTEXT" "false"
+```
+
+Do not put provider API keys in the desktop app, installer, release ZIP, registry defaults, docs, source code, or tester Windows User env vars.
+
+---
+
 ## LM Studio (local OpenAI-compatible server)
 
 - Install [LM Studio](https://lmstudio.ai/) and start a local server.  
@@ -105,6 +128,17 @@ When your organization enables these integrations, keys are supplied **outside**
 | GitHub Models | `GITHUB_MODELS_TOKEN` |
 
 Use **Kyra Advanced** to enable the matching slot where applicable, then **Refresh Provider Status**.
+
+GitHub Models can also route across optional model slots with the same token:
+
+```powershell
+Set-FdsEnv "GITHUB_MODELS_TOKEN" "PASTE_YOUR_REAL_GITHUB_MODELS_PAT"
+Set-FdsEnv "FORGEREMS_GITHUB_MODELS_DEFAULT_MODEL" "openai/gpt-5"
+Set-FdsEnv "FORGEREMS_GITHUB_MODELS_FAST_MODEL" "deepseek/DeepSeek-V3-0324"
+Set-FdsEnv "FORGEREMS_GITHUB_MODELS_ALT_MODEL" "meta/Llama-4-Scout-17B-16E-Instruct"
+```
+
+The three `FORGEREMS_GITHUB_MODELS_*_MODEL` values are model IDs, not secrets. One GitHub Models token works across the configured model IDs your account can access. Restart ForgerEMS or refresh provider status after setting Windows User environment variables.
 
 ---
 
