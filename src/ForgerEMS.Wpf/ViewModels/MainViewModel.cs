@@ -3352,10 +3352,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var toolStatus = new KyraToolRegistry().BuildStatusSummary();
         var sb = new StringBuilder();
         sb.AppendLine(_copilotSettings.ApiFirstRouting
-            ? "Online assist: on — configured providers may answer before Local Kyra when the prompt is not machine-anchored."
+            ? "Kyra Mode: API-first hybrid — configured providers may answer first when mode and privacy settings allow."
             : "Online assist: off — Local Kyra drafts first when polish mode applies.");
         sb.AppendLine(_copilotSettings.OfflineFallbackEnabled ? "Local fallback: enabled." : "Local fallback: disabled.");
         sb.AppendLine(_copilotSettings.AllowOnlineSystemContextSharing ? "System context to online providers: on (sanitized summary only)." : "System context to online providers: off.");
+        sb.AppendLine($"Provider priority: {_copilotSettings.ProviderPriorityCsv}");
+        sb.AppendLine($"Memory: {_copilotSettings.MaxContextTurns} turns / {_copilotSettings.MemoryMode}; personality: {_copilotSettings.PersonalityProfile}.");
         sb.AppendLine("Live tools: weather/crypto only when enabled under Kyra Advanced live APIs; news/sports/stocks/search need operator keys.");
         sb.AppendLine(_copilotSettings.ProviderConfigurationMode == KyraProviderConfigurationMode.DeveloperManaged
             ? "Provider configuration mode: developer-managed (beta testers are not prompted for BYOK)."
@@ -7097,14 +7099,20 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         settings.LiveTools ??= new KyraLiveToolsSettings();
         settings.Mode = ToCopilotMode(SelectedCopilotMode);
         settings.ProviderType = CopilotProviderType.LocalOffline;
-        settings.TimeoutSeconds = settings.TimeoutSeconds <= 0 ? 12 : settings.TimeoutSeconds;
+        settings.TimeoutSeconds = settings.TimeoutSeconds <= 0 ? ForgerEmsEnvironmentConfiguration.KyraProviderTimeoutSeconds : settings.TimeoutSeconds;
         settings.OfflineFallbackEnabled = _copilotSettings?.OfflineFallbackEnabled ?? settings.OfflineFallbackEnabled;
         settings.RedactContextEnabled = true;
-        settings.MaxContextCharacters = settings.MaxContextCharacters <= 0 ? 6000 : settings.MaxContextCharacters;
+        settings.MaxContextCharacters = settings.MaxContextCharacters <= 0 ? ForgerEmsEnvironmentConfiguration.KyraContextMaxChars : settings.MaxContextCharacters;
         settings.UseLatestSystemScanContext = UseLatestSystemScanContext;
         settings.AllowOnlineSystemContextSharing = AllowOnlineSystemContextSharing;
         settings.EnableFreeProviderPool = EnableFreeProviderPool;
         settings.EnableByokProviders = EnableByokProviders;
+        settings.MaxContextTurns = Math.Clamp(settings.MaxContextTurns <= 0 ? ForgerEmsEnvironmentConfiguration.KyraMaxContextTurns : settings.MaxContextTurns, 1, 200);
+        settings.ProviderPriorityCsv = string.IsNullOrWhiteSpace(settings.ProviderPriorityCsv)
+            ? ForgerEmsEnvironmentConfiguration.KyraProviderPriority
+            : settings.ProviderPriorityCsv;
+        settings.MemoryMode = string.IsNullOrWhiteSpace(settings.MemoryMode) ? ForgerEmsEnvironmentConfiguration.KyraMemoryMode : settings.MemoryMode;
+        settings.PersonalityProfile = string.IsNullOrWhiteSpace(settings.PersonalityProfile) ? ForgerEmsEnvironmentConfiguration.KyraPersonality : settings.PersonalityProfile;
 
         foreach (var provider in _copilotProviderRegistry.Providers)
         {
@@ -7196,7 +7204,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             anyOnlineConfigured);
 
         CopilotRoutingPolicyText = mode == CopilotMode.HybridAuto
-            ? "Hybrid: local for device/USB/toolkit tasks; API for normal chat when providers are ready."
+            ? "Hybrid/API-first: local facts stay authoritative; online providers receive sanitized system context only when sharing is enabled."
             : string.Empty;
 
         if (mode == CopilotMode.OfflineOnly)
@@ -7224,7 +7232,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 ? "Kyra Mode: Online Assisted - providers may be used when configured."
                 : "Online provider not configured. Local Kyra is active.",
             _ => anyOnlineConfigured || localOllamaEnabled || localLmStudioEnabled
-                ? "Hybrid: local for device/USB/toolkit tasks; API for normal chat when providers are ready."
+                ? "Kyra Mode: API-first hybrid - configured providers first, Local Kyra fallback always available."
                 : "Online provider not configured. Local Kyra is active."
         };
         var hasReachableProvider = anyOnlineConfigured || localOllamaEnabled || localLmStudioEnabled;

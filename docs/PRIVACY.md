@@ -53,6 +53,11 @@ Default support reports should be redacted where supported, but you should still
 - **Optional online** providers are **developer/operator-managed** (environment or deployment configuration). They are **advanced** — not part of the default beta tester checklist.  
 - When online paths are enabled and you allow context sharing, **sanitized** text may be sent per **Kyra Advanced** settings — not a dump of your entire disk.
 - **System Intelligence context** may be included in Kyra answers depending on provider/settings. Use offline/local mode when you do not want hardware summaries or report context sent to an online AI provider.
+- **API-first mode** may try configured providers before Local Kyra for normal chat, but missing keys, failures, timeouts, and privacy gates fall back to local/offline answers.
+- Placeholder provider values are ignored, so example keys or example URLs do not accidentally enable online traffic.
+- Consensus/multi-provider comparison is disabled by default because it can spend more provider quota; enable it only intentionally.
+- Kyra keeps recent chat context locally so troubleshooting stays coherent. Memory is redacted and must not include API keys, tokens, passwords, product keys, private documents, raw logs, or unredacted support bundles.
+- Live weather, news, finance, stocks, crypto, sports, or statistics answers require a configured current-data tool/provider. If no provider is configured, Kyra should say so rather than invent live facts.
 
 ---
 

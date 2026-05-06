@@ -42,11 +42,29 @@ It is the **supported entry point** after you extract the release ZIP. It walks 
 
 Optional **online** models only appear when an **operator** has already configured the machine or deployment (advanced). Operators: [KYRA_PROVIDER_ENVIRONMENT_SETUP.md](KYRA_PROVIDER_ENVIRONMENT_SETUP.md).
 
+When API-first mode is enabled, Kyra tries configured providers in priority order and skips missing keys, disabled providers, failed calls, and timeouts. Local/offline Kyra remains the fallback.
+
+Placeholder values such as `REPLACE_ME`, `YOUR_*`, `local-model-name`, or `example.local` are ignored and do not count as configured providers. For installed-app testing, use Windows **User** environment variables and check them with `tools/show-forgerems-env-status.ps1`.
+
 ---
 
 ## Why does Kyra say it does not have live data?
 
 Kyra is **not a live web browser**. Offline answers use **rules and what is already on your PC** (your scans, toolkit state, logs you choose to summarize). Some **integrated tools** may add fresh data when that feature exists; otherwise Kyra may **suggest** you open an external source — it does not silently browse the web for you.
+
+Weather and crypto can use built-in no-key paths when enabled. News requires NewsAPI/GNews configuration. Stocks support `finnhub`, `alphavantage`, or `fmp` when configured. Economic/statistics data is limited/shell status unless a supported provider is wired. Kyra should not make up live prices, weather, or breaking news.
+
+---
+
+## How much does Kyra remember?
+
+Kyra keeps recent chat context locally so troubleshooting stays coherent, with a 100-turn default and a 1-200 turn clamp. Persistent memory is optional and redacted. Kyra memory should never store API keys, tokens, passwords, product keys, raw logs, or private documents.
+
+---
+
+## Does Kyra know this device automatically?
+
+Yes, after you run System Intelligence. Kyra loads the latest local System Intelligence / Hardware X-Ray report and can answer questions like what device this is, what it is best for, what sensors are missing, whether it can run games, and how to position it for resale. If the scan is missing or stale, Kyra should say that clearly.
 
 ---
 

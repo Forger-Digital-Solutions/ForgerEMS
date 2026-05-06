@@ -16,6 +16,12 @@ public static class ForgerEmsEnvironmentConfiguration
         return string.IsNullOrWhiteSpace(v) ? defaultValue : v.Trim();
     }
 
+    public static string GetConfigString(string name, string defaultValue = "")
+    {
+        var v = GetString(name, defaultValue);
+        return VentoyToolkitSetup.Wpf.Services.KyraProviderConfigResolver.IsPlaceholderSecretOrValue(v) ? string.Empty : v;
+    }
+
     public static bool GetBool(string name, bool defaultValue)
     {
         var v = Environment.GetEnvironmentVariable(name);
@@ -70,27 +76,57 @@ public static class ForgerEmsEnvironmentConfiguration
     public static bool KyraOnlineEnabled => GetBool("FORGEREMS_KYRA_ONLINE_ENABLED", false);
     public static bool KyraShareSystemContext => GetBool("FORGEREMS_KYRA_SHARE_SYSTEM_CONTEXT", false);
     public static bool KyraRequireLocalFacts => GetBool("FORGEREMS_KYRA_REQUIRE_LOCAL_FACTS", true);
-    public static int KyraMaxContextTurns => GetInt("FORGEREMS_KYRA_MAX_CONTEXT_TURNS", 20, 1, 200);
+    public static bool KyraApiFirst => GetBool("FORGEREMS_KYRA_API_FIRST", true);
+    public static string KyraProviderPriority => GetString(
+        "FORGEREMS_KYRA_PROVIDER_PRIORITY",
+        "openai-compatible,custom,openrouter,groq,gemini,anthropic,mistral,cerebras,github-models,cloudflare,lmstudio,ollama,offline");
+    public static int KyraProviderTimeoutSeconds => GetInt("FORGEREMS_KYRA_PROVIDER_TIMEOUT_SECONDS", 60, 3, 120);
+    public static bool KyraConsensusMode => GetBool("FORGEREMS_KYRA_CONSENSUS_MODE", false);
+    public static string KyraMemoryMode => GetString("FORGEREMS_KYRA_MEMORY_MODE", "session");
+    public static bool KyraPersistMemory => GetBool("FORGEREMS_KYRA_PERSIST_MEMORY", false);
+    public static int KyraMaxContextTurns => GetInt("FORGEREMS_KYRA_MAX_CONTEXT_TURNS", 100, 1, 200);
+    public static int KyraContextMaxChars => GetInt("FORGEREMS_KYRA_CONTEXT_MAX_CHARS", 12000, 1000, 50000);
+    public static string KyraPersonality => GetString("FORGEREMS_KYRA_PERSONALITY", "bubbly-tech");
 
-    public static string OpenAiBaseUrl => GetString("FORGEREMS_OPENAI_BASE_URL", "");
-    public static string OpenAiModel => GetString("FORGEREMS_OPENAI_MODEL", "");
-    public static bool OpenAiApiKeyPresent => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FORGEREMS_OPENAI_API_KEY"));
+    public static string OpenAiBaseUrl => GetConfigString("FORGEREMS_OPENAI_BASE_URL", "");
+    public static string OpenAiModel => GetConfigString("FORGEREMS_OPENAI_MODEL", "");
+    public static bool OpenAiApiKeyPresent =>
+        VentoyToolkitSetup.Wpf.Services.KyraProviderConfigResolver.ResolveNamedCredential("FORGEREMS_OPENAI_API_KEY") is not VentoyToolkitSetup.Wpf.Services.KyraProviderCredentialState.Missing and not VentoyToolkitSetup.Wpf.Services.KyraProviderCredentialState.Placeholder ||
+        VentoyToolkitSetup.Wpf.Services.KyraProviderConfigResolver.ResolveNamedCredential("OPENAI_API_KEY") is not VentoyToolkitSetup.Wpf.Services.KyraProviderCredentialState.Missing and not VentoyToolkitSetup.Wpf.Services.KyraProviderCredentialState.Placeholder;
 
-    public static string LmStudioBaseUrl => GetString("FORGEREMS_LMSTUDIO_BASE_URL", "http://localhost:1234/v1");
-    public static string LmStudioModel => GetString("FORGEREMS_LMSTUDIO_MODEL", "");
+    public static string LmStudioBaseUrl => GetConfigString("FORGEREMS_LMSTUDIO_BASE_URL", "http://localhost:1234/v1");
+    public static string LmStudioModel => GetConfigString("FORGEREMS_LMSTUDIO_MODEL", "");
 
-    public static string OllamaBaseUrl => GetString("FORGEREMS_OLLAMA_BASE_URL", "http://localhost:11434");
-    public static string OllamaModel => GetString("FORGEREMS_OLLAMA_MODEL", "");
+    public static string OllamaBaseUrl => GetConfigString("FORGEREMS_OLLAMA_BASE_URL", "http://localhost:11434");
+    public static string OllamaModel => GetConfigString("FORGEREMS_OLLAMA_MODEL", "");
 
-    public static bool AnthropicApiKeyPresent => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FORGEREMS_ANTHROPIC_API_KEY"));
-    public static string AnthropicModel => GetString("FORGEREMS_ANTHROPIC_MODEL", "");
-    public static bool GeminiApiKeyPresent => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FORGEREMS_GEMINI_API_KEY"));
-    public static string GeminiModel => GetString("FORGEREMS_GEMINI_MODEL", "");
+    public static bool AnthropicApiKeyPresent =>
+        VentoyToolkitSetup.Wpf.Services.KyraProviderConfigResolver.ResolveNamedCredential("FORGEREMS_ANTHROPIC_API_KEY") is not VentoyToolkitSetup.Wpf.Services.KyraProviderCredentialState.Missing and not VentoyToolkitSetup.Wpf.Services.KyraProviderCredentialState.Placeholder ||
+        VentoyToolkitSetup.Wpf.Services.KyraProviderConfigResolver.ResolveNamedCredential("ANTHROPIC_API_KEY") is not VentoyToolkitSetup.Wpf.Services.KyraProviderCredentialState.Missing and not VentoyToolkitSetup.Wpf.Services.KyraProviderCredentialState.Placeholder;
+    public static string AnthropicModel => GetConfigString("FORGEREMS_ANTHROPIC_MODEL", "");
+    public static bool GeminiApiKeyPresent =>
+        VentoyToolkitSetup.Wpf.Services.KyraProviderConfigResolver.ResolveNamedCredential("FORGEREMS_GEMINI_API_KEY") is not VentoyToolkitSetup.Wpf.Services.KyraProviderCredentialState.Missing and not VentoyToolkitSetup.Wpf.Services.KyraProviderCredentialState.Placeholder ||
+        VentoyToolkitSetup.Wpf.Services.KyraProviderConfigResolver.ResolveNamedCredential("GEMINI_API_KEY") is not VentoyToolkitSetup.Wpf.Services.KyraProviderCredentialState.Missing and not VentoyToolkitSetup.Wpf.Services.KyraProviderCredentialState.Placeholder;
+    public static string GeminiModel => GetConfigString("FORGEREMS_GEMINI_MODEL", "");
 
-    public static string CustomProviderBaseUrl => GetString("FORGEREMS_CUSTOM_PROVIDER_BASE_URL", "");
-    public static string CustomProviderModel => GetString("FORGEREMS_CUSTOM_PROVIDER_MODEL", "");
+    public static string CustomProviderBaseUrl => GetConfigString("FORGEREMS_CUSTOM_PROVIDER_BASE_URL", "");
+    public static string CustomProviderModel => GetConfigString("FORGEREMS_CUSTOM_PROVIDER_MODEL", "");
     public static bool CustomProviderApiKeyPresent =>
-        !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FORGEREMS_CUSTOM_PROVIDER_API_KEY"));
+        VentoyToolkitSetup.Wpf.Services.KyraProviderConfigResolver.ResolveNamedCredential("FORGEREMS_CUSTOM_PROVIDER_API_KEY") is not VentoyToolkitSetup.Wpf.Services.KyraProviderCredentialState.Missing and not VentoyToolkitSetup.Wpf.Services.KyraProviderCredentialState.Placeholder;
+
+    public static string WeatherProvider => GetString("FORGEREMS_WEATHER_PROVIDER", "");
+    public static bool WeatherApiKeyPresent => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FORGEREMS_WEATHER_API_KEY"));
+    public static string WeatherDefaultLocation => GetString("FORGEREMS_WEATHER_DEFAULT_LOCATION", "");
+    public static string NewsProvider => GetString("FORGEREMS_NEWS_PROVIDER", "");
+    public static bool NewsApiKeyPresent => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FORGEREMS_NEWS_API_KEY"));
+    public static string NewsRegion => GetString("FORGEREMS_NEWS_REGION", "");
+    public static string FinanceProvider => GetString("FORGEREMS_FINANCE_PROVIDER", "");
+    public static bool FinanceApiKeyPresent => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FORGEREMS_FINANCE_API_KEY"));
+    public static string FinanceRegion => GetString("FORGEREMS_FINANCE_REGION", "");
+    public static string CryptoProvider => GetString("FORGEREMS_CRYPTO_PROVIDER", "");
+    public static bool CryptoApiKeyPresent => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FORGEREMS_CRYPTO_API_KEY"));
+    public static string StatsProvider => GetString("FORGEREMS_STATS_PROVIDER", "");
+    public static bool StatsApiKeyPresent => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FORGEREMS_STATS_API_KEY"));
 
     // Diagnostics export
     public static string DiagnosticsExportDir => GetString("FORGEREMS_DIAGNOSTICS_EXPORT_DIR", "");

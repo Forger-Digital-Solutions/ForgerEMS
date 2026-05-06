@@ -361,9 +361,9 @@
                             <StackPanel>
                                 <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Stocks" />
                                 <CheckBox Margin="0,6,0,6" IsChecked="{Binding KyraLiveToolsForBinding.StocksEnabled, Mode=TwoWay}" Content="Enabled" />
-                                <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Provider: finnhub" />
+                                <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Provider: finnhub | alphavantage | fmp" />
                                 <TextBox Margin="0,4,0,0" Text="{Binding KyraLiveToolsForBinding.StocksProvider, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                <TextBlock Margin="0,6,0,0" FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Finnhub token" />
+                                <TextBlock Margin="0,6,0,0" FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="API key / token" />
                                 <TextBox Margin="0,4,0,0" Text="{Binding KyraLiveToolsForBinding.StocksApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
                         </Border>
@@ -478,7 +478,7 @@
                                 </DataGrid>
                             </StackPanel>
                         </Border>
-                        <CheckBox Margin="0,0,0,8" IsChecked="{Binding KyraApiFirstRouting, Mode=TwoWay}" Content="Online assist: try configured providers before Local Kyra when mode allows (not for machine-anchored scans)" />
+                        <CheckBox Margin="0,0,0,8" IsChecked="{Binding KyraApiFirstRouting, Mode=TwoWay}" Content="API-first: try configured providers before Local Kyra when mode and privacy settings allow" />
                         <CheckBox Margin="0,0,0,8" IsChecked="{Binding KyraOfflineFallbackEnabled, Mode=TwoWay}" Content="Local fallback: allow Local Kyra when online providers fail" />
                         <CheckBox Margin="0,0,0,8" IsChecked="{Binding VerboseLiveLogs, Mode=TwoWay}" Content="Verbose beta logs (show Kyra routing lines in live logs)" />
                         <TextBlock Margin="0,0,0,12"
@@ -497,7 +497,7 @@
                                 <TextBlock Margin="0,8,0,0"
                                            FontSize="11.5"
                                            Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                                           Text="Stores safe preferences on this PC only—never API keys, passwords, serials, or recovery keys. Not sent to providers unless you enable memory and it passes sanitization."
+                                           Text="Keeps recent Kyra chat context locally (up to 100 turns by default) so troubleshooting stays coherent—never API keys, passwords, serials, product keys, or recovery keys. Not sent to providers unless you enable memory and it passes sanitization."
                                            TextWrapping="Wrap" />
                                 <CheckBox Margin="0,10,0,8" IsChecked="{Binding KyraPersistentMemoryEnabled, Mode=TwoWay}" Content="Enable Kyra memory" />
                                 <WrapPanel Margin="0,0,0,0">
@@ -661,6 +661,8 @@
                         <TextBlock FontFamily="Consolas" Text="CLOUDFLARE_API_KEY" />
                         <TextBlock FontFamily="Consolas" Text="CLOUDFLARE_ACCOUNT_ID" />
                         <TextBlock FontFamily="Consolas" Text="OPENAI_API_KEY" />
+                        <TextBlock FontFamily="Consolas" Text="FORGEREMS_OPENAI_API_KEY" />
+                        <TextBlock FontFamily="Consolas" Text="FORGEREMS_CUSTOM_PROVIDER_API_KEY" />
                         <TextBlock FontFamily="Consolas" Text="ANTHROPIC_API_KEY" />
 
                         <TextBlock Margin="0,10,0,0"

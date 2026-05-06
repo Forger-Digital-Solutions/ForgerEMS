@@ -33,6 +33,13 @@ public sealed class KyraLiveToolsSettings
 
     public string StocksBaseUrl { get; set; } = string.Empty;
 
+    /// <summary>fred when enabled; currently reports clear setup status unless implementation is available.</summary>
+    public string StatsProvider { get; set; } = "fred";
+
+    public string StatsApiKey { get; set; } = string.Empty;
+
+    public string StatsBaseUrl { get; set; } = string.Empty;
+
     public bool CryptoEnabled { get; set; } = true;
 
     /// <summary>coingecko (no key), optional future providers</summary>

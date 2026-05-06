@@ -101,7 +101,7 @@ public static class KyraCopilotResponseBuilder
             CopilotProviderType.GitHubModels => KyraResponseSource.GitHubModels,
             CopilotProviderType.MistralApi => KyraResponseSource.Mistral,
             CopilotProviderType.CloudflareWorkersAi => KyraResponseSource.CloudflareWorkersAi,
-            CopilotProviderType.OpenAICompatible => KyraResponseSource.OpenAi,
+            CopilotProviderType.OpenAICompatible or CopilotProviderType.CustomOpenAICompatible => KyraResponseSource.OpenAi,
             CopilotProviderType.AnthropicClaude => KyraResponseSource.Anthropic,
             CopilotProviderType.LmStudioLocal => KyraResponseSource.LmStudio,
             CopilotProviderType.OllamaLocal => KyraResponseSource.Ollama,

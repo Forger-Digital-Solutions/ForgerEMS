@@ -158,7 +158,7 @@ function Get-RedactedPreview {
 
 function Is-PlaceholderLine {
     param([Parameter(Mandatory)][string] $Line)
-    return $Line -match '(?i)REPLACE_ME|fake-|example|placeholder|sample|dummy|not-a-real|redaction fixture|SECRET123'
+    return $Line -match '(?i)REPLACE_ME|REPLACE_MODEL_NAME|YOUR_[A-Z0-9_]+|local-model-name|model-name|changeme|TODO|fake-|example|placeholder|sample|dummy|not-a-real|redaction fixture|SECRET123'
 }
 
 $secretFindings = [System.Collections.Generic.List[object]]::new()

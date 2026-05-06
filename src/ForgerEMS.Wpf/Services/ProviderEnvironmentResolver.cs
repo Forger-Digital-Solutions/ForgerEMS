@@ -48,7 +48,7 @@ public static class ProviderEnvironmentResolver
     public static KyraCredentialResolution ResolveApiCredential(string providerId, string? apiKeyEnvironmentVariable)
     {
         var session = KyraApiKeyStore.GetSessionKey(providerId);
-        if (!string.IsNullOrWhiteSpace(session))
+        if (!KyraProviderConfigResolver.IsMissingOrPlaceholder(session))
         {
             return new KyraCredentialResolution(session, KyraCredentialSource.Session);
         }
@@ -68,20 +68,20 @@ public static class ProviderEnvironmentResolver
             return KyraCredentialResolution.Empty;
         }
 
-        var process = SafeGetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.Process);
-        if (!string.IsNullOrWhiteSpace(process))
-        {
-            return new KyraCredentialResolution(process, KyraCredentialSource.ProcessEnvironment);
-        }
-
         var user = SafeGetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.User);
-        if (!string.IsNullOrWhiteSpace(user))
+        if (!KyraProviderConfigResolver.IsMissingOrPlaceholder(user))
         {
             return new KyraCredentialResolution(user, KyraCredentialSource.UserEnvironment);
         }
 
+        var process = SafeGetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.Process);
+        if (!KyraProviderConfigResolver.IsMissingOrPlaceholder(process))
+        {
+            return new KyraCredentialResolution(process, KyraCredentialSource.ProcessEnvironment);
+        }
+
         var machine = SafeGetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.Machine);
-        if (!string.IsNullOrWhiteSpace(machine))
+        if (!KyraProviderConfigResolver.IsMissingOrPlaceholder(machine))
         {
             return new KyraCredentialResolution(machine, KyraCredentialSource.MachineEnvironment);
         }

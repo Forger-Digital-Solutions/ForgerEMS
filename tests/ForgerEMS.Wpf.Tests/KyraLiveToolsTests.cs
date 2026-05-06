@@ -223,6 +223,28 @@ public sealed class KyraLiveToolsTests
     }
 
     [Fact]
+    public async Task Stock_AlphaVantage_Response_DoesNotLeakTokenInSummary()
+    {
+        var handler = new RoutingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(new
+            {
+                Global_Quote = new Dictionary<string, string>()
+            }).Replace("Global_Quote", "Global Quote", StringComparison.Ordinal)
+              .Replace("{}", "{\"05. price\":\"123.45\",\"10. change percent\":\"2.50%\",\"07. latest trading day\":\"2026-05-06\"}", StringComparison.Ordinal), Encoding.UTF8, "application/json")
+        });
+        var s = BaseSettings();
+        s.LiveTools!.StocksProvider = "alphavantage";
+        s.LiveTools.StocksApiKey = "alpha_super_secret_abc";
+        var tool = new KyraToolRegistry(handler).Tools.First(t => t.Name == "Stocks");
+        var r = await tool.ExecuteAsync(MkReq(KyraIntent.StockPrice, "MSFT", s, "MSFT"), default);
+        Assert.True(r.Success);
+        Assert.Contains("Alpha Vantage", r.UserFacingSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("alpha_super_secret", r.UserFacingSummary, StringComparison.Ordinal);
+        Assert.DoesNotContain("alpha_super_secret", r.ProviderAugmentation, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ProviderGrid_DoesNotContainKeys()
     {
         var s = BaseSettings();

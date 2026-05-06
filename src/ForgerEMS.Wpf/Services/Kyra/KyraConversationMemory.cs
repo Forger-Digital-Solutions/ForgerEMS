@@ -57,9 +57,9 @@ public sealed class KyraConversationMemory
     private readonly KyraMemoryStore? _store;
     private Func<bool>? _persistEnabled;
 
-    public KyraConversationMemory(int maxTurns = 30, KyraMemoryStore? store = null)
+    public KyraConversationMemory(int maxTurns = 100, KyraMemoryStore? store = null)
     {
-        _maxTurns = Math.Clamp(maxTurns, 20, 30);
+        _maxTurns = Math.Clamp(maxTurns, 1, 200);
         _store = store;
         TryRestoreFromDisk();
     }
@@ -105,7 +105,7 @@ public sealed class KyraConversationMemory
         lock (_gate)
         {
             return _turns
-                .TakeLast(Math.Min(20, _maxTurns))
+                .TakeLast(_maxTurns)
                 .SelectMany(turn => new[]
                 {
                     new CopilotChatMessage { Role = "You", Text = turn.UserMessage, Timestamp = turn.Timestamp },
@@ -375,8 +375,8 @@ public sealed class KyraConversationMemory
             return string.Empty;
         }
 
-        var tail = string.Join(" | ", _turns.TakeLast(4).Select(t => $"{t.Intent}:{t.UserMessage[..Math.Min(80, t.UserMessage.Length)]}"));
-        return tail.Length <= 500 ? tail : tail[..500] + "…";
+        var tail = string.Join(" | ", _turns.TakeLast(12).Select(t => $"{t.Intent}:{t.UserMessage[..Math.Min(80, t.UserMessage.Length)]}"));
+        return tail.Length <= 1200 ? tail : tail[..1200] + "…";
     }
 
     private static string Summarize(string value)

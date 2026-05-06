@@ -18,13 +18,18 @@ public static class CopilotProviderStatusFormatter
             ? provider.DefaultApiKeyEnvironmentVariable
             : providerConfig.ApiKeyEnvironmentVariable;
 
-        var resolution = ProviderEnvironmentResolver.ResolveApiCredential(provider.Id, envVar);
-        if (resolution.Source == KyraCredentialSource.None)
+        var resolution = KyraProviderConfigResolver.ResolveCredentialState(provider.Id, envVar, providerConfig.BaseUrl);
+        if (resolution == KyraProviderCredentialState.Missing)
         {
             return "Key source: not configured";
         }
 
-        return $"Key source — {resolution.DescribeUx()}";
+        if (resolution == KyraProviderCredentialState.Placeholder)
+        {
+            return "Key source: placeholder ignored";
+        }
+
+        return $"Key source — {DescribeCredentialState(resolution)}";
     }
 
     public static string BuildStatusLabel(ICopilotProvider provider, CopilotProviderConfiguration providerConfig)
@@ -36,10 +41,14 @@ public static class CopilotProviderStatusFormatter
 
         if (provider.Id.Equals("anthropic-claude", StringComparison.OrdinalIgnoreCase))
         {
-            var anthropicKey = ProviderEnvironmentResolver.ResolveApiCredential(provider.Id, providerConfig.ApiKeyEnvironmentVariable);
-            if (anthropicKey.Source == KyraCredentialSource.None)
+            var anthropicKey = KyraProviderConfigResolver.ResolveCredentialState(provider.Id, providerConfig.ApiKeyEnvironmentVariable, providerConfig.BaseUrl);
+            if (anthropicKey == KyraProviderCredentialState.Missing)
             {
                 return "Not configured — set ANTHROPIC_API_KEY (process/user/machine env) or a session key.";
+            }
+            if (anthropicKey == KyraProviderCredentialState.Placeholder)
+            {
+                return "Not configured — Anthropic key is a placeholder and will be ignored.";
             }
 
             return "Anthropic: adapter shell only in this build — key detected but live Claude API calls are not enabled yet.";
@@ -47,19 +56,29 @@ public static class CopilotProviderStatusFormatter
 
         if (provider.Id.Equals("cloudflare-workers-ai", StringComparison.OrdinalIgnoreCase))
         {
-            var account = ProviderEnvironmentResolver.ResolveCloudflareAccountId();
-            var keyResolution = ProviderEnvironmentResolver.ResolveApiCredential(provider.Id, providerConfig.ApiKeyEnvironmentVariable);
-            if (keyResolution.Source == KyraCredentialSource.None)
+            var account = KyraProviderConfigResolver.ResolveNamedCredential(CopilotProviderEnvironmentVariableNames.CloudflareAccountId);
+            var keyResolution = KyraProviderConfigResolver.ResolveCredentialState(provider.Id, providerConfig.ApiKeyEnvironmentVariable, providerConfig.BaseUrl);
+            if (keyResolution == KyraProviderCredentialState.Missing)
             {
                 return $"Not configured — set {CopilotProviderEnvironmentVariableNames.CloudflareWorkersAi} (process/user/machine env) or a session key.";
             }
 
-            if (account.Source == KyraCredentialSource.None)
+            if (keyResolution == KyraProviderCredentialState.Placeholder)
+            {
+                return "Not configured — Cloudflare API key is a placeholder and will be ignored.";
+            }
+
+            if (account == KyraProviderCredentialState.Missing)
             {
                 return $"Not usable — {CopilotProviderEnvironmentVariableNames.CloudflareAccountId} is missing. Add it to user or machine environment, then Refresh Provider Status.";
             }
 
-            return $"Ready — API key via {DescribeEnvTier(keyResolution.Source)}; account ID via {DescribeEnvTier(account.Source)}.";
+            if (account == KyraProviderCredentialState.Placeholder)
+            {
+                return $"Not usable — {CopilotProviderEnvironmentVariableNames.CloudflareAccountId} is a placeholder and will be ignored.";
+            }
+
+            return $"Ready — API key via {DescribeCredentialState(keyResolution)}; account ID via {DescribeCredentialState(account)}.";
         }
 
         if (IsPlaceholderProvider(provider))
@@ -76,11 +95,11 @@ public static class CopilotProviderStatusFormatter
             ? provider.DefaultApiKeyEnvironmentVariable
             : providerConfig.ApiKeyEnvironmentVariable;
 
-        var res = ProviderEnvironmentResolver.ResolveApiCredential(provider.Id, envVarName);
+        var resolved = KyraProviderConfigResolver.ResolveProvider(provider, providerConfig);
 
-        if (provider.IsConfigured(providerConfig))
+        if (resolved.IsReady && provider.IsConfigured(providerConfig))
         {
-            if (res.Source == KyraCredentialSource.Session)
+            if (resolved.CredentialState == KyraProviderCredentialState.FromSession)
             {
                 var envOnly = ProviderEnvironmentResolver.ResolveFromEnvironmentVariable(envVarName ?? string.Empty);
                 if (envOnly.Source != KyraCredentialSource.None)
@@ -91,7 +110,12 @@ public static class CopilotProviderStatusFormatter
                 return "Configured via session key (not saved to disk).";
             }
 
-            return $"Configured: {res.DescribeUx().Replace("Configured via ", "", StringComparison.Ordinal)}.";
+            return $"Configured: {DescribeCredentialState(resolved.CredentialState)}.";
+        }
+
+        if (!resolved.IsReady)
+        {
+            return $"{provider.DisplayName} is not ready: {resolved.SafeSkipReason}.";
         }
 
         if (string.IsNullOrWhiteSpace(envVarName))
@@ -101,6 +125,18 @@ public static class CopilotProviderStatusFormatter
 
         return $"{provider.DisplayName} key not found. Enter a session API key or set {envVarName} for process, user, or machine scope, then tap Refresh Provider Status.";
     }
+
+    private static string DescribeCredentialState(KyraProviderCredentialState state) =>
+        state switch
+        {
+            KyraProviderCredentialState.FromSession => "session key",
+            KyraProviderCredentialState.FromUserEnv => "user env",
+            KyraProviderCredentialState.FromProcessEnv => "process env",
+            KyraProviderCredentialState.FromSettings => "settings",
+            KyraProviderCredentialState.Present => "environment",
+            KyraProviderCredentialState.InvalidFormatMaybe => "present (format may be invalid)",
+            _ => "not configured"
+        };
 
     private static string DescribeEnvTier(KyraCredentialSource source)
     {

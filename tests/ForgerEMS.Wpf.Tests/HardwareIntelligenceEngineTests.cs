@@ -118,10 +118,12 @@ public sealed class HardwareIntelligenceEngineTests
     [Fact]
     public void AutomationMergeAddsMachineClassSensorMatrixAndDeviceFit()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "forgerems-hardware-intel-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(dir);
-        var reportPath = Path.Combine(dir, "system-intelligence-latest.json");
-        File.WriteAllText(reportPath, """
+        WithDeepSensorMode(null, () =>
+        {
+            var dir = Path.Combine(Path.GetTempPath(), "forgerems-hardware-intel-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            var reportPath = Path.Combine(dir, "system-intelligence-latest.json");
+            File.WriteAllText(reportPath, """
         {
           "summary": {
             "manufacturer": "Dell",
@@ -147,7 +149,7 @@ public sealed class HardwareIntelligenceEngineTests
           "recommendations": []
         }
         """);
-        File.WriteAllText(Path.Combine(dir, "usb-intelligence-latest.json"), """
+            File.WriteAllText(Path.Combine(dir, "usb-intelligence-latest.json"), """
         {
           "usbDiagnostics": {
             "usbProfileKnownPortsCount": 4,
@@ -159,23 +161,24 @@ public sealed class HardwareIntelligenceEngineTests
         }
         """);
 
-        Assert.True(SystemIntelligenceAutomationMerger.TryMerge(reportPath));
-        using var doc = JsonDocument.Parse(File.ReadAllText(reportPath));
+            Assert.True(SystemIntelligenceAutomationMerger.TryMerge(reportPath));
+            using var doc = JsonDocument.Parse(File.ReadAllText(reportPath));
 
-        Assert.Equal("Mobile Workstation", doc.RootElement.GetProperty("machineClass").GetProperty("primaryClass").GetString());
-        Assert.True(doc.RootElement.TryGetProperty("sensorMatrix", out var sensorMatrix));
-        Assert.Contains("CPU:", sensorMatrix.GetProperty("coverageSummary").GetString());
-        Assert.True(sensorMatrix.TryGetProperty("sensorProviders", out var providers));
-        Assert.Contains(providers.EnumerateArray(), provider =>
-            provider.GetProperty("providerName").GetString() == "Windows Native" &&
-            provider.GetProperty("isEnabled").GetBoolean());
-        Assert.Contains(providers.EnumerateArray(), provider =>
-            provider.GetProperty("providerName").GetString() == "LibreHardwareMonitor" &&
-            !provider.GetProperty("isEnabled").GetBoolean());
-        Assert.DoesNotContain("USB: 0/3 fields known", sensorMatrix.GetProperty("coverageSummary").GetString(), StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("USB: 5/5 fields known", sensorMatrix.GetProperty("coverageSummary").GetString(), StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("Mobile Workstation", doc.RootElement.GetProperty("deviceFit").GetProperty("machineClass").GetString());
-        Assert.Contains("Scan Confidence", doc.RootElement.GetProperty("forgerAutomation").GetProperty("summaryLine").GetString());
+            Assert.Equal("Mobile Workstation", doc.RootElement.GetProperty("machineClass").GetProperty("primaryClass").GetString());
+            Assert.True(doc.RootElement.TryGetProperty("sensorMatrix", out var sensorMatrix));
+            Assert.Contains("CPU:", sensorMatrix.GetProperty("coverageSummary").GetString());
+            Assert.True(sensorMatrix.TryGetProperty("sensorProviders", out var providers));
+            Assert.Contains(providers.EnumerateArray(), provider =>
+                provider.GetProperty("providerName").GetString() == "Windows Native" &&
+                provider.GetProperty("isEnabled").GetBoolean());
+            Assert.Contains(providers.EnumerateArray(), provider =>
+                provider.GetProperty("providerName").GetString() == "LibreHardwareMonitor" &&
+                !provider.GetProperty("isEnabled").GetBoolean());
+            Assert.DoesNotContain("USB: 0/3 fields known", sensorMatrix.GetProperty("coverageSummary").GetString(), StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("USB: 5/5 fields known", sensorMatrix.GetProperty("coverageSummary").GetString(), StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("Mobile Workstation", doc.RootElement.GetProperty("deviceFit").GetProperty("machineClass").GetString());
+            Assert.Contains("Scan Confidence", doc.RootElement.GetProperty("forgerAutomation").GetProperty("summaryLine").GetString());
+        });
     }
 
     [Fact]

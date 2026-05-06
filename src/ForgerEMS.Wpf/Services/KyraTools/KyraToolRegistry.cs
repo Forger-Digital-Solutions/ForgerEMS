@@ -24,10 +24,14 @@ public sealed class KyraToolRegistry
             new SystemContextKyraTool(),
             new ToolkitHealthKyraTool(),
             new DiagnosticsKyraTool(),
+            new CalculatorKyraTool(),
+            new DateTimeKyraTool(),
             new WeatherKyraTool(http, cache),
             new NewsKyraTool(http, cache),
             new CryptoPriceKyraTool(http, cache),
             new StockPriceKyraTool(http, cache),
+            new FinanceDataKyraTool(),
+            new StatsDataKyraTool(),
             new SportsKyraTool(http, cache),
             new WebSearchKyraTool(),
             new MarketplaceKyraTool(),
@@ -151,6 +155,72 @@ public sealed class KyraToolRegistry
 
     public string BuildStatusSummary() =>
         "See /provider or Kyra Advanced → Tools for per-tool status. Open-Meteo + CoinGecko are no-key options when enabled.";
+
+    public IReadOnlyList<CurrentDataToolStatus> BuildCurrentDataStatus(CopilotSettings settings)
+    {
+        var lt = settings.LiveTools ?? new KyraLiveToolsSettings();
+        return
+        [
+            new CurrentDataToolStatus
+            {
+                ToolName = "Weather",
+                Provider = string.IsNullOrWhiteSpace(lt.WeatherProvider) ? "openmeteo" : lt.WeatherProvider,
+                Configured = (lt.WeatherProvider ?? "openmeteo").Equals("openmeteo", StringComparison.OrdinalIgnoreCase) ||
+                             !string.IsNullOrWhiteSpace(lt.WeatherApiKey),
+                KeyStatus = string.IsNullOrWhiteSpace(lt.WeatherApiKey)
+                    ? KyraProviderCredentialState.Missing
+                    : KyraProviderConfigResolver.IsPlaceholderSecretOrValue(lt.WeatherApiKey) ? KyraProviderCredentialState.Placeholder : KyraProviderCredentialState.FromSettings,
+                Implemented = true,
+                RequiresNetwork = true,
+                SupportsNoKey = (lt.WeatherProvider ?? "openmeteo").Equals("openmeteo", StringComparison.OrdinalIgnoreCase)
+            },
+            new CurrentDataToolStatus
+            {
+                ToolName = "News",
+                Provider = string.IsNullOrWhiteSpace(lt.NewsProvider) ? "newsapi" : lt.NewsProvider,
+                Configured = !string.IsNullOrWhiteSpace(lt.NewsApiKey) &&
+                             !KyraProviderConfigResolver.IsPlaceholderSecretOrValue(lt.NewsApiKey),
+                KeyStatus = KeyStatusFromSetting(lt.NewsApiKey),
+                Implemented = (lt.NewsProvider ?? "newsapi").Equals("newsapi", StringComparison.OrdinalIgnoreCase) ||
+                              (lt.NewsProvider ?? "newsapi").Equals("gnews", StringComparison.OrdinalIgnoreCase),
+                RequiresNetwork = true,
+                SupportsNoKey = false
+            },
+            new CurrentDataToolStatus
+            {
+                ToolName = "Finance / Stocks",
+                Provider = string.IsNullOrWhiteSpace(lt.StocksProvider) ? "finnhub" : lt.StocksProvider,
+                Configured = !string.IsNullOrWhiteSpace(lt.StocksApiKey) &&
+                             !KyraProviderConfigResolver.IsPlaceholderSecretOrValue(lt.StocksApiKey),
+                KeyStatus = KeyStatusFromSetting(lt.StocksApiKey),
+                Implemented = new[] { "finnhub", "alphavantage", "fmp" }.Contains(NormalizeFinanceProvider(lt.StocksProvider), StringComparer.OrdinalIgnoreCase),
+                RequiresNetwork = true,
+                SupportsNoKey = false
+            },
+            new CurrentDataToolStatus
+            {
+                ToolName = "Crypto",
+                Provider = string.IsNullOrWhiteSpace(lt.CryptoProvider) ? "coingecko" : lt.CryptoProvider,
+                Configured = (lt.CryptoProvider ?? "coingecko").Equals("coingecko", StringComparison.OrdinalIgnoreCase),
+                KeyStatus = KeyStatusFromSetting(lt.CryptoApiKey),
+                Implemented = (lt.CryptoProvider ?? "coingecko").Equals("coingecko", StringComparison.OrdinalIgnoreCase),
+                RequiresNetwork = true,
+                SupportsNoKey = (lt.CryptoProvider ?? "coingecko").Equals("coingecko", StringComparison.OrdinalIgnoreCase)
+            },
+            new CurrentDataToolStatus
+            {
+                ToolName = "Stats / Economic Data",
+                Provider = string.IsNullOrWhiteSpace(lt.StatsProvider) ? "fred" : lt.StatsProvider,
+                Configured = !string.IsNullOrWhiteSpace(lt.StatsApiKey) &&
+                             !KyraProviderConfigResolver.IsPlaceholderSecretOrValue(lt.StatsApiKey),
+                KeyStatus = KeyStatusFromSetting(lt.StatsApiKey),
+                Implemented = false,
+                LastErrorSanitized = "FRED/status shell only in this build.",
+                RequiresNetwork = true,
+                SupportsNoKey = false
+            }
+        ];
+    }
 
     /// <summary>Builds a single augmentation block for API providers (disclaimers + stub status).</summary>
     public async Task<string?> BuildAugmentationAsync(
@@ -301,5 +371,29 @@ public sealed class KyraToolRegistry
         }
 
         return tool.Description;
+    }
+
+    private static KyraProviderCredentialState KeyStatusFromSetting(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return KyraProviderCredentialState.Missing;
+        }
+
+        return KyraProviderConfigResolver.IsPlaceholderSecretOrValue(value)
+            ? KyraProviderCredentialState.Placeholder
+            : KyraProviderCredentialState.FromSettings;
+    }
+
+    private static string NormalizeFinanceProvider(string? provider)
+    {
+        var p = (provider ?? "finnhub").Trim().ToLowerInvariant().Replace("-", "", StringComparison.Ordinal).Replace("_", "", StringComparison.Ordinal);
+        return p switch
+        {
+            "alpha" or "alphavantage" => "alphavantage",
+            "financialmodelingprep" => "fmp",
+            "" => "finnhub",
+            _ => p
+        };
     }
 }

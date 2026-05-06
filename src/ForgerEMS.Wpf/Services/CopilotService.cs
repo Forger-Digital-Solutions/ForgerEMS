@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Data;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -10,6 +11,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using VentoyToolkitSetup.Wpf.Configuration;
 using VentoyToolkitSetup.Wpf.Infrastructure;
 using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services.Intelligence;
@@ -43,6 +45,7 @@ public enum CopilotProviderType
 {
     LocalOffline,
     OpenAICompatible,
+    CustomOpenAICompatible,
     AnthropicClaude,
     OllamaLocal,
     LmStudioLocal,
@@ -224,13 +227,13 @@ public sealed class CopilotSettings
 
     public string ApiKeyEnvironmentVariable { get; set; } = string.Empty;
 
-    public int TimeoutSeconds { get; set; } = 12;
+    public int TimeoutSeconds { get; set; } = 60;
 
     public bool OfflineFallbackEnabled { get; set; } = true;
 
     public bool RedactContextEnabled { get; set; } = true;
 
-    public int MaxContextCharacters { get; set; } = 6000;
+    public int MaxContextCharacters { get; set; } = 12000;
 
     public bool UseLatestSystemScanContext { get; set; } = true;
 
@@ -258,6 +261,20 @@ public sealed class CopilotSettings
 
     /// <summary>When true (default), online providers are tried before falling back to Local Kyra when mode allows.</summary>
     public bool ApiFirstRouting { get; set; } = true;
+
+    public string ProviderPriorityCsv { get; set; } =
+        "openai-compatible,custom,openrouter,groq,gemini,anthropic,mistral,cerebras,github-models,cloudflare,lmstudio,ollama,offline";
+
+    /// <summary>Future testing hook; off by default to avoid surprise token burn.</summary>
+    public bool ConsensusMode { get; set; }
+
+    public string MemoryMode { get; set; } = "session";
+
+    public bool PersistMemory { get; set; }
+
+    public int MaxContextTurns { get; set; } = 100;
+
+    public string PersonalityProfile { get; set; } = "bubbly-tech";
 
     /// <summary>Optional on-disk preferences (non-sensitive); user toggle.</summary>
     public bool KyraPersistentMemoryEnabled { get; set; }
@@ -887,16 +904,19 @@ public static class KyraProviderPriority
 {
     public static readonly string[] DefaultOrder =
     [
-        "local-offline",
-        "gemini-free",
-        "groq-free",
-        "cerebras-free",
+        "openai-compatible",
+        "custom-openai-compatible",
         "openrouter-free",
+        "groq-free",
+        "gemini-free",
+        "anthropic-claude",
         "mistral-free",
+        "cerebras-free",
         "github-models",
         "cloudflare-workers-ai",
-        "openai-compatible",
-        "anthropic-claude",
+        "lm-studio-local",
+        "ollama-local",
+        "local-offline",
         "forgerems-cloud"
     ];
 }
@@ -1296,9 +1316,7 @@ public static class KyraApiKeyStore
 
     public static string ResolveApiKey(string providerId, CopilotProviderConfiguration configuration)
     {
-        return ProviderEnvironmentResolver
-            .ResolveApiCredential(providerId, configuration.ApiKeyEnvironmentVariable)
-            .Value ?? string.Empty;
+        return KyraProviderConfigResolver.ResolveApiKeyValue(providerId, configuration.ApiKeyEnvironmentVariable, configuration.BaseUrl);
     }
 
     public static string Mask(string apiKey)
@@ -1315,6 +1333,24 @@ public static class KyraApiKeyStore
         }
 
         return $"{trimmed[..4]}...{trimmed[^4..]}";
+    }
+}
+
+public static class KyraProviderUrlSafety
+{
+    public static bool IsSafeBaseUrl(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        if (!Uri.TryCreate(value.Trim(), UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        return uri.Scheme is "https" or "http" && string.IsNullOrWhiteSpace(uri.UserInfo);
     }
 }
 
@@ -2375,6 +2411,16 @@ public sealed class CopilotProviderRegistry : ICopilotProviderRegistry
             new OpenAiStyleCopilotProvider("cloudflare-workers-ai", "Cloudflare Workers AI", CopilotProviderType.CloudflareWorkersAi, "Free API pool", false, "https://api.cloudflare.com/client/v4/accounts", "@cf/meta/llama-3.1-8b-instruct", "CLOUDFLARE_API_KEY", "Cloudflare Workers AI (endpoint shape may require account-specific route)."),
             new StubCopilotProvider(CopilotProviderType.HuggingFaceInference, "huggingface-inference", "Hugging Face Inference Providers", "Free API pool", "Placeholder provider: endpoint/model compatibility varies by provider route."),
             new OpenAICompatibleCopilotProvider(),
+            new OpenAiStyleCopilotProvider(
+                "custom-openai-compatible",
+                "Custom OpenAI-Compatible",
+                CopilotProviderType.CustomOpenAICompatible,
+                "Online/local AI",
+                true,
+                ForgerEmsEnvironmentConfiguration.CustomProviderBaseUrl,
+                ForgerEmsEnvironmentConfiguration.CustomProviderModel,
+                "FORGEREMS_CUSTOM_PROVIDER_API_KEY",
+                "Operator-supplied OpenAI-compatible endpoint. Rejects base URLs with embedded credentials."),
             new AnthropicClaudeCopilotProvider(),
             new OllamaCopilotProvider(),
             new LmStudioCopilotProvider(),
@@ -2425,8 +2471,9 @@ public sealed class CopilotService : ICopilotService
     {
         _providerRegistry = providerRegistry;
         _contextBuilder = contextBuilder;
-        _memory = new KyraConversationMemory(30, new KyraMemoryStore());
-        _memory.SetPersistenceGate(() => _lastSettingsForMemory?.KyraPersistentMemoryEnabled == true);
+        _memory = new KyraConversationMemory(ForgerEmsEnvironmentConfiguration.KyraMaxContextTurns, new KyraMemoryStore());
+        _memory.SetPersistenceGate(() => _lastSettingsForMemory?.KyraPersistentMemoryEnabled == true ||
+                                         _lastSettingsForMemory?.PersistMemory == true);
         _kyraHost = new KyraOrchestrationHostAdapter(this);
         _kyraOrchestrator = new KyraOrchestrator(_kyraHost, _providerRegistry, _contextBuilder, _toolRegistry);
     }
@@ -2619,8 +2666,9 @@ public sealed class CopilotService : ICopilotService
         }
 
         var providerConfig = GetProviderConfig(settings, provider);
+        var resolvedConfig = KyraProviderConfigResolver.ResolveProvider(provider, providerConfig);
         var quotaState = _usageTracker.GetOrCreate(provider.Id);
-        quotaState.IsConfigured = provider.IsConfigured(providerConfig);
+        quotaState.IsConfigured = provider.IsConfigured(providerConfig) && resolvedConfig.IsReady;
         quotaState.IsEnabled = providerConfig.IsEnabled;
         if (quotaState.CooldownUntilUtc is not null && quotaState.CooldownUntilUtc > DateTimeOffset.UtcNow)
         {
@@ -2631,6 +2679,18 @@ public sealed class CopilotService : ICopilotService
                 FailureReason = KyraProviderFailureReason.RateLimited,
                 IsTransientFailure = true,
                 UserMessage = $"{provider.DisplayName} appears rate-limited right now. I’m trying the next configured provider."
+            };
+        }
+
+        if (!resolvedConfig.IsReady)
+        {
+            notes.Add($"{provider.DisplayName}: skipped ({resolvedConfig.SafeSkipReason})");
+            return new CopilotProviderResult
+            {
+                Succeeded = false,
+                FailureReason = KyraProviderFailureReason.NotConfigured,
+                UserMessage = $"{provider.DisplayName} is not configured.",
+                DiagnosticMessage = resolvedConfig.SafeSkipReason
             };
         }
 
@@ -2809,6 +2869,9 @@ public sealed class CopilotService : ICopilotService
 
     public void EnsureProviderDefaults(CopilotSettings settings)
     {
+        settings.LiveTools ??= new KyraLiveToolsSettings();
+        KyraProviderConfigResolver.ApplyLiveToolEnvironmentDefaults(settings.LiveTools);
+
         foreach (var provider in _providerRegistry.Providers)
         {
             _ = GetProviderConfig(settings, provider);
@@ -2835,12 +2898,14 @@ public sealed class CopilotService : ICopilotService
             settings.Providers[provider.Id] = providerConfig;
         }
 
-        if (string.IsNullOrWhiteSpace(providerConfig.BaseUrl))
+        if (string.IsNullOrWhiteSpace(providerConfig.BaseUrl) ||
+            KyraProviderConfigResolver.IsPlaceholderSecretOrValue(providerConfig.BaseUrl))
         {
             providerConfig.BaseUrl = provider.DefaultBaseUrl;
         }
 
-        if (string.IsNullOrWhiteSpace(providerConfig.ModelName))
+        if (string.IsNullOrWhiteSpace(providerConfig.ModelName) ||
+            KyraProviderConfigResolver.IsPlaceholderSecretOrValue(providerConfig.ModelName))
         {
             providerConfig.ModelName = provider.DefaultModelName;
         }
@@ -3357,14 +3422,34 @@ public sealed class CopilotSettingsStore : ICopilotSettingsStore
 
     private void ApplyDefaults(CopilotSettings settings)
     {
-        settings.TimeoutSeconds = settings.TimeoutSeconds <= 0 ? 12 : settings.TimeoutSeconds;
-        settings.MaxContextCharacters = settings.MaxContextCharacters <= 0 ? 6000 : settings.MaxContextCharacters;
+        settings.TimeoutSeconds = settings.TimeoutSeconds <= 0 ? ForgerEmsEnvironmentConfiguration.KyraProviderTimeoutSeconds : settings.TimeoutSeconds;
+        settings.MaxContextCharacters = settings.MaxContextCharacters <= 0 ? ForgerEmsEnvironmentConfiguration.KyraContextMaxChars : settings.MaxContextCharacters;
         settings.ModelName = string.IsNullOrWhiteSpace(settings.ModelName) ? "local-rules" : settings.ModelName;
         settings.MaxProviderFallbacksPerMessage = settings.MaxProviderFallbacksPerMessage <= 0 ? 4 : settings.MaxProviderFallbacksPerMessage;
         settings.FreeApiDailyRequestCap = settings.FreeApiDailyRequestCap <= 0 ? 120 : settings.FreeApiDailyRequestCap;
         settings.MaxInputCharactersOnline = settings.MaxInputCharactersOnline <= 0 ? 4000 : settings.MaxInputCharactersOnline;
         settings.MaxOutputTokensOnline = settings.MaxOutputTokensOnline <= 0 ? 700 : settings.MaxOutputTokensOnline;
         settings.ConsecutiveFailureThreshold = settings.ConsecutiveFailureThreshold <= 0 ? 4 : settings.ConsecutiveFailureThreshold;
+        settings.ApiFirstRouting = settings.ApiFirstRouting && ForgerEmsEnvironmentConfiguration.KyraApiFirst;
+        settings.ProviderPriorityCsv = string.IsNullOrWhiteSpace(settings.ProviderPriorityCsv)
+            ? ForgerEmsEnvironmentConfiguration.KyraProviderPriority
+            : settings.ProviderPriorityCsv;
+        settings.ConsensusMode = settings.ConsensusMode || ForgerEmsEnvironmentConfiguration.KyraConsensusMode;
+        settings.MemoryMode = string.IsNullOrWhiteSpace(settings.MemoryMode) ? ForgerEmsEnvironmentConfiguration.KyraMemoryMode : settings.MemoryMode;
+        settings.PersistMemory = settings.PersistMemory || ForgerEmsEnvironmentConfiguration.KyraPersistMemory;
+        settings.KyraPersistentMemoryEnabled = settings.KyraPersistentMemoryEnabled || settings.PersistMemory;
+        settings.MaxContextTurns = Math.Clamp(settings.MaxContextTurns <= 0 ? ForgerEmsEnvironmentConfiguration.KyraMaxContextTurns : settings.MaxContextTurns, 1, 200);
+        settings.PersonalityProfile = string.IsNullOrWhiteSpace(settings.PersonalityProfile)
+            ? ForgerEmsEnvironmentConfiguration.KyraPersonality
+            : settings.PersonalityProfile;
+        if (ForgerEmsEnvironmentConfiguration.KyraOnlineEnabled && settings.Mode == CopilotMode.OfflineOnly)
+        {
+            settings.Mode = CopilotMode.HybridAuto;
+        }
+
+        settings.AllowOnlineSystemContextSharing |= ForgerEmsEnvironmentConfiguration.KyraShareSystemContext;
+        settings.EnableFreeProviderPool = settings.EnableFreeProviderPool || ForgerEmsEnvironmentConfiguration.KyraOnlineEnabled;
+        settings.EnableByokProviders = settings.EnableByokProviders || ForgerEmsEnvironmentConfiguration.KyraOnlineEnabled;
 
         foreach (var provider in _registry.Providers)
         {
@@ -3374,12 +3459,19 @@ public sealed class CopilotSettingsStore : ICopilotSettingsStore
                 settings.Providers[provider.Id] = providerConfig;
             }
 
-            providerConfig.IsEnabled = providerConfig.IsEnabled || provider.EnabledByDefault;
-            providerConfig.BaseUrl = string.IsNullOrWhiteSpace(providerConfig.BaseUrl) ? provider.DefaultBaseUrl : providerConfig.BaseUrl;
-            providerConfig.ModelName = string.IsNullOrWhiteSpace(providerConfig.ModelName) ? provider.DefaultModelName : providerConfig.ModelName;
+            providerConfig.BaseUrl = string.IsNullOrWhiteSpace(providerConfig.BaseUrl) ||
+                                     KyraProviderConfigResolver.IsPlaceholderSecretOrValue(providerConfig.BaseUrl)
+                ? provider.DefaultBaseUrl
+                : providerConfig.BaseUrl;
+            providerConfig.ModelName = string.IsNullOrWhiteSpace(providerConfig.ModelName) ||
+                                       KyraProviderConfigResolver.IsPlaceholderSecretOrValue(providerConfig.ModelName)
+                ? provider.DefaultModelName
+                : providerConfig.ModelName;
             providerConfig.ApiKeyEnvironmentVariable = string.IsNullOrWhiteSpace(providerConfig.ApiKeyEnvironmentVariable)
                 ? provider.DefaultApiKeyEnvironmentVariable
                 : providerConfig.ApiKeyEnvironmentVariable;
+            var resolvedProvider = KyraProviderConfigResolver.ResolveProvider(provider, providerConfig);
+            providerConfig.IsEnabled = providerConfig.IsEnabled || provider.EnabledByDefault || (resolvedProvider.IsReady && provider.IsConfigured(providerConfig));
             providerConfig.TimeoutSeconds = providerConfig.TimeoutSeconds <= 0 ? settings.TimeoutSeconds : providerConfig.TimeoutSeconds;
             providerConfig.MaxRequestsPerMinute = providerConfig.MaxRequestsPerMinute <= 0 ? 12 : providerConfig.MaxRequestsPerMinute;
             providerConfig.DailyRequestCap = providerConfig.DailyRequestCap <= 0 ? (provider.IsOnlineProvider ? 60 : int.MaxValue) : providerConfig.DailyRequestCap;
@@ -3388,6 +3480,7 @@ public sealed class CopilotSettingsStore : ICopilotSettingsStore
         }
 
         settings.LiveTools ??= new KyraLiveToolsSettings();
+        KyraProviderConfigResolver.ApplyLiveToolEnvironmentDefaults(settings.LiveTools);
         if (settings.LiveTools.CacheMinutes <= 0)
         {
             settings.LiveTools.CacheMinutes = 10;
@@ -3400,8 +3493,9 @@ public static class PromptTemplates
     public static string GetSystemPrompt(CopilotPromptMode mode)
     {
         const string shared =
-            "You are Kyra, ForgerEMS’s built-in assistant—practical, concise, and calm. " +
+            "You are Kyra, ForgerEMS’s built-in AI technician assistant—cute, bubbly, fun, technician-smart, direct, and honest without being childish. " +
             "Lead with the direct answer, then short numbered steps, then optional detail. Ask at most one useful follow-up when it helps. " +
+            "Use light warmth and personality, but do not spam emoji or sacrifice accuracy. " +
             "If the user message is a follow-up (“those issues”, “that”, “fix it”), continue from Kyra’s prior reply in the recap—never claim Kyra did not suggest or list anything that appears there. " +
             "Never invent live market/weather/news/sports data unless a configured Kyra live tool actually supplied it; otherwise say live tools are not available here and give safe general guidance. " +
             "Use Kyra device insight + System Intelligence naturally in plain language; don’t paste huge raw diagnostics unless the user asks. " +
@@ -3508,7 +3602,7 @@ public sealed class OpenAiStyleCopilotProvider : ICopilotProvider
             return false;
         }
 
-        return !string.IsNullOrWhiteSpace(configuration.BaseUrl) &&
+        return KyraProviderUrlSafety.IsSafeBaseUrl(configuration.BaseUrl) &&
                !string.IsNullOrWhiteSpace(configuration.ModelName) &&
                (!string.IsNullOrWhiteSpace(KyraApiKeyStore.ResolveApiKey(Id, configuration)));
     }
@@ -3541,6 +3635,17 @@ public sealed class OpenAiStyleCopilotProvider : ICopilotProvider
                     DiagnosticMessage = "Missing CLOUDFLARE_ACCOUNT_ID."
                 };
             }
+        }
+
+        if (!KyraProviderUrlSafety.IsSafeBaseUrl(request.ProviderConfiguration.BaseUrl))
+        {
+            return new CopilotProviderResult
+            {
+                Succeeded = false,
+                FailureReason = KyraProviderFailureReason.NotConfigured,
+                UserMessage = $"{DisplayName} base URL is invalid or contains embedded credentials. Fix provider settings and try again.",
+                DiagnosticMessage = "Unsafe provider base URL rejected."
+            };
         }
 
         var baseUrl = request.ProviderConfiguration.BaseUrl.TrimEnd('/');
@@ -3641,14 +3746,18 @@ public sealed class OpenAICompatibleCopilotProvider : ICopilotProvider
     public bool IsOnlineProvider => true;
     public bool IsPaidProvider => true;
     public bool EnabledByDefault => false;
-    public string DefaultBaseUrl => "https://api.openai.com/v1";
-    public string DefaultModelName => "gpt-4.1-mini";
-    public string DefaultApiKeyEnvironmentVariable => "OPENAI_API_KEY";
+    public string DefaultBaseUrl => string.IsNullOrWhiteSpace(ForgerEmsEnvironmentConfiguration.OpenAiBaseUrl)
+        ? "https://api.openai.com/v1"
+        : ForgerEmsEnvironmentConfiguration.OpenAiBaseUrl;
+    public string DefaultModelName => string.IsNullOrWhiteSpace(ForgerEmsEnvironmentConfiguration.OpenAiModel)
+        ? "gpt-4.1-mini"
+        : ForgerEmsEnvironmentConfiguration.OpenAiModel;
+    public string DefaultApiKeyEnvironmentVariable => "FORGEREMS_OPENAI_API_KEY";
     public string StatusText => "Configurable OpenAI-compatible provider. API key is read from environment variable only.";
 
     public bool IsConfigured(CopilotProviderConfiguration configuration)
     {
-        return !string.IsNullOrWhiteSpace(configuration.BaseUrl) &&
+        return KyraProviderUrlSafety.IsSafeBaseUrl(configuration.BaseUrl) &&
                !string.IsNullOrWhiteSpace(configuration.ModelName) &&
                !string.IsNullOrWhiteSpace(KyraApiKeyStore.ResolveApiKey(Id, configuration));
     }
@@ -3661,6 +3770,17 @@ public sealed class OpenAICompatibleCopilotProvider : ICopilotProvider
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             return NotConfigured("OpenAI-compatible API key environment variable is not set.");
+        }
+
+        if (!KyraProviderUrlSafety.IsSafeBaseUrl(request.ProviderConfiguration.BaseUrl))
+        {
+            return new CopilotProviderResult
+            {
+                Succeeded = false,
+                FailureReason = KyraProviderFailureReason.NotConfigured,
+                UserMessage = "OpenAI-compatible provider base URL is invalid or contains embedded credentials. Offline fallback is available.",
+                DiagnosticMessage = "Unsafe provider base URL rejected."
+            };
         }
 
         var baseUrl = request.ProviderConfiguration.BaseUrl.TrimEnd('/');
@@ -4209,6 +4329,11 @@ public sealed class LocalRulesCopilotEngine
             return refusal;
         }
 
+        if (TryBuildCalculatorAnswer(normalizedPrompt, out var calculatorAnswer))
+        {
+            return calculatorAnswer;
+        }
+
         if (IsEmbeddedWslDiagnosticsStabilityQuestion(normalizedPrompt))
         {
             return BuildEmbeddedWslDiagnosticsStabilityAnswer();
@@ -4300,6 +4425,44 @@ public sealed class LocalRulesCopilotEngine
             Next step:
             If you need verified live figures, enable the relevant live tool in Kyra Advanced (operator configuration) or check a trusted website directly.
             """;
+    }
+
+    private static bool TryBuildCalculatorAnswer(string prompt, out string answer)
+    {
+        answer = string.Empty;
+        if (!ContainsAny(prompt, "calculate", "calculator", "what is", "what's", "math"))
+        {
+            return false;
+        }
+
+        var expression = Regex.Replace(prompt, @"(?i)\b(calculate|calculator|what\s+is|what's|math|please|equals|=)\b", " ");
+        expression = expression.Replace("×", "*", StringComparison.Ordinal)
+            .Replace("÷", "/", StringComparison.Ordinal)
+            .Trim();
+        if (!Regex.IsMatch(expression, @"^[\d\.\+\-\*/\(\)\s%]+$") ||
+            !Regex.IsMatch(expression, @"\d") ||
+            !Regex.IsMatch(expression, @"[\+\-\*/%]"))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var table = new DataTable();
+            var result = table.Compute(expression.Replace("%", "/100", StringComparison.Ordinal), string.Empty);
+            var numeric = Convert.ToDecimal(result, CultureInfo.InvariantCulture);
+            answer = $"""
+                Direct answer:
+                {expression} = {numeric.ToString("0.########", CultureInfo.InvariantCulture)}
+
+                I used Kyra’s local calculator tool for that, so no provider call or guesswork was needed.
+                """;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static bool IsKyraBetaOperatorApiKeyQuestion(string prompt)

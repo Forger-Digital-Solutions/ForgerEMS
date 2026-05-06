@@ -105,12 +105,23 @@ public static class KyraProviderRouter
                 continue;
             }
 
+            var resolved = KyraProviderConfigResolver.ResolveProvider(provider, config);
+            if (!resolved.IsReady)
+            {
+                continue;
+            }
+
             if (!settings.EnableByokProviders && provider.IsPaidProvider)
             {
                 continue;
             }
 
             if (!settings.EnableFreeProviderPool && !provider.IsPaidProvider)
+            {
+                continue;
+            }
+
+            if (!provider.IsConfigured(config))
             {
                 continue;
             }
@@ -137,11 +148,105 @@ public static class KyraProviderRouter
             scores.Add(new KyraProviderScore { Provider = provider, Score = score });
         }
 
+        var priority = BuildPriority(settings.ProviderPriorityCsv);
         return scores
-            .OrderByDescending(item => item.Score)
+            .OrderBy(item => priority.TryGetValue(ProviderAlias(item.Provider), out var rank) ? rank : int.MaxValue)
+            .ThenByDescending(item => item.Score)
             .Take(Math.Max(1, settings.MaxProviderFallbacksPerMessage))
             .ToArray();
     }
+
+    public static IReadOnlyList<string> ExplainSkippedProviders(
+        IReadOnlyList<ICopilotProvider> providers,
+        CopilotRequest request,
+        CopilotSettings settings,
+        CopilotContext context,
+        Func<ICopilotProvider, CopilotProviderConfiguration> configResolver)
+    {
+        var skipped = new List<string>();
+        foreach (var provider in providers)
+        {
+            if (provider.ProviderType == CopilotProviderType.LocalOffline)
+            {
+                continue;
+            }
+
+            var config = configResolver(provider);
+            if (!config.IsEnabled)
+            {
+                skipped.Add($"{provider.DisplayName}: disabled");
+                continue;
+            }
+
+            var resolved = KyraProviderConfigResolver.ResolveProvider(provider, config);
+            if (!resolved.IsReady)
+            {
+                skipped.Add($"{provider.DisplayName}: {resolved.SafeSkipReason}");
+                continue;
+            }
+
+            if (!settings.EnableByokProviders && provider.IsPaidProvider)
+            {
+                skipped.Add($"{provider.DisplayName}: BYOK providers disabled");
+                continue;
+            }
+
+            if (!settings.EnableFreeProviderPool && !provider.IsPaidProvider)
+            {
+                skipped.Add($"{provider.DisplayName}: free provider pool disabled");
+                continue;
+            }
+
+            if (!provider.CanHandle(new CopilotProviderRequest
+                {
+                    Prompt = request.Prompt,
+                    Context = context,
+                    Settings = settings,
+                    ProviderConfiguration = config
+                }))
+            {
+                skipped.Add($"{provider.DisplayName}: not implemented for this request");
+            }
+        }
+
+        return skipped;
+    }
+
+    private static Dictionary<string, int> BuildPriority(string? csv)
+    {
+        var source = string.IsNullOrWhiteSpace(csv)
+            ? "openai-compatible,custom,openrouter,groq,gemini,anthropic,mistral,cerebras,github-models,cloudflare,lmstudio,ollama,offline"
+            : csv;
+        var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var parts = source.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        for (var i = 0; i < parts.Length; i++)
+        {
+            if (!map.ContainsKey(parts[i]))
+            {
+                map[parts[i]] = i;
+            }
+        }
+
+        return map;
+    }
+
+    private static string ProviderAlias(ICopilotProvider provider) =>
+        provider.Id switch
+        {
+            "custom-openai-compatible" => "custom",
+            "openrouter-free" => "openrouter",
+            "groq-free" => "groq",
+            "gemini-free" => "gemini",
+            "anthropic-claude" => "anthropic",
+            "mistral-free" => "mistral",
+            "cerebras-free" => "cerebras",
+            "github-models" => "github-models",
+            "cloudflare-workers-ai" => "cloudflare",
+            "lm-studio-local" => "lmstudio",
+            "ollama-local" => "ollama",
+            "local-offline" => "offline",
+            _ => provider.Id
+        };
 
     private static int ScoreProvider(ICopilotProvider provider, KyraIntent intent, bool deprioritizeLocalAi)
     {

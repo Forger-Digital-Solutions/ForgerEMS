@@ -4,6 +4,10 @@ This file documents supported and reserved ForgerEMS environment variables for v
 
 General app configuration is local-first. Environment variables are optional operator/developer overrides unless stated otherwise.
 
+Placeholder values such as `REPLACE_ME`, `YOUR_*`, `REPLACE_MODEL_NAME`, `local-model-name`, `model-name`, `example.local`, `sk-REPLACE_ME`, `changeme`, and `TODO` are treated as **not configured**. They are examples only and must not make Kyra mark a provider ready.
+
+For installed-app testing, persistent variables are Windows **User** environment variables. Use `tools/show-forgerems-env-status.ps1` to inspect User env readiness without printing raw secrets.
+
 Deep Sensor Mode has explicit consent precedence:
 
 1. `FORGEREMS_DEEP_SENSOR_MODE` environment variable
@@ -59,7 +63,15 @@ Deep Sensor Mode has explicit consent precedence:
 | `FORGEREMS_KYRA_ONLINE_ENABLED` | No | `false` | Kyra config | Gate online provider use | Yes | Online providers may send prompt/context to configured provider. |
 | `FORGEREMS_KYRA_SHARE_SYSTEM_CONTEXT` | No | `false` | Kyra config | Allow sanitized system context sharing | Yes | Keep off unless user/operator intentionally enables. |
 | `FORGEREMS_KYRA_REQUIRE_LOCAL_FACTS` | No | `true` | Kyra config | Prefer grounded local reports | Yes | Not a secret. |
-| `FORGEREMS_KYRA_MAX_CONTEXT_TURNS` | No | `20` | Kyra config | Conversation context depth | Yes | Clamped 1-200. |
+| `FORGEREMS_KYRA_API_FIRST` | No | `true` | Kyra routing | Try configured API providers before Local Kyra when mode/privacy allow | Yes | Offline fallback still remains available. |
+| `FORGEREMS_KYRA_PROVIDER_PRIORITY` | No | `openai-compatible,custom,openrouter,groq,gemini,anthropic,mistral,cerebras,github-models,cloudflare,lmstudio,ollama,offline` | Kyra routing | Provider fallback order | Yes | Does not call every provider; missing keys are skipped. |
+| `FORGEREMS_KYRA_PROVIDER_TIMEOUT_SECONDS` | No | `60` | Kyra routing | Provider call timeout | Yes | Clamped 3-120. |
+| `FORGEREMS_KYRA_CONSENSUS_MODE` | No | `false` | Kyra routing | Future multi-provider comparison gate | Yes | Disabled to avoid surprise token/API usage. |
+| `FORGEREMS_KYRA_MEMORY_MODE` | No | `session` | Kyra memory | Memory mode hint | Yes | Session memory is local. |
+| `FORGEREMS_KYRA_PERSIST_MEMORY` | No | `false` | Kyra memory | Persist sanitized memory locally | Yes | Secrets are redacted before persistence. |
+| `FORGEREMS_KYRA_MAX_CONTEXT_TURNS` | No | `100` | Kyra config | Conversation context depth | Yes | Clamped 1-200. |
+| `FORGEREMS_KYRA_CONTEXT_MAX_CHARS` | No | `12000` | Kyra config | Prompt/context character budget | Yes | Sanitized before online use. |
+| `FORGEREMS_KYRA_PERSONALITY` | No | `bubbly-tech` | Kyra tone | Personality profile hint | Yes | Future values may include professional/minimal/debug. |
 | `FORGEREMS_OPENAI_BASE_URL` | No | empty | Kyra OpenAI-compatible path | Base URL override | Usually yes | Do not include embedded credentials in URLs. |
 | `FORGEREMS_OPENAI_MODEL` | No | empty | Kyra OpenAI-compatible path | Model override | Yes | Not a secret. |
 | `FORGEREMS_OPENAI_API_KEY` | Optional secret | empty | Kyra OpenAI-compatible path | API key presence check | Never expose | Prefer secret manager/user env. |
@@ -74,6 +86,17 @@ Deep Sensor Mode has explicit consent precedence:
 | `FORGEREMS_CUSTOM_PROVIDER_BASE_URL` | No | empty | Kyra custom provider | OpenAI-compatible custom URL | Usually yes | Do not include embedded credentials. |
 | `FORGEREMS_CUSTOM_PROVIDER_MODEL` | No | empty | Kyra custom provider | Custom provider model | Yes | Not a secret. |
 | `FORGEREMS_CUSTOM_PROVIDER_API_KEY` | Optional secret | empty | Kyra custom provider | API key presence check | Never expose | Do not log raw. |
+| `FORGEREMS_WEATHER_PROVIDER` | No | empty/openmeteo | Kyra live tools | Weather provider hint | Yes | Open-Meteo can work without a key when enabled. |
+| `FORGEREMS_WEATHER_API_KEY` | Optional secret | empty | Kyra live tools | Weather provider key | Never expose | Optional for providers that require keys. |
+| `FORGEREMS_WEATHER_DEFAULT_LOCATION` | No | empty | Kyra live tools | Default coarse weather location | Treat as personal location | Prefer city/ZIP, not exact address. |
+| `FORGEREMS_NEWS_PROVIDER` | No | empty | Kyra live tools | News provider hint | Yes | Shell/config path; do not invent live news. |
+| `FORGEREMS_NEWS_API_KEY` | Optional secret | empty | Kyra live tools | News provider key | Never expose | Optional future/current provider. |
+| `FORGEREMS_FINANCE_PROVIDER` | No | empty/`finnhub` | Kyra live tools | Finance/stocks provider hint | Yes | Supported values for stock quotes: `finnhub`, `alphavantage`, `fmp`. |
+| `FORGEREMS_FINANCE_API_KEY` | Optional secret | empty | Kyra live tools | Finance provider key | Never expose | Optional future/current provider. |
+| `FORGEREMS_CRYPTO_PROVIDER` | No | empty/coingecko | Kyra live tools | Crypto provider hint | Yes | CoinGecko no-key path may be used when enabled. |
+| `FORGEREMS_CRYPTO_API_KEY` | Optional secret | empty | Kyra live tools | Crypto provider key | Never expose | Optional future provider. |
+| `FORGEREMS_STATS_PROVIDER` | No | empty/`fred` | Kyra live tools | Statistics/economic data provider hint | Yes | FRED status is shell/limited in this build; Kyra will not invent economic stats. |
+| `FORGEREMS_STATS_API_KEY` | Optional secret | empty | Kyra live tools | Statistics/economic data provider key | Never expose | Optional future/current provider. |
 | `FORGEREMS_DIAGNOSTICS_EXPORT_DIR` | No | empty | Support/export | Default export folder | Treat as private path | Redact in public reports. |
 | `FORGEREMS_DIAGNOSTICS_REDACTION_STRICT` | No | `true` | Diagnostics | Redaction mode hint | Yes | Reserved. |
 | `FORGEREMS_ENABLE_DIAGNOSTIC_BUNDLE` | No | `true` | WPF UI | Enable/disable support bundle command | Yes | Not a secret. |

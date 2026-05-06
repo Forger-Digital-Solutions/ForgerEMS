@@ -99,8 +99,24 @@ public sealed class KyraOrchestrator
                 hostFacts);
             var plan = decision.ToolPlan;
             notes.Add($"Tool plan: {plan.ToolName}");
+            notes.Add("Provider route: " + (decision.OrderedProviders.Count == 0
+                ? "Local Kyra fallback only"
+                : string.Join(" -> ", decision.OrderedProviders.Select(provider => provider.DisplayName))));
+            if (settings.AllowOnlineSystemContextSharing)
+            {
+                notes.Add("Machine context shared: true (sanitized when online provider is used)");
+            }
+            else
+            {
+                notes.Add("Machine context shared: false");
+            }
             if (request.VerboseDiagnosticNotes)
             {
+                foreach (var skipped in decision.SkippedProviders.Take(8))
+                {
+                    notes.Add("Skipped provider: " + skipped);
+                }
+
                 if (plan.StayLocalReason == KyraStayLocalReason.MachineContextPrivacy &&
                     settings.Mode is not CopilotMode.OfflineOnly and not CopilotMode.AskFirst)
                 {
