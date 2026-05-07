@@ -87,7 +87,7 @@ public sealed class DeepSensorDisclosureCopyTests
 
         Assert.Contains("Read-only local sensors", mainViewModel, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ForgerEMS does not control fans, voltages, clocks, BIOS, or firmware", mainViewModel, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Enable ForgerEMS Deep Sensor Mode", installer, StringComparison.Ordinal);
+        Assert.Contains("Enable Deep Sensor Mode (local read-only hardware sensors)", installer, StringComparison.Ordinal);
         Assert.Contains("bundled local read-only sensor provider", installer, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Some readings depend on firmware, drivers, permissions, and hardware support", installer, StringComparison.Ordinal);
         Assert.Contains("MPL-2.0", installer, StringComparison.Ordinal);

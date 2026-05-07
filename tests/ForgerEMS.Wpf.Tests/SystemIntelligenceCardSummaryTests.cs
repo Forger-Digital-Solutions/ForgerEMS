@@ -243,6 +243,103 @@ public sealed class SystemIntelligenceCardSummaryTests
         Assert.Contains("Best measured port: LT USB-C", text);
     }
 
+    [Fact]
+    public void HardwareXray_OptionalProviderStatusGroupsPermissionRequiredAndNotExposed()
+    {
+        var text = InvokeSummary("BuildHardwareXraySummary", JsonDocument.Parse(
+            """
+            {
+              "machineClass": { "primaryClass":"Mobile Workstation", "confidence":"High", "secondaryClasses":[] },
+              "sensorMatrix": {
+                "coverageSummary":"Coverage: partial",
+                "sensorProviders":[]
+              },
+              "optionalProviderStatus": [
+                { "providerName":"Storage health detail", "category":"Disk inventory", "status":"PermissionRequired" },
+                { "providerName":"Secure Boot firmware marker", "category":"Security", "status":"NotExposed" },
+                { "providerName":"Battery wear provider", "category":"Battery", "status":"ProviderUnavailable" }
+              ]
+            }
+            """).RootElement);
+
+        Assert.Contains("Optional providers:", text);
+        Assert.Contains("Permission required: 1", text);
+        Assert.Contains("Not exposed by firmware/driver: 1", text);
+        Assert.Contains("Provider unavailable: 1", text);
+        Assert.Contains("Run Elevated Scan for more detail", text);
+    }
+
+    [Fact]
+    public void SystemIntelligenceLayout_ExposesElevatedScanAction()
+    {
+        var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
+        Assert.Contains("Run Elevated Scan", xaml, StringComparison.Ordinal);
+        Assert.Contains("RunElevatedSystemScanCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("Copy Quick Summary", xaml, StringComparison.Ordinal);
+        Assert.Contains("Open JSON Report", xaml, StringComparison.Ordinal);
+        Assert.Contains("Copy Safe Path", xaml, StringComparison.Ordinal);
+        Assert.Contains("SystemIntelligenceScanStatusText", xaml, StringComparison.Ordinal);
+        Assert.Contains("SystemIntelligenceHealthStatusText", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WarningReason_IncludesBatteryAndWindowsReadinessSignals()
+    {
+        var root = JsonDocument.Parse(
+            """
+            {
+              "diskStatus":"READY",
+              "batteries":[{ "wearDisplay":"40.2%" }],
+              "summary":{
+                "tpmInfo":{"status":"UNKNOWN"},
+                "secureBootInfo":{"status":"UNKNOWN"}
+              },
+              "optionalProviderStatus":[]
+            }
+            """).RootElement;
+        var method = typeof(MainViewModel).GetMethod("BuildSystemIntelligenceWarningReason", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+
+        var reason = (string)method!.Invoke(null, [root, "Overall diagnostics warning"] )!;
+        Assert.Contains("Warning:", reason);
+        Assert.Contains("Battery wear", reason);
+        Assert.Contains("Windows readiness verification needed", reason);
+    }
+
+    [Fact]
+    public void NetworkCompactSummary_DoesNotExposeIpsByDefault()
+    {
+        var root = JsonDocument.Parse(
+            """
+            {
+              "network":{
+                "status":"READY",
+                "internetCheck":true,
+                "adapters":[
+                  {
+                    "name":"Ethernet",
+                    "adapterRole":"ActivePhysicalInternet",
+                    "ipAddresses":["192.168.1.19"],
+                    "gateways":["192.168.1.1"],
+                    "dnsServers":["1.1.1.1"]
+                  }
+                ]
+              }
+            }
+            """).RootElement;
+        var compactMethod = typeof(MainViewModel).GetMethod("BuildNetworkSummaryCompact", BindingFlags.NonPublic | BindingFlags.Static);
+        var technicalMethod = typeof(MainViewModel).GetMethod("BuildNetworkTechnicalDetails", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(compactMethod);
+        Assert.NotNull(technicalMethod);
+
+        var compact = (string)compactMethod!.Invoke(null, [root])!;
+        var technical = (string)technicalMethod!.Invoke(null, [root])!;
+
+        Assert.Contains("DNS: configured", compact);
+        Assert.DoesNotContain("192.168.1.19", compact, StringComparison.Ordinal);
+        Assert.Contains("192.168.1.19", technical);
+    }
+
     private static string InvokeSummary(string methodName, JsonElement root)
     {
         var method = typeof(MainViewModel).GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Static);

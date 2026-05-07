@@ -8,6 +8,7 @@ param(
 $ErrorActionPreference = "Stop"
 $script:SystemIntelligenceLogPath = $null
 $script:SystemIntelligenceLogFailed = $false
+$script:OptionalProviderDiagnostics = New-Object System.Collections.Generic.List[object]
 
 function Write-ScanLog {
     param(
@@ -33,17 +34,123 @@ function Write-ScanLog {
     }
 }
 
+function Test-IsAdministrator {
+    try {
+        $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+        $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+        return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    }
+    catch {
+        return $false
+    }
+}
+
+function Resolve-OptionalProviderStatus {
+    param(
+        [string]$Message,
+        [bool]$RequiresElevation,
+        [bool]$AffectsReadiness
+    )
+
+    $safe = if ([string]::IsNullOrWhiteSpace($Message)) { "" } else { $Message.Trim() }
+    if ($safe -match "(?i)access denied|unauthorized|not authorized|cim resource was not available|permission") {
+        if ($RequiresElevation) {
+            return "PermissionRequired"
+        }
+
+        return "ProviderUnavailable"
+    }
+
+    if ($safe -match "(?i)cannot find path|cannot find property|property .* does not exist|PEFirmwareType") {
+        return "NotExposed"
+    }
+
+    if ($safe -match "(?i)timed out|timeout|operation has timed out") {
+        return "Timeout"
+    }
+
+    if ($safe -match "(?i)generic failure|provider load failure|rpc server is unavailable|invalid class") {
+        return "ProviderUnavailable"
+    }
+
+    if ($AffectsReadiness) {
+        return "Failure"
+    }
+
+    return "ProviderUnavailable"
+}
+
+function New-OptionalProviderUserMessage {
+    param(
+        [string]$ProviderName,
+        [string]$Status
+    )
+
+    $provider = if ([string]::IsNullOrWhiteSpace($ProviderName)) { "Optional provider" } else { $ProviderName }
+    switch ($Status) {
+        "PermissionRequired" { return ("{0} requires administrator permissions." -f $provider) }
+        "NotExposed" { return ("{0} is not exposed by this Windows build/firmware." -f $provider) }
+        "ProviderUnavailable" { return ("{0} provider unavailable; using safe fallback when possible." -f $provider) }
+        "Timeout" { return ("{0} timed out; continuing with available scan data." -f $provider) }
+        "Failure" { return ("{0} failed and affected required scan coverage." -f $provider) }
+        default { return ("{0} was unavailable; continuing with available scan data." -f $provider) }
+    }
+}
+
+function Add-OptionalProviderDiagnostic {
+    param(
+        [string]$ProviderName,
+        [string]$Category,
+        [string]$Status,
+        [bool]$RequiresElevation,
+        [bool]$AffectsReadiness,
+        [Nullable[int]]$TimeoutSeconds,
+        [string]$UserMessage,
+        [string]$DiagnosticMessage
+    )
+
+    $script:OptionalProviderDiagnostics.Add([ordered]@{
+        providerName = $ProviderName
+        category = $Category
+        status = $Status
+        requiresElevation = $RequiresElevation
+        impactsReadiness = $AffectsReadiness
+        timeoutSeconds = $TimeoutSeconds
+        userMessage = $UserMessage
+        diagnosticMessage = $DiagnosticMessage
+        timestampUtc = (Get-Date).ToUniversalTime().ToString("o")
+    }) | Out-Null
+}
+
 function Invoke-Optional {
     param(
         [Parameter(Mandatory)][scriptblock]$ScriptBlock,
-        [object]$Default = $null
+        [object]$Default = $null,
+        [string]$ProviderName = "Optional provider",
+        [string]$Category = "General",
+        [Nullable[int]]$TimeoutSeconds = $null,
+        [bool]$RequiresElevation = $false,
+        [bool]$AffectsReadiness = $false
     )
 
     try {
         return & $ScriptBlock
     }
     catch {
-        Write-ScanLog ("Optional provider failed: {0}" -f $_.Exception.Message) "WARN"
+        $diag = $_.Exception.Message
+        $status = Resolve-OptionalProviderStatus -Message $diag -RequiresElevation $RequiresElevation -AffectsReadiness $AffectsReadiness
+        $safeMessage = New-OptionalProviderUserMessage -ProviderName $ProviderName -Status $status
+        $level = if ($status -eq "Failure") { "WARN" } else { "INFO" }
+        Write-ScanLog $safeMessage $level
+        Add-OptionalProviderDiagnostic `
+            -ProviderName $ProviderName `
+            -Category $Category `
+            -Status $status `
+            -RequiresElevation $RequiresElevation `
+            -AffectsReadiness $AffectsReadiness `
+            -TimeoutSeconds $TimeoutSeconds `
+            -UserMessage $safeMessage `
+            -DiagnosticMessage $diag
         return $Default
     }
 }
@@ -71,8 +178,39 @@ function New-ProviderField {
 }
 
 function Get-FirmwareTypeDisplay {
-    $firmwareType = Invoke-Optional {
-        (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control" -Name PEFirmwareType -ErrorAction Stop).PEFirmwareType
+    $controlPath = "HKLM:\SYSTEM\CurrentControlSet\Control"
+    $firmwareType = $null
+    if (Test-Path -LiteralPath $controlPath) {
+        try {
+            $item = Get-ItemProperty -Path $controlPath -ErrorAction Stop
+            if ($item.PSObject.Properties.Name -contains "PEFirmwareType") {
+                $firmwareType = $item.PEFirmwareType
+            }
+            else {
+                Write-ScanLog "Secure Boot firmware marker not exposed by this Windows build/firmware." "INFO"
+                Add-OptionalProviderDiagnostic `
+                    -ProviderName "Secure Boot firmware marker" `
+                    -Category "Security" `
+                    -Status "NotExposed" `
+                    -RequiresElevation $false `
+                    -AffectsReadiness $false `
+                    -TimeoutSeconds $null `
+                    -UserMessage "Secure Boot firmware marker not exposed by this Windows build/firmware." `
+                    -DiagnosticMessage "PEFirmwareType registry value not present."
+            }
+        }
+        catch {
+            Write-ScanLog "Secure Boot firmware marker provider unavailable; using Windows firmware API fallback." "INFO"
+            Add-OptionalProviderDiagnostic `
+                -ProviderName "Secure Boot firmware marker" `
+                -Category "Security" `
+                -Status "ProviderUnavailable" `
+                -RequiresElevation $false `
+                -AffectsReadiness $false `
+                -TimeoutSeconds $null `
+                -UserMessage "Secure Boot firmware marker provider unavailable; using Windows firmware API fallback." `
+                -DiagnosticMessage $_.Exception.Message
+        }
     }
 
     switch ([int]$firmwareType) {
@@ -294,7 +432,16 @@ function Get-BatteryReportData {
         }
     }
     catch {
-        Write-ScanLog ("Battery report fallback failed: {0}" -f $_.Exception.Message) "WARN"
+        Write-ScanLog "Battery wear provider unavailable; using powercfg fallback." "INFO"
+        Add-OptionalProviderDiagnostic `
+            -ProviderName "Battery wear provider" `
+            -Category "Battery" `
+            -Status "ProviderUnavailable" `
+            -RequiresElevation $false `
+            -AffectsReadiness $false `
+            -TimeoutSeconds $null `
+            -UserMessage "Battery wear provider unavailable; using powercfg fallback." `
+            -DiagnosticMessage $_.Exception.Message
         return $null
     }
 }
@@ -363,6 +510,23 @@ function Add-UniqueText {
     if (-not $Items.Contains($Text)) {
         [void]$Items.Add($Text)
     }
+}
+
+function Write-PhaseTiming {
+    param(
+        [Parameter(Mandatory)][string]$PhaseName,
+        [Parameter(Mandatory)][System.Diagnostics.Stopwatch]$Stopwatch,
+        [Parameter(Mandatory)][ref]$LastMs
+    )
+
+    $nowMs = [int64]$Stopwatch.ElapsedMilliseconds
+    $phaseMs = [int64]($nowMs - $LastMs.Value)
+    if ($phaseMs -lt 0) {
+        $phaseMs = 0
+    }
+
+    Write-ScanLog ("Timing phase {0}: {1} ms (elapsed {2} ms)" -f $PhaseName, $phaseMs, $nowMs)
+    $LastMs.Value = $nowMs
 }
 
 function Get-ProcessorName {
@@ -1254,35 +1418,39 @@ $obviousProblems = New-Object System.Collections.Generic.List[string]
 
 Write-ScanLog "ForgerEMS System Intelligence scan started."
 Write-ScanLog "Collecting OS, CPU, RAM, GPU, disk, battery, network, and security data."
+$scanStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+$lastPhaseMs = 0L
 
-$computerSystem = Invoke-Optional { Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction Stop }
-$operatingSystem = Invoke-Optional { Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop }
-$bios = Invoke-Optional { Get-CimInstance -ClassName Win32_BIOS -ErrorAction Stop }
+$computerSystem = Invoke-Optional { Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction Stop } -ProviderName "Computer system inventory" -Category "OS/Hardware"
+$operatingSystem = Invoke-Optional { Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop } -ProviderName "Operating system inventory" -Category "OS/Hardware"
+$bios = Invoke-Optional { Get-CimInstance -ClassName Win32_BIOS -ErrorAction Stop } -ProviderName "BIOS inventory" -Category "Firmware"
 $tpmInfo = Get-TpmInfo
 $secureBootInfo = Get-SecureBootInfo
-$processor = Invoke-Optional { Get-CimInstance -ClassName Win32_Processor -ErrorAction Stop | Select-Object -First 1 }
-$gpus = @(Invoke-Optional { Get-CimInstance -ClassName Win32_VideoController -ErrorAction Stop } @())
-$batteries = @(Invoke-Optional { Get-CimInstance -ClassName Win32_Battery -ErrorAction Stop } @())
-$batteryStaticData = @(Invoke-Optional { Get-CimInstance -Namespace "root\wmi" -ClassName BatteryStaticData -ErrorAction Stop } @())
-$batteryFullChargedCapacity = @(Invoke-Optional { Get-CimInstance -Namespace "root\wmi" -ClassName BatteryFullChargedCapacity -ErrorAction Stop } @())
-$batteryCycleCount = @(Invoke-Optional { Get-CimInstance -Namespace "root\wmi" -ClassName BatteryCycleCount -ErrorAction Stop } @())
-$networkAdapters = @(Invoke-Optional { Get-CimInstance -ClassName Win32_NetworkAdapterConfiguration -Filter "IPEnabled = True" -ErrorAction Stop } @())
-$netAdapters = @(Invoke-Optional { Get-NetAdapter -ErrorAction Stop } @())
-$physicalDisks = @(Invoke-Optional { Get-PhysicalDisk -ErrorAction Stop } @())
-$smartPredictFailures = @(Invoke-Optional { Get-CimInstance -Namespace "root\wmi" -ClassName MSStorageDriver_FailurePredictStatus -ErrorAction Stop } @())
-$logicalDisks = @(Invoke-Optional { Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DriveType = 3" -ErrorAction Stop } @())
-$memoryModules = @(Invoke-Optional { Get-CimInstance -ClassName Win32_PhysicalMemory -ErrorAction Stop } @())
-$memoryArrays = @(Invoke-Optional { Get-CimInstance -ClassName Win32_PhysicalMemoryArray -ErrorAction Stop } @())
-$displays = @(Invoke-Optional { Get-CimInstance -ClassName Win32_DesktopMonitor -ErrorAction Stop } @())
-$bitLockerVolumes = @(Invoke-Optional { Get-BitLockerVolume -ErrorAction Stop } @())
+Write-PhaseTiming -PhaseName "TPM/Secure Boot" -Stopwatch $scanStopwatch -LastMs ([ref]$lastPhaseMs)
+$processor = Invoke-Optional { Get-CimInstance -ClassName Win32_Processor -ErrorAction Stop | Select-Object -First 1 } -ProviderName "CPU inventory" -Category "OS/CPU/RAM/GPU"
+$gpus = @(Invoke-Optional { Get-CimInstance -ClassName Win32_VideoController -ErrorAction Stop } @() -ProviderName "GPU inventory" -Category "OS/CPU/RAM/GPU")
+$batteries = @(Invoke-Optional { Get-CimInstance -ClassName Win32_Battery -ErrorAction Stop } @() -ProviderName "Battery base inventory" -Category "Battery")
+$batteryStaticData = @(Invoke-Optional { Get-CimInstance -Namespace "root\wmi" -ClassName BatteryStaticData -ErrorAction Stop } @() -ProviderName "Battery static data" -Category "Battery")
+$batteryFullChargedCapacity = @(Invoke-Optional { Get-CimInstance -Namespace "root\wmi" -ClassName BatteryFullChargedCapacity -ErrorAction Stop } @() -ProviderName "Battery full charge capacity" -Category "Battery")
+$batteryCycleCount = @(Invoke-Optional { Get-CimInstance -Namespace "root\wmi" -ClassName BatteryCycleCount -ErrorAction Stop } @() -ProviderName "Battery cycle count provider" -Category "Battery")
+$networkAdapters = @(Invoke-Optional { Get-CimInstance -ClassName Win32_NetworkAdapterConfiguration -Filter "IPEnabled = True" -ErrorAction Stop } @() -ProviderName "Network adapter configuration" -Category "Network")
+$netAdapters = @(Invoke-Optional { Get-NetAdapter -ErrorAction Stop } @() -ProviderName "Network adapter inventory" -Category "Network")
+$physicalDisks = @(Invoke-Optional { Get-PhysicalDisk -ErrorAction Stop } @() -ProviderName "Physical disk inventory" -Category "Disk inventory")
+$smartPredictFailures = @(Invoke-Optional { Get-CimInstance -Namespace "root\wmi" -ClassName MSStorageDriver_FailurePredictStatus -ErrorAction Stop } @() -ProviderName "SMART failure predictor" -Category "Disk inventory" -RequiresElevation $true)
+$logicalDisks = @(Invoke-Optional { Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DriveType = 3" -ErrorAction Stop } @() -ProviderName "Logical disk inventory" -Category "Disk inventory")
+$memoryModules = @(Invoke-Optional { Get-CimInstance -ClassName Win32_PhysicalMemory -ErrorAction Stop } @() -ProviderName "Memory module inventory" -Category "OS/CPU/RAM/GPU")
+$memoryArrays = @(Invoke-Optional { Get-CimInstance -ClassName Win32_PhysicalMemoryArray -ErrorAction Stop } @() -ProviderName "Memory slot inventory" -Category "OS/CPU/RAM/GPU")
+$displays = @(Invoke-Optional { Get-CimInstance -ClassName Win32_DesktopMonitor -ErrorAction Stop } @() -ProviderName "Display inventory" -Category "OS/CPU/RAM/GPU")
+$bitLockerVolumes = @(Invoke-Optional { Get-BitLockerVolume -ErrorAction Stop } @() -ProviderName "BitLocker volume provider" -Category "Security" -RequiresElevation $true)
 $licenseProduct = Invoke-Optional {
     Get-CimInstance -ClassName SoftwareLicensingProduct -ErrorAction Stop |
         Where-Object { $_.PartialProductKey -and $_.Name -match 'Windows' } |
         Select-Object -First 1
 }
-$wifiInterfaceText = Invoke-Optional { netsh wlan show interfaces 2>$null | Out-String } ""
+$wifiInterfaceText = Invoke-Optional { netsh wlan show interfaces 2>$null | Out-String } "" -ProviderName "Wi-Fi interface status" -Category "Network"
 $wifiState = Get-WifiState -NetshText $wifiInterfaceText
 $batteryReportFallback = Get-BatteryReportData
+Write-PhaseTiming -PhaseName "OS/CPU/RAM/GPU" -Stopwatch $scanStopwatch -LastMs ([ref]$lastPhaseMs)
 
 $lastBoot = Invoke-Optional {
     if ($null -ne $operatingSystem -and $null -ne $operatingSystem.LastBootUpTime) {
@@ -1321,6 +1489,10 @@ $memoryType = switch ([int]$memoryTypeCode) {
     24 { "DDR3" }
     26 { "DDR4" }
     34 { "DDR5" }
+    29 { "LPDDR3" }
+    30 { "LPDDR4" }
+    35 { "LPDDR5" }
+    36 { "LPDDR5X" }
     default { "RAM" }
 }
 $memorySlotsTotal = @($memoryArrays | Where-Object { $_.MemoryDevices } | Select-Object -First 1).MemoryDevices
@@ -1393,7 +1565,10 @@ if ($gpuStatus -eq "UNKNOWN") {
 Write-ScanLog "Checking physical disk health."
 $diskReports = @()
 foreach ($disk in $physicalDisks) {
-    $reliability = Invoke-Optional { $disk | Get-StorageReliabilityCounter -ErrorAction Stop }
+    $reliability = Invoke-Optional { $disk | Get-StorageReliabilityCounter -ErrorAction Stop } $null `
+        -ProviderName ("Storage reliability detail ({0})" -f [string]$disk.FriendlyName) `
+        -Category "Disk inventory" `
+        -RequiresElevation $true
     $diskStatus = "READY"
     $health = [string]$disk.HealthStatus
     $operational = [string]($disk.OperationalStatus -join ", ")
@@ -1487,6 +1662,7 @@ if ($diskReports.Count -eq 0) {
 }
 $diskStatusInputs = @($diskReports | ForEach-Object { $_.status }) + @($volumeReports | ForEach-Object { $_.status })
 $diskOverallStatus = if ($diskStatusInputs.Count -eq 0) { "UNKNOWN" } else { Get-WorstStatus -Statuses $diskStatusInputs }
+Write-PhaseTiming -PhaseName "Disk inventory" -Stopwatch $scanStopwatch -LastMs ([ref]$lastPhaseMs)
 
 Write-ScanLog "Checking battery state."
 $batteryReports = @()
@@ -1556,6 +1732,7 @@ foreach ($battery in $batteries) {
     }
 }
 $batteryOverallStatus = if ($batteryReports.Count -eq 0) { "UNKNOWN" } else { Get-WorstStatus -Statuses @($batteryReports | ForEach-Object { $_.status }) }
+Write-PhaseTiming -PhaseName "Battery" -Stopwatch $scanStopwatch -LastMs ([ref]$lastPhaseMs)
 
 Write-ScanLog "Checking network adapters."
 $networkStatus = if ($networkAdapters.Count -gt 0) { "READY" } else { "WATCH" }
@@ -1567,7 +1744,7 @@ $defaultRouteRaw = Invoke-Optional {
         Where-Object { $_.NextHop -and $_.NextHop -ne "0.0.0.0" } |
         Sort-Object RouteMetric |
         Select-Object -First 1
-}
+} $null -ProviderName "Default route probe" -Category "Network"
 $networkReport = @($networkAdapters | ForEach-Object {
     $configAdapter = $_
     $ipAddresses = @($_.IPAddress)
@@ -1636,7 +1813,7 @@ if ($null -eq $defaultRouteAdapter -and $null -ne $defaultRouteRaw) {
         }
     }
 }
-$internetCheck = Invoke-Optional { Test-NetConnection -ComputerName "1.1.1.1" -Port 443 -InformationLevel Quiet -WarningAction SilentlyContinue -ErrorAction Stop } $false
+$internetCheck = Invoke-Optional { Test-NetConnection -ComputerName "1.1.1.1" -Port 443 -InformationLevel Quiet -WarningAction SilentlyContinue -ErrorAction Stop } $false -ProviderName "Internet connectivity probe" -Category "Network"
 if (-not $internetCheck) {
     $networkStatus = if ($networkStatus -eq "READY") { "WATCH" } else { $networkStatus }
     Add-Recommendation -Recommendations $recommendations -Text "Internet connectivity check did not pass against 1.1.1.1:443. Confirm network before downloads."
@@ -1680,11 +1857,12 @@ $virtualIgnoredDisplay = if ($virtualNetworkReport.Count -gt 0) {
 else {
     "Virtual adapters ignored: none"
 }
+Write-PhaseTiming -PhaseName "Network" -Stopwatch $scanStopwatch -LastMs ([ref]$lastPhaseMs)
 
 Write-ScanLog "Checking Defender and registered antivirus state."
-$defender = Invoke-Optional { Get-MpComputerStatus -ErrorAction Stop }
-$avProducts = @(Invoke-Optional { Get-CimInstance -Namespace "root\SecurityCenter2" -ClassName AntiVirusProduct -ErrorAction Stop } @())
-$firewallProfiles = @(Invoke-Optional { Get-NetFirewallProfile -ErrorAction Stop } @())
+$defender = Invoke-Optional { Get-MpComputerStatus -ErrorAction Stop } $null -ProviderName "Defender status provider" -Category "Defender/AV" -RequiresElevation $true
+$avProducts = @(Invoke-Optional { Get-CimInstance -Namespace "root\SecurityCenter2" -ClassName AntiVirusProduct -ErrorAction Stop } @() -ProviderName "Registered AV products provider" -Category "Defender/AV")
+$firewallProfiles = @(Invoke-Optional { Get-NetFirewallProfile -ErrorAction Stop } @() -ProviderName "Firewall profile provider" -Category "Defender/AV")
 $firewallEnabled = if ($firewallProfiles.Count -gt 0) { -not ($firewallProfiles | Where-Object { -not $_.Enabled }) } else { $null }
 $securityStatus = "UNKNOWN"
 if ($null -ne $defender) {
@@ -1778,6 +1956,7 @@ $securityReport = [ordered]@{
     bitLockerSummary = $bitLockerSummary
     status = $securityStatus
 }
+Write-PhaseTiming -PhaseName "Defender/AV" -Stopwatch $scanStopwatch -LastMs ([ref]$lastPhaseMs)
 
 if ($recommendations.Count -eq 0) {
     Add-Recommendation -Recommendations $recommendations -Text "System is ready for standard ForgerEMS field work. Re-scan after major updates or hardware changes."
@@ -1851,99 +2030,221 @@ $sensorMatrix = New-SensorMatrixReport `
     -VirtualAdapterCount $virtualNetworkReport.Count `
     -InternetCheck ([bool]$internetCheck) `
     -UsbIntelligenceReport $usbIntelligenceReport
+Write-PhaseTiming -PhaseName "Deep sensors/provider status" -Stopwatch $scanStopwatch -LastMs ([ref]$lastPhaseMs)
 
-$report = [ordered]@{
-    schemaVersion = 1
-    product = "ForgerEMS"
-    releaseIdentifier = ([string]::Concat("ForgerEMS Beta v1.1.4 ", [char]0x2014, " Whole-App Intelligence Preview"))
-    generatedUtc = (Get-Date).ToUniversalTime().ToString("o")
-    overallStatus = $overallStatus
-    summary = [ordered]@{
-        computerName = $env:COMPUTERNAME
-        manufacturer = if ($null -ne $computerSystem) { [string]$computerSystem.Manufacturer } else { "Unknown" }
-        model = if ($null -ne $computerSystem) { [string]$computerSystem.Model } else { "Unknown" }
-        serviceTag = $serviceTagRedacted
-        serialNumber = $serviceTagRedacted
-        os = if ($null -ne $operatingSystem) { ("{0} {1}" -f $operatingSystem.Caption, $operatingSystem.Version).Trim() } else { "Unknown OS" }
-        osBuild = if ($null -ne $operatingSystem) { [string]$operatingSystem.BuildNumber } else { "UNKNOWN" }
-        osArchitecture = if ($null -ne $operatingSystem) { [string]$operatingSystem.OSArchitecture } else { "UNKNOWN" }
-        windowsLicenseChannel = $windowsLicenseChannel
-        windowsLicenseStatus = $windowsLicenseStatus
-        windowsLicense = $licenseInfo
-        bios = if ($null -ne $bios) { ("{0} {1}" -f $bios.Manufacturer, $bios.SMBIOSBIOSVersion).Trim() } else { "UNKNOWN" }
-        biosDate = if ($null -ne $bios) { Format-DateValue -Value $bios.ReleaseDate } else { "UNKNOWN" }
-        secureBoot = if ($null -ne $secureBootInfo.value) { [bool]$secureBootInfo.value } else { $null }
-        secureBootInfo = $secureBootInfo
-        tpmPresent = if ($null -ne $tpmInfo.present) { [bool]$tpmInfo.present } else { $null }
-        tpmReady = if ($null -ne $tpmInfo.ready) { [bool]$tpmInfo.ready } else { $null }
-        tpmInfo = $tpmInfo
-        lastBoot = if ($null -ne $lastBoot) { $lastBoot.ToString("yyyy-MM-dd HH:mm:ss") } else { "UNKNOWN" }
-        uptime = if ($null -ne $uptime) { Format-TimeSpanValue -Value $uptime } else { "UNKNOWN" }
-        cpu = Get-ProcessorName -Processor $processor
-        cpuCores = if ($null -ne $processor) { $processor.NumberOfCores } else { $null }
-        cpuLogicalProcessors = if ($null -ne $processor) { $processor.NumberOfLogicalProcessors } else { $null }
-        cpuBaseClockMhz = if ($null -ne $processor) { $processor.CurrentClockSpeed } else { $null }
-        cpuMaxClockMhz = if ($null -ne $processor) { $processor.MaxClockSpeed } else { $null }
-        ramTotal = Format-Bytes -Bytes $totalMemoryBytes
-        ramFree = Format-Bytes -Bytes $freeMemoryBytes
-        ramUsed = Format-Bytes -Bytes $usedMemoryBytes
-        ramUsedPercent = $usedMemoryPercent
-        ramSpeed = $memoryConfiguredDisplay
-        ramInstalledDisplay = $memoryInstalledDisplay
-        ramConfiguredSpeedDisplay = $memoryConfiguredDisplay
-        ramModuleRatedSpeedDisplay = $memoryRatedDisplay
-        ramSlotsDisplay = $memorySlotsDisplay
-        ramModules = $memoryModuleReports
-        ramSlotsTotal = $memorySlotsTotal
-        ramSlotsUsed = $memorySlotsUsed
-        ramSlotsFree = $memorySlotsFree
-        ramUpgradePath = $memoryUpgradePath
-        ramStatus = $ramStatus
-        gpus = @($gpus | ForEach-Object { [ordered]@{ name = [string]$_.Name; type = Get-GpuType -Name ([string]$_.Name); driverVersion = [string]$_.DriverVersion } })
-        gpuStatus = $gpuStatus
+$defaultRouteIfIndex = $null
+if ($null -ne $defaultRouteRaw) {
+    $defaultRouteIfIndex = $defaultRouteRaw.ifIndex
+}
+
+$defaultRouteNextHop = ""
+if ($null -ne $defaultRouteRaw) {
+    $defaultRouteNextHop = [string]$defaultRouteRaw.NextHop
+}
+
+$defaultRouteAdapterName = ""
+if ($null -ne $defaultRouteAdapter) {
+    $defaultRouteAdapterName = [string]$defaultRouteAdapter.name
+}
+
+$gpuSummaryRows = New-Object System.Collections.Generic.List[object]
+foreach ($gpu in @($gpus)) {
+    if ($null -eq $gpu) {
+        continue
     }
-    disks = $diskReports
-    smart = $smartReport
-    volumes = $volumeReports
-    diskStatus = $diskOverallStatus
-    batteryPresent = ($batteryReports.Count -gt 0)
-    batteries = $batteryReports
-    batteryStatus = $batteryOverallStatus
-    displays = $displayReport
-    network = [ordered]@{
-        status = $networkStatus
-        internetCheck = [bool]$internetCheck
-        internetDisplay = $internetDisplay
-        defaultRoute = [ordered]@{
-            friendlyDisplayText = $defaultRouteDisplay
-            ifIndex = if ($null -ne $defaultRouteRaw) { $defaultRouteRaw.ifIndex } else { $null }
-            nextHop = if ($null -ne $defaultRouteRaw) { [string]$defaultRouteRaw.NextHop } else { "" }
-            adapterName = if ($null -ne $defaultRouteAdapter) { [string]$defaultRouteAdapter.name } else { "" }
-        }
-        wifi = $wifiState
-        physicalAdapters = $physicalNetworkReport
-        virtualAdapters = $virtualNetworkReport
-        physicalAdapterCount = $physicalNetworkReport.Count
-        virtualAdapterCount = $virtualNetworkReport.Count
-        virtualAdaptersIgnored = $virtualIgnoredDisplay
-        adapters = $networkReport
+
+    $gpuSummaryRows.Add([ordered]@{
+        name = [string]$gpu.Name
+        type = Get-GpuType -Name ([string]$gpu.Name)
+        driverVersion = [string]$gpu.DriverVersion
+    }) | Out-Null
+}
+
+$scanModeValue = "Standard"
+if (Test-IsAdministrator) {
+    $scanModeValue = "Elevated"
+}
+
+$cpuCoreCount = $null
+$cpuLogicalProcessors = $null
+$cpuBaseClock = $null
+$cpuMaxClock = $null
+$cpuDisplayName = "Unknown CPU"
+if ($null -ne $processor) {
+    $cpuCoreCount = $processor.NumberOfCores
+    $cpuLogicalProcessors = $processor.NumberOfLogicalProcessors
+    $cpuBaseClock = $processor.CurrentClockSpeed
+    $cpuMaxClock = $processor.MaxClockSpeed
+    $cpuDisplayName = Get-ProcessorName -Processor $processor
+}
+
+$ramTotalDisplayValue = Format-Bytes -Bytes $totalMemoryBytes
+$ramFreeDisplayValue = Format-Bytes -Bytes $freeMemoryBytes
+$ramUsedDisplayValue = Format-Bytes -Bytes $usedMemoryBytes
+$secureBootValue = $null
+if ($null -ne $secureBootInfo.value) {
+    $secureBootValue = [bool]$secureBootInfo.value
+}
+
+$tpmPresentValue = $null
+if ($null -ne $tpmInfo.present) {
+    $tpmPresentValue = [bool]$tpmInfo.present
+}
+
+$tpmReadyValue = $null
+if ($null -ne $tpmInfo.ready) {
+    $tpmReadyValue = [bool]$tpmInfo.ready
+}
+
+$lastBootDisplay = "UNKNOWN"
+if ($null -ne $lastBoot) {
+    $lastBootDisplay = $lastBoot.ToString("yyyy-MM-dd HH:mm:ss")
+}
+
+$uptimeDisplay = "UNKNOWN"
+if ($null -ne $uptime) {
+    $uptimeDisplay = Format-TimeSpanValue -Value $uptime
+}
+
+$summaryManufacturer = "Unknown"
+$summaryModel = "Unknown"
+$summaryOs = "Unknown OS"
+$summaryOsBuild = "UNKNOWN"
+$summaryOsArchitecture = "UNKNOWN"
+$summaryBios = "UNKNOWN"
+$summaryBiosDate = "UNKNOWN"
+if ($null -ne $computerSystem) {
+    $summaryManufacturer = [string]$computerSystem.Manufacturer
+    $summaryModel = [string]$computerSystem.Model
+}
+
+if ($null -ne $operatingSystem) {
+    $summaryOs = ("{0} {1}" -f $operatingSystem.Caption, $operatingSystem.Version).Trim()
+    $summaryOsBuild = [string]$operatingSystem.BuildNumber
+    $summaryOsArchitecture = [string]$operatingSystem.OSArchitecture
+}
+
+if ($null -ne $bios) {
+    $summaryBios = ("{0} {1}" -f $bios.Manufacturer, $bios.SMBIOSBIOSVersion).Trim()
+    $summaryBiosDate = Format-DateValue -Value $bios.ReleaseDate
+}
+
+try {
+    $summary = [ordered]@{}
+    $summary["computerName"] = $env:COMPUTERNAME
+    $summary["manufacturer"] = $summaryManufacturer
+    $summary["model"] = $summaryModel
+    $summary["serviceTag"] = $serviceTagRedacted
+    $summary["serialNumber"] = $serviceTagRedacted
+    $summary["os"] = $summaryOs
+    $summary["osBuild"] = $summaryOsBuild
+    $summary["osArchitecture"] = $summaryOsArchitecture
+    $summary["windowsLicenseChannel"] = $windowsLicenseChannel
+    $summary["windowsLicenseStatus"] = $windowsLicenseStatus
+    $summary["windowsLicense"] = $licenseInfo
+    $summary["bios"] = $summaryBios
+    $summary["biosDate"] = $summaryBiosDate
+    $summary["secureBoot"] = $secureBootValue
+    $summary["secureBootInfo"] = $secureBootInfo
+    $summary["tpmPresent"] = $tpmPresentValue
+    $summary["tpmReady"] = $tpmReadyValue
+    $summary["tpmInfo"] = $tpmInfo
+    $summary["lastBoot"] = $lastBootDisplay
+    $summary["uptime"] = $uptimeDisplay
+    $summary["cpu"] = $cpuDisplayName
+    $summary["cpuCores"] = $cpuCoreCount
+    $summary["cpuLogicalProcessors"] = $cpuLogicalProcessors
+    $summary["cpuBaseClockMhz"] = $cpuBaseClock
+    $summary["cpuMaxClockMhz"] = $cpuMaxClock
+    $summary["ramTotal"] = $ramTotalDisplayValue
+    $summary["ramFree"] = $ramFreeDisplayValue
+    $summary["ramUsed"] = $ramUsedDisplayValue
+    $summary["ramUsedPercent"] = $usedMemoryPercent
+    $summary["ramSpeed"] = $memoryConfiguredDisplay
+    $summary["ramInstalledDisplay"] = $memoryInstalledDisplay
+    $summary["ramConfiguredSpeedDisplay"] = $memoryConfiguredDisplay
+    $summary["ramModuleRatedSpeedDisplay"] = $memoryRatedDisplay
+    $summary["ramSlotsDisplay"] = $memorySlotsDisplay
+    $summary["ramModules"] = $memoryModuleReports
+    $summary["ramSlotsTotal"] = $memorySlotsTotal
+    $summary["ramSlotsUsed"] = $memorySlotsUsed
+    $summary["ramSlotsFree"] = $memorySlotsFree
+    $summary["ramUpgradePath"] = $memoryUpgradePath
+    $summary["ramStatus"] = $ramStatus
+    $summary["memoryType"] = $memoryType
+    $summary["gpus"] = [object[]]$gpuSummaryRows.ToArray()
+    $summary["gpuStatus"] = $gpuStatus
+
+    $network = [ordered]@{}
+    $network["status"] = $networkStatus
+    $network["internetCheck"] = [bool]$internetCheck
+    $network["internetDisplay"] = $internetDisplay
+    $network["defaultRoute"] = [ordered]@{
+        friendlyDisplayText = $defaultRouteDisplay
+        ifIndex = $defaultRouteIfIndex
+        nextHop = $defaultRouteNextHop
+        adapterName = $defaultRouteAdapterName
     }
-    security = $securityReport
-    obviousProblems = @($obviousProblems)
-    flipValue = $flipValue
-    machineClass = $machineClass
-    sensorMatrix = $sensorMatrix
-    deepSensorMode = $sensorMatrix.deepSensorMode
-    sensorProviders = $sensorMatrix.sensorProviders
-    deviceFit = $deviceFit
-    recommendations = @($recommendations)
-    reportPaths = [ordered]@{
+    $network["wifi"] = $wifiState
+    $network["physicalAdapters"] = $physicalNetworkReport
+    $network["virtualAdapters"] = $virtualNetworkReport
+    $network["physicalAdapterCount"] = $physicalNetworkReport.Count
+    $network["virtualAdapterCount"] = $virtualNetworkReport.Count
+    $network["virtualAdaptersIgnored"] = $virtualIgnoredDisplay
+    $network["adapters"] = $networkReport
+
+    $report = [ordered]@{}
+    $report["schemaVersion"] = 1
+    $report["product"] = "ForgerEMS"
+    $report["releaseIdentifier"] = "ForgerEMS v1.2.0 Public Preview"
+    $report["generatedUtc"] = (Get-Date).ToUniversalTime().ToString("o")
+    $report["scanMode"] = $scanModeValue
+    $report["overallStatus"] = $overallStatus
+    $report["summary"] = $summary
+    $report["disks"] = $diskReports
+    $report["smart"] = $smartReport
+    $report["volumes"] = $volumeReports
+    $report["diskStatus"] = $diskOverallStatus
+    $report["batteryPresent"] = ($batteryReports.Count -gt 0)
+    $report["batteries"] = $batteryReports
+    $report["batteryStatus"] = $batteryOverallStatus
+    $report["displays"] = $displayReport
+    $report["network"] = $network
+    $report["security"] = $securityReport
+    $report["obviousProblems"] = @($obviousProblems)
+    $report["flipValue"] = $flipValue
+    $report["machineClass"] = $machineClass
+    $report["sensorMatrix"] = $sensorMatrix
+    $report["deepSensorMode"] = $sensorMatrix.deepSensorMode
+    $report["sensorProviders"] = $sensorMatrix.sensorProviders
+    $report["optionalProviderStatus"] = if ($null -eq $script:OptionalProviderDiagnostics) { @() } else { [object[]]$script:OptionalProviderDiagnostics.ToArray() }
+    $report["deviceFit"] = $deviceFit
+    $report["recommendations"] = @($recommendations)
+    $report["scanNotes"] = @(
+        "Standard scan: safe non-admin scan."
+        "Elevated scan: unlocks more hardware/security detail."
+        "Some hardware details require administrator permission. No failure: standard scan completed with permission-limited deep details when needed."
+    )
+    $report["reportPaths"] = [ordered]@{
         json = $jsonPath
         markdown = $markdownPath
     }
 }
+catch {
+    $position = if ($_.InvocationInfo -and $_.InvocationInfo.PositionMessage) { $_.InvocationInfo.PositionMessage.Trim() } else { "position unavailable" }
+    Write-ScanLog ("Report assembly failed: {0} ({1})" -f $_.Exception.Message, $position) "ERROR"
+    throw
+}
 
-$report | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $jsonPath -Encoding UTF8
+try {
+    $report | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $jsonPath -Encoding UTF8
+}
+catch {
+    $position = if ($_.InvocationInfo -and $_.InvocationInfo.PositionMessage) { $_.InvocationInfo.PositionMessage.Trim() } else { "position unavailable" }
+    Write-ScanLog ("Report JSON serialization failed: {0} ({1})" -f $_.Exception.Message, $position) "ERROR"
+    throw
+}
+Write-PhaseTiming -PhaseName "Report write" -Stopwatch $scanStopwatch -LastMs ([ref]$lastPhaseMs)
 
 $markdown = New-Object System.Collections.Generic.List[string]
 [void]$markdown.Add("# ForgerEMS System Intelligence")
@@ -1988,6 +2289,17 @@ foreach ($provider in $report.sensorProviders) {
     if ($provider.requiresThirdPartyLicenseNotice -and $null -ne $provider.thirdPartyNotice) {
         [void]$markdown.Add(("  - License notice: {0} {1} ({2}); {3}" -f $provider.thirdPartyNotice.name, $provider.thirdPartyNotice.version, $provider.thirdPartyNotice.license, $provider.thirdPartyNotice.sourceOfferOrNotice))
     }
+}
+[void]$markdown.Add("")
+[void]$markdown.Add("### Optional Provider Status")
+if ($report.optionalProviderStatus.Count -gt 0) {
+    foreach ($provider in $report.optionalProviderStatus) {
+        [void]$markdown.Add(("- {0} ({1}): {2} | elevation required: {3}" -f $provider.providerName, $provider.category, $provider.status, $provider.requiresElevation))
+        [void]$markdown.Add(("  - {0}" -f $provider.userMessage))
+    }
+}
+else {
+    [void]$markdown.Add("- No optional provider limitations were recorded.")
 }
 [void]$markdown.Add("")
 [void]$markdown.Add("### Machine Class Signals")

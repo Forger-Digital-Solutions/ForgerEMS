@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using VentoyToolkitSetup.Wpf.Configuration;
+using VentoyToolkitSetup.Wpf.Services.Kyra;
 
 namespace VentoyToolkitSetup.Wpf.Services;
 
@@ -181,7 +182,8 @@ public sealed class KyraGatewayClient
         timeout.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(timeoutSeconds, 2, 120)));
 
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, gatewayUrl);
-        httpRequest.Content = new StringContent(JsonSerializer.Serialize(request, JsonOptions), Encoding.UTF8, "application/json");
+        httpRequest.Headers.TryAddWithoutValidation("Authorization", "Bearer " + request.BetaToken.Trim());
+        httpRequest.Content = new StringContent(JsonSerializer.Serialize(BuildWireRequest(request), JsonOptions), Encoding.UTF8, "application/json");
 
         using var response = await _httpClient.SendAsync(httpRequest, timeout.Token).ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false);
@@ -231,6 +233,23 @@ public sealed class KyraGatewayClient
 
         return null;
     }
+
+    private static object BuildWireRequest(KyraGatewayRequest request) => new
+    {
+        request.AppVersion,
+        request.ReleaseChannel,
+        request.LicenseTier,
+        request.ConversationId,
+        request.MessageId,
+        request.UserMessage,
+        request.Personality,
+        request.Intent,
+        request.ToolsRequested,
+        request.MachineContext,
+        request.MemorySummary,
+        request.MaxTokens,
+        request.Temperature
+    };
 }
 
 public sealed class KyraGatewayProvider : ICopilotProvider
@@ -268,10 +287,33 @@ public sealed class KyraGatewayProvider : ICopilotProvider
     public bool IsConfigured(CopilotProviderConfiguration configuration) =>
         KyraGatewayProviderConfig.FromProviderConfiguration(configuration).IsConfigured;
 
-    public bool CanHandle(CopilotProviderRequest request) => true;
+    /// <summary>
+    /// Gateway worker is for <b>live tool / research</b> flows (crypto, weather, system tools, etc.), not generic casual chat.
+    /// Empty tool list + non-research intent → use Groq/OpenRouter/Ollama instead so we don’t spam a failing chat path.
+    /// </summary>
+    public bool CanHandle(CopilotProviderRequest request)
+    {
+        var ctx = request.Context;
+        if (BuildToolList(ctx).Count > 0)
+        {
+            return true;
+        }
+
+        return ctx.Intent == KyraIntent.LiveOnlineQuestion;
+    }
 
     public async Task<CopilotProviderResult> GenerateAsync(CopilotProviderRequest request, CancellationToken cancellationToken)
     {
+        if (!ForgerEmsEnvironmentConfiguration.KyraGatewayEnabled)
+        {
+            return GatewayNotConfigured("gateway disabled via FORGEREMS_KYRA_GATEWAY_ENABLED");
+        }
+
+        if (!request.Settings.KyraRealtimeGatewayEnabled)
+        {
+            return GatewayNotConfigured("realtime gateway disabled in Kyra settings");
+        }
+
         var config = KyraGatewayProviderConfig.FromProviderConfiguration(request.ProviderConfiguration);
         if (config.UrlState != KyraProviderEndpointState.Ready)
         {
@@ -390,6 +432,11 @@ public sealed class KyraGatewayProvider : ICopilotProvider
 
     private static string BuildMemorySummary(CopilotContext context)
     {
+        if (!KyraPromptIsolation.LooksLikeExplicitThreadContinuation(context.UserQuestion))
+        {
+            return string.Empty;
+        }
+
         var recap = KyraProviderPromptBuilder.FormatConversationRecap(context);
         if (string.IsNullOrWhiteSpace(recap))
         {

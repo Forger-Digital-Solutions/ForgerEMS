@@ -129,14 +129,14 @@ internal sealed class WeatherKyraTool(HttpClient http, KyraLiveToolCache cache) 
         if (geoTo)
         {
             return KyraToolResult.Fail("Weather", KyraLiveToolErrorKind.Timeout,
-                "Weather lookup timed out. Try again.",
+                "Live weather is unavailable right now because the lookup timed out. Try again in a minute.",
                 "[Kyra weather] Timeout; do not invent conditions.");
         }
 
         if (!geoOk)
         {
             return KyraToolResult.Fail("Weather", KyraLiveToolErrorKind.HttpError,
-                "Could not reach the weather geocoding service. Check your network and try again.",
+                "Live weather is unavailable right now because the location lookup failed. Check your network or try again in a minute.",
                 "[Kyra weather] Geocoding request failed.");
         }
 
@@ -145,7 +145,7 @@ internal sealed class WeatherKyraTool(HttpClient http, KyraLiveToolCache cache) 
             results.ValueKind != JsonValueKind.Array || results.GetArrayLength() == 0)
         {
             return KyraToolResult.Fail("Weather", KyraLiveToolErrorKind.ParseError,
-                $"No match found for “{location}”. Try a ZIP or larger city name.",
+                $"I need a city, ZIP, or larger place name to load live weather. I could not match “{location}”.",
                 "[Kyra weather] Geocoding returned no results.");
         }
 
@@ -166,14 +166,14 @@ internal sealed class WeatherKyraTool(HttpClient http, KyraLiveToolCache cache) 
         if (fcTo)
         {
             return KyraToolResult.Fail("Weather", KyraLiveToolErrorKind.Timeout,
-                "Weather forecast timed out. Try again.",
+                "Live weather is unavailable right now because the forecast timed out. Try again in a minute.",
                 "[Kyra weather] Timeout.");
         }
 
         if (!fcOk)
         {
             return KyraToolResult.Fail("Weather", KyraLiveToolErrorKind.HttpError,
-                "Could not load the forecast. Try again in a moment.",
+                "Live weather is unavailable right now because the forecast provider failed. Try again in a minute.",
                 "[Kyra weather] Forecast request failed.");
         }
 
@@ -181,7 +181,7 @@ internal sealed class WeatherKyraTool(HttpClient http, KyraLiveToolCache cache) 
         if (fc is null || !fc.RootElement.TryGetProperty("current", out var cur))
         {
             return KyraToolResult.Fail("Weather", KyraLiveToolErrorKind.ParseError,
-                "Weather data was unreadable. The provider may have changed format.",
+                "Live weather is unavailable right now because the provider response was unreadable.",
                 "[Kyra weather] Parse error.");
         }
 
@@ -241,14 +241,14 @@ internal sealed class WeatherKyraTool(HttpClient http, KyraLiveToolCache cache) 
         if (timedOut)
         {
             return KyraToolResult.Fail("Weather", KyraLiveToolErrorKind.Timeout,
-                "Weather request timed out. Try again later.",
+                "Live weather is unavailable right now because the request timed out. Try again in a minute.",
                 "[Kyra weather] Timeout; do not invent readings.");
         }
 
         if (!ok)
         {
             return KyraToolResult.Fail("Weather", KyraLiveToolErrorKind.HttpError,
-                "Weather request failed. Try again later.",
+                "Live weather is unavailable right now because the provider request failed. Try again in a minute.",
                 "[Kyra weather] HTTP failure; do not invent readings.");
         }
 
@@ -256,7 +256,7 @@ internal sealed class WeatherKyraTool(HttpClient http, KyraLiveToolCache cache) 
         if (doc is null)
         {
             return KyraToolResult.Fail("Weather", KyraLiveToolErrorKind.ParseError,
-                "Could not read weather response.",
+                "Live weather is unavailable right now because the provider response was unreadable.",
                 "[Kyra weather] Parse error.");
         }
 
@@ -612,7 +612,7 @@ internal sealed class StockPriceKyraTool(HttpClient http, KyraLiveToolCache cach
         if (!lt.StocksEnabled)
         {
             return KyraToolResult.Fail(Name, KyraLiveToolErrorKind.Disabled,
-                "Stock live data is turned off in Kyra Advanced → Live APIs.",
+                "Stock live data is turned off in Kyra Advanced → Live APIs. Enable a finance provider and Kyra gateway/live stock tools if your operator configured live market access — Kyra will not invent market summaries while this is off.",
                 "[Kyra stocks] Disabled.");
         }
 
@@ -939,7 +939,7 @@ internal sealed class CryptoPriceKyraTool(HttpClient http, KyraLiveToolCache cac
         {
             KyraLiveToolTelemetry.Record(Name, KyraToolOperationalStatus.Failed, "CoinGecko", false);
             return KyraToolResult.Fail(Name, KyraLiveToolErrorKind.HttpError,
-                "Could not load crypto price. Try again later.",
+                $"I couldn’t load live {raw.Trim().ToUpperInvariant()} pricing right now. The crypto live tool may be unavailable or rate-limited. Try again in a minute or check the provider settings.",
                 "[Kyra crypto] HTTP error.");
         }
 

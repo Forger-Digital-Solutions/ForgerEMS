@@ -79,7 +79,64 @@ public sealed class KyraLiveDataBoundaryTests
     [Fact]
     public void LiveToolsUnavailableMessage_IsStable()
     {
-        Assert.Contains("don't have live data tools", KyraLiveToolRouter.LiveToolsUnavailableMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("couldn’t load verified live data", KyraLiveToolRouter.LiveToolsUnavailableMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("don't have live data tools", KyraLiveToolRouter.LiveToolsUnavailableMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("not capable", KyraLiveToolRouter.LiveToolsUnavailableMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task OfflineOnly_WeatherEnabled_WeatherIntent_LiveDataToolBlocked()
+    {
+        var settings = new CopilotSettings
+        {
+            Mode = CopilotMode.OfflineOnly,
+            LiveTools = new KyraLiveToolsSettings { WeatherEnabled = true }
+        };
+        var request = new KyraToolExecutionRequest
+        {
+            Intent = KyraIntent.Weather,
+            Prompt = "What is the current weather outside?",
+            Settings = settings
+        };
+        var result = await Registry().BuildAugmentationAsync(request, CancellationToken.None);
+        // WeatherKyraTool is LiveData; must be blocked in OfflineOnly — no weather fetch block in result
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task AskFirst_WeatherEnabled_WeatherIntent_LiveDataToolBlocked()
+    {
+        var settings = new CopilotSettings
+        {
+            Mode = CopilotMode.AskFirst,
+            LiveTools = new KyraLiveToolsSettings { WeatherEnabled = true }
+        };
+        var request = new KyraToolExecutionRequest
+        {
+            Intent = KyraIntent.Weather,
+            Prompt = "What is the current weather outside?",
+            Settings = settings
+        };
+        var result = await Registry().BuildAugmentationAsync(request, CancellationToken.None);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task AskFirst_CryptoEnabled_CryptoIntent_LiveDataToolBlocked()
+    {
+        var settings = new CopilotSettings
+        {
+            Mode = CopilotMode.AskFirst,
+            LiveTools = new KyraLiveToolsSettings { CryptoEnabled = true }
+        };
+        var request = new KyraToolExecutionRequest
+        {
+            Intent = KyraIntent.CryptoPrice,
+            Prompt = "How much is BTC worth?",
+            Settings = settings
+        };
+        var result = await Registry().BuildAugmentationAsync(request, CancellationToken.None);
+        Assert.Null(result);
     }
 
     private sealed class StubHandler : HttpMessageHandler

@@ -24,7 +24,8 @@ public sealed class KyraProviderDecision
         Func<ICopilotProvider, CopilotProviderConfiguration> configResolver,
         KyraConversationState memoryState,
         KyraToolRegistry toolRegistry,
-        KyraToolHostFacts hostFacts)
+        KyraToolHostFacts hostFacts,
+        KyraProviderUsageTracker? providerUsage = null)
     {
         var (plan, ordered) = KyraOrchestrator.BuildExecutionPlan(
             request,
@@ -34,7 +35,8 @@ public sealed class KyraProviderDecision
             configResolver,
             memoryState,
             toolRegistry,
-            hostFacts);
+            hostFacts,
+            providerUsage);
 
         var machineAnchored = KyraMachineContextRouter.IsMachineAnchoredIntent(context.Intent, request.Prompt);
         var apiFirst = settings.ApiFirstRouting &&
@@ -45,7 +47,7 @@ public sealed class KyraProviderDecision
         {
             ToolPlan = plan,
             OrderedProviders = ordered,
-            SkippedProviders = KyraProviderRouter.ExplainSkippedProviders(providers, request, settings, context, configResolver),
+            SkippedProviders = KyraProviderRouter.ExplainSkippedProviders(providers, request, settings, context, configResolver, providerUsage),
             ApiFirst = apiFirst,
             EffectiveCapabilities = KyraProviderCapabilityCatalog.AggregateForProviders(ordered)
         };

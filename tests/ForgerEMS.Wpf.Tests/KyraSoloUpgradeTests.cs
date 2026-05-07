@@ -165,7 +165,7 @@ public sealed class KyraSoloUpgradeTests
             new CopilotContext { Intent = KyraIntent.GeneralTechQuestion });
 
         Assert.Contains("60", answer, StringComparison.Ordinal);
-        Assert.Contains("local calculator", answer, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Direct answer", answer, StringComparison.OrdinalIgnoreCase);
     }
 
     private static Dictionary<string, string?> CaptureEnv(params string[] names)

@@ -162,6 +162,60 @@ public sealed class ProviderEnvironmentResolverTests
     }
 
     [Fact]
+    public void ProcessEnvironment_WinsOverUserEnvironment_WhenBothSet()
+    {
+        var name = UniqueName("FORGEREMS_UT_PREC_");
+        try
+        {
+            Environment.SetEnvironmentVariable(name, "proc-wins", EnvironmentVariableTarget.Process);
+            try
+            {
+                Environment.SetEnvironmentVariable(name, "user-loses", EnvironmentVariableTarget.User);
+            }
+            catch (SecurityException) { return; }
+            catch (UnauthorizedAccessException) { return; }
+
+            var r = ProviderEnvironmentResolver.ResolveFromEnvironmentVariable(name);
+            Assert.Equal(KyraCredentialSource.ProcessEnvironment, r.Source);
+            Assert.Equal("proc-wins", r.Value);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(name, null, EnvironmentVariableTarget.Process);
+            try { Environment.SetEnvironmentVariable(name, null, EnvironmentVariableTarget.User); }
+            catch (SecurityException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+    }
+
+    [Fact]
+    public void ProcessEnv_Placeholder_FallsThrough_ToUserEnv()
+    {
+        var name = UniqueName("FORGEREMS_UT_FALL_");
+        try
+        {
+            Environment.SetEnvironmentVariable(name, "REPLACE_ME", EnvironmentVariableTarget.Process);
+            try
+            {
+                Environment.SetEnvironmentVariable(name, "real-user-key", EnvironmentVariableTarget.User);
+            }
+            catch (SecurityException) { return; }
+            catch (UnauthorizedAccessException) { return; }
+
+            var r = ProviderEnvironmentResolver.ResolveFromEnvironmentVariable(name);
+            Assert.Equal(KyraCredentialSource.UserEnvironment, r.Source);
+            Assert.Equal("real-user-key", r.Value);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(name, null, EnvironmentVariableTarget.Process);
+            try { Environment.SetEnvironmentVariable(name, null, EnvironmentVariableTarget.User); }
+            catch (SecurityException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+    }
+
+    [Fact]
     public void CredentialSourceLine_ReflectsRefreshAfterProcessEnvChange()
     {
         var name = UniqueName("FORGEREMS_UT_REF_");

@@ -28,7 +28,7 @@ public sealed class KyraLocalSpecAnswerBuilderTests
 
         Assert.True(KyraLocalSpecAnswerBuilder.TryBuildLocalSpecAnswer("What CPU do I have?", profile, out var r));
         Assert.Contains("i7-9850H", r.Text, System.StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("grounded in latest System Intelligence scan", r.Text, System.StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("_Kyra", r.Text, System.StringComparison.OrdinalIgnoreCase);
         Assert.True(r.GroundedInSystemIntelligence);
     }
 
@@ -37,7 +37,7 @@ public sealed class KyraLocalSpecAnswerBuilderTests
     {
         Assert.True(KyraLocalSpecAnswerBuilder.TryBuildLocalSpecAnswer("How much RAM?", null, out var r));
         Assert.Contains("Run System Intelligence first", r.Text, System.StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("no current scan available", r.Text, System.StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("_Kyra", r.Text, System.StringComparison.OrdinalIgnoreCase);
         Assert.False(r.GroundedInSystemIntelligence);
     }
 
@@ -45,5 +45,22 @@ public sealed class KyraLocalSpecAnswerBuilderTests
     public void NonSpecQuestion_NotHandled()
     {
         Assert.False(KyraLocalSpecAnswerBuilder.TryBuildLocalSpecAnswer("Write a poem about USB drives.", new SystemProfile(), out _));
+    }
+
+    [Fact]
+    public void SensorQuestion_ExplainsPermissionLimitedDataNotBrokenHardware()
+    {
+        var profile = new SystemProfile
+        {
+            Manufacturer = "Dell",
+            Model = "Precision",
+            Cpu = "Intel Core i7",
+            OperatingSystem = "Windows 11",
+            RamTotal = "32 GB"
+        };
+
+        Assert.True(KyraLocalSpecAnswerBuilder.TryBuildLocalSpecAnswer("what sensors are missing?", profile, out var r));
+        Assert.Contains("permission-limited", r.Text, System.StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("broken", r.Text, System.StringComparison.OrdinalIgnoreCase);
     }
 }

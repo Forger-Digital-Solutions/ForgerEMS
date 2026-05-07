@@ -28,10 +28,7 @@ public static class KyraLocalSpecAnswerBuilder
 
         var grounded = profile is not null;
         var body = grounded ? BuildAnswerFromProfile(prompt.Trim(), profile!) : NoScanBody;
-        var footer = grounded
-            ? "_Kyra · grounded in latest System Intelligence scan_"
-            : "_Kyra · no current scan available_";
-        var text = body.TrimEnd() + Environment.NewLine + Environment.NewLine + footer;
+        var text = body.TrimEnd();
 
         response = new CopilotResponse
         {
@@ -39,7 +36,7 @@ public static class KyraLocalSpecAnswerBuilder
             UsedOnlineData = false,
             OnlineStatus = "Kyra Mode: Local hardware facts (System Intelligence scan).",
             ProviderType = CopilotProviderType.LocalOffline,
-            ProviderNotes = ["Kyra routing: local-first deterministic hardware spec answer."],
+            ProviderNotes = ["Kyra routing: hardware facts -> local System Intelligence"],
             ResponseSource = KyraResponseSource.LocalKyra,
             SourceLabel = KyraResponseComposer.KyraIdentityLabel,
             GroundedInSystemIntelligence = grounded,
@@ -194,7 +191,8 @@ public static class KyraLocalSpecAnswerBuilder
         var gb = p.RamTotalGb is { } g
             ? FormattableString.Invariant($"{g:0.#} GB")
             : p.RamTotal;
-        return $"RAM (from System Intelligence): {gb} total. Reported speed summary: {p.RamSpeed}.";
+        var mem = string.IsNullOrWhiteSpace(p.MemoryTypeSummary) ? string.Empty : $" ({p.MemoryTypeSummary})";
+        return $"RAM (from System Intelligence): {gb} total{mem}. Reported speed summary: {p.RamSpeed}.";
     }
 
     private static string FormatStorage(SystemProfile p)
@@ -205,7 +203,10 @@ public static class KyraLocalSpecAnswerBuilder
         }
 
         var lines = p.Disks.Select(d =>
-                $"• {d.Name}: {d.Size}, {d.MediaType}, health {d.Health} ({d.Status})")
+            {
+                var bus = string.IsNullOrWhiteSpace(d.InterfaceType) ? string.Empty : $"{d.InterfaceType} ";
+                return $"• {d.Name}: {bus}{d.Size}, {d.MediaType}, health {d.Health} ({d.Status})";
+            })
             .ToArray();
         return "Storage (from System Intelligence):" + Environment.NewLine + string.Join(Environment.NewLine, lines);
     }
@@ -254,7 +255,7 @@ public static class KyraLocalSpecAnswerBuilder
             "Sensor / Hardware X-Ray coverage (from System Intelligence):" + Environment.NewLine +
             sensors.CoverageSummary + Environment.NewLine +
             $"Confidence: {sensors.Confidence}" + Environment.NewLine +
-            "Unavailable sensors are exposure limits, not hardware failures." + Environment.NewLine +
+            "Unavailable sensors are usually permission-limited or not exposed by firmware/driver, not hardware failures." + Environment.NewLine +
             "Status guide: Unknown = lower confidence; NotExposed = firmware/driver/permission limit; Inferred = derived from another signal; Failure = only with explicit warning/critical evidence." + Environment.NewLine +
             string.Join(Environment.NewLine, missing);
     }

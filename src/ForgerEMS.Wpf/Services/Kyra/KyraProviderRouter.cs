@@ -37,10 +37,6 @@ public static class KyraProviderCapabilityCatalog
         {
             caps |= KyraProviderCapabilities.RequiresSecret;
         }
-        else
-        {
-            caps |= KyraProviderCapabilities.RequiresSecret;
-        }
 
         caps |= KyraProviderCapabilities.SupportsSystemEnhancement;
         return caps;
@@ -89,12 +85,19 @@ public static class KyraProviderRouter
         CopilotRequest request,
         CopilotSettings settings,
         CopilotContext context,
-        Func<ICopilotProvider, CopilotProviderConfiguration> configResolver)
+        Func<ICopilotProvider, CopilotProviderConfiguration> configResolver,
+        KyraProviderUsageTracker? usageTracker = null)
     {
         var scores = new List<KyraProviderScore>();
         foreach (var provider in providers)
         {
             if (provider.ProviderType == CopilotProviderType.LocalOffline)
+            {
+                continue;
+            }
+
+            if (usageTracker is not null &&
+                IsInCooldown(usageTracker, provider.Id, out _))
             {
                 continue;
             }
@@ -161,13 +164,21 @@ public static class KyraProviderRouter
         CopilotRequest request,
         CopilotSettings settings,
         CopilotContext context,
-        Func<ICopilotProvider, CopilotProviderConfiguration> configResolver)
+        Func<ICopilotProvider, CopilotProviderConfiguration> configResolver,
+        KyraProviderUsageTracker? usageTracker = null)
     {
         var skipped = new List<string>();
         foreach (var provider in providers)
         {
             if (provider.ProviderType == CopilotProviderType.LocalOffline)
             {
+                continue;
+            }
+
+            if (usageTracker is not null && IsInCooldown(usageTracker, provider.Id, out var until))
+            {
+                var sec = Math.Max(1, (int)Math.Ceiling((until - DateTimeOffset.UtcNow).TotalSeconds));
+                skipped.Add($"{provider.DisplayName}: cooling down (~{sec}s)");
                 continue;
             }
 
@@ -211,6 +222,19 @@ public static class KyraProviderRouter
         }
 
         return skipped;
+    }
+
+    public static bool IsInCooldown(KyraProviderUsageTracker tracker, string providerId, out DateTimeOffset cooldownUntilUtc)
+    {
+        var state = tracker.GetOrCreate(providerId);
+        if (state.CooldownUntilUtc is { } u && u > DateTimeOffset.UtcNow)
+        {
+            cooldownUntilUtc = u;
+            return true;
+        }
+
+        cooldownUntilUtc = default;
+        return false;
     }
 
     private static Dictionary<string, int> BuildPriority(string? csv)

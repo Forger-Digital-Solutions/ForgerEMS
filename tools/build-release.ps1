@@ -436,6 +436,7 @@ $checksumsPath = Join-Path $releaseRoot "CHECKSUMS.sha256"
 $installerOutputDir = Join-Path $distRoot "installer"
 $installerReleaseName = "ForgerEMS-Setup-v{0}.exe" -f $Version
 $installerReleasePath = Join-Path $releaseRoot $installerReleaseName
+$displayVersionLabel = "ForgerEMS v1.2.0 Public Preview"
 $releaseIdentifierLabel = "ForgerEMS v1.2.0 Public Preview - package $Version (ZIP-first technician bundle)"
 
 Write-Step "Release version: $Version"
@@ -489,6 +490,7 @@ else {
     & $isccPath `
         "/DAppVersion=$Version" `
         "/DAppVersionInfo=$appVersionInfo" `
+        ("/DDisplayVersion=$displayVersionLabel") `
         ("/DReleaseIdentifier=$releaseIdentifierLabel") `
         "/DPublishDir=$publishDir" `
         "/DBackendBundleDir=$backendStageRoot" `

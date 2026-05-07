@@ -235,6 +235,14 @@ public sealed class KyraToolRegistry
                 continue;
             }
 
+            // OfflineOnly and AskFirst must never trigger live network calls. LocalContext and
+            // CodeAssist tools are pure-local and are not affected by this gate.
+            if (request.Settings.Mode is CopilotMode.OfflineOnly or CopilotMode.AskFirst
+                && tool.SurfaceCategory is KyraToolSurfaceCategory.LiveData or KyraToolSurfaceCategory.Marketplace)
+            {
+                continue;
+            }
+
             var result = await tool.ExecuteAsync(request, cancellationToken).ConfigureAwait(false);
             if (!result.AugmentsProviderPrompt)
             {

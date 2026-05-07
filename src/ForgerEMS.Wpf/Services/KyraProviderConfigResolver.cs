@@ -186,16 +186,16 @@ public static class KyraProviderConfigResolver
 
         foreach (var name in ExpandCredentialNames(providerId, apiKeyEnvironmentVariable, baseUrl))
         {
-            var user = SafeGet(name, EnvironmentVariableTarget.User);
-            if (!IsMissingOrPlaceholder(user))
-            {
-                return user!.Trim();
-            }
-
             var process = SafeGet(name, EnvironmentVariableTarget.Process);
             if (!IsMissingOrPlaceholder(process))
             {
                 return process!.Trim();
+            }
+
+            var user = SafeGet(name, EnvironmentVariableTarget.User);
+            if (!IsMissingOrPlaceholder(user))
+            {
+                return user!.Trim();
             }
 
             var machine = SafeGet(name, EnvironmentVariableTarget.Machine);
@@ -215,16 +215,16 @@ public static class KyraProviderConfigResolver
             return defaultValue;
         }
 
-        var user = SafeGet(name, EnvironmentVariableTarget.User);
-        if (!IsMissingOrPlaceholder(user))
-        {
-            return user!.Trim();
-        }
-
         var process = SafeGet(name, EnvironmentVariableTarget.Process);
         if (!IsMissingOrPlaceholder(process))
         {
             return process!.Trim();
+        }
+
+        var user = SafeGet(name, EnvironmentVariableTarget.User);
+        if (!IsMissingOrPlaceholder(user))
+        {
+            return user!.Trim();
         }
 
         var machine = SafeGet(name, EnvironmentVariableTarget.Machine);
@@ -243,20 +243,20 @@ public static class KyraProviderConfigResolver
             return KyraProviderCredentialState.Missing;
         }
 
-        var user = SafeGet(name, EnvironmentVariableTarget.User);
-        if (!string.IsNullOrWhiteSpace(user))
-        {
-            return IsPlaceholderSecretOrValue(user)
-                ? KyraProviderCredentialState.Placeholder
-                : KyraProviderCredentialState.FromUserEnv;
-        }
-
         var process = SafeGet(name, EnvironmentVariableTarget.Process);
         if (!string.IsNullOrWhiteSpace(process))
         {
             return IsPlaceholderSecretOrValue(process)
                 ? KyraProviderCredentialState.Placeholder
                 : KyraProviderCredentialState.FromProcessEnv;
+        }
+
+        var user = SafeGet(name, EnvironmentVariableTarget.User);
+        if (!string.IsNullOrWhiteSpace(user))
+        {
+            return IsPlaceholderSecretOrValue(user)
+                ? KyraProviderCredentialState.Placeholder
+                : KyraProviderCredentialState.FromUserEnv;
         }
 
         var machine = SafeGet(name, EnvironmentVariableTarget.Machine);

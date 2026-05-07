@@ -42,6 +42,7 @@ public sealed class IntelligenceAutomationTests
         Assert.Equal("Managed Missing", ToolkitDisplayClassification.BuildNormalizedLabel("MISSING_REQUIRED", "MANAGED", ""));
         Assert.Equal("Manual Required", ToolkitDisplayClassification.BuildNormalizedLabel("MANUAL_REQUIRED", "MANUAL", ""));
         Assert.Equal("Verification Issues", ToolkitDisplayClassification.BuildNormalizedLabel("HASH_FAILED", "MANAGED", "FAIL"));
+        Assert.Equal("Verification Pending", ToolkitDisplayClassification.BuildNormalizedLabel("VERIFICATION_PENDING", "MANAGED", ""));
     }
 
     [Fact]

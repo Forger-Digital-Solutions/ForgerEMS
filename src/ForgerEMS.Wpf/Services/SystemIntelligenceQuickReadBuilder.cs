@@ -38,7 +38,7 @@ public static class SystemIntelligenceQuickReadBuilder
 
         if (needsSensorNote && lines.Count < 8)
         {
-            lines.Add("Sensor Notes: Unknown lowers confidence; NotExposed means firmware/driver/permission limitation, not failure.");
+            lines.Add("Sensor Notes: Unknown lowers confidence; NotExposed/PermissionRequired means Windows limited optional detail, not failure.");
         }
 
         return string.Join(Environment.NewLine, lines.Take(8));

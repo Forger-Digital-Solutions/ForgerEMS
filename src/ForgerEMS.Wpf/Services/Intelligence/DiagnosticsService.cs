@@ -37,7 +37,7 @@ public sealed class DiagnosticsService : IDiagnosticsService
             {
                 Source = "WSL",
                 Code = "wsl_not_detected",
-                Severity = DiagnosticSeverityLevel.Warning,
+                Severity = DiagnosticSeverityLevel.Info,
                 Message = "Windows Subsystem for Linux was not detected on PATH.",
                 SuggestedFix = "Optional: install WSL from an elevated prompt only if you need Linux tooling (`wsl --install`)."
             });
@@ -89,6 +89,11 @@ public sealed class DiagnosticsService : IDiagnosticsService
             return DiagnosticSeverityLevel.Warning;
         }
 
+        if (items.Any(i => i.Severity == DiagnosticSeverityLevel.Info))
+        {
+            return DiagnosticSeverityLevel.Info;
+        }
+
         if (items.All(i => i.Severity == DiagnosticSeverityLevel.Ok))
         {
             return DiagnosticSeverityLevel.Ok;
@@ -127,8 +132,8 @@ public sealed class DiagnosticsService : IDiagnosticsService
                     {
                         Source = "SystemIntelligence",
                         Code = GetString(issue, "code"),
-                        Severity = sev,
-                        Message = GetString(issue, "message"),
+                        Severity = PromoteOptionalProviderSeverity(sev, GetString(issue, "message")),
+                        Message = SanitizeDiagnosticMessage(GetString(issue, "message")),
                         SuggestedFix = GetOptionalString(issue, "suggestedFix")
                     });
                 }
@@ -150,7 +155,7 @@ public sealed class DiagnosticsService : IDiagnosticsService
                         Source = "SystemIntelligence",
                         Code = "obvious_problem",
                         Severity = DiagnosticSeverityLevel.Warning,
-                        Message = text,
+                        Message = SanitizeDiagnosticMessage(text),
                         SuggestedFix = "Review System Intelligence recommendations and rerun the scan after changes."
                     });
                 }
@@ -424,6 +429,11 @@ public sealed class DiagnosticsService : IDiagnosticsService
             return DiagnosticSeverityLevel.Warning;
         }
 
+        if (raw.Equals("Info", StringComparison.OrdinalIgnoreCase))
+        {
+            return DiagnosticSeverityLevel.Info;
+        }
+
         if (raw.Equals("Ok", StringComparison.OrdinalIgnoreCase) || raw.Equals("OK", StringComparison.OrdinalIgnoreCase))
         {
             return DiagnosticSeverityLevel.Ok;
@@ -466,5 +476,37 @@ public sealed class DiagnosticsService : IDiagnosticsService
         }
 
         return int.TryParse(p.ToString(), out value);
+    }
+
+    private static DiagnosticSeverityLevel PromoteOptionalProviderSeverity(DiagnosticSeverityLevel severity, string message)
+    {
+        if (severity is DiagnosticSeverityLevel.Warning or DiagnosticSeverityLevel.Blocked)
+        {
+            return severity;
+        }
+
+        var sanitized = SanitizeDiagnosticMessage(message);
+        if (sanitized.Contains("Permission required", StringComparison.OrdinalIgnoreCase) ||
+            sanitized.Contains("not exposed", StringComparison.OrdinalIgnoreCase) ||
+            sanitized.Contains("optional low-level detail", StringComparison.OrdinalIgnoreCase))
+        {
+            return DiagnosticSeverityLevel.Info;
+        }
+
+        return severity;
+    }
+
+    private static string SanitizeDiagnosticMessage(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return "Provider unavailable.";
+        }
+
+        var safe = message.Trim();
+        safe = safe.Replace("Generic failure", "Provider unavailable", StringComparison.OrdinalIgnoreCase);
+        safe = safe.Replace("Access denied", "Permission required", StringComparison.OrdinalIgnoreCase);
+        safe = safe.Replace("Access to a CIM resource was not available to the client.", "Windows blocked optional low-level detail.", StringComparison.OrdinalIgnoreCase);
+        return safe;
     }
 }

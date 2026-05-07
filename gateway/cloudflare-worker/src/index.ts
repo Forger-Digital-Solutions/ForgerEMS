@@ -3,6 +3,10 @@ export interface Env {
   OPENAI_API_KEY?: string;
   OPENROUTER_API_KEY?: string;
   GROQ_API_KEY?: string;
+  NEWS_API_KEY?: string;
+  FINNHUB_API_KEY?: string;
+  ALPHA_VANTAGE_API_KEY?: string;
+  FMP_API_KEY?: string;
   RELEASE_CHANNEL?: string;
   DEFAULT_MODEL?: string;
   MAX_REQUEST_BYTES?: string;
@@ -46,6 +50,42 @@ type KyraGatewayResponse = {
   retryAfterSeconds?: number;
 };
 
+type KyraResearchRequest = {
+  requestId?: string;
+  intent?: string;
+  prompt?: string;
+  context?: {
+    machineClass?: string;
+    healthScoreBand?: string;
+    issueCategory?: string;
+    usbState?: string;
+    privacyMode?: string;
+    manufacturer?: string;
+    modelFamily?: string;
+    partCategory?: string;
+    knownLocalFacts?: Record<string, string | undefined>;
+  };
+  consent?: {
+    gatewayResearch?: boolean;
+    communitySharing?: boolean;
+  };
+  betaToken?: string;
+};
+
+type KyraResearchResponse = {
+  ok: boolean;
+  answer?: string;
+  tool?: string;
+  provider?: string;
+  freshnessUtc?: string;
+  confidence?: string;
+  sources?: unknown[];
+  metadata?: { liveResearch?: boolean; sanitizedContext?: boolean };
+  errorCode?: string;
+  safeMessage?: string;
+  retryAfterSeconds?: number;
+};
+
 const jsonHeaders = {
   "content-type": "application/json; charset=utf-8",
   "cache-control": "no-store",
@@ -53,104 +93,481 @@ const jsonHeaders = {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    if (request.method !== "POST") {
-      return json({ ok: false, errorCode: "MethodNotAllowed", message: "POST required." }, 405);
-    }
-
-    const contentLength = Number(request.headers.get("content-length") ?? "0");
+    const url = new URL(request.url);
+    const pathNorm = url.pathname.replace(/\/$/, "");
     const maxBytes = Number(env.MAX_REQUEST_BYTES ?? "18000");
-    if (contentLength > maxBytes) {
-      return json({ ok: false, errorCode: "RequestTooLarge", message: "Kyra request is too large for the beta gateway." }, 413);
+
+    if (request.method === "GET" && pathNorm.endsWith("/v1/kyra/status")) {
+      return handleGatewayStatus(request, env);
     }
 
-    let body: KyraGatewayRequest;
+    if (request.method !== "POST") {
+      return jsonLegacy({ ok: false, errorCode: "MethodNotAllowed", message: "POST required." }, 405);
+    }
+
+    const researchPath = pathNorm.endsWith("/v1/kyra/research");
+    const legacyChatPath = pathNorm.endsWith("/v1/kyra/chat");
+    if (!researchPath && !legacyChatPath) {
+      return jsonLegacy({ ok: false, errorCode: "NotFound", message: "Unknown Kyra gateway path." }, 404);
+    }
+
+    let bodyText: string;
     try {
-      body = await request.json<KyraGatewayRequest>();
+      bodyText = await readBodyTextCapped(request, maxBytes);
     } catch {
-      return json({ ok: false, errorCode: "BadJson", message: "Invalid gateway request." }, 400);
+      return jsonLegacy({ ok: false, errorCode: "RequestTooLarge", message: "Kyra request is too large for the beta gateway." }, 413);
     }
 
-    if (!env.BETA_GATEWAY_TOKEN || body.betaToken !== env.BETA_GATEWAY_TOKEN) {
-      return json({ ok: false, errorCode: "Unauthorized", message: "Kyra beta gateway token is missing or invalid." }, 401);
+    if (researchPath) {
+      return handleResearchBody(bodyText, request, env, maxBytes);
     }
 
-    const rateLimit = await evaluateRateLimit(request, env, body.betaToken);
-    if (!rateLimit.ok) {
-      return json(
-        {
-          ok: false,
-          errorCode: "BetaLimitReached",
-          message: "Kyra beta API time is used up for today. Local/offline mode is still available.",
-          retryAfterSeconds: rateLimit.retryAfterSeconds,
-          rateLimit: {
-            remainingToday: 0,
-            resetUtc: rateLimit.resetUtc,
-          },
-        },
-        429,
-      );
-    }
-
-    const prompt = sanitizeForProvider(body.userMessage ?? "");
-    if (!prompt) {
-      return json({ ok: false, errorCode: "EmptyPrompt", message: "Kyra needs a prompt to answer." }, 400);
-    }
-
-    const context = body.machineContext?.summary
-      ? `\n\nSanitized machine context:\n${sanitizeForProvider(body.machineContext.summary)}`
-      : "";
-    const memory = body.memorySummary ? `\n\nSafe memory summary:\n${sanitizeForProvider(body.memorySummary)}` : "";
-    const userContent = `${prompt}${context}${memory}`.slice(0, maxBytes);
-
-    const providers = [
-      env.OPENAI_API_KEY
-        ? { name: "openai", baseUrl: "https://api.openai.com/v1", key: env.OPENAI_API_KEY, model: env.DEFAULT_MODEL || "gpt-4o-mini" }
-        : null,
-      env.OPENROUTER_API_KEY
-        ? { name: "openrouter", baseUrl: "https://openrouter.ai/api/v1", key: env.OPENROUTER_API_KEY, model: "openrouter/auto" }
-        : null,
-      env.GROQ_API_KEY
-        ? { name: "groq", baseUrl: "https://api.groq.com/openai/v1", key: env.GROQ_API_KEY, model: "llama-3.1-8b-instant" }
-        : null,
-    ].filter(Boolean) as Array<{ name: string; baseUrl: string; key: string; model: string }>;
-
-    if (providers.length === 0) {
-      return json({ ok: false, errorCode: "NoProviderConfigured", message: "Kyra gateway has no server-side provider configured." }, 503);
-    }
-
-    let lastError = "unknown";
-    for (let i = 0; i < providers.length; i++) {
-      const provider = providers[i];
-      const result = await callOpenAiCompatible(provider, body, userContent, Number(env.PROVIDER_TIMEOUT_MS ?? "45000"));
-      if (result.ok) {
-        return json({
-          ok: true,
-          providerUsed: provider.name,
-          modelUsed: provider.model,
-          message: result.message,
-          toolResults: [],
-          fallbackUsed: i > 0,
-          diagnosticNote: "gateway response",
-        });
-      }
-
-      lastError = result.errorCode;
-    }
-
-    return json({
-      ok: false,
-      errorCode: "GatewayProviderFailure",
-      message: "Kyra gateway providers are unavailable. Local/offline mode is still available.",
-      diagnosticNote: lastError,
-    }, 503);
+    return handleLegacyChatBody(bodyText, request, env, maxBytes);
   },
 };
+
+async function readBodyTextCapped(request: Request, maxBytes: number): Promise<string> {
+  const buf = await request.arrayBuffer();
+  if (buf.byteLength > maxBytes) {
+    throw new Error("too-large");
+  }
+  return new TextDecoder("utf-8").decode(buf);
+}
+
+async function handleGatewayStatus(request: Request, env: Env): Promise<Response> {
+  const token = extractBetaToken(request, undefined);
+  const expectedToken = normalizeToken(env.BETA_GATEWAY_TOKEN);
+  if (!expectedToken || !token || token !== expectedToken) {
+    return new Response(JSON.stringify({ ok: false, errorCode: "unauthorized" }), {
+      status: 401,
+      headers: jsonHeaders,
+    });
+  }
+
+  const rateLimit = await evaluateRateLimit(request, env, token);
+  if (!rateLimit.ok) {
+    return new Response(
+      JSON.stringify({ ok: false, errorCode: "rate_limited", retryAfterSeconds: rateLimit.retryAfterSeconds }),
+      { status: 429, headers: jsonHeaders },
+    );
+  }
+
+  const aiList = buildProviderList(env);
+  const aiChat = aiList.length > 0 ? "configured" : "unconfigured";
+  const financeConfigured = !!(env.FINNHUB_API_KEY || env.ALPHA_VANTAGE_API_KEY || env.FMP_API_KEY);
+  const newsConfigured = !!env.NEWS_API_KEY;
+
+  return new Response(
+    JSON.stringify({
+      ok: true,
+      providers: {
+        aiChat,
+        crypto: "configured",
+        weather: aiChat === "configured" ? "configured" : "unconfigured",
+        finance: financeConfigured ? "configured" : "unconfigured",
+        news: newsConfigured ? "configured" : "unconfigured",
+        webResearch: aiChat,
+      },
+    }),
+    { status: 200, headers: jsonHeaders },
+  );
+}
+
+function extractBetaToken(request: Request, bodyToken?: string): string | undefined {
+  const auth = request.headers.get("authorization");
+  if (auth && auth.toLowerCase().startsWith("bearer ")) {
+    return normalizeToken(auth.slice(7));
+  }
+  return normalizeToken(bodyToken);
+}
+
+function normalizeToken(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+async function handleResearchBody(bodyText: string, request: Request, env: Env, maxBytes: number): Promise<Response> {
+  let body: KyraResearchRequest;
+  try {
+    body = JSON.parse(bodyText) as KyraResearchRequest;
+  } catch {
+    return jsonResearch(
+      {
+        ok: false,
+        errorCode: "BadJson",
+        safeMessage: "Invalid realtime research request.",
+      },
+      400,
+    );
+  }
+
+  const token = extractBetaToken(request, body.betaToken);
+  const expectedToken = normalizeToken(env.BETA_GATEWAY_TOKEN);
+  if (!expectedToken || !token || token !== expectedToken) {
+    return jsonResearch(
+      {
+        ok: false,
+        errorCode: "unauthorized",
+        safeMessage: "Kyra beta gateway token is missing or invalid.",
+      },
+      401,
+    );
+  }
+
+  const rateLimit = await evaluateRateLimit(request, env, token);
+  if (!rateLimit.ok) {
+    return jsonResearch(
+      {
+        ok: false,
+        errorCode: "rate_limited",
+        safeMessage: "Kyra beta API time is used up for today. Local/offline mode is still available.",
+        retryAfterSeconds: rateLimit.retryAfterSeconds,
+      },
+      429,
+    );
+  }
+
+  if (!body.consent?.gatewayResearch) {
+    return jsonResearch(
+      {
+        ok: false,
+        errorCode: "consent_required",
+        safeMessage: "Realtime gateway research requires consent in the app.",
+      },
+      403,
+    );
+  }
+
+  const prompt = sanitizeForProvider(body.prompt ?? "");
+  if (!prompt) {
+    return jsonResearch({ ok: false, errorCode: "EmptyPrompt", safeMessage: "Kyra needs a prompt to answer." }, 400);
+  }
+
+  const intent = (body.intent ?? "chat").toLowerCase();
+  const ctx = body.context ?? {};
+  const factsLine =
+    ctx.knownLocalFacts && typeof ctx.knownLocalFacts === "object"
+      ? sanitizeForProvider(
+          Object.entries(ctx.knownLocalFacts)
+            .map(([k, v]) => (v ? `${k}=${v}` : ""))
+            .filter(Boolean)
+            .join(","),
+        ).slice(0, 400)
+      : "";
+  const ctxLine = [
+    ctx.machineClass ? `machineClass=${sanitizeForProvider(ctx.machineClass)}` : "",
+    ctx.healthScoreBand ? `health=${sanitizeForProvider(ctx.healthScoreBand)}` : "",
+    ctx.usbState ? `usbState=${sanitizeForProvider(ctx.usbState)}` : "",
+    ctx.privacyMode ? `privacyMode=${sanitizeForProvider(ctx.privacyMode)}` : "",
+    ctx.manufacturer ? `mfg=${sanitizeForProvider(ctx.manufacturer)}` : "",
+    ctx.modelFamily ? `model=${sanitizeForProvider(ctx.modelFamily)}` : "",
+    ctx.partCategory ? `part=${sanitizeForProvider(ctx.partCategory)}` : "",
+    factsLine ? `localBands=${factsLine}` : "",
+  ]
+    .filter(Boolean)
+    .join("; ");
+
+  const nowIso = new Date().toISOString();
+
+  if (intent === "crypto") {
+    const live = await fetchCryptoLive(prompt);
+    if (live) {
+      return jsonResearch({
+        ok: true,
+        answer: live.answer,
+        tool: "crypto",
+        provider: live.provider,
+        freshnessUtc: nowIso,
+        confidence: "high",
+        metadata: { liveResearch: true, sanitizedContext: true },
+      });
+    }
+    return jsonResearch({
+      ok: false,
+      errorCode: "provider_unavailable",
+      safeMessage:
+        "I couldn’t load live BTC pricing right now. The crypto live tool may be unavailable or rate-limited. Try again in a minute or check provider settings.",
+    }, 503);
+  }
+
+  if (intent === "software_version" || (prompt.toLowerCase().includes("ventoy") && prompt.toLowerCase().includes("version"))) {
+    const v = await fetchVentoyLatestVersion();
+    if (v) {
+      return jsonResearch({
+        ok: true,
+        answer: v,
+        tool: "software_version",
+        provider: "github",
+        freshnessUtc: nowIso,
+        confidence: "high",
+        metadata: { liveResearch: true, sanitizedContext: true },
+      });
+    }
+  }
+
+  if (intent === "finance") {
+    const financeConfigured = !!(env.FINNHUB_API_KEY || env.ALPHA_VANTAGE_API_KEY || env.FMP_API_KEY);
+    return jsonResearch({
+      ok: false,
+      errorCode: financeConfigured ? "provider_unavailable" : "not_configured",
+      safeMessage: financeConfigured
+        ? "Live finance data is configured on the gateway, but the finance research tool could not verify this request right now. I will not invent market data."
+        : "Live finance data is not configured on the gateway yet. I will not invent current stock market changes.",
+    }, financeConfigured ? 503 : 501);
+  }
+
+  const providers = buildProviderList(env);
+  if (providers.length === 0) {
+    return jsonResearch({
+      ok: false,
+      errorCode: "not_configured",
+      safeMessage: "The realtime gateway has no AI provider configured server-side.",
+    }, 503);
+  }
+
+  const researchSystem =
+    intent === "hardware_part_lookup"
+      ? `You are Kyra (ForgerEMS) answering hardware part / upgrade shopping questions from realtime research.
+Rules:
+- Never invent exact OEM part numbers, sticker SKUs, or “guaranteed compatible” claims without labeling them as unverified candidates.
+- If you cite prices, ranges, or “cheapest”, only do so when you are summarizing plausible live marketplace patterns in generic terms — never fabricate specific listings, part IDs, or stock.
+- Prefer official/service-manual/OEM compatibility language for fit; treat third-party sellers as availability hints only.
+- Use only the sanitized machine hints in the operator context line (manufacturer/model family/part category/local bands). Do not ask for service tags, serials, or private paths.
+- Include a short “confirm before buy” reminder (manual, battery label, or OEM compatibility matrix).
+- Keep answers concise and technician-practical.`
+      : `You are Kyra (ForgerEMS). Realtime research mode.
+Rules:
+- Never invent live market prices, sports scores, exact CVE details, or version numbers unless you state they are illustrative.
+- If you cannot verify current facts, say the live tool or gateway could not verify and suggest checking an official source.
+- Do not ask for secrets. Keep answers concise.`;
+
+  const userContent = `Sanitized operator context: ${ctxLine || "none"}
+
+User question:
+${prompt}`.slice(0, maxBytes);
+  const pseudoBody: KyraGatewayRequest = {
+    personality: "bubbly-tech",
+    maxTokens: 900,
+    temperature: 0.35,
+  };
+
+  for (let i = 0; i < providers.length; i++) {
+    const provider = providers[i];
+    const result = await callOpenAiCompatible(
+      provider,
+      pseudoBody,
+      userContent,
+      Number(env.PROVIDER_TIMEOUT_MS ?? "45000"),
+      researchSystem,
+    );
+    if (result.ok) {
+      const text = result.message;
+      if (intent === "crypto" || intent === "finance") {
+        if (/\bknowledge cutoff\b|as of my last update|don't have real-time|do not have real-time/i.test(text)) {
+          return jsonResearch({
+            ok: false,
+            errorCode: "stale_wording_rejected",
+            safeMessage:
+              "I couldn’t return verified live market data from the gateway. Try again shortly or check operator configuration.",
+          }, 503);
+        }
+      }
+      return jsonResearch({
+        ok: true,
+        answer: text,
+        tool: "llm",
+        provider: provider.name,
+        freshnessUtc: nowIso,
+        confidence: "medium",
+        metadata: { liveResearch: true, sanitizedContext: true },
+      });
+    }
+  }
+
+  return jsonResearch(
+    {
+      ok: false,
+      errorCode: "provider_unavailable",
+      safeMessage:
+        "I couldn’t complete realtime research right now. The gateway provider may be unavailable. Local Kyra is still available.",
+    },
+    503,
+  );
+}
+
+async function fetchCryptoLive(prompt: string): Promise<{ answer: string; provider: string } | null> {
+  const l = prompt.toLowerCase();
+  const ids: string[] = [];
+  if (l.includes("btc") || l.includes("bitcoin")) {
+    ids.push("bitcoin");
+  }
+  if (l.includes("eth") || l.includes("ethereum")) {
+    ids.push("ethereum");
+  }
+  if (l.includes("sol") || l.includes("solana")) {
+    ids.push("solana");
+  }
+  if (ids.length === 0) {
+    ids.push("bitcoin");
+  }
+
+  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(ids.join(","))}&vs_currencies=usd&include_24hr_change=true`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    const res = await fetch(url, { signal: controller.signal, headers: { accept: "application/json" } });
+    if (!res.ok) {
+      return null;
+    }
+    const data = (await res.json()) as Record<string, { usd?: number; usd_24h_change?: number }>;
+    const lines: string[] = [];
+    for (const id of ids) {
+      const row = data[id];
+      if (!row?.usd) {
+        continue;
+      }
+      const sym = id === "bitcoin" ? "BTC" : id === "ethereum" ? "ETH" : id === "solana" ? "SOL" : id.toUpperCase();
+      const chg = row.usd_24h_change;
+      const chgTxt = typeof chg === "number" ? ` (24h ${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%)` : "";
+      lines.push(`${sym}: about $${row.usd.toLocaleString("en-US", { maximumFractionDigits: 2 })} USD${chgTxt} via CoinGecko (informational, not financial advice).`);
+    }
+    if (lines.length === 0) {
+      return null;
+    }
+    return { answer: lines.join("\n"), provider: "coingecko" };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchVentoyLatestVersion(): Promise<string | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    const res = await fetch("https://api.github.com/repos/ventoy/Ventoy/releases/latest", {
+      signal: controller.signal,
+      headers: {
+        accept: "application/vnd.github+json",
+        "user-agent": "ForgerEMS-Kyra-Gateway",
+      },
+    });
+    if (!res.ok) {
+      return null;
+    }
+    const data = (await res.json()) as { tag_name?: string; html_url?: string };
+    const tag = data.tag_name ?? "unknown";
+    const link = data.html_url ?? "https://github.com/ventoy/Ventoy/releases";
+    return `Latest Ventoy release on GitHub is tagged ${tag}. Confirm on ventoy.net or the official repo before downloading: ${link}`;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function buildProviderList(env: Env): Array<{ name: string; baseUrl: string; key: string; model: string }> {
+  return [
+    env.OPENAI_API_KEY
+      ? { name: "openai", baseUrl: "https://api.openai.com/v1", key: env.OPENAI_API_KEY, model: env.DEFAULT_MODEL || "gpt-4o-mini" }
+      : null,
+    env.OPENROUTER_API_KEY
+      ? { name: "openrouter", baseUrl: "https://openrouter.ai/api/v1", key: env.OPENROUTER_API_KEY, model: "openrouter/auto" }
+      : null,
+    env.GROQ_API_KEY
+      ? { name: "groq", baseUrl: "https://api.groq.com/openai/v1", key: env.GROQ_API_KEY, model: "llama-3.1-8b-instant" }
+      : null,
+  ].filter(Boolean) as Array<{ name: string; baseUrl: string; key: string; model: string }>;
+}
+
+async function handleLegacyChatBody(bodyText: string, request: Request, env: Env, maxBytes: number): Promise<Response> {
+  let body: KyraGatewayRequest;
+  try {
+    body = JSON.parse(bodyText) as KyraGatewayRequest;
+  } catch {
+    return jsonLegacy({ ok: false, errorCode: "BadJson", message: "Invalid gateway request." }, 400);
+  }
+
+  const token = extractBetaToken(request, body.betaToken);
+  const expectedToken = normalizeToken(env.BETA_GATEWAY_TOKEN);
+  if (!expectedToken || !token || token !== expectedToken) {
+    return jsonLegacy({ ok: false, errorCode: "Unauthorized", message: "Kyra beta gateway token is missing or invalid." }, 401);
+  }
+
+  const rateLimit = await evaluateRateLimit(request, env, token);
+  if (!rateLimit.ok) {
+    return jsonLegacy(
+      {
+        ok: false,
+        errorCode: "BetaLimitReached",
+        message: "Kyra beta API time is used up for today. Local/offline mode is still available.",
+        retryAfterSeconds: rateLimit.retryAfterSeconds,
+        rateLimit: {
+          remainingToday: 0,
+          resetUtc: rateLimit.resetUtc,
+        },
+      },
+      429,
+    );
+  }
+
+  const prompt = sanitizeForProvider(body.userMessage ?? "");
+  if (!prompt) {
+    return jsonLegacy({ ok: false, errorCode: "EmptyPrompt", message: "Kyra needs a prompt to answer." }, 400);
+  }
+
+  const context = body.machineContext?.summary
+    ? `\n\nSanitized machine context:\n${sanitizeForProvider(body.machineContext.summary)}`
+    : "";
+  const memory = body.memorySummary ? `\n\nSafe memory summary:\n${sanitizeForProvider(body.memorySummary)}` : "";
+  const userContent = `${prompt}${context}${memory}`.slice(0, maxBytes);
+
+  const providers = buildProviderList(env);
+
+  if (providers.length === 0) {
+    return jsonLegacy({ ok: false, errorCode: "NoProviderConfigured", message: "Kyra gateway has no server-side provider configured." }, 503);
+  }
+
+  let lastError = "unknown";
+  for (let i = 0; i < providers.length; i++) {
+    const provider = providers[i];
+    const result = await callOpenAiCompatible(
+      provider,
+      body,
+      userContent,
+      Number(env.PROVIDER_TIMEOUT_MS ?? "45000"),
+      `You are Kyra, the ForgerEMS beta assistant. Be concise, useful, and do not ask for secrets. Personality: ${body.personality ?? "bubbly-tech"}.`,
+    );
+    if (result.ok) {
+      return jsonLegacy({
+        ok: true,
+        providerUsed: provider.name,
+        modelUsed: provider.model,
+        message: result.message,
+        toolResults: [],
+        fallbackUsed: i > 0,
+        diagnosticNote: "gateway response",
+      });
+    }
+
+    lastError = result.errorCode;
+  }
+
+  return jsonLegacy({
+    ok: false,
+    errorCode: "GatewayProviderFailure",
+    message: "Kyra gateway providers are unavailable. Local/offline mode is still available.",
+    diagnosticNote: lastError,
+  }, 503);
+}
 
 async function callOpenAiCompatible(
   provider: { baseUrl: string; key: string; model: string },
   body: KyraGatewayRequest,
   userContent: string,
   providerTimeoutMs: number,
+  systemPrompt: string,
 ): Promise<{ ok: true; message: string } | { ok: false; errorCode: string }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort("provider-timeout"), clamp(providerTimeoutMs, 1500, 90000));
@@ -159,7 +576,7 @@ async function callOpenAiCompatible(
     response = await fetch(`${provider.baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
-        "authorization": `Bearer ${provider.key}`,
+        authorization: `Bearer ${provider.key}`,
         "content-type": "application/json",
       },
       body: JSON.stringify({
@@ -167,7 +584,7 @@ async function callOpenAiCompatible(
         messages: [
           {
             role: "system",
-            content: `You are Kyra, the ForgerEMS beta assistant. Be concise, useful, and do not ask for secrets. Personality: ${body.personality ?? "bubbly-tech"}.`,
+            content: systemPrompt,
           },
           { role: "user", content: userContent },
         ],
@@ -191,7 +608,11 @@ async function callOpenAiCompatible(
   return message ? { ok: true, message } : { ok: false, errorCode: "EmptyProviderResponse" };
 }
 
-function json(payload: KyraGatewayResponse, status = 200): Response {
+function jsonLegacy(payload: KyraGatewayResponse, status = 200): Response {
+  return new Response(JSON.stringify(payload), { status, headers: jsonHeaders });
+}
+
+function jsonResearch(payload: KyraResearchResponse, status = 200): Response {
   return new Response(JSON.stringify(payload), { status, headers: jsonHeaders });
 }
 
@@ -199,7 +620,14 @@ function sanitizeForProvider(value: string): string {
   return value
     .replace(/(api[_-]?key|token|secret|password)\s*[:=]\s*["']?[^"'\s;]+/gi, "[redacted]")
     .replace(/\bsk-[A-Za-z0-9_-]{12,}\b/gi, "[redacted]")
+    .replace(/\bgsk_[A-Za-z0-9_-]{12,}\b/gi, "[redacted]")
+    .replace(/\bAIza[A-Za-z0-9_-]{16,}\b/g, "[redacted]")
     .replace(/\b(ghp|gho|github_pat)_[A-Za-z0-9_]{20,}\b/gi, "[redacted]")
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{12,}\b/gi, "Bearer [redacted]")
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[email redacted]")
+    .replace(/\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/g, "[ip redacted]")
+    .replace(/\b[A-Z0-9]{5}(?:-[A-Z0-9]{5}){4}\b/gi, "[product key redacted]")
+    .replace(/[A-Za-z]:\\[^\s\r\n]+/g, "[private path redacted]")
     .replace(/[A-Za-z]:\\Users\\[^\s\r\n]+/g, "[private path redacted]")
     .slice(0, 16000);
 }

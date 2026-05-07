@@ -101,7 +101,8 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
     $Version = Get-ProjectVersion -ProjectPath $csprojPath
 }
 
-$releaseIdentifierLabel = [string]::Concat("ForgerEMS Beta v", $Version, " ", [char]0x2014, " Beta RC: onboarding, USB Intelligence, Kyra, docs")
+$displayVersionLabel = "ForgerEMS v1.2.0 Public Preview"
+$releaseIdentifierLabel = $displayVersionLabel
 
 if (-not $SkipPublish) {
     Write-Host "Publishing ForgerEMS..." -ForegroundColor Cyan
@@ -133,6 +134,7 @@ Write-Host "Compiling installer with Inno Setup..." -ForegroundColor Cyan
 & $isccPath `
     "/DAppVersion=$Version" `
     "/DAppVersionInfo=$appVersionInfo" `
+    ("/DDisplayVersion=$displayVersionLabel") `
     ("/DReleaseIdentifier=$releaseIdentifierLabel") `
     "/DPublishDir=$publishDir" `
     "/DBackendBundleDir=$backendStageRoot" `

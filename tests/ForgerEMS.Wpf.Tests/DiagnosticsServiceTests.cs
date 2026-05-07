@@ -33,4 +33,12 @@ public sealed class DiagnosticsServiceTests
             }
         }
     }
+
+    [Fact]
+    public void BuildReport_WslMissing_IsInfoNotWarning()
+    {
+        var svc = new DiagnosticsService();
+        var report = svc.BuildReport(null, null, null, wslLikelyAvailable: false);
+        Assert.Contains(report.Items, static i => i.Code == "wsl_not_detected" && i.Severity == DiagnosticSeverityLevel.Info);
+    }
 }

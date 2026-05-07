@@ -52,6 +52,7 @@ public sealed class SupportBundleExporterTests
         fake.EnsureInitialized();
         File.WriteAllText(fake.SessionLogPath, @"C:\Users\SecretUser\Desktop\test");
         File.WriteAllText(Path.Combine(rt, "reports", "system-intelligence-latest.json"), "{\"path\":\"D:\\\\Private\\\\x\"}");
+        File.WriteAllText(Path.Combine(rt, "logs", "diagnostics.log"), "email: private@example.com ip: 8.8.8.8 mac: AA-BB-CC-DD-EE-FF");
 
         Assert.True(SupportBundleExporter.TryCreateSupportBundle(
             zip,
@@ -72,5 +73,13 @@ public sealed class SupportBundleExporterTests
         using var reader = new StreamReader(sessionEntry.Open());
         var body = reader.ReadToEnd();
         Assert.Contains("[REDACTED_PRIVATE_PATH]", body, System.StringComparison.Ordinal);
+
+        var diagnostics = archive.Entries.FirstOrDefault(e => e.FullName.EndsWith("diagnostics.log", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(diagnostics);
+        using var diagnosticsReader = new StreamReader(diagnostics!.Open());
+        var diagnosticsBody = diagnosticsReader.ReadToEnd();
+        Assert.DoesNotContain("private@example.com", diagnosticsBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("8.8.8.8", diagnosticsBody, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("AA-BB-CC-DD-EE-FF", diagnosticsBody, StringComparison.OrdinalIgnoreCase);
     }
 }

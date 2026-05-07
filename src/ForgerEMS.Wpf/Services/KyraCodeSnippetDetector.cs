@@ -22,6 +22,14 @@ public static partial class KyraCodeSnippetDetector
             t = t[..800];
         }
 
+        if (t.Contains("code snippet", StringComparison.OrdinalIgnoreCase) ||
+            t.Contains("fix this code", StringComparison.OrdinalIgnoreCase) ||
+            t.Contains("fix this small code", StringComparison.OrdinalIgnoreCase) ||
+            t.Contains("fix this snippet", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
         return LooksLikePowerShell(t) ||
                LooksLikeCSharp(t) ||
                LooksLikeJson(t) ||
@@ -95,6 +103,7 @@ public static partial class KyraCodeSnippetDetector
     private static bool LooksLikeCSharp(string t) =>
         t.Contains("namespace ", StringComparison.Ordinal) ||
         t.Contains("public class ", StringComparison.Ordinal) ||
+        CSharpMethodRegex().IsMatch(t) ||
         t.Contains("void Main(", StringComparison.Ordinal);
 
     private static bool LooksLikeJson(string t)
@@ -136,4 +145,7 @@ public static partial class KyraCodeSnippetDetector
 
     [GeneratedRegex(@"(?m)^[A-Za-z0-9_-]+:\s*\S+", RegexOptions.Compiled)]
     private static partial Regex MultilineKeyRegex();
+
+    [GeneratedRegex(@"\b(public|private|protected|internal)\s+[\w<>\[\],\s]+\s+\w+\s*\([^)]*\)\s*\{", RegexOptions.Compiled)]
+    private static partial Regex CSharpMethodRegex();
 }

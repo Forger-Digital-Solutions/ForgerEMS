@@ -19,7 +19,7 @@ ForgerEMS **does not** implement a background “phone home” telemetry product
 - The app **does not** harvest or upload **API keys** or **passwords** you might use elsewhere on your PC.  
 - **Session-only** credentials used inside the app for optional online Kyra paths are described in [PRIVACY.md](PRIVACY.md) and operator documentation; they are **not** written to ordinary settings files as a default design goal for those paths.
 
-**Expected network use (not hidden “analytics”):** HTTPS calls to **GitHub** when you use **in-app update checks**, calls to the **ForgerEMS Gateway** when beta Gateway mode is configured, and calls to **third-party AI endpoints** only when an operator has enabled those Kyra providers. See [UPDATE_SYSTEM.md](UPDATE_SYSTEM.md) and [KYRA_PROVIDER_ENVIRONMENT_SETUP.md](KYRA_PROVIDER_ENVIRONMENT_SETUP.md).
+**Expected network use (not hidden “analytics”):** HTTPS calls to **GitHub** when you use **in-app update checks**, calls to the **ForgerEMS Gateway** (including **`/v1/kyra/research`** and **`/v1/kyra/status`** when enabled) when beta Gateway mode is configured, and calls to **third-party AI endpoints** only when an operator has enabled those Kyra providers. See [UPDATE_SYSTEM.md](UPDATE_SYSTEM.md) and [KYRA_PROVIDER_ENVIRONMENT_SETUP.md](KYRA_PROVIDER_ENVIRONMENT_SETUP.md).
 
 Normal workflows store **logs and reports on your machine** under `%LOCALAPPDATA%\ForgerEMS\`. **You** choose what to email for support.
 
@@ -77,6 +77,19 @@ Hardware, diagnostics, Hardware X-Ray sensor coverage, and resale-oriented summa
 Kyra can use offline/local answers by default. If an operator enables ForgerEMS Gateway or online AI/API providers, prompts and optional sanitized context may be sent to the configured gateway/provider under that service's terms. Provider API keys must not be embedded in the desktop app, installer, release ZIP, appsettings, `.env.example`, docs, source code, or registry defaults. Do not paste API keys, tokens, passwords, product keys, private documents, or sensitive customer data into Kyra or support messages.
 
 ForgerEMS Beta Gateway tokens are revocable access tokens, not provider API keys. They should be limited, rotatable, and replaceable during beta without shipping provider keys to testers.
+
+---
+
+## Kyra Intelligence Network
+
+Kyra Intelligence Network is a beta foundation for **Local-first repair memory + optional anonymous community learning**.
+
+- Local Kyra Memory stores sanitized machine-scoped repair notes on the user's PC.
+- Anonymous community intelligence sharing is optional, off by default, and requires explicit opt-in.
+- This phase does not include a live community upload endpoint; the community client is disabled/no-op and preview/export output must stay sanitized.
+- Users can keep Kyra local-only, opt out in Settings, export Kyra memory, and delete Kyra memory.
+
+ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the user explicitly enables a future sharing option. Realtime Kyra Gateway sends only sanitized request context needed to answer current-data questions. Provider API keys are stored server-side and are not included in the desktop app. Anonymous Community Intelligence sharing is optional and off by default.
 
 ---
 

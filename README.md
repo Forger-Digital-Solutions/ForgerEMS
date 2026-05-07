@@ -27,7 +27,8 @@ This is **Public Preview / prerelease** software: behavior and packaging can cha
 | **System Intelligence** | Local scan summaries with Hardware X-Ray sensor coverage, health scoring, FlipValue, Best Use / Device Fit, and honest Unknown/NotExposed handling before repair or resale prep. |
 | **Diagnostics** | Unified health checklist, file/link safety helpers, and technician-oriented tools (including WSL-related helpers where applicable). |
 | **Toolkit Manager** | Manifest-driven health for what is on your USB; clear paths when something must be supplied manually. |
-| **Kyra** | In-app assistant: offline local answers first, with optional **Kyra Beta Gateway** cloud access via gateway URL + revocable beta token. **Beta testers are not asked to supply direct provider API keys.** |
+| **Kyra** | In-app assistant: offline local answers first, with optional **Kyra Beta Gateway** cloud access via gateway URL + revocable beta token. **Beta testers are not asked to supply direct provider API keys.** After System Intelligence, Kyra can answer many **hardware / upgrade / parts** questions from local scan data; live part pricing and exact SKUs require configured research paths and source confirmation — not guesses. |
+| **Kyra Intelligence Network** | Local-first repair memory plus optional anonymous community learning foundations. Default is **Local Only**; community upload is off/disabled in this phase. |
 
 More context: [docs/ABOUT_FORGEREMS.md](docs/ABOUT_FORGEREMS.md) · Behavior notes: [KYRA_BEHAVIOR_SPEC.md](KYRA_BEHAVIOR_SPEC.md) (repository root).
 
@@ -38,9 +39,21 @@ More context: [docs/ABOUT_FORGEREMS.md](docs/ABOUT_FORGEREMS.md) · Behavior not
 - Beta cloud access can use `FORGEREMS_KYRA_GATEWAY_URL` + `FORGEREMS_KYRA_GATEWAY_BETA_TOKEN`.
 - Desktop app never needs owner provider keys for this beta path.
 - Provider keys stay server-side only as Cloudflare Worker secrets.
+- **Realtime research** uses `POST /v1/kyra/research`; **status** uses `GET /v1/kyra/status` (see [gateway/GATEWAY_RESEARCH_CONTRACT.md](gateway/GATEWAY_RESEARCH_CONTRACT.md)).
 - System context sharing is off by default and only sends sanitized summary when enabled.
 - Local/offline fallback remains available if gateway is missing, rate-limited, or unavailable.
 - Do not paste provider keys or beta tokens in docs, screenshots, logs, support email, or Kyra chat.
+
+## Kyra Intelligence Network
+
+Kyra Intelligence Network is the safe foundation for **local-first repair memory + optional anonymous community learning**.
+
+- **Local Kyra Memory** can store sanitized, machine-scoped repair notes on this PC: machine class, hardware category summary, health score band, issue/warning category, suggested or user-confirmed fixes, USB target safety result, best-use category, resale prep category, scan timestamp, confidence, and a ForgerEMS-generated local machine profile ID.
+- **Optional Anonymous Community Learning** is off by default. The app must not share community intelligence unless the user explicitly opts in. In this phase the community client is disabled/no-op and only sanitized preview/export foundations exist.
+- **Research Mode** routes current/live prompts such as crypto, stocks, weather, news, latest versions, drivers, CVEs, and market pricing to configured live tools/providers first. If no live tool is available, Kyra must say so honestly instead of inventing current data.
+- Settings include **Kyra Intelligence** controls to keep local-only, view what would be shared, export Kyra memory, and delete Kyra memory.
+
+ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the user explicitly enables a future sharing option. Realtime Kyra Gateway sends only sanitized request context needed to answer current-data questions. Provider API keys are stored server-side and are not included in the desktop app. Anonymous Community Intelligence sharing is optional and off by default.
 
 ---
 
@@ -91,6 +104,8 @@ The app can check **public GitHub Releases** for this repo (no account required 
 ## For developers
 
 Prerequisites: Windows 10/11, .NET 8 SDK, PowerShell 5.1+, Inno Setup 6 (for installer builds).
+
+The Inno script (`installer/ForgerEMS.iss`) includes a **Kyra Intelligence** wizard page: optional anonymous community sharing is **off by default** (all checkboxes unchecked). Choices are stored under `HKLM\Software\ForgerEMS` and applied the first time the app creates `copilot-settings.json` for a Windows profile; users can change everything later in **Settings → Kyra Intelligence**.
 
 ```powershell
 dotnet restore .\ForgerEMS.sln

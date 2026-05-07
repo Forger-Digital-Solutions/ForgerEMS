@@ -74,7 +74,7 @@
     },
 
     {
-      "name": "Ventoy 1.1.11 (Windows package)",
+      "name": "Ventoy pinned fallback 1.1.11 (Windows package)",
       "type": "file",
       "dest": "Tools\\Portable\\USB\\ventoy-1.1.11-windows.zip",
       "url": "https://sourceforge.net/projects/ventoy/files/v1.1.11/ventoy-1.1.11-windows.zip/download",
@@ -86,7 +86,7 @@
       "maintenanceRank": 3,
       "enabled": true,
       "archive": true,
-      "notes": "Active managed autodownload: official Ventoy Windows package. Ventoy2Disk installation is still a manual step."
+      "notes": "Pinned verified fallback only. USB Builder first attempts latest official Ventoy release resolution, then falls back to this package when latest metadata/checksum lookup is unavailable."
     },
     {
       "name": "MediCat Download Page",

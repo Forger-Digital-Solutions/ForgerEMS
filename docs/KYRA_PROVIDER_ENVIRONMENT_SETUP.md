@@ -28,6 +28,35 @@
 
 ---
 
+## Research Mode
+
+Kyra Research Mode handles current or time-sensitive requests. Current/realtime intents include crypto prices/trends, stocks/finance, weather, news, sports/current scores where supported, software versions, driver/version lookups, Ventoy/latest tool versions, resale/current market pricing, current Windows issues, security advisories/CVEs, and general web/current research.
+
+Routing rule:
+
+1. Use the relevant live tool/provider/research path first.
+2. If unavailable, clearly say the live tool/provider is unavailable, rate-limited, or not configured.
+3. Do not fabricate current data.
+4. Do not answer prices, news, or versions with stale “knowledge cutoff” language.
+
+Live data limitations are expected in beta. Crypto can use the configured crypto provider/CoinGecko path. Stocks require a configured finance provider. Weather uses Open-Meteo/configured weather provider. News, resale comps, driver/vendor lookups, and general web research require matching provider/tool support; otherwise Kyra should be honest that live research is unavailable.
+
+---
+
+## Kyra Intelligence privacy controls
+
+Kyra Intelligence Network is **Local-first repair memory + optional anonymous community learning**.
+
+- Default is **Local Only**.
+- Local Kyra Memory stores sanitized machine-scoped repair notes on this PC.
+- Anonymous community intelligence sharing is off by default and requires opt-in.
+- This phase has no live community upload endpoint; the client is disabled/no-op and can only produce sanitized preview/export data.
+- Users can opt out, export Kyra memory, or delete Kyra memory from **Settings → Kyra Intelligence**.
+
+ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the user explicitly enables a future sharing option. Realtime Kyra Gateway sends only sanitized request context needed to answer current-data questions. Provider API keys are stored server-side and are not included in the desktop app. Anonymous Community Intelligence sharing is optional and off by default.
+
+---
+
 ## Offline (default for beta)
 
 - Choose **Offline Local** (or equivalent) in Kyra mode.  
@@ -62,6 +91,7 @@ For beta builds, ForgerEMS can route Kyra through a small HTTPS gateway so teste
 
 - The desktop app calls `FORGEREMS_KYRA_GATEWAY_URL`.
 - The desktop app may store a revocable `FORGEREMS_KYRA_GATEWAY_BETA_TOKEN`.
+- **Realtime research** uses `POST /v1/kyra/research`; **status** uses `GET /v1/kyra/status`. See [gateway/GATEWAY_RESEARCH_CONTRACT.md](../gateway/GATEWAY_RESEARCH_CONTRACT.md).
 - Provider secrets such as OpenAI, OpenRouter, Groq, Gemini, Anthropic, Mistral, Cerebras, or GitHub tokens belong only in the server-side gateway secret store.
 - Gateway context sharing is off unless both `FORGEREMS_KYRA_SHARE_SYSTEM_CONTEXT=true` and `FORGEREMS_KYRA_GATEWAY_SHARE_SYSTEM_CONTEXT=true`.
 - Local/offline fallback remains available when the gateway is missing, rate-limited, timed out, or down.
@@ -73,6 +103,9 @@ Set-FdsEnv "FORGEREMS_KYRA_GATEWAY_URL" "https://REPLACE_ME.workers.dev"
 Set-FdsEnv "FORGEREMS_KYRA_GATEWAY_BETA_TOKEN" "REPLACE_WITH_BETA_ACCESS_TOKEN"
 Set-FdsEnv "FORGEREMS_KYRA_GATEWAY_TIMEOUT_SECONDS" "60"
 Set-FdsEnv "FORGEREMS_KYRA_GATEWAY_SHARE_SYSTEM_CONTEXT" "false"
+Set-FdsEnv "FORGEREMS_KYRA_GATEWAY_ENABLED" "true"
+Set-FdsEnv "FORGEREMS_KYRA_RESEARCH_ENABLED" "false"
+Set-FdsEnv "FORGEREMS_KYRA_GATEWAY_REQUIRE_CONSENT" "false"
 ```
 
 Do not put provider API keys in the desktop app, installer, release ZIP, registry defaults, docs, source code, or tester Windows User env vars.

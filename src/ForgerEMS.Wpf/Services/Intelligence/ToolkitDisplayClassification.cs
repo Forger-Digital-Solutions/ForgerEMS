@@ -31,6 +31,12 @@ public static class ToolkitDisplayClassification
             return "Verification Issues";
         }
 
+        if (s.Contains("VERIFICATION_PENDING", StringComparison.Ordinal) ||
+            s.Contains("PENDING", StringComparison.Ordinal))
+        {
+            return "Verification Pending";
+        }
+
         if (s.Contains("UPDATE", StringComparison.Ordinal))
         {
             return "Managed Update Available";

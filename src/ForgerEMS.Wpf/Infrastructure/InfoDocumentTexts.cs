@@ -32,6 +32,7 @@ public static class InfoDocumentTexts
             • Toolkit Manager — Beta: managed vs manual/info items; manual links are expected where redistribution is gated.
             • Diagnostics — Beta: checklist, logs, experimental WSL helpers where enabled.
             • Kyra — Preview: offline/local deterministic answers first; optional online providers only when configured (Kyra Advanced).
+            • Kyra Intelligence Network — Preview foundation: local-first repair memory plus optional anonymous community learning controls. Default is Local Only; community upload is off/disabled in this phase.
             • USB Intelligence / port mapping — Pro Preview: best-effort port topology on Windows; benchmark-driven hints when you measure.
 
             HARDWARE X-RAY / DEEP SENSOR MODE
@@ -43,6 +44,9 @@ public static class InfoDocumentTexts
 
             KYRA (OPTIONAL ONLINE PROVIDERS)
             Offline Kyra needs no API keys. Public beta can use ForgerEMS Kyra Gateway with only FORGEREMS_KYRA_GATEWAY_URL + FORGEREMS_KYRA_GATEWAY_BETA_TOKEN. Provider API keys stay server-side. Optional BYOK providers (OpenAI-compatible, LM Studio, Ollama, Gemini/Anthropic paths where stubbed, custom base URL): see docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md and docs/ENVIRONMENT.md. Kyra Advanced shows status without revealing secrets.
+
+            KYRA INTELLIGENCE NETWORK
+            Local Kyra Memory stores sanitized machine-scoped repair notes on this PC. Anonymous community intelligence sharing is off by default and requires explicit opt-in; this build uses a disabled/no-op community client and can only show sanitized preview/export data. ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the user explicitly enables a future sharing option. Realtime Kyra Gateway sends only sanitized request context needed to answer current-data questions. Provider API keys are stored server-side and are not included in the desktop app. Anonymous Community Intelligence sharing is optional and off by default.
 
             UPDATES
             GitHub Releases power the in-app update checker (stable / beta / RC / preview semantics depend on Settings and release tags). See docs/UPDATE-SYSTEM-v1.2.0.md.
@@ -108,6 +112,12 @@ public static class InfoDocumentTexts
 
             What does Kyra see?
             Offline Kyra uses rules and optional local reports you already generated. With your permission, a sanitized summary (no product keys, raw serials, or full private paths in the safe summary path) can be included for online providers and gateway paths.
+
+            What is Kyra Intelligence Network?
+            Local-first repair memory + optional anonymous community learning. Default is Local Only. Local Kyra Memory can store sanitized machine-scoped repair notes on this PC; community sharing is off by default and this phase has a disabled/no-op upload client. Use Settings → Kyra Intelligence to view what would be shared, export Kyra memory, or delete Kyra memory. ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the user explicitly enables a future sharing option. Realtime Kyra Gateway sends only sanitized request context needed to answer current-data questions. Provider API keys are stored server-side and are not included in the desktop app. Anonymous Community Intelligence sharing is optional and off by default.
+
+            What is Kyra Research Mode?
+            Current/live prompts such as crypto, stocks, weather, news, latest versions, drivers, Ventoy/tool releases, resale comps, current Windows issues, and CVEs route to configured live tools/providers first. If unavailable, Kyra should say the live tool/provider is unavailable or not configured and should not invent current data.
 
             What is Free vs Pro preview?
             During beta, some “Pro” or preview capabilities may be visible for feedback; licensing is not enforced yet. Treat preview labels as informational, not a final entitlement.
@@ -185,6 +195,9 @@ public static class InfoDocumentTexts
             REAL-TIME / API CONTENT
             When Kyra uses API-backed features, treat responses as informational unless you verify at the source.
 
+            KYRA INTELLIGENCE
+            Kyra Intelligence Network is Local-first repair memory + optional anonymous community learning. Local repair memory is sanitized and machine-scoped. Anonymous community learning is off by default, requires opt-in, and uses a disabled/no-op community client in this foundation phase. Users can keep Kyra local-only, export Kyra memory, or delete Kyra memory in Settings. ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the user explicitly enables a future sharing option. Realtime Kyra Gateway sends only sanitized request context needed to answer current-data questions. Provider API keys are stored server-side and are not included in the desktop app. Anonymous Community Intelligence sharing is optional and off by default.
+
             SUPPORT
             Do not email API keys, passwords, serial numbers, product keys, private documents, recovery keys, or sensitive personal data to support.
             """;
@@ -209,11 +222,18 @@ public static class InfoDocumentTexts
             KYRA AND SANITIZED SUMMARIES
             Kyra uses sanitized summaries for external/provider paths where implemented. Do not paste API keys, passwords, serial numbers, product keys, private documents, or sensitive files into chat or support email.
 
+            KYRA INTELLIGENCE NETWORK
+            Default is Local Only. Local Kyra Memory can store sanitized machine-scoped repair notes on this PC, such as machine class, hardware category summary, health score band, issue/warning category, USB target safety result, best-use category, resale prep category, scan timestamp, and confidence. Anonymous community intelligence sharing is off by default and requires explicit opt-in. This foundation phase has a disabled/no-op community client; Settings can show only sanitized preview/export data.
+            ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the user explicitly enables a future sharing option. Realtime Kyra Gateway sends only sanitized request context needed to answer current-data questions. Provider API keys are stored server-side and are not included in the desktop app. Anonymous Community Intelligence sharing is optional and off by default.
+
             LOGS AND REPORTS
             Technical diagnostics may appear in local logs. Anything you copy for sharing (for example “Copy Safe Summary”) should be reviewed first. Full logs may contain paths or device detail — redact before sending.
 
             ONLINE AI PROVIDERS
             If you configure an online provider in Kyra Advanced, prompts and optional context are sent according to that provider’s settings and your toggles. Offline/local modes remain available where implemented.
+
+            REALTIME KYRA GATEWAY
+            ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the user explicitly enables a future sharing option. Realtime Kyra Gateway sends only sanitized request context needed to answer current-data questions. Provider API keys are stored server-side and are not included in the desktop app. Anonymous Community Intelligence sharing is optional and off by default.
 
             THIRD PARTIES
             Third-party tools you install or download separately are governed by their own privacy policies and terms.

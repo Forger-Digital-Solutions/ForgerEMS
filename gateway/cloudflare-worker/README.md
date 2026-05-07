@@ -40,6 +40,14 @@ Optional provider secrets can be added later, server-side only.
 npx wrangler@latest deploy
 ```
 
+## HTTP routes
+
+- `POST /v1/kyra/chat` — legacy Kyra chat contract (allowlisted; other POST paths return 404).
+- `POST /v1/kyra/research` — sanitized realtime research (see [../GATEWAY_RESEARCH_CONTRACT.md](../GATEWAY_RESEARCH_CONTRACT.md)).
+- `GET /v1/kyra/status` — bearer-authenticated coarse provider readiness (`configured` / `unconfigured` only).
+
+POST bodies are read in full up to `MAX_REQUEST_BYTES` (defense in depth when `Content-Length` is missing or wrong).
+
 ## Current protections
 
 - Beta token validation.

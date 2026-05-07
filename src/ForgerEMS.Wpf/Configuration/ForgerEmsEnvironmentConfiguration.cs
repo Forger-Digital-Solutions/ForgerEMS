@@ -132,6 +132,15 @@ public static class ForgerEmsEnvironmentConfiguration
     public static bool KyraGatewayConfigured =>
         !string.IsNullOrWhiteSpace(KyraGatewayUrl) && KyraGatewayBetaTokenPresent;
 
+    /// <summary>When false, the app does not call the ForgerEMS Kyra Gateway (chat or research).</summary>
+    public static bool KyraGatewayEnabled => GetConfigBool("FORGEREMS_KYRA_GATEWAY_ENABLED", true);
+
+    /// <summary>When true, current/realtime-style prompts may use POST /v1/kyra/research when gateway is configured.</summary>
+    public static bool KyraResearchEnabled => GetConfigBool("FORGEREMS_KYRA_RESEARCH_ENABLED", false);
+
+    /// <summary>When true, the user must consent in Kyra Advanced before realtime gateway research runs.</summary>
+    public static bool KyraGatewayRequireConsent => GetConfigBool("FORGEREMS_KYRA_GATEWAY_REQUIRE_CONSENT", false);
+
     public static string OpenAiBaseUrl => GetConfigString("FORGEREMS_OPENAI_BASE_URL", "");
     public static string OpenAiModel => GetConfigString("FORGEREMS_OPENAI_MODEL", "");
     public static bool OpenAiApiKeyPresent =>

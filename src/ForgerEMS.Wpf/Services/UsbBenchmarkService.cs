@@ -451,7 +451,9 @@ PowerShellFallback:
         var (measClass, conf, _) = UsbMeasurementClassifier.Classify(writeSpeed, readSpeed, null);
         var accuracy = UsbBenchmarkAccuracy.Assess(writeSpeed, readSpeed, null, target);
         var adjustedConfidence = Math.Clamp(conf - accuracy.ConfidencePenalty, 20, 95);
-        var readDisplay = $"{readSpeed.ToString("0.0", CultureInfo.InvariantCulture)} MB/s{accuracy.ReadDisplaySuffix}";
+        var readDisplay = accuracy.ReadLikelyCached || accuracy.ReadIsEstimate
+            ? $"{readSpeed.ToString("0.0", CultureInfo.InvariantCulture)} MB/s (cache suspected / rerun recommended)"
+            : $"{readSpeed.ToString("0.0", CultureInfo.InvariantCulture)} MB/s{accuracy.ReadDisplaySuffix}";
         var summarySuffix = accuracy.ReadLikelyCached || accuracy.ReadIsEstimate
             ? " Read may be cached; treat read speed as an estimate."
             : string.Empty;
@@ -520,7 +522,9 @@ PowerShellFallback:
             Summary = $"USB benchmark complete: {native.Classification}",
             Details = native.SummaryLine,
             WriteSpeedDisplay = $"{native.WriteSpeedMBps.ToString("0.0", CultureInfo.InvariantCulture)} MB/s",
-            ReadSpeedDisplay = $"{native.ReadSpeedMBps.ToString("0.0", CultureInfo.InvariantCulture)} MB/s{(native.ReadLikelyCached || native.ReadIsEstimate ? " (cache suspected)" : string.Empty)}",
+            ReadSpeedDisplay = native.ReadLikelyCached || native.ReadIsEstimate
+                ? $"{native.ReadSpeedMBps.ToString("0.0", CultureInfo.InvariantCulture)} MB/s (cache suspected / rerun recommended)"
+                : $"{native.ReadSpeedMBps.ToString("0.0", CultureInfo.InvariantCulture)} MB/s",
             TestSizeMb = native.TestSizeMb,
             LastTestedAt = native.Timestamp,
             Classification = native.Classification.ToString(),

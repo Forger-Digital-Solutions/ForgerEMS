@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using VentoyToolkitSetup.Wpf.Services.Intelligence;
+using VentoyToolkitSetup.Wpf.Services.Kyra;
 
 namespace VentoyToolkitSetup.Wpf.Services;
 
@@ -12,6 +13,21 @@ public static class KyraProviderPromptBuilder
 {
     public static string AppendConversationRecap(string corePrompt, CopilotContext context, int maxTotalChars = 14_000)
     {
+        if (context.Intent == KyraIntent.CodeAssist || KyraCodeSnippetDetector.LooksLikeCodeSnippet(context.UserQuestion))
+        {
+            return Trim(corePrompt, maxTotalChars);
+        }
+
+        if (KyraPromptIsolation.ShouldIsolateFromConversationMemory(context.UserQuestion, context.Intent))
+        {
+            return Trim(corePrompt, maxTotalChars);
+        }
+
+        if (!KyraPromptIsolation.LooksLikeExplicitThreadContinuation(context.UserQuestion))
+        {
+            return Trim(corePrompt, maxTotalChars);
+        }
+
         var recap = FormatConversationRecap(context);
         var follow = BuildFollowUpHint(context);
         if (string.IsNullOrWhiteSpace(recap) && string.IsNullOrWhiteSpace(follow))
@@ -48,7 +64,11 @@ public static class KyraProviderPromptBuilder
         }
 
         var sb = new StringBuilder();
-        sb.AppendLine("Recent Kyra conversation (most recent last). For phrases like \"those issues\", \"that\", \"what you said\", or \"fix it\", continue from Kyra's last reply — do not claim there was no prior answer.");
+        var explicitThread = KyraPromptIsolation.LooksLikeExplicitThreadContinuation(context.UserQuestion);
+        sb.AppendLine(
+            explicitThread
+                ? "Recent Kyra conversation (most recent last). For phrases like \"those issues\", \"that\", \"what you said\", or \"fix it\", continue from Kyra's last reply — do not claim there was no prior answer."
+                : "Recent Kyra conversation (older turns are background only). The latest user message after the '---' divider is the primary instruction. Do not recap unrelated earlier topics, environment-variable setup, or diagnostics unless the user explicitly continues that thread.");
         foreach (var message in history.TakeLast(40))
         {
             var role = message.Role.Equals("You", StringComparison.OrdinalIgnoreCase) ? "User" : "Kyra";
@@ -75,7 +95,8 @@ public static class KyraProviderPromptBuilder
     public static string BuildFollowUpHint(CopilotContext context)
     {
         var q = context.UserQuestion.Trim();
-        if (!KyraFollowUpClassifier.LooksLikeConversationFollowUp(q))
+        if (!KyraFollowUpClassifier.LooksLikeConversationFollowUp(q) &&
+            !KyraPromptIsolation.LooksLikeExplicitThreadContinuation(q))
         {
             return string.Empty;
         }

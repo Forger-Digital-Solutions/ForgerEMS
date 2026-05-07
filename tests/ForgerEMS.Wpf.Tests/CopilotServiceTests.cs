@@ -341,7 +341,8 @@ public sealed class CopilotServiceTests
         });
 
         Assert.False(response.UsedOnlineData);
-        Assert.Contains("live data tools", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("couldn’t load verified live data", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("not capable", response.Text, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Health score", response.Text, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -355,8 +356,9 @@ public sealed class CopilotServiceTests
             Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
         });
 
-        Assert.Contains("live data tools", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("couldn’t load verified live data", response.Text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Kyra Advanced", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("knowledge cutoff", response.Text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -634,7 +636,7 @@ public sealed class CopilotServiceTests
 
         Assert.True(response.UsedOnlineData);
         Assert.Equal(1, online.CallCount);
-        Assert.Contains("normal chat ->", string.Join('|', response.ProviderNotes), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("casual chat ->", string.Join('|', response.ProviderNotes), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -1146,6 +1148,50 @@ public sealed class CopilotServiceTests
     }
 
     [Fact]
+    public async Task InlineCSharpAddSnippet_StaysLocalCodeAssistOnly()
+    {
+        var online = new FakeSuccessProvider();
+        var registry = new FakeProviderRegistry(new LocalOfflineCopilotProvider(), online);
+        var service = new CopilotService(registry);
+        var settings = new CopilotSettings
+        {
+            Mode = CopilotMode.FreeApiPool,
+            EnableFreeProviderPool = true,
+            OfflineFallbackEnabled = true
+        };
+        settings.Providers["fake-free"] = new CopilotProviderConfiguration { IsEnabled = true, ApiKeyEnvironmentVariable = "FAKE_FREE_KEY" };
+        var oldKey = Environment.GetEnvironmentVariable("FAKE_FREE_KEY");
+        Environment.SetEnvironmentVariable("FAKE_FREE_KEY", "fake-key");
+        try
+        {
+            var response = await service.GenerateReplyAsync(new CopilotRequest
+            {
+                Prompt = "public int Add(int a, int b) { return a - b; }",
+                Settings = settings,
+                VerboseDiagnosticNotes = true
+            });
+
+            Assert.Equal(0, online.CallCount);
+            Assert.Contains("subtracts instead of adding", response.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("return a + b;", response.Text, StringComparison.Ordinal);
+            Assert.DoesNotContain("System Intelligence", response.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("scan", response.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("device", response.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("TPM", response.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("battery", response.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("USB", response.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("gateway", response.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("previous conversation", response.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("planning on running this code", response.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(response.ProviderNotes, note => note.Contains("Intent detected: CodeAssist", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FAKE_FREE_KEY", oldKey);
+        }
+    }
+
+    [Fact]
     public async Task CancelledRequestReturnsStoppedMessage()
     {
         using var cancellation = new CancellationTokenSource();
@@ -1289,6 +1335,60 @@ public sealed class CopilotServiceTests
 
         Assert.Contains("BETA_TESTER_QUICKSTART", response.Text, StringComparison.Ordinal);
         Assert.Contains("BETA_HUMAN_TESTING_CHECKLIST", response.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CodeFixSnippet_IsolatedFromPriorDiagnosticConversation()
+    {
+        var registry = new CopilotProviderRegistry();
+        var service = new CopilotService(registry);
+        var reportPath = WriteTempSystemReport();
+
+        _ = await service.GenerateReplyAsync(new CopilotRequest
+        {
+            Prompt = "Why is this laptop lagging?",
+            SystemIntelligenceReportPath = reportPath,
+            Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
+        });
+
+        var response = await service.GenerateReplyAsync(new CopilotRequest
+        {
+            Prompt = """
+                Fix this small code snippet:
+                public int Add(int a, int b)
+                {
+                    return a - b;
+                }
+                """,
+            SystemIntelligenceReportPath = reportPath,
+            Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
+        });
+
+        Assert.Contains("return a + b;", response.Text, StringComparison.Ordinal);
+        Assert.Contains("subtracts instead of adding", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("lag", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("battery", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("TPM", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Secure Boot", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("previous", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.False(response.GroundedInSystemIntelligence);
+    }
+
+    [Fact]
+    public async Task UsbNoLikelyTargetsWarning_UsesSingleUsbWarningAnswer()
+    {
+        var registry = new CopilotProviderRegistry();
+        var service = new CopilotService(registry);
+        var response = await service.GenerateReplyAsync(new CopilotRequest
+        {
+            Prompt = "Explain this warning: No likely USB targets were detected.",
+            Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
+        });
+
+        Assert.Contains("safe removable USB target", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("benchmark rank", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("resale", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("battery", response.Text, StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class FakeProviderRegistry(params ICopilotProvider[] providers) : ICopilotProviderRegistry

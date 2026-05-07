@@ -31,4 +31,13 @@ public sealed class InfoDocumentTextsTests
         Assert.DoesNotContain("Copilot", InfoDocumentTexts.BuildLegal(), StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Copilot", InfoDocumentTexts.BuildPrivacy(), StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void BuildPrivacy_IncludesRealtimeGatewayDataHandlingCopy()
+    {
+        var privacy = InfoDocumentTexts.BuildPrivacy();
+        Assert.Contains("Realtime Kyra Gateway sends only sanitized request context", privacy, StringComparison.Ordinal);
+        Assert.Contains("Provider API keys are stored server-side", privacy, StringComparison.Ordinal);
+        Assert.Contains("Anonymous Community Intelligence sharing is optional and off by default.", privacy, StringComparison.Ordinal);
+    }
 }

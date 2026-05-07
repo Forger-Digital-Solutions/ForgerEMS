@@ -68,16 +68,16 @@ public static class ProviderEnvironmentResolver
             return KyraCredentialResolution.Empty;
         }
 
-        var user = SafeGetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.User);
-        if (!KyraProviderConfigResolver.IsMissingOrPlaceholder(user))
-        {
-            return new KyraCredentialResolution(user, KyraCredentialSource.UserEnvironment);
-        }
-
         var process = SafeGetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.Process);
         if (!KyraProviderConfigResolver.IsMissingOrPlaceholder(process))
         {
             return new KyraCredentialResolution(process, KyraCredentialSource.ProcessEnvironment);
+        }
+
+        var user = SafeGetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.User);
+        if (!KyraProviderConfigResolver.IsMissingOrPlaceholder(user))
+        {
+            return new KyraCredentialResolution(user, KyraCredentialSource.UserEnvironment);
         }
 
         var machine = SafeGetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.Machine);

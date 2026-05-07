@@ -7,7 +7,7 @@ namespace VentoyToolkitSetup.Wpf.Services.Kyra;
 public static class KyraLiveToolRouter
 {
     public const string LiveToolsUnavailableMessage =
-        "I don't have live data tools enabled in this ForgerEMS build yet.";
+        "I couldn’t load verified live data right now. The live tool may be unavailable, rate-limited, missing a required setting, or waiting for a location.";
 
     public static bool IsLiveDataIntent(KyraIntent intent) =>
         intent is KyraIntent.Weather

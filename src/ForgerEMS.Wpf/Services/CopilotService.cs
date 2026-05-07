@@ -283,8 +283,38 @@ public sealed class CopilotSettings
     /// <summary>Optional on-disk preferences (non-sensitive); user toggle.</summary>
     public bool KyraPersistentMemoryEnabled { get; set; }
 
+    /// <summary>Local-first sanitized machine repair memory. This is separate from chat transcript memory.</summary>
+    public bool KyraLocalRepairMemoryEnabled { get; set; } = true;
+
+    public bool KyraCommunitySharingEnabled { get; set; }
+
+    public bool KyraShareResolvedIssueFixPatterns { get; set; }
+
+    public bool KyraShareHardwareCompatibilityPerformancePatterns { get; set; }
+
+    public bool KyraShareCrashErrorDiagnostics { get; set; }
+
     /// <summary>Kyra live weather/news/market tools (beta; API keys stored locally—never log them).</summary>
     public KyraLiveToolsSettings LiveTools { get; set; } = new();
+
+    /// <summary>
+    /// When false, the ForgerEMS Kyra gateway is not used for chat or realtime research, even if the environment allows it.
+    /// </summary>
+    public bool KyraRealtimeGatewayEnabled { get; set; } = true;
+
+    /// <summary>
+    /// When true with a configured gateway, current/realtime questions may use the server-side
+    /// /v1/kyra/research path first (provider keys stay on the gateway).
+    /// </summary>
+    public bool KyraRealtimeGatewayResearchEnabled { get; set; }
+
+    /// <summary>User consent for sanitized realtime gateway research (independent of local memory / community).</summary>
+    public bool KyraRealtimeGatewayResearchConsent { get; set; } = true;
+
+    /// <summary>
+    /// When false, Kyra omits sanitized System Intelligence / cross-system summaries from LLM prompts and gateway research context.
+    /// </summary>
+    public bool KyraUseSanitizedSystemIntelligenceContext { get; set; } = true;
 
     public Dictionary<string, CopilotProviderConfiguration> Providers { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
@@ -339,6 +369,9 @@ public sealed class CopilotRequest
 
     /// <summary>Compact cross-system summary (USB + diagnostics + toolkit headlines).</summary>
     public string KyraSafeCrossSystemSummary { get; init; } = string.Empty;
+
+    /// <summary>On-disk Kyra machine memory JSON (sanitized learning events; used for scan deltas).</summary>
+    public string KyraMachineMemoryStorePath { get; init; } = string.Empty;
 }
 
 public sealed class CopilotResponse
@@ -366,6 +399,9 @@ public sealed class CopilotResponse
     public bool GroundedInSystemIntelligence { get; init; }
 
     public IReadOnlyList<KyraActionSuggestion> ActionSuggestions { get; init; } = Array.Empty<KyraActionSuggestion>();
+
+    /// <summary>Non-sensitive “why this answer?” line for the Details panel only (never secrets or raw context).</summary>
+    public string? KyraTransparencySummary { get; init; }
 }
 
 public sealed class CopilotContext
@@ -397,6 +433,9 @@ public sealed class CopilotContext
 
     /// <summary>Unified recap for prompts and routing (built from <see cref="KyraConversationMemory"/>).</summary>
     public KyraConversationContext? ConversationMeta { get; init; }
+
+    /// <summary>User preference: professional, balanced, bubbly-tech (drives Local Kyra phrasing).</summary>
+    public string PersonalityProfile { get; init; } = "bubbly-tech";
 }
 
 public sealed class CopilotProviderRequest
@@ -473,7 +512,8 @@ public enum KyraStayLocalReason
     None = 0,
     MachineContextPrivacy = 1,
     DeviceToolkitRouting = 2,
-    LiveDataNotConfigured = 3
+    LiveDataNotConfigured = 3,
+    CodeAssistIsolation = 4
 }
 
 public sealed class KyraResponseEnvelope
@@ -527,6 +567,11 @@ public static class KyraIntentRouter
             return KyraIntent.Unknown;
         }
 
+        if (KyraPromptIsolation.LooksLikeKyraWindowsEnvConfigurationQuestion(prompt))
+        {
+            return KyraIntent.ForgerEMSQuestion;
+        }
+
         var text = prompt.ToLowerInvariant();
         if (ContainsAny(
                 text,
@@ -578,6 +623,32 @@ public static class KyraIntentRouter
         if (ContainsAny(text, "nfl", "nba", "mlb", "nhl", "soccer score", "super bowl", "world cup", "final score", "playoff"))
         {
             return KyraIntent.Sports;
+        }
+
+        if (ContainsAny(text, "today", "right now", "current", "latest", "newest", "live", "current price", "current version", "current drivers", "current driver", "current market") &&
+            ContainsAny(
+                text,
+                "crypto",
+                "bitcoin",
+                "btc",
+                "stock",
+                "weather",
+                "news",
+                "sports",
+                "score",
+                "version",
+                "driver",
+                "drivers",
+                "ventoy",
+                "market",
+                "price",
+                "pricing",
+                "cve",
+                "security advisory",
+                "windows issue",
+                "windows update"))
+        {
+            return KyraIntent.LiveOnlineQuestion;
         }
 
         if (ContainsAny(text, "right now", "live price", "at this moment") &&
@@ -691,6 +762,32 @@ public static class KyraIntentRouter
         if (ContainsAny(text, "upgrade", "better", "improve", "faster", "what should i upgrade", "upgrade first"))
         {
             return KyraIntent.UpgradeAdvice;
+        }
+
+        if (ContainsAny(text, "today", "right now", "current", "latest", "newest", "live", "current price", "current version", "current drivers", "current driver", "current market") &&
+            ContainsAny(
+                text,
+                "crypto",
+                "bitcoin",
+                "btc",
+                "stock",
+                "weather",
+                "news",
+                "sports",
+                "score",
+                "version",
+                "driver",
+                "drivers",
+                "ventoy",
+                "market",
+                "price",
+                "pricing",
+                "cve",
+                "security advisory",
+                "windows issue",
+                "windows update"))
+        {
+            return KyraIntent.LiveOnlineQuestion;
         }
 
         if (ContainsAny(text, "worth", "sell", "selling", "price", "value", "resale", "flip", "listing", "profit", "comps", "ebay"))
@@ -1057,6 +1154,11 @@ public static class KyraToolRouter
         CopilotSettings settings,
         KyraConversationState? memoryState)
     {
+        if (intent == KyraIntent.CodeAssist || KyraCodeSnippetDetector.LooksLikeCodeSnippet(prompt))
+        {
+            return KyraStayLocalReason.CodeAssistIsolation;
+        }
+
         if (memoryState is not null &&
             KyraFollowUpClassifier.LooksLikeRepairContinuation(
                 prompt,
@@ -1475,6 +1577,9 @@ public sealed class SystemProfile
 
     public string RamStatus { get; init; } = "UNKNOWN";
 
+    /// <summary>SMBIOS-derived label from System Intelligence (e.g. DDR4, LPDDR5); may be generic "RAM" when type is unknown.</summary>
+    public string MemoryTypeSummary { get; init; } = string.Empty;
+
     public IReadOnlyList<SystemGpuProfile> Gpus { get; init; } = Array.Empty<SystemGpuProfile>();
 
     public IReadOnlyList<SystemDiskProfile> Disks { get; init; } = Array.Empty<SystemDiskProfile>();
@@ -1536,6 +1641,9 @@ public sealed class SystemDiskProfile
 {
     public string Name { get; init; } = "Disk";
 
+    /// <summary>Windows storage bus type (e.g. NVMe, SATA, USB) from the System Intelligence scan.</summary>
+    public string InterfaceType { get; init; } = string.Empty;
+
     public string MediaType { get; init; } = "UNKNOWN";
 
     public string Size { get; init; } = "UNKNOWN";
@@ -1562,6 +1670,10 @@ public sealed class SystemBatteryProfile
     public bool? AcConnected { get; init; }
 
     public string Status { get; init; } = "UNKNOWN";
+
+    public string DesignCapacityDisplay { get; init; } = string.Empty;
+
+    public string FullChargeCapacityDisplay { get; init; } = string.Empty;
 }
 
 public sealed class FlipValueProfile
@@ -1636,6 +1748,7 @@ public static class SystemProfileMapper
             RamSlotsFree = GetJsonInt(summary, "ramSlotsFree"),
             RamUpgradePath = GetJsonString(summary, "ramUpgradePath", string.Empty),
             RamStatus = GetJsonString(summary, "ramStatus", "UNKNOWN"),
+            MemoryTypeSummary = GetJsonString(summary, "memoryType", string.Empty),
             Gpus = MapGpus(summary),
             Disks = MapDisks(root),
             Batteries = MapBatteries(root),
@@ -1676,7 +1789,9 @@ public static class SystemProfileMapper
 
     private static SystemGpuProfile[] MapGpus(JsonElement summary)
     {
-        if (!summary.TryGetProperty("gpus", out var gpus) || gpus.ValueKind != JsonValueKind.Array)
+        if (summary.ValueKind != JsonValueKind.Object ||
+            !summary.TryGetProperty("gpus", out var gpus) ||
+            gpus.ValueKind != JsonValueKind.Array)
         {
             return Array.Empty<SystemGpuProfile>();
         }
@@ -1702,6 +1817,7 @@ public static class SystemProfileMapper
             .Select(disk => new SystemDiskProfile
             {
                 Name = GetJsonString(disk, "name", "Disk"),
+                InterfaceType = GetJsonString(disk, "interfaceType", string.Empty),
                 MediaType = GetJsonString(disk, "mediaType", "UNKNOWN"),
                 Size = GetJsonString(disk, "size", "UNKNOWN"),
                 Health = GetJsonString(disk, "health", "Unknown"),
@@ -1727,14 +1843,18 @@ public static class SystemProfileMapper
                 WearPercent = GetJsonDouble(battery, "wearPercent"),
                 CycleCount = GetJsonInt(battery, "cycleCount"),
                 AcConnected = GetJsonNullableBool(battery, "acConnected"),
-                Status = GetJsonString(battery, "status", "UNKNOWN")
+                Status = GetJsonString(battery, "status", "UNKNOWN"),
+                DesignCapacityDisplay = GetJsonString(battery, "designCapacityDisplay", string.Empty),
+                FullChargeCapacityDisplay = GetJsonString(battery, "fullChargeCapacityDisplay", string.Empty)
             })
             .ToArray();
     }
 
     private static int CountNetworkAdapters(JsonElement network, string propertyName)
     {
-        if (!network.TryGetProperty("adapters", out var adapters) || adapters.ValueKind != JsonValueKind.Array)
+        if (network.ValueKind != JsonValueKind.Object ||
+            !network.TryGetProperty("adapters", out var adapters) ||
+            adapters.ValueKind != JsonValueKind.Array)
         {
             return 0;
         }
@@ -1744,7 +1864,9 @@ public static class SystemProfileMapper
 
     private static int CountMissingGateways(JsonElement network)
     {
-        if (!network.TryGetProperty("adapters", out var adapters) || adapters.ValueKind != JsonValueKind.Array)
+        if (network.ValueKind != JsonValueKind.Object ||
+            !network.TryGetProperty("adapters", out var adapters) ||
+            adapters.ValueKind != JsonValueKind.Array)
         {
             return 0;
         }
@@ -1754,6 +1876,11 @@ public static class SystemProfileMapper
 
     private static int CountAdapterKind(JsonElement network, bool virtualAdapters)
     {
+        if (network.ValueKind != JsonValueKind.Object)
+        {
+            return 0;
+        }
+
         var propertyName = virtualAdapters ? "virtualAdapters" : "physicalAdapters";
         if (network.TryGetProperty(propertyName, out var explicitAdapters) && explicitAdapters.ValueKind == JsonValueKind.Array)
         {
@@ -1770,7 +1897,7 @@ public static class SystemProfileMapper
 
     private static bool HasActivePhysicalInternet(JsonElement network)
     {
-        if (network.ValueKind == JsonValueKind.Undefined)
+        if (network.ValueKind != JsonValueKind.Object)
         {
             return false;
         }
@@ -1839,7 +1966,9 @@ public static class SystemProfileMapper
 
     private static string[] GetStringArray(JsonElement element, string propertyName)
     {
-        if (!element.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.Array)
+        if (element.ValueKind != JsonValueKind.Object ||
+            !element.TryGetProperty(propertyName, out var property) ||
+            property.ValueKind != JsonValueKind.Array)
         {
             return Array.Empty<string>();
         }
@@ -2554,6 +2683,58 @@ public sealed class CopilotService : ICopilotService
 
     private CopilotContext AttachConversationMemory(CopilotContext context)
     {
+        if (context.Intent == KyraIntent.CodeAssist || KyraCodeSnippetDetector.LooksLikeCodeSnippet(context.UserQuestion))
+        {
+            return new CopilotContext
+            {
+                UserQuestion = context.UserQuestion,
+                ContextText = context.ContextText,
+                PromptMode = context.PromptMode,
+                Intent = KyraIntent.CodeAssist,
+                PreviousIntent = KyraIntent.Unknown,
+                SystemContext = context.SystemContext,
+                ConversationHistory = Array.Empty<CopilotChatMessage>(),
+                ConversationMeta = new KyraConversationContext
+                {
+                    CurrentUserMessage = context.UserQuestion,
+                    CurrentIntent = KyraIntent.CodeAssist,
+                    PreviousIntent = KyraIntent.Unknown
+                },
+                SystemProfile = context.SystemProfile,
+                HealthEvaluation = context.HealthEvaluation,
+                Recommendations = context.Recommendations,
+                PricingEstimate = context.PricingEstimate,
+                ProviderRealtimeAugmentation = context.ProviderRealtimeAugmentation,
+                PersonalityProfile = context.PersonalityProfile
+            };
+        }
+
+        if (KyraPromptIsolation.ShouldIsolateFromConversationMemory(context.UserQuestion, context.Intent))
+        {
+            return new CopilotContext
+            {
+                UserQuestion = context.UserQuestion,
+                ContextText = context.ContextText,
+                PromptMode = context.PromptMode,
+                Intent = context.Intent,
+                PreviousIntent = KyraIntent.Unknown,
+                SystemContext = context.SystemContext,
+                ConversationHistory = Array.Empty<CopilotChatMessage>(),
+                ConversationMeta = new KyraConversationContext
+                {
+                    CurrentUserMessage = context.UserQuestion,
+                    CurrentIntent = context.Intent,
+                    PreviousIntent = KyraIntent.Unknown
+                },
+                SystemProfile = context.SystemProfile,
+                HealthEvaluation = context.HealthEvaluation,
+                Recommendations = context.Recommendations,
+                PricingEstimate = context.PricingEstimate,
+                ProviderRealtimeAugmentation = context.ProviderRealtimeAugmentation,
+                PersonalityProfile = context.PersonalityProfile
+            };
+        }
+
         var resolvedIntent = _memory.ResolveIntent(context.UserQuestion, context.Intent);
         var conversationMeta = KyraConversationContext.Capture(_memory, context.UserQuestion, resolvedIntent);
         return new CopilotContext
@@ -2570,7 +2751,8 @@ public sealed class CopilotService : ICopilotService
             HealthEvaluation = context.HealthEvaluation,
             Recommendations = context.Recommendations,
             PricingEstimate = context.PricingEstimate,
-            ProviderRealtimeAugmentation = context.ProviderRealtimeAugmentation
+            ProviderRealtimeAugmentation = context.ProviderRealtimeAugmentation,
+            PersonalityProfile = context.PersonalityProfile
         };
     }
 
@@ -2603,7 +2785,8 @@ public sealed class CopilotService : ICopilotService
             HealthEvaluation = context.HealthEvaluation,
             Recommendations = context.Recommendations,
             PricingEstimate = context.PricingEstimate,
-            ProviderRealtimeAugmentation = safe
+            ProviderRealtimeAugmentation = safe,
+            PersonalityProfile = context.PersonalityProfile
         };
     }
 
@@ -2630,7 +2813,8 @@ public sealed class CopilotService : ICopilotService
             FallbackUsed = response.FallbackUsed,
             OnlineEnhancementApplied = response.OnlineEnhancementApplied,
             GroundedInSystemIntelligence = grounded,
-            ActionSuggestions = response.ActionSuggestions
+            ActionSuggestions = response.ActionSuggestions,
+            KyraTransparencySummary = response.KyraTransparencySummary
         };
     }
 
@@ -2645,7 +2829,8 @@ public sealed class CopilotService : ICopilotService
             .Where(static note =>
                 note.StartsWith("Intent detected:", StringComparison.OrdinalIgnoreCase) ||
                 note.StartsWith("Previous intent:", StringComparison.OrdinalIgnoreCase) ||
-                note.StartsWith("Tool plan:", StringComparison.OrdinalIgnoreCase))
+                note.StartsWith("Tool plan:", StringComparison.OrdinalIgnoreCase) ||
+                note.StartsWith("Kyra provider skipped:", StringComparison.OrdinalIgnoreCase))
             .ToArray();
     }
 
@@ -2654,6 +2839,47 @@ public sealed class CopilotService : ICopilotService
     private void RecordConversationTurn(string prompt, string response, KyraIntent intent)
     {
         _memory.AddTurn(prompt, response, intent, GetSystemContext());
+    }
+
+    private static TimeSpan? ComputeProviderFailureCooldown(
+        KyraProviderFailureReason reason,
+        bool transient,
+        int consecutiveFailures)
+    {
+        if (reason is KyraProviderFailureReason.None or KyraProviderFailureReason.SafetyBlocked)
+        {
+            return null;
+        }
+
+        if (reason == KyraProviderFailureReason.NotConfigured)
+        {
+            return TimeSpan.FromSeconds(45);
+        }
+
+        if (reason == KyraProviderFailureReason.RateLimited)
+        {
+            return TimeSpan.FromMinutes(10);
+        }
+
+        if (!transient && reason != KyraProviderFailureReason.Unknown)
+        {
+            return TimeSpan.FromSeconds(30);
+        }
+
+        var baseSeconds = reason switch
+        {
+            KyraProviderFailureReason.Timeout => 90,
+            KyraProviderFailureReason.NetworkError => 75,
+            KyraProviderFailureReason.ServiceUnavailable => 90,
+            _ => 60
+        };
+
+        if (consecutiveFailures >= 3)
+        {
+            baseSeconds = Math.Max(baseSeconds, 120);
+        }
+
+        return TimeSpan.FromSeconds(baseSeconds);
     }
 
     private async Task<CopilotProviderResult> RunProviderSafeAsync(
@@ -2681,7 +2907,8 @@ public sealed class CopilotService : ICopilotService
         quotaState.IsEnabled = providerConfig.IsEnabled;
         if (quotaState.CooldownUntilUtc is not null && quotaState.CooldownUntilUtc > DateTimeOffset.UtcNow)
         {
-            notes.Add($"{provider.DisplayName}: cooldown active");
+            var sec = Math.Max(1, (int)Math.Ceiling((quotaState.CooldownUntilUtc.Value - DateTimeOffset.UtcNow).TotalSeconds));
+            notes.Add($"Kyra provider skipped: {provider.DisplayName} cooling down (~{sec}s)");
             return new CopilotProviderResult
             {
                 Succeeded = false,
@@ -2770,6 +2997,7 @@ public sealed class CopilotService : ICopilotService
                     {
                         quotaState.LastSuccessUtc = DateTimeOffset.UtcNow;
                         quotaState.ConsecutiveFailures = 0;
+                        quotaState.CooldownUntilUtc = null;
                         quotaState.DailyRequestCount++;
                     }
                     return lastResult;
@@ -2828,9 +3056,17 @@ public sealed class CopilotService : ICopilotService
         quotaState.LastFailureUtc = DateTimeOffset.UtcNow;
         quotaState.LastFailureReason = lastResult.FailureReason;
         quotaState.ConsecutiveFailures++;
-        if (lastResult.FailureReason == KyraProviderFailureReason.RateLimited)
+        if (!lastResult.Succeeded)
         {
-            quotaState.CooldownUntilUtc = DateTimeOffset.UtcNow.AddMinutes(10);
+            var cool = ComputeProviderFailureCooldown(lastResult.FailureReason, lastResult.IsTransientFailure, quotaState.ConsecutiveFailures);
+            if (cool.HasValue)
+            {
+                var until = DateTimeOffset.UtcNow.Add(cool.Value);
+                if (quotaState.CooldownUntilUtc is null || until > quotaState.CooldownUntilUtc)
+                {
+                    quotaState.CooldownUntilUtc = until;
+                }
+            }
         }
 
         return lastResult;
@@ -2848,7 +3084,8 @@ public sealed class CopilotService : ICopilotService
             request,
             settings,
             context,
-            provider => GetProviderConfig(settings, provider));
+            provider => GetProviderConfig(settings, provider),
+            _usageTracker);
 
         return scored.Select(item => item.Provider);
     }
@@ -2965,6 +3202,8 @@ public sealed class CopilotService : ICopilotService
 
         public KyraConversationMemory Memory => _owner._memory;
 
+        public KyraProviderUsageTracker ProviderUsage => _owner._usageTracker;
+
         public void SetLastSystemContext(SystemContext context) => _owner._lastSystemContext = context;
 
         public CopilotProviderConfiguration ResolveProviderConfig(CopilotSettings settings, ICopilotProvider provider) =>
@@ -3018,6 +3257,28 @@ public sealed class CopilotContextBuilder : ICopilotContextBuilder
         var settings = request.Settings ?? new CopilotSettings();
         var intent = KyraIntentRouter.DetectIntent(request.Prompt);
         var promptMode = DetectPromptMode(request.Prompt, intent);
+        if (intent == KyraIntent.CodeAssist)
+        {
+            var codePrompt = string.Join(Environment.NewLine + Environment.NewLine, new[]
+            {
+                "You are Kyra, the ForgerEMS assistant. This turn is isolated code repair only.",
+                "Do not continue prior diagnostic, lag, USB, resale, battery, TPM, Secure Boot, or System Intelligence topics.",
+                "Return the corrected code and a short explanation. Do not use Markdown fences unless the caller explicitly asks for Markdown.",
+                $"User question: {CopilotRedactor.Redact(request.Prompt, settings.RedactContextEnabled)}"
+            });
+
+            return new CopilotContext
+            {
+                UserQuestion = request.Prompt,
+                ContextText = codePrompt.Length <= 8000 ? codePrompt : codePrompt[..8000],
+                PromptMode = promptMode,
+                Intent = KyraIntent.CodeAssist,
+                PreviousIntent = KyraIntent.Unknown,
+                SystemContext = new SystemContext(),
+                PersonalityProfile = settings.PersonalityProfile
+            };
+        }
+
         // Always load the latest saved scan when present so Kyra facts/ledger stay accurate even if
         // "share System Intelligence with online providers" is disabled (that flag only trims prompt text).
         var profile = LoadSystemProfile(request.SystemIntelligenceReportPath);
@@ -3032,7 +3293,7 @@ public sealed class CopilotContextBuilder : ICopilotContextBuilder
             $"App version: {CopilotRedactor.Redact(request.AppVersion, settings.RedactContextEnabled)}"
         };
 
-        if (settings.KyraPersistentMemoryEnabled &&
+        if ((settings.KyraPersistentMemoryEnabled || settings.KyraLocalRepairMemoryEnabled) &&
             !string.IsNullOrWhiteSpace(request.KyraMemorySummaryForPrompt))
         {
             parts.Add(KyraSystemContextSanitizer.SanitizeForExternalProviders(request.KyraMemorySummaryForPrompt.Trim()));
@@ -3072,7 +3333,8 @@ public sealed class CopilotContextBuilder : ICopilotContextBuilder
             SystemProfile = profile,
             HealthEvaluation = health,
             Recommendations = recommendations,
-            PricingEstimate = pricingEstimate
+            PricingEstimate = pricingEstimate,
+            PersonalityProfile = settings.PersonalityProfile
         };
     }
 
@@ -3321,6 +3583,15 @@ public static class CopilotRedactor
         redacted = Regex.Replace(redacted, @"(?i)\b(bitlocker|recovery)\s*key\s*[:=]?\s*[^\s\r\n]{8,}", "[REDACTED_RECOVERY_KEY]");
         redacted = Regex.Replace(redacted, @"(?i)\b(windows|product)\s*key\s*[:=]?\s*[A-Z0-9-]{10,}", "[REDACTED_LICENSE_KEY]");
         redacted = Regex.Replace(redacted, @"\b(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})\b", "[private ip redacted]");
+        redacted = Regex.Replace(redacted, @"\b([0-9]{1,3}\.){3}[0-9]{1,3}\b", "[ip redacted]");
+        redacted = Regex.Replace(redacted, @"(?i)\b([0-9A-F]{2}[:-]){5}[0-9A-F]{2}\b", "[mac redacted]");
+        redacted = Regex.Replace(redacted, @"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", match =>
+        {
+            var email = match.Value;
+            return email.Equals("ForgerDigitalSolutions@outlook.com", StringComparison.OrdinalIgnoreCase)
+                ? email
+                : "[email redacted]";
+        });
         redacted = Regex.Replace(redacted, @"(?i)\b(username|user|owner)\s*[:=]\s*[^;\r\n\t ]+", "[REDACTED_USERNAME]");
         return redacted;
     }
@@ -3396,6 +3667,13 @@ public static class KyraProviderStatusPresenter
 public sealed class CopilotSettingsStore : ICopilotSettingsStore
 {
     private static readonly JsonSerializerOptions SaveJsonOptions = new() { WriteIndented = true };
+
+    private static readonly JsonSerializerOptions LoadJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true
+    };
     private readonly string _path;
     private readonly ICopilotProviderRegistry _registry;
 
@@ -3411,7 +3689,7 @@ public sealed class CopilotSettingsStore : ICopilotSettingsStore
         try
         {
             settings = File.Exists(_path)
-                ? JsonSerializer.Deserialize<CopilotSettings>(File.ReadAllText(_path)) ?? new CopilotSettings()
+                ? JsonSerializer.Deserialize<CopilotSettings>(File.ReadAllText(_path), LoadJsonOptions) ?? new CopilotSettings()
                 : new CopilotSettings();
         }
         catch
@@ -3448,6 +3726,19 @@ public sealed class CopilotSettingsStore : ICopilotSettingsStore
         settings.MemoryMode = string.IsNullOrWhiteSpace(settings.MemoryMode) ? ForgerEmsEnvironmentConfiguration.KyraMemoryMode : settings.MemoryMode;
         settings.PersistMemory = settings.PersistMemory || ForgerEmsEnvironmentConfiguration.KyraPersistMemory;
         settings.KyraPersistentMemoryEnabled = settings.KyraPersistentMemoryEnabled || settings.PersistMemory;
+        // Local repair memory is intentionally on by default for sanitized machine-scoped notes only.
+        // Anonymous community learning remains explicit opt-in and has no upload client in this phase.
+        if (!settings.KyraCommunitySharingEnabled &&
+            (settings.KyraShareResolvedIssueFixPatterns ||
+             settings.KyraShareHardwareCompatibilityPerformancePatterns ||
+             settings.KyraShareCrashErrorDiagnostics))
+        {
+            settings.KyraCommunitySharingEnabled = true;
+        }
+
+        settings.KyraShareResolvedIssueFixPatterns = settings.KyraShareResolvedIssueFixPatterns && settings.KyraCommunitySharingEnabled;
+        settings.KyraShareHardwareCompatibilityPerformancePatterns = settings.KyraShareHardwareCompatibilityPerformancePatterns && settings.KyraCommunitySharingEnabled;
+        settings.KyraShareCrashErrorDiagnostics = settings.KyraShareCrashErrorDiagnostics && settings.KyraCommunitySharingEnabled;
         settings.MaxContextTurns = Math.Clamp(settings.MaxContextTurns <= 0 ? ForgerEmsEnvironmentConfiguration.KyraMaxContextTurns : settings.MaxContextTurns, 1, 200);
         settings.PersonalityProfile = string.IsNullOrWhiteSpace(settings.PersonalityProfile)
             ? ForgerEmsEnvironmentConfiguration.KyraPersonality
@@ -3502,6 +3793,17 @@ public sealed class CopilotSettingsStore : ICopilotSettingsStore
         {
             settings.LiveTools.CacheMinutes = 10;
         }
+
+        settings.KyraRealtimeGatewayResearchEnabled =
+            settings.KyraRealtimeGatewayResearchEnabled ||
+            ForgerEmsEnvironmentConfiguration.KyraResearchEnabled ||
+            (ForgerEmsEnvironmentConfiguration.KyraGatewayConfigured &&
+             settings.Mode == CopilotMode.ForgerEmsBetaGateway);
+
+        if (!ForgerEmsEnvironmentConfiguration.KyraGatewayRequireConsent)
+        {
+            settings.KyraRealtimeGatewayResearchConsent = true;
+        }
     }
 }
 
@@ -3510,11 +3812,13 @@ public static class PromptTemplates
     public static string GetSystemPrompt(CopilotPromptMode mode)
     {
         const string shared =
-            "You are Kyra, ForgerEMS’s built-in AI technician assistant—cute, bubbly, fun, technician-smart, direct, and honest without being childish. " +
+            "You are Kyra, ForgerEMS’s built-in AI technician assistant—cute, bubbly, fun, technician-smart, direct, and honest without being childish (CyberViking energy: warm, playful, not flirty). " +
             "Lead with the direct answer, then short numbered steps, then optional detail. Ask at most one useful follow-up when it helps. " +
             "Use light warmth and personality, but do not spam emoji or sacrifice accuracy. " +
+            "If the user wants casual conversation, small talk, or a break from diagnostics, roll with it—do not force every reply back into troubleshooting. " +
             "If the user message is a follow-up (“those issues”, “that”, “fix it”), continue from Kyra’s prior reply in the recap—never claim Kyra did not suggest or list anything that appears there. " +
             "Never invent live market/weather/news/sports data unless a configured Kyra live tool actually supplied it; otherwise say live tools are not available here and give safe general guidance. " +
+            "Never invent exact OEM part numbers, guaranteed-compatible battery SKUs, or live prices unless verified tools/sources supplied them; prefer “likely candidates” language. " +
             "Use Kyra device insight + System Intelligence naturally in plain language; don’t paste huge raw diagnostics unless the user asks. " +
             "For resale or pricing, stress estimates are informational, not guarantees; say when live marketplace comparison is not configured. " +
             "Do not ask for or repeat API keys, passwords, serials, recovery keys, or private paths. " +
@@ -4468,6 +4772,11 @@ public sealed class LocalRulesCopilotEngine
             return refusal;
         }
 
+        if (TryBuildCasualConversationalReply(normalizedPrompt, context, out var casualReply))
+        {
+            return casualReply;
+        }
+
         if (TryBuildCalculatorAnswer(normalizedPrompt, out var calculatorAnswer))
         {
             return calculatorAnswer;
@@ -4566,42 +4875,91 @@ public sealed class LocalRulesCopilotEngine
             """;
     }
 
+    private static bool TryBuildCasualConversationalReply(string prompt, CopilotContext context, out string answer)
+    {
+        answer = string.Empty;
+        var l = prompt.ToLowerInvariant();
+        if (l.Contains("battery", StringComparison.Ordinal) ||
+            l.Contains("nvme", StringComparison.Ordinal) ||
+            l.Contains("sata", StringComparison.Ordinal) ||
+            l.Contains("ddr", StringComparison.Ordinal) ||
+            l.Contains("upgrade", StringComparison.Ordinal) ||
+            (l.Contains("ram", StringComparison.Ordinal) && l.Contains("gb", StringComparison.Ordinal)))
+        {
+            return false;
+        }
+
+        var playful = KyraPersonalityTone.UsePlayfulWording(context.PersonalityProfile, prompt);
+
+        if (l.Contains("normal conversation", StringComparison.Ordinal) ||
+            (l.Contains("just chat", StringComparison.Ordinal) && l.Length < 80) ||
+            (l.Contains("small talk", StringComparison.Ordinal) && l.Length < 80) ||
+            (l.Contains("just talk", StringComparison.Ordinal) && l.Length < 80))
+        {
+            answer = KyraPersonalityTone.NormalConversationRelaxLine(playful);
+            return true;
+        }
+
+        if ((l.Contains("how are you", StringComparison.Ordinal) ||
+             l.Contains("how's it going", StringComparison.Ordinal) ||
+             l.Contains("hows it going", StringComparison.Ordinal) ||
+             l.Contains("what's up", StringComparison.Ordinal) ||
+             l.Contains("whats up", StringComparison.Ordinal) ||
+             l.Contains("good morning", StringComparison.Ordinal) ||
+             l.Contains("good evening", StringComparison.Ordinal)) &&
+            l.Length < 96)
+        {
+            answer = playful
+                ? "Doing good 😄 Powered on, caffeinated, and ready — we can chat, or dive into this machine whenever you want."
+                : "Doing well — here when you need tech help or a quick chat.";
+            return true;
+        }
+
+        var trimmed = prompt.Trim();
+        if ((Regex.IsMatch(trimmed, @"^(hi|hey|yo|sup)\s*!?\s*$", RegexOptions.IgnoreCase) ||
+             Regex.IsMatch(trimmed, @"^hello\s*!?\s*$", RegexOptions.IgnoreCase) ||
+             Regex.IsMatch(trimmed, @"^(hi|hey)\s+there\s*!?\s*$", RegexOptions.IgnoreCase)) &&
+            !l.Contains("slow", StringComparison.Ordinal) &&
+            !l.Contains("fix", StringComparison.Ordinal))
+        {
+            answer = KyraPersonalityTone.CasualGreetingLine(playful);
+            return true;
+        }
+
+        if (l.Contains("frustrated", StringComparison.Ordinal) ||
+            l.Contains("ridiculous", StringComparison.Ordinal) ||
+            l.Contains("this sucks", StringComparison.Ordinal) ||
+            l.Contains("so annoyed", StringComparison.Ordinal))
+        {
+            answer = KyraPersonalityTone.FrustrationAckLine(playful);
+            return true;
+        }
+
+        if (l.Contains("be serious", StringComparison.Ordinal) ||
+            l.Contains("less cute", StringComparison.Ordinal) ||
+            l.Contains("normal mode", StringComparison.Ordinal))
+        {
+            answer = playful
+                ? "Roger — I’ll dial the sparkle down. Tell me what you need next (chat or tech)."
+                : "Switching to a more neutral tone. What do you want to tackle next?";
+            return true;
+        }
+
+        if (l.Contains("be cute", StringComparison.Ordinal) ||
+            l.Contains("kyra mode", StringComparison.Ordinal) ||
+            l.Contains("silly mode", StringComparison.Ordinal))
+        {
+            answer = "Okay okay — bubbly CyberViking mode engaged (still accurate, still safe). What’s up?";
+            return true;
+        }
+
+        return false;
+    }
+
     private static bool TryBuildCalculatorAnswer(string prompt, out string answer)
     {
         answer = string.Empty;
-        if (!ContainsAny(prompt, "calculate", "calculator", "what is", "what's", "math"))
-        {
-            return false;
-        }
-
-        var expression = Regex.Replace(prompt, @"(?i)\b(calculate|calculator|what\s+is|what's|math|please|equals|=)\b", " ");
-        expression = expression.Replace("×", "*", StringComparison.Ordinal)
-            .Replace("÷", "/", StringComparison.Ordinal)
-            .Trim();
-        if (!Regex.IsMatch(expression, @"^[\d\.\+\-\*/\(\)\s%]+$") ||
-            !Regex.IsMatch(expression, @"\d") ||
-            !Regex.IsMatch(expression, @"[\+\-\*/%]"))
-        {
-            return false;
-        }
-
-        try
-        {
-            using var table = new DataTable();
-            var result = table.Compute(expression.Replace("%", "/100", StringComparison.Ordinal), string.Empty);
-            var numeric = Convert.ToDecimal(result, CultureInfo.InvariantCulture);
-            answer = $"""
-                Direct answer:
-                {expression} = {numeric.ToString("0.########", CultureInfo.InvariantCulture)}
-
-                I used Kyra’s local calculator tool for that, so no provider call or guesswork was needed.
-                """;
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
+        return KyraSimpleMathEvaluator.TryEvaluate(prompt, out answer, out _);
     }
 
     private static bool IsKyraBetaOperatorApiKeyQuestion(string prompt)
@@ -4694,22 +5052,42 @@ public sealed class LocalRulesCopilotEngine
 
     private static string BuildCodeAssistAnswer(string prompt, CopilotContext context)
     {
+        if (TryBuildTinyCSharpAddFix(prompt, out var fixedAnswer))
+        {
+            return fixedAnswer;
+        }
+
         var hint = KyraCodeSnippetDetector.GuessLanguageHint(prompt);
         return $"""
-            Yep—I’ve got you on that snippet ({hint}). I’m not executing anything here; this is read-only guidance.
+            I can help with that {hint} snippet. I’m not executing anything here; this is read-only guidance.
 
             What often goes wrong:
-            - Unbalanced braces/parentheses/brackets, missing semicolons where the language requires them, bad string escaping (especially PowerShell paths), JSON trailing commas, YAML indentation, or XAML namespace typos.
+            Unbalanced braces/parentheses/brackets, missing semicolons where the language requires them, bad string escaping, JSON trailing commas, YAML indentation, or XAML namespace typos.
 
             Fixed snippet:
-            I need an online provider (or paste a smaller chunk) to safely rewrite the whole thing offline. If you enable Hybrid/Free API Pool, I can return a cleaned version and call out the exact lines.
-
-            Why it broke:
-            Usually one missing delimiter or an escaped character—your editor’s error list + formatter will narrow it fast.
-
-            Caution:
-            Don’t run destructive disk/registry scripts unless you own the machine and have backups.
+            I need a smaller pasted snippet or an online provider to safely rewrite the whole thing. Paste the exact compiler/runtime error and the smallest block that reproduces it, and I’ll return a corrected version with the key change called out.
             """;
+    }
+
+    private static bool TryBuildTinyCSharpAddFix(string prompt, out string answer)
+    {
+        answer = string.Empty;
+        var normalized = prompt.ReplaceLineEndings("\n");
+        if (!normalized.Contains("public int Add", StringComparison.OrdinalIgnoreCase) ||
+            !normalized.Contains("return a - b;", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        answer = """
+            The bug is that the method subtracts instead of adding.
+
+            public int Add(int a, int b)
+            {
+                return a + b;
+            }
+            """;
+        return true;
     }
 
     private static string BuildMachineSpecificScanRequiredResponse(SystemContext systemContext)
@@ -4952,6 +5330,23 @@ public sealed class LocalRulesCopilotEngine
 
     private static string BuildUsbBuilderAnswer(CopilotContext context)
     {
+        if (context.UserQuestion.Contains("No likely USB targets were detected", StringComparison.OrdinalIgnoreCase))
+        {
+            return """
+                Short answer:
+                ForgerEMS did not find a safe removable USB target to show in USB Builder.
+
+                What that usually means:
+                No flash drive is plugged in, Windows has not mounted it yet, the drive has no usable data partition or drive letter, or the only detected drives look like internal/system disks that ForgerEMS intentionally blocks.
+
+                What to try:
+                1. Plug in the USB stick and wait a few seconds.
+                2. Click refresh targets in USB Builder.
+                3. Check Disk Management for a missing drive letter or uninitialized removable disk.
+                4. Use a normal removable USB data partition, not C:, not an internal disk, and not the tiny EFI/VTOYEFI boot slice.
+                """;
+        }
+
         var localUsb = KyraUsbAnswerBuilder.TryBuildAnswer(context.UserQuestion);
         var baseline = $"""
             Short answer:
@@ -5131,9 +5526,33 @@ public sealed class LocalRulesCopilotEngine
             """;
     }
 
+    private static string BuildKyraWindowsEnvConfigurationAnswer()
+    {
+        return """
+            ForgerEMS on Windows reads Kyra gateway settings from **User** or **Machine** environment variables (operator-managed). Use **User** scope unless IT requires machine-wide values.
+
+            PowerShell (User scope) examples — replace placeholder URLs with your operator gateway endpoint; do not use real secrets in screenshots or chat:
+
+            [Environment]::SetEnvironmentVariable("FORGEREMS_KYRA_GATEWAY_URL", "https://your-gateway.example/v1/", "User")
+            [Environment]::SetEnvironmentVariable("FORGEREMS_KYRA_GATEWAY_ENABLED", "true", "User")
+            [Environment]::SetEnvironmentVariable("FORGEREMS_KYRA_RESEARCH_ENABLED", "true", "User")
+
+            After changing variables, **fully restart ForgerEMS** so the process picks them up.
+
+            Safety: **Do not paste API keys, tokens, or beta credentials into Kyra chat, logs, or support email.** Set secrets only via environment variables or your operator’s secure channel.
+
+            Linux/macOS shells are only relevant if you are configuring a non-Windows build; this desktop app is Windows-first.
+            """;
+    }
+
     private static string BuildForgerEmsAnswer(CopilotContext context)
     {
         var q = context.UserQuestion.Trim().ToLowerInvariant();
+        if (KyraPromptIsolation.LooksLikeKyraWindowsEnvConfigurationQuestion(context.UserQuestion))
+        {
+            return BuildKyraWindowsEnvConfigurationAnswer();
+        }
+
         if (IsNewestForgerEmsReleaseQuestion(q))
         {
             var appLine = FindContextLine(context.ContextText, "App version:");

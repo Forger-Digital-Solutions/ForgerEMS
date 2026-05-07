@@ -64,13 +64,34 @@ Examples:
 
 - “How do I map USB ports?”  
 - “Which port should I use?”  
+- “What device are we working on?”  
+- “Is my drive NVMe or SATA?” (after System Intelligence)  
+- “What RAM type does this machine show?” (after System Intelligence)  
+- “What battery do I need?” / “What should I upgrade first?”  
+- “How’s BTC doing today?”  
 - “What is in the beta quickstart?”  
 
 **Offline Kyra** works immediately — **no API keys** and **no sign-up** for the default beta path. Optional online help exists only when an **operator** has already configured the environment (advanced).
 
+**Kyra Advanced → Realtime Gateway** explains secure research routing: provider keys stay on the ForgerEMS Worker; the app only needs gateway URL + beta token. Use **Check gateway status** for coarse server-side readiness (no secrets returned).
+
 ---
 
-## 10. Report issues with safe logs only
+## 10. Check Kyra Intelligence Network settings
+
+Open **Settings → Kyra Intelligence**.
+
+- **Local repair memory** lets Kyra remember sanitized repair notes and diagnostic patterns on this PC.
+- **Anonymous community intelligence sharing** is off by default.
+- **View what would be shared** shows only sanitized preview fields.
+- **Export Kyra memory** exports sanitized local Kyra memory.
+- **Delete Kyra memory** deletes local Kyra memory after confirmation.
+
+ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the user explicitly enables a future sharing option. Realtime Kyra Gateway sends only sanitized request context needed to answer current-data questions. Provider API keys are stored server-side and are not included in the desktop app. Anonymous Community Intelligence sharing is optional and off by default.
+
+---
+
+## 11. Report issues with safe logs only
 
 Use [BETA_ISSUE_REPORT_TEMPLATE.md](BETA_ISSUE_REPORT_TEMPLATE.md). Attach screenshots and **redacted** log excerpts. **Do not** include passwords, API keys, product keys, serial numbers, or private documents.
 

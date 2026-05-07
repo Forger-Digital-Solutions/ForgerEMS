@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Text.Json;
 using VentoyToolkitSetup.Wpf.Services;
 using VentoyToolkitSetup.Wpf.Services.Kyra;
 
@@ -35,9 +36,9 @@ public sealed class KyraGatewayProviderTests
             Environment.SetEnvironmentVariable(tokenEnv, "beta-token-ready", EnvironmentVariableTarget.Process);
             var scores = KyraProviderRouter.ScoreProviders(
                 [gateway],
-                new CopilotRequest { Prompt = "hello", Settings = settings },
+                new CopilotRequest { Prompt = "btc price", Settings = settings },
                 settings,
-                new CopilotContext { UserQuestion = "hello", Intent = KyraIntent.GeneralTechQuestion },
+                new CopilotContext { UserQuestion = "btc price", Intent = KyraIntent.CryptoPrice },
                 provider => settings.Providers[provider.Id]);
 
             var selected = Assert.Single(scores);
@@ -214,6 +215,45 @@ public sealed class KyraGatewayProviderTests
     }
 
     [Fact]
+    public async Task GatewayClient_SendsTokenInAuthorizationHeader_NotJsonBody()
+    {
+        const string token = "gateway-token-body-check";
+        HttpRequestMessage? captured = null;
+        string capturedBody = string.Empty;
+        var client = new KyraGatewayClient(new HttpClient(new InspectingHandler(async request =>
+        {
+            captured = request;
+            capturedBody = request.Content is null
+                ? string.Empty
+                : await request.Content.ReadAsStringAsync();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"ok":true,"message":"ok"}""", Encoding.UTF8, "application/json")
+            };
+        })));
+
+        await client.SendAsync(
+            "https://gateway.example.test/v1/kyra/chat",
+            new KyraGatewayRequest
+            {
+                BetaToken = "  " + token + "  ",
+                UserMessage = "hello",
+                AppVersion = "1.2.3",
+                ReleaseChannel = "beta",
+                LicenseTier = "community"
+            },
+            timeoutSeconds: 5,
+            CancellationToken.None);
+
+        Assert.NotNull(captured);
+        Assert.Equal("Bearer", captured!.Headers.Authorization?.Scheme);
+        Assert.Equal(token, captured.Headers.Authorization?.Parameter);
+        Assert.DoesNotContain(token, capturedBody, StringComparison.Ordinal);
+        using var doc = JsonDocument.Parse(capturedBody);
+        Assert.False(doc.RootElement.TryGetProperty("betaToken", out _));
+    }
+
+    [Fact]
     public async Task GatewayTimeoutFallsBackWithSafeMessage()
     {
         const string tokenEnv = "FORGEREMS_UT_GATEWAY_TOKEN_TIMEOUT";
@@ -352,6 +392,12 @@ public sealed class KyraGatewayProviderTests
             };
             return Task.FromResult(response);
         }
+    }
+
+    private sealed class InspectingHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> handler) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            handler(request);
     }
 
     private sealed class TimeoutHandler : HttpMessageHandler

@@ -48,6 +48,7 @@ Placeholder values such as `REPLACE_ME`, `YOUR_*`, `local-model-name`, or `examp
 
 ### Kyra Beta Gateway quick answers
 
+- The **beta gateway** is aimed at **live research / tool** calls (crypto, weather, news, etc.), not every casual “hello.” Everyday chat uses your normal free/BYOK LLM providers when configured. If the gateway fails for chat-like prompts, that can be expected — check **Kyra Advanced** provider order and **Check gateway status**.
 - Beta users only need gateway vars (`FORGEREMS_KYRA_GATEWAY_URL` and `FORGEREMS_KYRA_GATEWAY_BETA_TOKEN`) when cloud access is enabled.
 - Direct provider keys are optional BYOK and are not required for default beta.
 - Gateway beta tokens are revocable and can be rotated quickly.
@@ -61,11 +62,39 @@ Kyra is **not a live web browser**. Offline answers use **rules and what is alre
 
 Weather and crypto can use built-in no-key paths when enabled. News requires NewsAPI/GNews configuration. Stocks support `finnhub`, `alphavantage`, or `fmp` when configured. Economic/statistics data is limited/shell status unless a supported provider is wired. Kyra should not make up live prices, weather, or breaking news.
 
+Kyra Research Mode should route current/live prompts first to the **ForgerEMS realtime gateway** (`/v1/kyra/research`) when that path is enabled and configured, then to **Kyra Advanced live tools** (local API keys) where applicable: crypto, stocks/finance, weather, news, sports, latest/current software versions, drivers, Ventoy/tool versions, resale/current market pricing, current Windows issues, security advisories, CVEs, and general current research. If the live tool is unavailable or rate-limited, Kyra should say so honestly and avoid stale “knowledge cutoff” pricing or fabricated versions.
+
+---
+
+## Can Kyra answer hardware, parts, and upgrade questions?
+
+**Yes — local scan first.** After **System Intelligence**, Kyra can explain storage type (e.g. NVMe vs SATA when the scan shows it), RAM summary when exposed, battery wear bands, and realistic upgrade advice (for example, laptop GPU/CPU usually not upgradable).
+
+**Exact part numbers and “cheapest” prices** need **live research** (gateway or other configured tools) with real sources; otherwise Kyra should say what is known locally, call out **likely compatible candidates**, and tell you to **confirm against the service manual, battery label, or official compatibility** before buying.
+
+**Privacy:** realtime part lookup uses **sanitized** model family and coarse bands — not service tags, serials, full paths, or secrets by default. See [PRIVACY.md](PRIVACY.md) and [KYRA_BEHAVIOR_SPEC.md](../KYRA_BEHAVIOR_SPEC.md).
+
 ---
 
 ## How much does Kyra remember?
 
 Kyra keeps recent chat context locally so troubleshooting stays coherent, with a 100-turn default and a 1-200 turn clamp. Persistent memory is optional and redacted. Kyra memory should never store API keys, tokens, passwords, product keys, raw logs, or private documents.
+
+Kyra Intelligence Network adds **Local Kyra Memory** for sanitized machine-scoped repair notes. It may store categories and summaries such as machine class, health score band, issue/warning category, user-confirmed fix, USB target safety result, best-use category, resale prep category, confidence, scan timestamp, and a ForgerEMS-generated local machine profile ID. It should not store giant prompt transcripts or raw logs.
+
+Use **Settings → Kyra Intelligence** to turn Local repair memory off, export Kyra memory, delete Kyra memory, or view the sanitized preview for optional community learning.
+
+---
+
+## What is Kyra Intelligence Network?
+
+Kyra Intelligence Network is **Local-first repair memory + optional anonymous community learning**.
+
+- Default is **Local Only**.
+- Anonymous community intelligence sharing is **off by default**.
+- Declining does not block app usage.
+- This foundation phase has a disabled/no-op community client; it can show a sanitized preview/export only.
+ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the user explicitly enables a future sharing option. Realtime Kyra Gateway sends only sanitized request context needed to answer current-data questions. Provider API keys are stored server-side and are not included in the desktop app. Anonymous Community Intelligence sharing is optional and off by default.
 
 ---
 

@@ -32,7 +32,8 @@ public sealed class KyraOrchestrator
         Func<ICopilotProvider, CopilotProviderConfiguration> configResolver,
         KyraConversationState memoryState,
         KyraToolRegistry toolRegistry,
-        KyraToolHostFacts hostFacts)
+        KyraToolHostFacts hostFacts,
+        KyraProviderUsageTracker? providerUsage = null)
     {
         var toolPlan = KyraMessagePlanner.BuildPlan(request, context, settings, memoryState, toolRegistry, hostFacts);
         if (toolPlan.ShouldUseLocalToolAnswer)
@@ -40,7 +41,7 @@ public sealed class KyraOrchestrator
             return (toolPlan, Array.Empty<ICopilotProvider>());
         }
 
-        var scored = KyraProviderRouter.ScoreProviders(providers, request, settings, context, configResolver);
+        var scored = KyraProviderRouter.ScoreProviders(providers, request, settings, context, configResolver, providerUsage);
         return (toolPlan, scored.Select(item => item.Provider).ToArray());
     }
 
@@ -86,6 +87,39 @@ public sealed class KyraOrchestrator
             context = _host.AttachConversationMemory(context);
             var memoryState = _host.Memory.GetState();
             _host.SetLastSystemContext(context.SystemContext);
+
+            if (KyraDestructiveRequestGuard.TryBuildSafeResponse(request.Prompt, out var destructiveReply))
+            {
+                Report("Formatting Kyra response…");
+                var destructiveDone = _host.CompleteResponse(request, context, destructiveReply);
+                Report("Done.");
+                return destructiveDone;
+            }
+
+            if (KyraPrivacyHelpAnswerBuilder.TryBuild(request.Prompt, settings, out var privacyReply))
+            {
+                Report("Formatting Kyra response…");
+                var privacyDone = _host.CompleteResponse(request, context, privacyReply);
+                Report("Done.");
+                return privacyDone;
+            }
+
+            if (KyraProviderTroubleshootingAnswerBuilder.TryBuild(request.Prompt, settings, out var providerHelpReply))
+            {
+                Report("Formatting Kyra response…");
+                var helpDone = _host.CompleteResponse(request, context, providerHelpReply);
+                Report("Done.");
+                return helpDone;
+            }
+
+            if (KyraScanDeltaAnswerBuilder.TryBuild(request.Prompt, request.KyraMachineMemoryStorePath, out var scanDeltaReply))
+            {
+                Report("Formatting Kyra response…");
+                var deltaDone = _host.CompleteResponse(request, context, scanDeltaReply);
+                Report("Done.");
+                return deltaDone;
+            }
+
             var notes = new List<string> { $"Intent detected: {context.Intent}", $"Previous intent: {memoryState.LastIntent}" };
             var localProvider = _providerRegistry.FindByType(CopilotProviderType.LocalOffline) ?? new LocalOfflineCopilotProvider();
             var decision = KyraProviderDecision.Build(
@@ -96,7 +130,8 @@ public sealed class KyraOrchestrator
                 provider => _host.ResolveProviderConfig(settings, provider),
                 memoryState,
                 _toolRegistry,
-                hostFacts);
+                hostFacts,
+                _host.ProviderUsage);
             var plan = decision.ToolPlan;
             notes.Add($"Tool plan: {plan.ToolName}");
             notes.Add("Provider route: " + (decision.OrderedProviders.Count == 0
@@ -141,6 +176,14 @@ public sealed class KyraOrchestrator
             KyraOrchestrationLog.Append(
                 $"Kyra ctx intent={ctxPackage.Intent} localTruth={ctxPackage.LocalTruthAvailable} requiresLocal={ctxPackage.RequiresLocalTruth} caps={decision.EffectiveCapabilities} liveUnavailable={(plan.StayLocalReason == KyraStayLocalReason.LiveDataNotConfigured ? 1 : 0)}");
 
+            if (KyraHardwarePartsAnswerBuilder.TryBuild(request.Prompt, context.SystemProfile, settings, out var hardwarePartsResponse))
+            {
+                Report("Formatting Kyra response…");
+                var hwDone = _host.CompleteResponse(request, context, hardwarePartsResponse);
+                Report("Done.");
+                return hwDone;
+            }
+
             if (KyraLocalSpecAnswerBuilder.TryBuildLocalSpecAnswer(request.Prompt, context.SystemProfile, out var localSpecResponse))
             {
                 Report("Formatting Kyra response…");
@@ -152,6 +195,19 @@ public sealed class KyraOrchestrator
                 var localSpecDone = _host.CompleteResponse(request, context, localSpecResponse);
                 Report("Done.");
                 return localSpecDone;
+            }
+
+            if (KyraSimpleMathEvaluator.TryBuildCopilotResponse(request.Prompt, out var deterministicMath))
+            {
+                Report("Formatting Kyra response…");
+                if (KyraResponseCache.IsCacheablePrompt(request.Prompt))
+                {
+                    _host.StoreResponseCache(BuildCacheKey(request.Prompt), deterministicMath.Text);
+                }
+
+                var mathDone = _host.CompleteResponse(request, context, deterministicMath);
+                Report("Done.");
+                return mathDone;
             }
 
             if (_host.TryGetResponseCache(BuildCacheKey(request.Prompt), out var cached))
@@ -269,7 +325,7 @@ public sealed class KyraOrchestrator
                             notes.Add("Kyra routing: API exhausted -> Local AI");
                         }
 
-                        notes.Add($"Kyra routing: normal chat -> {provider.DisplayName}");
+                        notes.Add(RoutingSuccessNote(context, provider));
                         var enhancementApplied = provider.IsOnlineProvider && result.UsedOnlineData;
                         var onlineResponse = _host.BuildResponse(result, provider, notes, status, enhancementApplied);
 
@@ -286,13 +342,18 @@ public sealed class KyraOrchestrator
 
                     if (i < candidates.Count - 1)
                     {
-                        notes.Add($"Kyra routing: provider failed ({provider.DisplayName}) -> trying next provider");
+                        KyraOrchestrationLog.Append(
+                            $"Kyra provider_fail id={provider.Id} reason={result.FailureReason} transient={result.IsTransientFailure}");
+                        if (request.VerboseDiagnosticNotes)
+                        {
+                            notes.Add($"Kyra routing: provider failed ({provider.DisplayName}) -> trying next provider");
+                        }
                     }
                 }
 
                 if (settings.OfflineFallbackEnabled)
                 {
-                    notes.Add("Kyra routing: all AI unavailable -> Local Kyra");
+                    notes.Add("Kyra routing: online providers exhausted -> Local Kyra");
                     Report("Using local fallback…");
                     var localFallback = await RunInstrumentedAsync(localProvider, request, settings, context, notes, cancellationToken).ConfigureAwait(false);
                     var fb = localFallback.UserMessage?.Trim() ?? string.Empty;
@@ -382,7 +443,7 @@ public sealed class KyraOrchestrator
                         notes.Add("Kyra routing: API exhausted -> Local AI");
                     }
 
-                    notes.Add($"Kyra routing: normal chat -> {provider.DisplayName}");
+                    notes.Add(RoutingSuccessNote(context, responseProvider));
                     var enhancementApplied = responseProvider.IsOnlineProvider && effectiveResult.UsedOnlineData;
                     var onlineResponse = _host.BuildResponse(effectiveResult, responseProvider, notes, status, enhancementApplied);
 
@@ -399,13 +460,18 @@ public sealed class KyraOrchestrator
 
                 if (i < candidates.Count - 1)
                 {
-                    notes.Add($"Kyra routing: provider failed ({provider.DisplayName}) -> trying next provider");
+                    KyraOrchestrationLog.Append(
+                        $"Kyra provider_fail id={provider.Id} reason={result.FailureReason} transient={result.IsTransientFailure}");
+                    if (request.VerboseDiagnosticNotes)
+                    {
+                        notes.Add($"Kyra routing: provider failed ({provider.DisplayName}) -> trying next provider");
+                    }
                 }
             }
 
             if (settings.OfflineFallbackEnabled)
             {
-                notes.Add("Kyra routing: all AI unavailable -> Local Kyra");
+                notes.Add("Kyra routing: online providers exhausted -> Local Kyra");
                 Report("Using local fallback…");
                 var localResult = await RunInstrumentedAsync(localProvider, request, settings, context, notes, cancellationToken).ConfigureAwait(false);
                 Report("Formatting Kyra response…");
@@ -478,6 +544,13 @@ public sealed class KyraOrchestrator
             $"localTruth={(KyraFactsLedger.FromCopilotContext(context).HasTrustedLocalHardwareFacts ? 1 : 0)}");
 
         return legacy;
+    }
+
+    private static string RoutingSuccessNote(CopilotContext context, ICopilotProvider provider)
+    {
+        var casual = context.Intent is KyraIntent.Unknown or KyraIntent.GeneralTechQuestion;
+        var label = casual ? "casual chat" : "normal chat";
+        return $"Kyra routing: {label} -> {provider.DisplayName}";
     }
 
     private static string BuildCacheKey(string prompt) => prompt.Trim().ToLowerInvariant();

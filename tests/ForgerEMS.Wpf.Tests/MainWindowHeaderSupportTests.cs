@@ -65,4 +65,16 @@ public sealed class MainWindowHeaderSupportTests
             Assert.False(prop!.CanWrite, name + " should remain display-only (no setter).");
         }
     }
+
+    [Fact]
+    public void MainWindowXaml_DiagnosticsSafetySections_DefaultCollapsed()
+    {
+        var repoRoot = FindRepoRootContainingMainWindow();
+        var xamlPath = Path.Combine(repoRoot, "src", "ForgerEMS.Wpf", "MainWindow.xaml");
+        var text = File.ReadAllText(xamlPath);
+        Assert.Contains("Header=\"Link / Download Safety Checker (beta)\" IsExpanded=\"False\"", text, StringComparison.Ordinal);
+        Assert.Contains("Header=\"Downloaded file / EXE safety (read-only)\" IsExpanded=\"False\"", text, StringComparison.Ordinal);
+        Assert.Contains("Header=\"Safe Testing / Sandbox\" IsExpanded=\"False\"", text, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Show full diagnostic detail\"", text, StringComparison.Ordinal);
+    }
 }

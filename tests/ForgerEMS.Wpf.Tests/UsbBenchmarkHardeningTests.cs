@@ -224,7 +224,7 @@ public sealed class UsbBenchmarkHardeningTests
             readMayBeCached: true);
 
         Assert.Contains("Write 58.2 MB/s measured", s, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Read 4536.4 MB/s may be cached", s, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Read 4536.4 MB/s cache suspected / rerun recommended", s, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -241,6 +241,25 @@ public sealed class UsbBenchmarkHardeningTests
         Assert.True(assessment.ReadLikelyCached);
         Assert.True(assessment.ReadIsEstimate);
         Assert.Contains("plausible", assessment.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData(59.0, 1486.0)]
+    [InlineData(57.0, 1895.0)]
+    [InlineData(56.0, 2457.0)]
+    public void BenchmarkAccuracy_ImpossibleReadSpeedsStayCacheSuspect(double writeMbps, double readMbps)
+    {
+        var target = BenchmarkTarget("USB Flash Drive");
+        var assessment = UsbBenchmarkAccuracy.Assess(writeMbps, readMbps, UsbSpeedClassification.Usb3, target);
+        var summary = UsbBenchmarkUiMessages.BuildUiSummary(
+            UsbBenchmarkResultKind.Completed,
+            readMbps,
+            writeMbps,
+            assessment.ConfidenceLabel,
+            readMayBeCached: assessment.ReadLikelyCached || assessment.ReadIsEstimate);
+
+        Assert.True(assessment.ReadLikelyCached);
+        Assert.Contains("cache suspected / rerun recommended", summary, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

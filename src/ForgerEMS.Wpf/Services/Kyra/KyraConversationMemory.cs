@@ -117,6 +117,11 @@ public sealed class KyraConversationMemory
 
     public KyraIntent ResolveIntent(string prompt, KyraIntent detectedIntent)
     {
+        if (detectedIntent == KyraIntent.CodeAssist || KyraCodeSnippetDetector.LooksLikeCodeSnippet(prompt))
+        {
+            return KyraIntent.CodeAssist;
+        }
+
         var text = prompt.ToLowerInvariant();
         if (KyraFollowUpClassifier.LooksLikeRepairContinuation(text, PreviousIntent, AlreadyGaveDiagnosticBreakdown))
         {
@@ -173,6 +178,11 @@ public sealed class KyraConversationMemory
 
     public void AddTurn(string prompt, string response, KyraIntent intent, SystemContext context)
     {
+        if (intent == KyraIntent.CodeAssist)
+        {
+            return;
+        }
+
         lock (_gate)
         {
             _turns.Add(new KyraConversationTurn

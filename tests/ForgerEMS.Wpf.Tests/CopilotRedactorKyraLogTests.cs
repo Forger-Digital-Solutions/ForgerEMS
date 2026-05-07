@@ -41,4 +41,14 @@ public sealed class CopilotRedactorKyraLogTests
         Assert.DoesNotContain("ghp_", safe, StringComparison.Ordinal);
         Assert.Contains("REDACTED", safe, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void Redact_StripsEmailIpAndMac()
+    {
+        var raw = "reach me at alice@example.com from 8.8.8.8 mac 00-11-22-33-44-55";
+        var safe = CopilotRedactor.Redact(raw, enabled: true);
+        Assert.DoesNotContain("alice@example.com", safe, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("8.8.8.8", safe, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("00-11-22-33-44-55", safe, StringComparison.OrdinalIgnoreCase);
+    }
 }

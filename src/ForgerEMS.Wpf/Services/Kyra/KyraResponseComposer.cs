@@ -7,9 +7,9 @@ public static class KyraResponseComposer
 {
     public const string KyraIdentityLabel = "Kyra";
 
-    public const string KyraLocalModeLabel = "Kyra · local mode";
+    public const string KyraLocalModeLabel = "Kyra • Local";
 
-    public const string KyraEnhancedLabel = "Kyra · enhanced with online assist";
+    public const string KyraEnhancedLabel = "Kyra • Online";
 
     public const string KyraThinkingStatus = "Kyra is thinking…";
 
@@ -29,7 +29,7 @@ public static class KyraResponseComposer
             return body;
         }
 
-        if (body.Contains("Enhanced with online assist", StringComparison.OrdinalIgnoreCase))
+        if (body.Contains("Enhanced with online", StringComparison.OrdinalIgnoreCase))
         {
             return body;
         }

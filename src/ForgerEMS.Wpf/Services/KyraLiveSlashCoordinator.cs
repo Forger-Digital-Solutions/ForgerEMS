@@ -74,7 +74,15 @@ public static class KyraLiveSlashCoordinator
         {
             HandledWithoutLlm = true,
             ResponseText = sb.ToString().TrimEnd(),
-            SourceLabel = "Kyra · /" + cmd.Name
+            SourceLabel = "Kyra · /" + cmd.Name,
+            UsedOnlineData = result.Success,
+            ProviderNotes =
+            [
+                $"Kyra routing: live tool /{cmd.Name}",
+                $"liveTool={tool.Name}",
+                $"liveProvider={result.ProviderName ?? "unknown"}",
+                $"liveSuccess={result.Success}"
+            ]
         };
     }
 
