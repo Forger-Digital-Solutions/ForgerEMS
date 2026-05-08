@@ -2,7 +2,7 @@
 
 This document describes how **in-app update checks** relate to **GitHub Releases** — not to every git push or branch tip.
 
-**Public Preview (v1.2.0+):** shipping tags use semver prereleases such as **`v1.2.0-preview.1`**. The in-app display line is **ForgerEMS v1.2.0 Public Preview** (see `AppReleaseInfo`). Env overrides: `FORGEREMS_GITHUB_OWNER`, `FORGEREMS_GITHUB_REPO`, `FORGEREMS_UPDATE_USER_AGENT` — see `docs/ENVIRONMENT.md` and `docs/UPDATE-SYSTEM-v1.2.0.md`.
+**Public Preview (v1.2.1+):** shipping tags use semver prereleases such as **`v1.2.1-preview.1`**. The in-app display line is **ForgerEMS v1.2.1 Public Preview** (see `AppReleaseInfo`). Env overrides: `FORGEREMS_GITHUB_OWNER`, `FORGEREMS_GITHUB_REPO`, `FORGEREMS_UPDATE_USER_AGENT` — see `docs/ENVIRONMENT.md` and `docs/UPDATE-SYSTEM-v1.2.0.md`.
 
 ---
 
@@ -23,7 +23,7 @@ The app uses the GitHub **Releases** API, reads the list of releases, and picks 
 - **Include Beta / RC** (typical for beta builds): prereleases are allowed.  
 - **Stable only**: prereleases are skipped; only non-prerelease releases count.
 
-The **version** used for comparison comes from the release **`tag_name`** / **`name`** (for example `v1.2.0-preview.1`, `1.2.0-preview.1`, or `ForgerEMS v1.2.0-preview.1`; older tags used `v1.1.12-rc.*`), **not** from guessing based on asset filenames.
+The **version** used for comparison comes from the release **`tag_name`** / **`name`** (for example `v1.2.1-preview.1`, `1.2.1-preview.1`, or `ForgerEMS v1.2.1-preview.1`; older tags used `v1.1.12-rc.*`), **not** from guessing based on asset filenames.
 
 ---
 
@@ -65,6 +65,8 @@ If the tag cannot be parsed as a semver, the app may still show that a **newer r
 Under **Settings → App updates**, copy explains:
 
 > Latest release is chosen by GitHub release publish date, then assets are inspected.
+
+The **Copy Update Diagnostics** button copies a safe diagnostic summary for support. It includes version/channel/update-check state and redacted failure detail; it is not an installer action and does not copy secrets.
 
 ---
 

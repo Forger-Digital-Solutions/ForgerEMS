@@ -1,11 +1,11 @@
 <Window x:Class="VentoyToolkitSetup.Wpf.KyraAdvancedSettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Kyra Advanced Settings"
-        Width="980"
-        Height="760"
-        MinWidth="760"
-        MinHeight="560"
+        Title="Kyra AI Settings"
+        Width="1040"
+        Height="780"
+        MinWidth="820"
+        MinHeight="600"
         WindowStartupLocation="CenterOwner"
         Background="#FF04070D"
         ResizeMode="CanResizeWithGrip"
@@ -13,7 +13,6 @@
         FontFamily="Segoe UI">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
-        <SolidColorBrush x:Key="KyraAdvancedTabBackground" Color="#FF0D1726" />
         <SolidColorBrush x:Key="KyraAdvancedPanelBackground" Color="#CC07101D" />
         <SolidColorBrush x:Key="KyraAdvancedCardBackground" Color="#B307101D" />
         <SolidColorBrush x:Key="KyraAdvancedCardBorder" Color="#4A5ED1FF" />
@@ -33,8 +32,8 @@
         <Style x:Key="KyraAdvancedTabItemStyle" TargetType="TabItem">
             <Setter Property="Foreground" Value="#FFE8EEF9" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Margin" Value="0,0,8,0" />
-            <Setter Property="Padding" Value="14,9" />
+            <Setter Property="Margin" Value="0,0,7,0" />
+            <Setter Property="Padding" Value="12,8" />
             <Setter Property="Background" Value="#660F1828" />
             <Setter Property="BorderBrush" Value="#5B4A6580" />
             <Setter Property="BorderThickness" Value="1" />
@@ -53,10 +52,6 @@
                     <Setter Property="Background" Value="#991A2A3D" />
                     <Setter Property="BorderBrush" Value="#8C67B7E8" />
                 </MultiTrigger>
-                <Trigger Property="IsEnabled" Value="False">
-                    <Setter Property="Foreground" Value="#FF8A96A8" />
-                    <Setter Property="Background" Value="#330A1018" />
-                </Trigger>
             </Style.Triggers>
         </Style>
 
@@ -73,8 +68,17 @@
             <Setter Property="Foreground" Value="{StaticResource KyraAdvancedHeaderBrush}" />
         </Style>
 
+        <Style x:Key="KyraCardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource KyraAdvancedCardBackground}" />
+            <Setter Property="BorderBrush" Value="{StaticResource KyraAdvancedCardBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="12" />
+            <Setter Property="Margin" Value="0,0,12,12" />
+        </Style>
+
         <Style x:Key="SecondaryButtonStyle" TargetType="Button">
-            <Setter Property="Margin" Value="0,0,0,10" />
+            <Setter Property="Margin" Value="0,0,8,8" />
             <Setter Property="Padding" Value="12,8" />
             <Setter Property="MinHeight" Value="34" />
             <Setter Property="Background" Value="#B30F1724" />
@@ -88,24 +92,12 @@
                     <Setter Property="Background" Value="#E6162436" />
                     <Setter Property="BorderBrush" Value="#FFFFB86B" />
                 </Trigger>
-                <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="#CC1A2433" />
-                    <Setter Property="BorderBrush" Value="#FFFFC56D" />
-                </Trigger>
             </Style.Triggers>
-        </Style>
-
-        <Style x:Key="FooterButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
-            <Setter Property="MinWidth" Value="104" />
-            <Setter Property="Margin" Value="0,0,8,0" />
-            <Setter Property="Padding" Value="11,7" />
-            <Setter Property="MinHeight" Value="32" />
         </Style>
 
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource KyraAdvancedTextBrush}" />
         </Style>
-
         <Style TargetType="TextBox">
             <Setter Property="BorderBrush" Value="{StaticResource KyraAdvancedInputBorder}" />
             <Setter Property="BorderThickness" Value="1" />
@@ -114,656 +106,354 @@
             <Setter Property="Foreground" Value="#FFF4F8FF" />
             <Setter Property="CaretBrush" Value="#FFFFDAB8" />
         </Style>
-
+        <Style TargetType="PasswordBox">
+            <Setter Property="BorderBrush" Value="{StaticResource KyraAdvancedInputBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="9,6" />
+            <Setter Property="Background" Value="{StaticResource KyraAdvancedInputBackground}" />
+            <Setter Property="Foreground" Value="#FFF4F8FF" />
+            <Setter Property="CaretBrush" Value="#FFFFDAB8" />
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Background" Value="{StaticResource KyraAdvancedInputBackground}" />
+            <Setter Property="Foreground" Value="#FF0B1220" />
+        </Style>
         <Style TargetType="CheckBox">
             <Setter Property="Foreground" Value="{StaticResource KyraAdvancedTextBrush}" />
         </Style>
+        <Style TargetType="Expander">
+            <Setter Property="Foreground" Value="{StaticResource KyraAdvancedTextBrush}" />
+        </Style>
     </Window.Resources>
+
     <Grid>
         <Image Source="Assets/KyraAdvancedBackground.png"
                Stretch="UniformToFill"
-               Opacity="0.36"
+               Opacity="0.30"
                RenderOptions.BitmapScalingMode="Fant"
                IsHitTestVisible="False" />
-        <Rectangle Fill="#9904070D" IsHitTestVisible="False" />
+        <Rectangle Fill="#A604070D" IsHitTestVisible="False" />
+
         <Grid Margin="16">
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <Border Grid.Row="0"
+            <DockPanel Grid.Row="0" Margin="0,0,0,12">
+                <Image DockPanel.Dock="Left" Width="48" Height="48" Margin="0,0,10,0" Source="Assets/Kyra.png" />
+                <StackPanel>
+                    <TextBlock FontSize="22" FontWeight="Bold" Foreground="{StaticResource KyraAdvancedHeaderBrush}" Text="Kyra AI Settings" />
+                    <TextBlock FontSize="12" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Choose Gateway, BYOK, local AI, live tools, and privacy settings. Keys stay hidden." />
+                </StackPanel>
+            </DockPanel>
+
+            <Border Grid.Row="1"
                     Background="{StaticResource KyraAdvancedPanelBackground}"
                     BorderBrush="#9967B7E8"
                     BorderThickness="1"
                     CornerRadius="12"
                     Padding="14">
-                <Grid>
-                    <Image HorizontalAlignment="Right"
-                           VerticalAlignment="Bottom"
-                           Width="300"
-                           Margin="0,0,-20,-24"
-                           Opacity="0.14"
-                           Source="Assets/Kyra.png"
-                           Stretch="Uniform"
-                           IsHitTestVisible="False"
-                           RenderOptions.BitmapScalingMode="Fant" />
-                    <TabControl Style="{StaticResource KyraAdvancedTabControlStyle}" Margin="0,2,0,0">
-                        <TabControl.ItemContainerStyle>
-                            <Style TargetType="TabItem" BasedOn="{StaticResource KyraAdvancedTabItemStyle}" />
-                        </TabControl.ItemContainerStyle>
-            <TabItem Header="Providers">
-                <ScrollViewer Style="{StaticResource KyraAdvancedScrollViewerStyle}" Padding="0,10,0,0">
-                    <StackPanel>
-                        <Border Background="{StaticResource KyraAdvancedCardBackground}"
-                                BorderBrush="{StaticResource KyraAdvancedCardBorder}"
-                                BorderThickness="1"
-                                CornerRadius="10"
-                                Padding="12"
-                                Margin="0,0,0,12">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Kyra mode and provider status" />
-                                <TextBlock Margin="0,8,0,0" FontSize="12" TextWrapping="Wrap"
-                                           Text="Public Preview default: offline/local Kyra always works. Online models activate only when an operator has configured providers (environment variables). API keys are never shown in logs or this summary." />
-                                <TextBlock Margin="0,8,0,0"
-                                           FontSize="11"
-                                           Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                                           Text="{Binding KyraProviderHubConfigHealthSummary}"
-                                           TextWrapping="Wrap" />
-                                <TextBlock Margin="0,6,0,0" FontSize="12" Text="{Binding CopilotProviderSummaryText}" TextWrapping="Wrap" />
-                                <TextBlock Margin="0,6,0,0" FontSize="12" Text="{Binding CopilotActiveProviderText}" TextWrapping="Wrap" />
-                                <TextBlock Margin="0,4,0,0" FontSize="11.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="{Binding CopilotDiagnosticsSummaryText}" TextWrapping="Wrap" />
-                                <TextBlock Margin="0,4,0,0" FontSize="11.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="{Binding CopilotLastProviderFailureText}" TextWrapping="Wrap" />
-                                <TextBlock Margin="0,4,0,0" FontSize="11.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="{Binding CopilotOnlineStatusText}" TextWrapping="Wrap" />
-                                <TextBlock Margin="0,4,0,0" FontSize="11.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="{Binding CopilotRoutingPolicyText}" TextWrapping="Wrap" />
-                            </StackPanel>
-                        </Border>
+                <TabControl Style="{StaticResource KyraAdvancedTabControlStyle}">
+                    <TabControl.ItemContainerStyle>
+                        <Style TargetType="TabItem" BasedOn="{StaticResource KyraAdvancedTabItemStyle}" />
+                    </TabControl.ItemContainerStyle>
 
-                        <WrapPanel Margin="0,0,0,10">
-                            <Button MinWidth="150"
-                                    Margin="0,0,8,8"
-                                    Style="{StaticResource SecondaryButtonStyle}"
-                                    Content="Clear Session Keys"
-                                    Command="{Binding ClearProviderSessionKeysCommand}" />
-                            <Button MinWidth="170"
-                                    Margin="0,0,8,8"
-                                    Style="{StaticResource SecondaryButtonStyle}"
-                                    Content="Refresh Provider Status"
-                                    Command="{Binding RefreshCopilotProviderStatusCommand}" />
-                            <Button MinWidth="124"
-                                    Margin="0,0,0,8"
-                                    Style="{StaticResource SecondaryButtonStyle}"
-                                    Content="Test Connection"
-                                    Command="{Binding TestCopilotConnectionCommand}" />
-                        </WrapPanel>
-                        <WrapPanel Margin="0,0,0,10">
-                            <CheckBox Margin="0,0,16,0" IsChecked="{Binding EnableFreeProviderPool, Mode=TwoWay}" Content="Enable free provider pool" />
-                            <CheckBox IsChecked="{Binding EnableByokProviders, Mode=TwoWay}" Content="Enable BYOK/paid providers"
-                                      Visibility="{Binding KyraTesterEditableProviders, Converter={StaticResource BoolToVis}}" />
-                        </WrapPanel>
-                        <TextBlock Margin="0,0,0,8"
-                                   FontSize="11"
-                                   Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                                   Text="Free API providers may have limits, outages, privacy tradeoffs, or changing terms. Offline Local Kyra needs no API key."
-                                   TextWrapping="Wrap" />
-                        <TextBlock Margin="0,0,0,8"
-                                   FontSize="11"
-                                   Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                                   Text="Operators configure API access via environment variables before launch. Beta testers should not paste API keys into chat, email, or screenshots."
-                                   TextWrapping="Wrap" />
-                        <ItemsControl ItemsSource="{Binding CopilotProviderSettings}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Margin="0,0,0,12"
-                                            Padding="12"
-                                            Background="{StaticResource KyraAdvancedCardBackground}"
-                                            BorderBrush="{StaticResource KyraAdvancedCardBorder}"
-                                            BorderThickness="1"
-                                            CornerRadius="10">
+                    <TabItem Header="Overview">
+                        <ScrollViewer Style="{StaticResource KyraAdvancedScrollViewerStyle}" Padding="0,12,0,0">
+                            <WrapPanel>
+                                <Border Style="{StaticResource KyraCardStyle}" Width="300">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Kyra Mode" />
+                                        <ComboBox Margin="0,10,0,6"
+                                                  ItemsSource="{Binding CopilotModeOptions}"
+                                                  SelectedItem="{Binding SelectedCopilotMode}" />
+                                        <TextBlock FontSize="12" Text="{Binding CopilotOnlineStatusText}" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource KyraCardStyle}" Width="300">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Current Provider" />
+                                        <TextBlock Margin="0,10,0,0" FontSize="13" Text="{Binding CopilotProviderBadgeText}" TextWrapping="Wrap" />
+                                        <TextBlock Margin="0,6,0,0" FontSize="12" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="{Binding CopilotProviderSummaryText}" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource KyraCardStyle}" Width="300">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Privacy" />
+                                        <TextBlock Margin="0,10,0,0" FontSize="12" Text="{Binding CopilotPrivacyBadgeText}" TextWrapping="Wrap" />
+                                        <TextBlock Margin="0,6,0,0" FontSize="11.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Keys hidden. Local scan facts are summarized before online use. Do not send secrets in support email." TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource KyraCardStyle}" Width="300">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="ForgerEMS Beta Gateway" />
+                                        <TextBlock Margin="0,10,0,0" FontSize="12" Text="{Binding KyraGatewayProviderStatusSummary}" TextWrapping="Wrap" />
+                                        <TextBlock Margin="0,6,0,0" FontSize="11.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Uses ForgerEMS-managed gateway token. Provider API keys stay server-side. Best for beta testers." TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource KyraCardStyle}" Width="620">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Live Tools" />
+                                        <TextBlock Margin="0,8,0,0" FontSize="12" Text="Weather, crypto, calculator, date/time, and System Intelligence can work without general web search. Web Search shows as Gateway search available or Not configured depending on provider setup." TextWrapping="Wrap" />
+                                        <TextBlock Margin="0,8,0,0" FontSize="11.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Web Search: Ready when Gateway search is available or a BYOK search provider is configured." TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource KyraCardStyle}" Width="300">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="System Context" />
+                                        <TextBlock Margin="0,10,0,0" FontSize="12" Text="{Binding CopilotContextSummaryText}" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+                            </WrapPanel>
+                        </ScrollViewer>
+                    </TabItem>
+
+                    <TabItem Header="Providers">
+                        <ScrollViewer Style="{StaticResource KyraAdvancedScrollViewerStyle}" Padding="0,12,0,0">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Provider Cards" />
+                                <TextBlock Margin="0,6,0,12" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Pick a preferred provider, test setup, and keep Local Kyra as fallback. Gateway remains best for beta testers when configured." TextWrapping="Wrap" />
+                                <ItemsControl ItemsSource="{Binding CopilotProviderSettings}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Style="{StaticResource KyraCardStyle}" Width="300">
+                                                <StackPanel>
+                                                    <TextBlock FontWeight="Bold" FontSize="14" Text="{Binding DisplayName}" TextWrapping="Wrap" />
+                                                    <TextBlock Margin="0,4,0,0" FontSize="12" Foreground="{StaticResource KyraAdvancedHeaderBrush}" Text="{Binding FriendlyStatus}" TextWrapping="Wrap" />
+                                                    <TextBlock Margin="0,6,0,0" FontSize="11.5" Text="{Binding SelectedModelDisplay}" TextWrapping="Wrap" />
+                                                    <TextBlock Margin="0,4,0,0" FontSize="11" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="{Binding CredentialBadgeText}" TextWrapping="Wrap" />
+                                                    <TextBlock Margin="0,4,0,8" FontSize="11" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="{Binding PrivacyNote}" TextWrapping="Wrap" />
+                                                    <WrapPanel>
+                                                        <CheckBox Margin="0,0,12,8" Content="Enabled" IsChecked="{Binding IsEnabled, Mode=TwoWay}" />
+                                                        <Button MinWidth="104" Content="Use as default" Style="{StaticResource SecondaryButtonStyle}" Command="{Binding DataContext.UseProviderAsDefaultCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" />
+                                                        <Button MinWidth="72" Content="Test" Style="{StaticResource SecondaryButtonStyle}" Command="{Binding DataContext.TestProviderConnectionCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" />
+                                                    </WrapPanel>
+                                                    <TextBlock FontSize="11" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="{Binding LastTestResult}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+
+                    <TabItem Header="Bring Your Own Key">
+                        <ScrollViewer Style="{StaticResource KyraAdvancedScrollViewerStyle}" Padding="0,12,0,0">
+                            <StackPanel>
+                                <Border Style="{StaticResource KyraCardStyle}">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="BYOK Setup" />
+                                        <TextBlock Margin="0,6,0,0" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="BYOK is optional. Use a session key for this run, or save a protected local key with Windows user protection when available. Use the model name from your provider dashboard; if a model list cannot be fetched, manual text is supported." TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+
+                                <ItemsControl ItemsSource="{Binding CopilotProviderSettings}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Style="{StaticResource KyraCardStyle}">
+                                                <StackPanel>
+                                                    <TextBlock FontWeight="Bold" FontSize="14" Text="{Binding DisplayName}" TextWrapping="Wrap" />
+                                                    <UniformGrid Margin="0,8,0,0" Columns="3">
+                                                        <StackPanel Margin="0,0,10,0">
+                                                            <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="API key" />
+                                                            <PasswordBox PasswordChanged="OnProviderPasswordChanged" />
+                                                        </StackPanel>
+                                                        <StackPanel Margin="0,0,10,0">
+                                                            <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Base URL" />
+                                                            <TextBox Text="{Binding BaseUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                                        </StackPanel>
+                                                        <StackPanel>
+                                                            <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Model" />
+                                                            <TextBox Text="{Binding ModelName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                                            <TextBlock Margin="0,4,0,0" FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Enter the model name from your provider dashboard." TextWrapping="Wrap" />
+                                                        </StackPanel>
+                                                    </UniformGrid>
+
+                                                    <WrapPanel Margin="0,8,0,0">
+                                                        <TextBlock Margin="0,7,8,0" FontSize="11" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Storage:" />
+                                                        <ComboBox Width="160" SelectedValue="{Binding KeyStorageMode, Mode=TwoWay}" SelectedValuePath="Content">
+                                                            <ComboBoxItem Content="session" />
+                                                            <ComboBoxItem Content="encrypted-local" />
+                                                            <ComboBoxItem Content="environment" />
+                                                        </ComboBox>
+                                                        <Button Content="Save key" MinWidth="96" Style="{StaticResource SecondaryButtonStyle}" Command="{Binding DataContext.SaveProviderKeyCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" />
+                                                        <Button Content="Clear saved key" MinWidth="120" Style="{StaticResource SecondaryButtonStyle}" Command="{Binding DataContext.ClearProviderKeyCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" />
+                                                        <Button Content="Test connection" MinWidth="124" Style="{StaticResource SecondaryButtonStyle}" Command="{Binding DataContext.TestProviderConnectionCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" />
+                                                    </WrapPanel>
+
+                                                    <TextBlock FontSize="11" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="{Binding SavedKeyStatus}" TextWrapping="Wrap" />
+                                                    <TextBlock FontSize="11" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="{Binding LastTestResult}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <Expander Header="Advanced environment setup" IsExpanded="False">
+                                    <Border Style="{StaticResource KyraCardStyle}">
+                                        <TextBlock FontFamily="Consolas" FontSize="11" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="{Binding CopilotProviderEnvironmentHelpText}" TextWrapping="Wrap" />
+                                    </Border>
+                                </Expander>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+
+                    <TabItem Header="Live Tools">
+                        <ScrollViewer Style="{StaticResource KyraAdvancedScrollViewerStyle}" Padding="0,12,0,0">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Tool Readiness" />
+                                <TextBlock Margin="0,6,0,12" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="These tools help Kyra answer current information questions. Web Search is first-class: it is ready when gateway search or a BYOK search provider is configured." TextWrapping="Wrap" />
+
+                                <WrapPanel>
+                                    <Border Style="{StaticResource KyraCardStyle}" Width="300">
                                         <StackPanel>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel>
-                                                    <TextBlock FontWeight="Bold" FontSize="13" Text="{Binding DisplayName}" />
-                                                    <TextBlock Margin="0,2,0,0" FontSize="11.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="{Binding DetailText}" TextWrapping="Wrap" />
-                                                    <TextBlock Margin="0,2,0,0" FontSize="11" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="{Binding ProviderStatusLabel}" TextWrapping="Wrap" />
-                                                    <TextBlock Margin="0,2,0,0" FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="{Binding CredentialSourceText}" TextWrapping="Wrap" />
-                                                </StackPanel>
-                                                <CheckBox Grid.Column="1"
-                                                          VerticalAlignment="Top"
-                                                          Margin="10,0,0,0"
-                                                          IsChecked="{Binding IsEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                          Content="Enabled" />
-                                            </Grid>
-                                            <UniformGrid Margin="0,6,0,0" Columns="3">
-                                                <StackPanel Margin="0,0,8,0">
-                                                    <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Endpoint URL" />
-                                                    <TextBox MinWidth="160"
-                                                             IsReadOnly="{Binding DataContext.KyraDeveloperManagedProviderUi, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                             Text="{Binding BaseUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                                </StackPanel>
-                                                <StackPanel Margin="0,0,8,0">
-                                                    <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Model" />
-                                                    <TextBox MinWidth="120"
-                                                             IsReadOnly="{Binding DataContext.KyraDeveloperManagedProviderUi, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                             Text="{Binding ModelName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                                </StackPanel>
-                                                <StackPanel>
-                                                    <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="API key env var" />
-                                                    <TextBox MinWidth="140"
-                                                             IsReadOnly="{Binding DataContext.KyraDeveloperManagedProviderUi, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                             Text="{Binding ApiKeyEnvironmentVariable, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                                </StackPanel>
-                                            </UniformGrid>
-                                            <UniformGrid Margin="0,6,0,0" Columns="2"
-                                                         Visibility="{Binding DataContext.KyraShowDeveloperProviderPlumbing, Converter={StaticResource BoolToVis}}">
-                                                <StackPanel Margin="0,0,8,0">
-                                                    <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Session API key (memory-only, not saved to disk)" />
-                                                    <TextBox MinWidth="160" Text="{Binding SessionApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                                </StackPanel>
-                                                <StackPanel>
-                                                    <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Current key mask" />
-                                                    <TextBlock Margin="0,6,0,0" FontFamily="Consolas" Text="{Binding MaskedApiKey}" />
-                                                </StackPanel>
-                                            </UniformGrid>
+                                            <TextBlock FontWeight="Bold" FontSize="14" Text="Web Search" />
+                                            <TextBlock Margin="0,4,0,0" FontSize="12" Foreground="{StaticResource KyraAdvancedHeaderBrush}" Text="Gateway search available or Not configured" TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,4,0,0" FontSize="11" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Lets Kyra look up current external information instead of guessing from local scan data." TextWrapping="Wrap" />
                                         </StackPanel>
                                     </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-            <TabItem Header="Live APIs">
-                <ScrollViewer Style="{StaticResource KyraAdvancedScrollViewerStyle}" Padding="0,10,0,0">
-                    <StackPanel>
-                        <Border Background="#B3161F2E"
-                                BorderBrush="#B3FFB86B"
-                                BorderThickness="1"
-                                CornerRadius="8"
-                                Padding="12"
-                                Margin="0,0,0,12">
-                            <TextBlock Foreground="{StaticResource KyraAdvancedTextBrush}"
-                                       FontWeight="SemiBold"
-                                       TextWrapping="Wrap"
-                                       Text="Live tool preferences are stored locally (beta). Never paste secrets into chat. Keys are not shown in /provider or tool grids." />
-                        </Border>
-                        <TextBlock Margin="0,0,0,10"
-                                   FontSize="11"
-                                   Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                                   TextWrapping="Wrap"
-                                   Text="No-key defaults: Weather → Open-Meteo, Crypto → CoinGecko. News, Stocks, and Sports need provider keys when enabled." />
-
-                        <Border Background="{StaticResource KyraAdvancedCardBackground}"
-                                BorderBrush="{StaticResource KyraAdvancedCardBorder}"
-                                BorderThickness="1"
-                                CornerRadius="10"
-                                Padding="12"
-                                Margin="0,0,0,10">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Shared" />
-                                <UniformGrid Columns="2" Margin="0,8,0,0">
-                                    <StackPanel Margin="0,0,8,0">
-                                        <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="HTTP timeout override (0 = use Kyra provider timeout)" />
-                                        <TextBox Text="{Binding KyraLiveToolsForBinding.TimeoutSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                    <StackPanel Margin="8,0,0,0">
-                                        <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Cache (minutes)" />
-                                        <TextBox Text="{Binding KyraLiveToolsForBinding.CacheMinutes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                    </StackPanel>
-                                </UniformGrid>
-                            </StackPanel>
-                        </Border>
-
-                        <Border Background="{StaticResource KyraAdvancedCardBackground}"
-                                BorderBrush="{StaticResource KyraAdvancedCardBorder}"
-                                BorderThickness="1"
-                                CornerRadius="10"
-                                Padding="12"
-                                Margin="0,0,0,10">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Weather" />
-                                <CheckBox Margin="0,6,0,6" IsChecked="{Binding KyraLiveToolsForBinding.WeatherEnabled, Mode=TwoWay}" Content="Enabled" />
-                                <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Provider: openmeteo | openweather" />
-                                <TextBox Margin="0,4,0,0" Text="{Binding KyraLiveToolsForBinding.WeatherProvider, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                <TextBlock Margin="0,6,0,0" FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="OpenWeather API key (only if provider is openweather)" />
-                                <TextBox Margin="0,4,0,0" Text="{Binding KyraLiveToolsForBinding.WeatherApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                <TextBlock Margin="0,6,0,0" FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Default location when /weather has no args (optional)" />
-                                <TextBox Margin="0,4,0,0" Text="{Binding KyraLiveToolsForBinding.DefaultWeatherLocation, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            </StackPanel>
-                        </Border>
-
-                        <Border Background="{StaticResource KyraAdvancedCardBackground}"
-                                BorderBrush="{StaticResource KyraAdvancedCardBorder}"
-                                BorderThickness="1"
-                                CornerRadius="10"
-                                Padding="12"
-                                Margin="0,0,0,10">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="News" />
-                                <CheckBox Margin="0,6,0,6" IsChecked="{Binding KyraLiveToolsForBinding.NewsEnabled, Mode=TwoWay}" Content="Enabled" />
-                                <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Provider: newsapi | gnews" />
-                                <TextBox Margin="0,4,0,0" Text="{Binding KyraLiveToolsForBinding.NewsProvider, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                <TextBlock Margin="0,6,0,0" FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="API key / token" />
-                                <TextBox Margin="0,4,0,0" Text="{Binding KyraLiveToolsForBinding.NewsApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            </StackPanel>
-                        </Border>
-
-                        <Border Background="{StaticResource KyraAdvancedCardBackground}"
-                                BorderBrush="{StaticResource KyraAdvancedCardBorder}"
-                                BorderThickness="1"
-                                CornerRadius="10"
-                                Padding="12"
-                                Margin="0,0,0,10">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Stocks" />
-                                <CheckBox Margin="0,6,0,6" IsChecked="{Binding KyraLiveToolsForBinding.StocksEnabled, Mode=TwoWay}" Content="Enabled" />
-                                <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Provider: finnhub | alphavantage | fmp" />
-                                <TextBox Margin="0,4,0,0" Text="{Binding KyraLiveToolsForBinding.StocksProvider, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                <TextBlock Margin="0,6,0,0" FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="API key / token" />
-                                <TextBox Margin="0,4,0,0" Text="{Binding KyraLiveToolsForBinding.StocksApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            </StackPanel>
-                        </Border>
-
-                        <Border Background="{StaticResource KyraAdvancedCardBackground}"
-                                BorderBrush="{StaticResource KyraAdvancedCardBorder}"
-                                BorderThickness="1"
-                                CornerRadius="10"
-                                Padding="12"
-                                Margin="0,0,0,10">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Crypto" />
-                                <CheckBox Margin="0,6,0,6" IsChecked="{Binding KyraLiveToolsForBinding.CryptoEnabled, Mode=TwoWay}" Content="Enabled" />
-                                <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Provider: coingecko (no key)" />
-                                <TextBox Margin="0,4,0,0" Text="{Binding KyraLiveToolsForBinding.CryptoProvider, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            </StackPanel>
-                        </Border>
-
-                        <Border Background="{StaticResource KyraAdvancedCardBackground}"
-                                BorderBrush="{StaticResource KyraAdvancedCardBorder}"
-                                BorderThickness="1"
-                                CornerRadius="10"
-                                Padding="12"
-                                Margin="0,0,0,10">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Sports" />
-                                <CheckBox Margin="0,6,0,6" IsChecked="{Binding KyraLiveToolsForBinding.SportsEnabled, Mode=TwoWay}" Content="Enabled" />
-                                <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Provider: thesportsdb" />
-                                <TextBox Margin="0,4,0,0" Text="{Binding KyraLiveToolsForBinding.SportsProvider, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                <TextBlock Margin="0,6,0,0" FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="TheSportsDB API key (path segment)" />
-                                <TextBox Margin="0,4,0,0" Text="{Binding KyraLiveToolsForBinding.SportsApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            </StackPanel>
-                        </Border>
-
-                        <WrapPanel Margin="0,0,0,12">
-                            <Button MinWidth="200"
-                                    Margin="0,0,8,8"
-                                    Style="{StaticResource SecondaryButtonStyle}"
-                                    Content="Save live tool settings"
-                                    Command="{Binding SaveKyraLiveToolsSettingsCommand}" />
-                        </WrapPanel>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-            <TabItem Header="Realtime Gateway">
-                <ScrollViewer Style="{StaticResource KyraAdvancedScrollViewerStyle}" Padding="0,10,0,0">
-                    <StackPanel>
-                        <Border Background="#B3161F2E"
-                                BorderBrush="#B35EEBE4"
-                                BorderThickness="1"
-                                CornerRadius="8"
-                                Padding="12"
-                                Margin="0,0,0,12">
-                            <TextBlock Foreground="{StaticResource KyraAdvancedTextBrush}"
-                                       FontWeight="SemiBold"
-                                       TextWrapping="Wrap"
-                                       Text="Realtime Kyra uses a secure ForgerEMS gateway. Provider API keys are stored server-side and are not included in this app. ForgerEMS sends only sanitized request context needed to answer your question. This is separate from Local Kyra Memory and optional Community Intelligence." />
-                        </Border>
-                        <CheckBox Margin="0,0,0,8"
-                                  IsChecked="{Binding KyraRealtimeGatewayEnabled, Mode=TwoWay}"
-                                  Content="Enable Kyra Realtime Gateway (chat + secure routing when configured)" />
-                        <CheckBox Margin="0,0,0,8"
-                                  IsChecked="{Binding KyraRealtimeGatewayResearchEnabled, Mode=TwoWay}"
-                                  Content="Research Mode: route current/realtime questions through the gateway first when enabled" />
-                        <CheckBox Margin="0,0,0,12"
-                                  IsChecked="{Binding KyraRealtimeGatewayResearchConsent, Mode=TwoWay}"
-                                  Content="I consent to sanitized realtime gateway research (independent of local memory / community)" />
-                        <CheckBox Margin="0,0,0,12"
-                                  IsChecked="{Binding AllowOnlineSystemContextSharing, Mode=TwoWay}"
-                                  Content="Include sanitized System Intelligence summary in gateway requests (requires FORGEREMS_KYRA_GATEWAY_SHARE_SYSTEM_CONTEXT when set by operator)" />
-                        <TextBlock Margin="0,0,0,6"
-                                   FontSize="11"
-                                   Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                                   TextWrapping="Wrap"
-                                   Text="Never paste API keys, private files, or raw logs into chat. The gateway strips common sensitive patterns; keep prompts short and operational." />
-                        <TextBlock Margin="0,0,0,4"
-                                   FontSize="10.5"
-                                   Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                                   TextWrapping="Wrap"
-                                   Text="Gateway base URL and beta token: Kyra Advanced → Providers → ForgerEMS Beta Gateway (FORGEREMS_KYRA_GATEWAY_URL / FORGEREMS_KYRA_GATEWAY_BETA_TOKEN)." />
-                        <WrapPanel Margin="0,0,0,12">
-                            <Button MinWidth="220"
-                                    Margin="0,0,8,8"
-                                    Style="{StaticResource SecondaryButtonStyle}"
-                                    Content="Check gateway status"
-                                    Command="{Binding CheckKyraGatewayStatusCommand}" />
-                        </WrapPanel>
-                        <Border Background="{StaticResource KyraAdvancedCardBackground}"
-                                BorderBrush="{StaticResource KyraAdvancedCardBorder}"
-                                BorderThickness="1"
-                                CornerRadius="10"
-                                Padding="12"
-                                Margin="0,0,0,10">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Provider readiness (server-side)" />
-                                <TextBlock Margin="0,8,0,0"
-                                           FontFamily="Consolas"
-                                           FontSize="11"
-                                           Foreground="{StaticResource KyraAdvancedTextBrush}"
-                                           Text="{Binding KyraGatewayProviderStatusSummary}"
-                                           TextWrapping="Wrap" />
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-            <TabItem Header="Assistant">
-                <ScrollViewer Style="{StaticResource KyraAdvancedScrollViewerStyle}" Padding="0,10,0,0">
-                    <StackPanel>
-                        <Border Background="{StaticResource KyraAdvancedCardBackground}"
-                                BorderBrush="{StaticResource KyraAdvancedCardBorder}"
-                                BorderThickness="1"
-                                CornerRadius="10"
-                                Padding="12"
-                                Margin="0,0,0,12">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Kyra assistant status" />
-                                <TextBlock Margin="0,8,0,0"
-                                           FontSize="12"
-                                           Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                                           Text="{Binding KyraAssistantStatusSummary}"
-                                           TextWrapping="Wrap" />
-                            </StackPanel>
-                        </Border>
-                        <Border Background="{StaticResource KyraAdvancedCardBackground}"
-                                BorderBrush="{StaticResource KyraAdvancedCardBorder}"
-                                BorderThickness="1"
-                                CornerRadius="10"
-                                Padding="12"
-                                Margin="0,0,0,12">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Tools" />
-                                <TextBlock Margin="0,6,0,8"
-                                           FontSize="11"
-                                           Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                                           Text="Per-tool readiness for Kyra. No API keys or secrets are listed."
-                                           TextWrapping="Wrap" />
-                                <DataGrid ItemsSource="{Binding KyraToolStatusRows}"
-                                          AutoGenerateColumns="False"
-                                          IsReadOnly="True"
-                                          HeadersVisibility="Column"
-                                          CanUserAddRows="False"
-                                          CanUserDeleteRows="False"
-                                          CanUserResizeRows="False"
-                                          GridLinesVisibility="Horizontal"
-                                          MaxHeight="280"
-                                          Background="{StaticResource KyraAdvancedInputBackground}"
-                                          BorderBrush="{StaticResource KyraAdvancedInputBorder}"
-                                          Foreground="{StaticResource KyraAdvancedTextBrush}"
-                                          RowBackground="{StaticResource KyraAdvancedInputBackground}"
-                                          AlternatingRowBackground="#190E1A29">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="Tool"
-                                                            Binding="{Binding ToolName}"
-                                                            Width="*"
-                                                            MinWidth="96" />
-                                        <DataGridTextColumn Header="Category"
-                                                            Binding="{Binding Category}"
-                                                            Width="120" />
-                                        <DataGridTextColumn Header="Status"
-                                                            Binding="{Binding Status}"
-                                                            Width="110" />
-                                        <DataGridTextColumn Header="Provider"
-                                                            Binding="{Binding Provider}"
-                                                            Width="130" />
-                                        <DataGridTextColumn Header="Last checked"
-                                                            Binding="{Binding LastChecked}"
-                                                            Width="90" />
-                                        <DataGridTextColumn Header="Notes / setup"
-                                                            Binding="{Binding Notes}"
-                                                            Width="2*"
-                                                            MinWidth="140" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                            </StackPanel>
-                        </Border>
-                        <CheckBox Margin="0,0,0,8" IsChecked="{Binding KyraApiFirstRouting, Mode=TwoWay}" Content="API-first: try configured providers before Local Kyra when mode and privacy settings allow" />
-                        <CheckBox Margin="0,0,0,8" IsChecked="{Binding KyraOfflineFallbackEnabled, Mode=TwoWay}" Content="Local fallback: allow Local Kyra when online providers fail" />
-                        <CheckBox Margin="0,0,0,8" IsChecked="{Binding VerboseLiveLogs, Mode=TwoWay}" Content="Verbose beta logs (show Kyra routing lines in live logs)" />
-                        <TextBlock Margin="0,0,0,12"
-                                   FontSize="11"
-                                   Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                                   Text="Kyra can use online language models, but live tools like weather or web search only work when their integrations are enabled. An API provider does not automatically mean live web access."
-                                   TextWrapping="Wrap" />
-                        <Border Background="{StaticResource KyraAdvancedCardBackground}"
-                                BorderBrush="{StaticResource KyraAdvancedCardBorder}"
-                                BorderThickness="1"
-                                CornerRadius="10"
-                                Padding="12"
-                                Margin="0,0,0,12">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Optional Kyra memory (local only)" />
-                                <TextBlock Margin="0,8,0,0"
-                                           FontSize="11.5"
-                                           Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                                           Text="Keeps recent Kyra chat context locally (up to 100 turns by default) so troubleshooting stays coherent—never API keys, passwords, serials, product keys, or recovery keys. Not sent to providers unless you enable memory and it passes sanitization."
-                                           TextWrapping="Wrap" />
-                                <CheckBox Margin="0,10,0,8" IsChecked="{Binding KyraPersistentMemoryEnabled, Mode=TwoWay}" Content="Enable Kyra memory" />
-                                <WrapPanel Margin="0,0,0,0">
-                                    <Button MinWidth="132"
-                                            Margin="0,0,8,8"
-                                            Style="{StaticResource SecondaryButtonStyle}"
-                                            Content="View memory"
-                                            Command="{Binding ViewKyraMemoryCommand}" />
-                                    <Button MinWidth="132"
-                                            Margin="0,0,8,8"
-                                            Style="{StaticResource SecondaryButtonStyle}"
-                                            Content="Export memory"
-                                            Command="{Binding ExportKyraMemoryCommand}" />
-                                    <Button MinWidth="132"
-                                            Margin="0,0,8,8"
-                                            Style="{StaticResource SecondaryButtonStyle}"
-                                            Content="Clear memory"
-                                            Command="{Binding ClearKyraMemoryCommand}" />
+                                    <Border Style="{StaticResource KyraCardStyle}" Width="300">
+                                        <StackPanel>
+                                            <TextBlock FontWeight="Bold" FontSize="14" Text="System Intelligence" />
+                                            <TextBlock Margin="0,4,0,0" FontSize="12" Foreground="{StaticResource KyraAdvancedHeaderBrush}" Text="Local only" />
+                                            <TextBlock Margin="0,4,0,0" FontSize="11" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Gives Kyra sanitized local hardware and toolkit facts." TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Border>
+                                    <ItemsControl ItemsSource="{Binding KyraToolStatusRows}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Style="{StaticResource KyraCardStyle}" Width="300">
+                                                    <StackPanel>
+                                                        <TextBlock FontWeight="Bold" FontSize="14" Text="{Binding ToolName}" TextWrapping="Wrap" />
+                                                        <TextBlock Margin="0,4,0,0" FontSize="12" Foreground="{StaticResource KyraAdvancedHeaderBrush}" Text="{Binding Status}" TextWrapping="Wrap" />
+                                                        <TextBlock Margin="0,4,0,0" FontSize="11.5" Text="{Binding Provider}" TextWrapping="Wrap" />
+                                                        <TextBlock Margin="0,4,0,0" FontSize="11" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="{Binding Notes}" TextWrapping="Wrap" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
                                 </WrapPanel>
-                            </StackPanel>
-                        </Border>
-                        <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Sanitized context preview (API-safe)" />
-                        <TextBlock Margin="0,6,0,8"
-                                   FontSize="11"
-                                   Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                                   Text="What would be summarized for online providers if context sharing is enabled. Refreshed when you open this window."
-                                   TextWrapping="Wrap" />
-                        <Border Padding="10"
-                                MaxHeight="280"
-                                Background="{StaticResource KyraAdvancedCardBackground}"
-                                BorderBrush="{StaticResource KyraAdvancedCardBorder}"
-                                BorderThickness="1"
-                                CornerRadius="8">
-                            <ScrollViewer VerticalScrollBarVisibility="Auto" Style="{StaticResource KyraAdvancedScrollViewerStyle}">
-                                <TextBlock FontFamily="Consolas"
-                                           FontSize="11"
-                                           Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                                           Text="{Binding KyraSanitizedContextPreviewText}"
-                                           TextWrapping="Wrap" />
-                            </ScrollViewer>
-                        </Border>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-            <TabItem Header="Privacy">
-                <StackPanel Margin="0,12,0,0">
-                    <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Privacy and Context Sharing" />
-                    <TextBlock Margin="0,8,0,0"
-                               FontSize="12"
-                               Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                               Text="Default: OFF. Keep this disabled unless you explicitly want sanitized context sent to online providers."
-                               TextWrapping="Wrap" />
-                    <CheckBox IsChecked="{Binding AllowOnlineSystemContextSharing, Mode=TwoWay}"
-                              Content="Allow Kyra to send summarized system context to online providers (default off)" />
-                    <TextBlock Margin="0,10,0,0"
-                               FontSize="12"
-                               Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                               Text="Beta testers do not need API keys. Online models are operator-configured; only enable context sharing if you understand what is sent (sanitized summaries, never raw logs or secrets)."
-                               TextWrapping="Wrap" />
-                    <TextBlock Margin="0,10,0,0"
-                               FontSize="12"
-                               Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                               Text="Free API providers may process your prompt on third-party servers. Keep this off unless you want Kyra to include sanitized PC specs."
-                               TextWrapping="Wrap" />
-                    <Border Margin="0,12,0,0"
-                            Padding="10"
-                            Background="{StaticResource KyraAdvancedCardBackground}"
-                            BorderBrush="{StaticResource KyraAdvancedCardBorder}"
-                            BorderThickness="1"
-                            CornerRadius="8">
-                        <StackPanel>
-                            <TextBlock FontWeight="SemiBold" Text="When sharing is enabled, Kyra sends a sanitized summary only." />
-                            <TextBlock Margin="0,6,0,0" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Never sent: serials, usernames, file paths, logs, API keys, passwords, product/license keys." TextWrapping="Wrap" />
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
-            </TabItem>
-            <TabItem Header="System Context">
-                <StackPanel Margin="0,12,0,0">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock FontWeight="SemiBold"
-                                   Foreground="{StaticResource KyraAdvancedHeaderBrush}"
-                                   Text="System context" />
-                        <Button Grid.Column="1"
-                                Width="190"
-                                Style="{StaticResource SecondaryButtonStyle}"
-                                Content="{Binding CopilotTechnicalContextButtonText}"
-                                Command="{Binding ToggleCopilotTechnicalContextCommand}" />
-                    </Grid>
-                    <CheckBox Margin="0,10,0,0"
-                              IsChecked="{Binding UseLatestSystemScanContext, Mode=TwoWay}"
-                              Content="Use latest system scan in Kyra context" />
-                    <TextBlock Margin="0,10,0,0"
-                               FontSize="12"
-                               Foreground="{StaticResource KyraAdvancedTextBrush}"
-                               Text="{Binding CopilotContextSummaryText}"
-                               TextWrapping="Wrap" />
-                    <Border Margin="0,12,0,0"
-                            Padding="8"
-                            Visibility="{Binding CopilotTechnicalContextVisibility}"
-                            Background="{StaticResource KyraAdvancedCardBackground}"
-                            BorderBrush="{StaticResource KyraAdvancedCardBorder}"
-                            BorderThickness="1"
-                            CornerRadius="8">
-                        <ScrollViewer MaxHeight="360"
-                                      VerticalScrollBarVisibility="Auto"
-                                      HorizontalScrollBarVisibility="Disabled"
-                                      Style="{StaticResource KyraAdvancedScrollViewerStyle}">
-                            <TextBlock FontFamily="Consolas"
-                                       FontSize="11"
-                                       Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                                       Text="{Binding CopilotContextText}"
-                                       TextWrapping="Wrap" />
-                        </ScrollViewer>
-                    </Border>
-                </StackPanel>
-            </TabItem>
-            <TabItem Header="Debug / Source">
-                <StackPanel Margin="0,12,0,0">
-                    <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Debug and Source Details" />
-                    <TextBlock Margin="0,8,0,0"
-                               FontSize="12"
-                               Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                               Text="Advanced diagnostics only. No raw keys are shown here."
-                               TextWrapping="Wrap" />
-                    <Border Margin="0,10,0,0"
-                            Padding="10"
-                            Background="{StaticResource KyraAdvancedCardBackground}"
-                            BorderBrush="{StaticResource KyraAdvancedCardBorder}"
-                            BorderThickness="1"
-                            CornerRadius="8">
-                        <StackPanel>
-                            <TextBlock FontSize="12" Text="{Binding CopilotActiveProviderText}" TextWrapping="Wrap" />
-                            <TextBlock Margin="0,6,0,0" FontSize="12" Text="{Binding CopilotOnlineStatusText}" TextWrapping="Wrap" />
-                            <TextBlock Margin="0,6,0,0" FontSize="12" Text="{Binding CopilotDiagnosticsSummaryText}" TextWrapping="Wrap" />
-                            <TextBlock Margin="0,6,0,0" FontSize="12" Text="{Binding CopilotLastProviderFailureText}" TextWrapping="Wrap" />
-                            <TextBlock Margin="0,6,0,0" FontSize="12" Text="{Binding CopilotRoutingPolicyText}" TextWrapping="Wrap" />
-                        </StackPanel>
-                    </Border>
-                    <TextBlock Margin="0,8,0,0"
-                               FontSize="12"
-                               Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                               Text="Routing mode, provider health, last response source, and fallback reasons are shown for troubleshooting."
-                               TextWrapping="Wrap" />
-                </StackPanel>
-            </TabItem>
-            <TabItem Header="Provider Status Help">
-                <ScrollViewer Style="{StaticResource KyraAdvancedScrollViewerStyle}" Margin="0,12,0,0">
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Operator environment setup (advanced)" />
-                        <TextBlock Margin="0,8,0,0" FontFamily="Consolas" Text="GEMINI_API_KEY" />
-                        <TextBlock FontFamily="Consolas" Text="GROQ_API_KEY" />
-                        <TextBlock FontFamily="Consolas" Text="OPENROUTER_API_KEY" />
-                        <TextBlock FontFamily="Consolas" Text="CEREBRAS_API_KEY" />
-                        <TextBlock FontFamily="Consolas" Text="MISTRAL_API_KEY" />
-                        <TextBlock FontFamily="Consolas" Text="GITHUB_MODELS_TOKEN" />
-                        <TextBlock FontFamily="Consolas" Text="CLOUDFLARE_API_KEY" />
-                        <TextBlock FontFamily="Consolas" Text="CLOUDFLARE_ACCOUNT_ID" />
-                        <TextBlock FontFamily="Consolas" Text="OPENAI_API_KEY" />
-                        <TextBlock FontFamily="Consolas" Text="FORGEREMS_OPENAI_API_KEY" />
-                        <TextBlock FontFamily="Consolas" Text="FORGEREMS_KYRA_GATEWAY_URL" />
-                        <TextBlock FontFamily="Consolas" Text="FORGEREMS_KYRA_GATEWAY_BETA_TOKEN" />
-                        <TextBlock FontFamily="Consolas" Text="FORGEREMS_CUSTOM_PROVIDER_API_KEY" />
-                        <TextBlock FontFamily="Consolas" Text="ANTHROPIC_API_KEY" />
 
-                        <TextBlock Margin="0,10,0,0"
-                                   Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                                   Text="See docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md for operator-only setup. Environment variable names are listed below — values are never shown here."
-                                   TextWrapping="Wrap" />
-                        <TextBlock Margin="0,8,0,0"
-                                   Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                                   Text="Anthropic and OpenAI providers may require billing/credits. Cloudflare requires both token and account ID."
-                                   TextWrapping="Wrap" />
-                        <TextBlock Margin="0,8,0,0"
-                                   Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                                   Text="After changing keys, click Refresh Provider Status."
-                                   TextWrapping="Wrap" />
-                        <Border Margin="0,10,0,0"
-                                Padding="12"
-                                Background="#B3161F2E"
-                                BorderBrush="#B3FFB86B"
-                                BorderThickness="1"
-                                CornerRadius="8">
-                            <TextBlock Foreground="{StaticResource KyraAdvancedTextBrush}"
-                                       FontWeight="SemiBold"
-                                       Text="Do not paste API keys into chat, logs, or support email. Operators configure keys via environment variables before launch."
-                                       TextWrapping="Wrap" />
-                        </Border>
-                        <TextBlock Margin="0,10,0,0"
-                                   Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                                   Text="{Binding CopilotProviderEnvironmentHelpText}"
-                                   TextWrapping="Wrap" />
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-                    </TabControl>
-                </Grid>
+                                <Button Content="Save Live Tool Settings" MinWidth="170" HorizontalAlignment="Left" Style="{StaticResource SecondaryButtonStyle}" Command="{Binding SaveKyraLiveToolsSettingsCommand}" />
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+
+                    <TabItem Header="Privacy &amp; Context">
+                        <ScrollViewer Style="{StaticResource KyraAdvancedScrollViewerStyle}" Padding="0,12,0,0">
+                            <StackPanel>
+                                <Border Style="{StaticResource KyraCardStyle}">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Privacy Controls" />
+                                        <CheckBox Margin="0,10,0,6" IsChecked="{Binding AllowOnlineSystemContextSharing, Mode=TwoWay}" Content="Send sanitized system summary to online AI" />
+                                        <CheckBox Margin="0,0,0,6" IsChecked="{Binding KyraPersistentMemoryEnabled, Mode=TwoWay}" Content="Include recent Kyra chat context" />
+                                        <CheckBox Margin="0,0,0,6" IsChecked="{Binding KyraUseSanitizedSystemIntelligenceContext, Mode=TwoWay}" Content="Include System Intelligence results" />
+                                        <CheckBox Margin="0,0,0,6" IsChecked="{Binding IncludeUsbToolkitStatusInKyraContext, Mode=TwoWay}" Content="Include USB/toolkit status" />
+                                        <CheckBox Margin="0,0,0,6" IsChecked="{Binding KyraRealtimeGatewayResearchEnabled, Mode=TwoWay}" Content="Use live research for current info" />
+                                        <TextBlock Margin="0,8,0,0" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="API keys are never sent to support email. Private documents are not automatically sent. Serial numbers, private paths, tokens, product keys, and raw logs should be redacted before sharing. Local scan facts are summarized before online use." TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Style="{StaticResource KyraCardStyle}">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Sanitized Context Preview" />
+                                        <ScrollViewer MaxHeight="280" VerticalScrollBarVisibility="Auto">
+                                            <TextBlock FontFamily="Consolas" FontSize="11" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="{Binding KyraSanitizedContextPreviewText}" TextWrapping="Wrap" />
+                                        </ScrollViewer>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+
+                    <TabItem Header="Local AI">
+                        <ScrollViewer Style="{StaticResource KyraAdvancedScrollViewerStyle}" Padding="0,12,0,0">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Local AI and Offline Fallback" />
+                                <TextBlock Margin="0,6,0,12" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Ollama, LM Studio, and Offline Local Kyra do not require a cloud API key. Offline fallback remains the safety net." TextWrapping="Wrap" />
+                                <ItemsControl ItemsSource="{Binding LocalAiProviderSettings}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Style="{StaticResource KyraCardStyle}">
+                                                <StackPanel>
+                                                    <TextBlock FontWeight="Bold" FontSize="14" Text="{Binding DisplayName}" TextWrapping="Wrap" />
+                                                    <TextBlock Margin="0,4,0,0" FontSize="12" Foreground="{StaticResource KyraAdvancedHeaderBrush}" Text="{Binding ProviderStatusLabel}" TextWrapping="Wrap" />
+                                                    <UniformGrid Margin="0,8,0,0" Columns="2">
+                                                        <StackPanel Margin="0,0,10,0">
+                                                            <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Endpoint" />
+                                                            <TextBox Text="{Binding BaseUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                                        </StackPanel>
+                                                        <StackPanel>
+                                                            <TextBlock FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Model" />
+                                                            <TextBox Text="{Binding ModelName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                                            <TextBlock Margin="0,4,0,0" FontSize="10.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Enter the model name from your provider dashboard." TextWrapping="Wrap" />
+                                                        </StackPanel>
+                                                    </UniformGrid>
+                                                    <WrapPanel Margin="0,8,0,0">
+                                                        <CheckBox Margin="0,7,12,8" Content="Enabled" IsChecked="{Binding IsEnabled, Mode=TwoWay}" />
+                                                        <Button Content="Test connection" Style="{StaticResource SecondaryButtonStyle}" Command="{Binding DataContext.TestProviderConnectionCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" />
+                                                    </WrapPanel>
+                                                    <TextBlock FontSize="11" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="No cloud API key required." TextWrapping="Wrap" />
+                                                    <TextBlock FontSize="11" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="{Binding LastTestResult}" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+
+                    <TabItem Header="Diagnostics">
+                        <ScrollViewer Style="{StaticResource KyraAdvancedScrollViewerStyle}" Padding="0,12,0,0">
+                            <StackPanel>
+                                <Border Style="{StaticResource KyraCardStyle}">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Friendly Diagnostics" />
+                                        <TextBlock Margin="0,8,0,0" Text="{Binding CopilotActiveProviderText}" TextWrapping="Wrap" />
+                                        <TextBlock Margin="0,6,0,0" Text="{Binding CopilotOnlineStatusText}" TextWrapping="Wrap" />
+                                        <TextBlock Margin="0,6,0,0" Text="{Binding CopilotLastProviderFailureText}" TextWrapping="Wrap" />
+                                        <TextBlock Margin="0,6,0,0" Text="{Binding KyraGatewayProviderStatusSummary}" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Expander Header="Show technical diagnostics" IsExpanded="False">
+                                    <Border Style="{StaticResource KyraCardStyle}">
+                                        <StackPanel>
+                                            <TextBlock FontSize="12" Text="{Binding CopilotDiagnosticsSummaryText}" TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,6,0,0" FontSize="12" Text="{Binding CopilotRoutingPolicyText}" TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,6,0,0" FontSize="12" Text="{Binding KyraProviderHubConfigHealthSummary}" TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,6,0,0" FontSize="11" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Technical diagnostics are sanitized: no raw API keys, tokens, serials, private paths, or full exception chains." TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Border>
+                                </Expander>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </TabItem>
+                </TabControl>
             </Border>
 
-            <Border Grid.Row="1"
+            <Border Grid.Row="2"
                     Margin="0,12,0,0"
                     Padding="12,10"
                     Background="#B30A111C"
@@ -775,21 +465,16 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <TextBlock VerticalAlignment="Center"
                                FontSize="11.5"
                                Foreground="{StaticResource KyraAdvancedMutedTextBrush}"
-                               Text="Tip: Advanced settings affect how Kyra chooses providers and protects privacy."
+                               Text="Keys are hidden. Diagnostics are sanitized. Offline Local Kyra remains available."
                                TextWrapping="Wrap" />
-                    <Button Grid.Column="1"
-                            Margin="12,0,8,0"
-                            Style="{StaticResource FooterButtonStyle}"
-                            Content="Copy diagnostics"
-                            Command="{Binding CopyLogsCommand}" />
-                    <Button Grid.Column="2"
-                            Style="{StaticResource FooterButtonStyle}"
-                            Content="Close"
-                            Click="OnCloseClick" />
+                    <Button Grid.Column="1" Style="{StaticResource SecondaryButtonStyle}" Content="Refresh Status" Command="{Binding RefreshCopilotProviderStatusCommand}" />
+                    <Button Grid.Column="2" Style="{StaticResource SecondaryButtonStyle}" Content="Copy Diagnostics" Command="{Binding CopyDiagnosticsCommandSummaryCommand}" />
+                    <Button Grid.Column="3" Style="{StaticResource SecondaryButtonStyle}" Content="Close" Click="OnCloseClick" />
                 </Grid>
             </Border>
         </Grid>

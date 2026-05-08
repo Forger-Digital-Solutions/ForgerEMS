@@ -1,4 +1,4 @@
-# ForgerEMS beta tester quickstart (Public Preview v1.2.0-preview.1)
+# ForgerEMS beta tester quickstart (Public Preview v1.2.1-preview.1)
 
 **Forger Engineering Maintenance Suite** — built by **Forger Digital Solutions**.
 
@@ -8,7 +8,7 @@
 
 ## 1. Download the ZIP from GitHub Releases
 
-Get **`ForgerEMS-v1.2.0-preview.1.zip`** or **`ForgerEMS-Beta-v1.2.0-preview.1.zip`** when published (same bundle style; pick one). Optionally verify **`CHECKSUMS.sha256`** from the same release. Older `v1.1.12-rc.*` assets remain on prior GitHub tags for history only.
+Get **`ForgerEMS-v1.2.1-preview.1.zip`** or **`ForgerEMS-Beta-v1.2.1-preview.1.zip`** when published (same bundle style; pick one). Optionally verify **`CHECKSUMS.sha256`** from the same release. Older `v1.1.12-rc.*` assets remain on prior GitHub tags for history only.
 
 If the browser download behaves oddly, read **[DOWNLOAD_TROUBLESHOOTING.md](DOWNLOAD_TROUBLESHOOTING.md)** and **[FIRST_TESTER_DOWNLOAD_FLOW.md](FIRST_TESTER_DOWNLOAD_FLOW.md)**.
 
@@ -40,25 +40,31 @@ Use **Run Scan** (System Intelligence). Wait for completion.
 
 ---
 
-## 6. Select USB
+## 6. Check Visual Effects if the app feels slow
+
+For public preview, **Settings → Visual Effects** defaults to **Static / Low Power** for responsiveness. Use **Animated** only if you want the motion, or **Off / Plain dark** for slower machines, remote sessions, or battery-saving testing.
+
+---
+
+## 7. Select USB
 
 Choose a **large removable data** partition (not tiny boot-only slices unless a flow explicitly asks for them).
 
 ---
 
-## 7. Run USB benchmark
+## 8. Run USB benchmark
 
 Use **Run USB Benchmark**. Confirm speeds update or show a clear “not measured” / cancelled state.
 
 ---
 
-## 8. Try USB mapping
+## 9. Try USB mapping
 
 **Start USB Mapping** → **Capture Current Port** → move the device → **Detect Port Change** → label → **Save Port Label**.
 
 ---
 
-## 9. Ask Kyra
+## 10. Ask Kyra
 
 Examples:
 
@@ -75,24 +81,28 @@ Examples:
 
 **Kyra Advanced → Realtime Gateway** explains secure research routing: provider keys stay on the ForgerEMS Worker; the app only needs gateway URL + beta token. Use **Check gateway status** for coarse server-side readiness (no secrets returned).
 
+Normal Kyra replies use compact privacy/source footers. Detailed provider routing remains in Live Logs, Full Logs, Diagnostics, and support bundles for beta troubleshooting.
+
 ---
 
-## 10. Check Kyra Intelligence Network settings
+## 11. Check Kyra Intelligence Network settings
 
 Open **Settings → Kyra Intelligence**.
 
-- **Local repair memory** lets Kyra remember sanitized repair notes and diagnostic patterns on this PC.
-- **Anonymous community intelligence sharing** is off by default.
-- **View what would be shared** shows only sanitized preview fields.
-- **Export Kyra memory** exports sanitized local Kyra memory.
-- **Delete Kyra memory** deletes local Kyra memory after confirmation.
+- **Local Kyra Memory** stores sanitized repair notes on this PC.
+- **Gateway Research** allows realtime public-info lookup when configured and needed.
+- **Use System Intelligence Context** lets Kyra use local scan summaries.
+- **Community Intelligence Sharing** is preview/off by default.
+- **View Shared Preview** shows only sanitized preview fields.
+- **Export Memory** exports sanitized local Kyra memory.
+- **Delete Memory** deletes local Kyra memory after confirmation.
 
 ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the user explicitly enables a future sharing option. Realtime Kyra Gateway sends only sanitized request context needed to answer current-data questions. Provider API keys are stored server-side and are not included in the desktop app. Anonymous Community Intelligence sharing is optional and off by default.
 
 ---
 
-## 11. Report issues with safe logs only
+## 12. Report issues with safe logs only
 
 Use [BETA_ISSUE_REPORT_TEMPLATE.md](BETA_ISSUE_REPORT_TEMPLATE.md). Attach screenshots and **redacted** log excerpts. **Do not** include passwords, API keys, product keys, serial numbers, or private documents.
 
-Human testing checklists (prior builds still useful): [BETA_HUMAN_TESTING_CHECKLIST_v1.1.11.md](BETA_HUMAN_TESTING_CHECKLIST_v1.1.11.md).
+Manual QA checklist for this build: [PUBLIC_PREVIEW_MANUAL_QA_v1.2.1-preview.1.md](PUBLIC_PREVIEW_MANUAL_QA_v1.2.1-preview.1.md).

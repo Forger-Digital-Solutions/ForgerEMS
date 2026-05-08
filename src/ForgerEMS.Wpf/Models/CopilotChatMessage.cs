@@ -28,6 +28,9 @@ public sealed partial class CopilotChatMessage : INotifyPropertyChanged
 
     public string MetadataDetails { get; init; } = string.Empty;
 
+    public bool HasMetadataSummary =>
+        !string.IsNullOrWhiteSpace(MetadataSummary);
+
     public bool HasMetadataDetails =>
         !string.IsNullOrWhiteSpace(MetadataSummary) || !string.IsNullOrWhiteSpace(MetadataDetails);
 

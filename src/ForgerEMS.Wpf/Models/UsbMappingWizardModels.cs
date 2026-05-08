@@ -63,7 +63,7 @@ public sealed class UsbSavedPortLabelOption
 
     public string VerificationDisplay { get; init; } = "Needs confirmation";
 
-    public string ConfirmButtonText => "Confirm";
+    public static string ConfirmButtonText => "Confirm";
 }
 
 public sealed class UsbMappingWizardResult

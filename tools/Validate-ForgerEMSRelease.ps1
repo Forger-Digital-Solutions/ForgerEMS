@@ -18,7 +18,7 @@
 #>
 param(
     [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot),
-    [string]$Version = "1.2.0-preview.1",
+    [string]$Version = "1.2.1-preview.1",
     [string]$ReleaseRoot = ""
 )
 
@@ -101,8 +101,8 @@ foreach ($g in $pg) {
 if ($csVer -eq $Version) { Add-Row -Level "PASS" -Id "csproj-Version" -Message "<Version> is $Version" }
 else { Add-Row -Level "FAIL" -Id "csproj-Version" -Message "Expected <Version>$Version</Version>, got '$csVer'" }
 
-if ($asmVer -eq "1.2.0.0") { Add-Row -Level "PASS" -Id "csproj-AssemblyVersion" -Message "AssemblyVersion 1.2.0.0" }
-else { Add-Row -Level "FAIL" -Id "csproj-AssemblyVersion" -Message "Expected 1.2.0.0, got '$asmVer'" }
+if ($asmVer -eq "1.2.1.0") { Add-Row -Level "PASS" -Id "csproj-AssemblyVersion" -Message "AssemblyVersion 1.2.1.0" }
+else { Add-Row -Level "FAIL" -Id "csproj-AssemblyVersion" -Message "Expected 1.2.1.0, got '$asmVer'" }
 
 if ($infoVer -eq $Version) { Add-Row -Level "PASS" -Id "csproj-InformationalVersion" -Message "InformationalVersion matches" }
 else { Add-Row -Level "FAIL" -Id "csproj-InformationalVersion" -Message "Expected $Version, got '$infoVer'" }

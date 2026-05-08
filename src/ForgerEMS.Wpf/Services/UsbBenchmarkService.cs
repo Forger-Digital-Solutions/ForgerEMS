@@ -123,7 +123,12 @@ public sealed class UsbBenchmarkResult
 
     /// <summary>History disk cache and Intelligence sync: successful completed runs only.</summary>
     public bool ShouldPersistSuccessfulHistory =>
-        GetEffectiveResultKind() == UsbBenchmarkResultKind.Completed && Succeeded && WriteSpeedMBps > 0 && ReadSpeedMBps > 0;
+        GetEffectiveResultKind() == UsbBenchmarkResultKind.Completed &&
+        Succeeded &&
+        WriteSpeedMBps > 0 &&
+        ReadSpeedMBps > 0 &&
+        !ReadLikelyCached &&
+        !ReadIsEstimate;
 }
 
 public sealed class UsbBenchmarkService : IUsbBenchmarkService

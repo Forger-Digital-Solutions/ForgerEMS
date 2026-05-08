@@ -51,6 +51,11 @@ function Resolve-ManifestPath {
 }
 
 function Get-LocalReportRoot {
+    $override = [Environment]::GetEnvironmentVariable("FORGEREMS_TOOLKIT_HEALTH_REPORT_ROOT", "Process")
+    if (-not [string]::IsNullOrWhiteSpace($override)) {
+        return $override
+    }
+
     $localAppData = [Environment]::GetFolderPath("LocalApplicationData")
     if ([string]::IsNullOrWhiteSpace($localAppData)) {
         $localAppData = [IO.Path]::GetTempPath()
@@ -384,6 +389,100 @@ function Find-AlternateItemPath {
     return ""
 }
 
+function Get-Sha256FromSourceUrl {
+    param(
+        [string]$ShaUrl
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ShaUrl)) {
+        return ""
+    }
+
+    if (Test-Path -LiteralPath $ShaUrl -PathType Leaf) {
+        try {
+            $content = Get-Content -LiteralPath $ShaUrl -Raw -ErrorAction Stop
+            $match = [regex]::Match([string]$content, '([a-fA-F0-9]{64})')
+            if ($match.Success) {
+                return $match.Groups[1].Value.ToLowerInvariant()
+            }
+        }
+        catch {
+            Write-ToolkitLog ("Checksum source file read failed: {0}" -f $_.Exception.Message) "WARN"
+        }
+
+        return ""
+    }
+
+    try {
+        $uri = [Uri]$ShaUrl
+        if ($uri.Scheme -notin @("http", "https")) {
+            return ""
+        }
+
+        $response = Invoke-WebRequest -Uri $ShaUrl -TimeoutSec 45 -UseBasicParsing -ErrorAction Stop
+        $content = [string]$response.Content
+        $match = [regex]::Match($content, '([a-fA-F0-9]{64})')
+        if ($match.Success) {
+            return $match.Groups[1].Value.ToLowerInvariant()
+        }
+    }
+    catch {
+        Write-ToolkitLog ("Checksum source fetch failed: {0}" -f $_.Exception.Message) "WARN"
+    }
+
+    return ""
+}
+
+function Get-ManagedCoverageToken {
+    param($Report)
+
+    $raw = [string]$Report.tool
+    if ([string]::IsNullOrWhiteSpace($raw)) {
+        $raw = [string]$Report.destination
+    }
+
+    $raw = $raw -replace '(?i)\bdownload page\b', ''
+    $raw = $raw -replace '(?i)\bDOWNLOAD\s*-\s*', ''
+    $raw = $raw -replace '\.url$', ''
+    $token = ($raw.ToLowerInvariant() -replace '[^a-z0-9]+', '')
+    return $token
+}
+
+function Set-ManualShortcutCoverageFromManagedDownloads {
+    param([object[]]$Reports)
+
+    $installedManaged = @($Reports | Where-Object {
+        $_.requirement -eq "required" -and
+        $_.status -eq "INSTALLED" -and
+        $_.checksumStatus -eq "Match"
+    })
+
+    foreach ($manual in @($Reports | Where-Object { $_.status -eq "MANUAL_REQUIRED" -and $_.type -eq "manualDownload" })) {
+        $manualToken = Get-ManagedCoverageToken -Report $manual
+        if ([string]::IsNullOrWhiteSpace($manualToken)) {
+            continue
+        }
+
+        $coveredBy = $installedManaged | Where-Object {
+            $candidateToken = Get-ManagedCoverageToken -Report $_
+            $_.category -eq $manual.category -and
+            -not [string]::IsNullOrWhiteSpace($candidateToken) -and
+            ($candidateToken.Contains($manualToken) -or $manualToken.Contains($candidateToken))
+        } | Select-Object -First 1
+
+        if ($null -eq $coveredBy) {
+            continue
+        }
+
+        $manual.status = "COVERED_BY_MANAGED"
+        $manual.verification = "Covered by managed download."
+        $manual.recommendation = "Shortcut suppressed because managed item is installed. No action needed."
+        $manual.checksumStatus = "Covered"
+        $manual.finalClassification = "COVERED_BY_MANAGED"
+        $manual.classificationReason = "Manual/info shortcut is covered by installed verified managed item: $($coveredBy.tool)."
+    }
+}
+
 function Get-ToolkitItemStatus {
     param(
         [Parameter(Mandatory)]$Item,
@@ -394,6 +493,7 @@ function Get-ToolkitItemStatus {
     $type = [string]$Item.type
     $name = [string]$Item.name
     $expectedHash = [string]$Item.sha256
+    $shaUrl = [string]$Item.sha256Url
     $url = [string]$Item.url
     $classificationInfo = Get-ItemClassification -Item $Item
     $classification = [string]$classificationInfo.Name
@@ -474,6 +574,14 @@ function Get-ToolkitItemStatus {
         $resolvedProbe = Get-ToolkitFileProbe -LiteralPath $resolvedPath
         if ($resolvedProbe.Exists -and $resolvedProbe.SizeBytes -gt 0) {
             $finalProbe = $resolvedProbe
+            if ([string]::IsNullOrWhiteSpace($expectedHash) -and -not [string]::IsNullOrWhiteSpace($shaUrl)) {
+                Write-ToolkitLog ("Checksum source URL available: {0}" -f $shaUrl) "INFO"
+                $expectedHash = Get-Sha256FromSourceUrl -ShaUrl $shaUrl
+                if (-not [string]::IsNullOrWhiteSpace($expectedHash)) {
+                    Write-ToolkitLog ("Resolved SHA256 from sha256Url: {0}" -f $expectedHash) "OK"
+                }
+            }
+
             if (-not [string]::IsNullOrWhiteSpace($expectedHash)) {
                 try {
                     $actualHash = Get-ForgerSha256 -LiteralPath $resolvedPath
@@ -501,9 +609,15 @@ function Get-ToolkitItemStatus {
             }
             else {
                 $status = "VERIFICATION_PENDING"
-                $verification = "File present; verification pending (manifest has no pinned SHA256)."
+                if (-not [string]::IsNullOrWhiteSpace($shaUrl)) {
+                    $verification = "File present; offline checksum pending (sha256Url unavailable or unresolved)."
+                    $recommendation = "File is present. Re-run Revalidate when network is available to verify checksum."
+                }
+                else {
+                    $verification = "File present; checksum not verified (manifest has no pinned SHA256)."
+                    $recommendation = "File is present. Optional integrity verification may be done manually if required."
+                }
                 $checksumStatus = "Pending"
-                $recommendation = "File is present. Optional integrity verification may be done manually if required."
             }
         }
         elseif (-not [string]::IsNullOrWhiteSpace($fallbackPath) -and (Test-Path -LiteralPath $fallbackPath -PathType Leaf)) {
@@ -588,8 +702,11 @@ foreach ($item in $items) {
     $toolReports += Get-ToolkitItemStatus -Item $item -ResolvedTargetRoot $resolvedTargetRoot
 }
 
+Set-ManualShortcutCoverageFromManagedDownloads -Reports $toolReports
+
 $requiredManagedMissing = @($toolReports | Where-Object { $_.requirement -eq "required" -and $_.status -eq "MISSING_REQUIRED" })
 $manualActionItems = @($toolReports | Where-Object { $_.status -in @("MANUAL_REQUIRED", "PLACEHOLDER") })
+$coveredByManagedItems = @($toolReports | Where-Object { $_.status -eq "COVERED_BY_MANAGED" })
 $hashFailureItems = @($toolReports | Where-Object { $_.status -eq "HASH_FAILED" })
 $verificationPendingItems = @($toolReports | Where-Object { $_.status -eq "VERIFICATION_PENDING" })
 $summary = [ordered]@{
@@ -601,6 +718,7 @@ $summary = [ordered]@{
     verificationPending = $verificationPendingItems.Count
     manual = @($toolReports | Where-Object { $_.status -eq "MANUAL_REQUIRED" }).Count
     placeholder = @($toolReports | Where-Object { $_.status -eq "PLACEHOLDER" }).Count
+    coveredByManaged = $coveredByManagedItems.Count
     skipped = @($toolReports | Where-Object { $_.status -eq "SKIPPED" }).Count
     unknown = @($toolReports | Where-Object { $_.status -eq "UNKNOWN" }).Count
     total = $toolReports.Count
@@ -618,6 +736,7 @@ else {
 }
 
 $manualExplanation = "Manual items are download pages, licensed/gated tools, or informational shortcuts that ForgerEMS intentionally does not auto-download. They do not count as required managed-tool failures."
+$coveredExplanation = "Covered/suppressed shortcuts are manual/info shortcuts intentionally omitted because the matching managed download is installed and verified."
 
 $localReportRoot = Get-LocalReportRoot
 New-Item -ItemType Directory -Path $localReportRoot -Force | Out-Null
@@ -648,9 +767,11 @@ $report = [ordered]@{
     manifestCoreVersion = [string]$manifest.coreVersion
     healthVerdict = $healthVerdict
     manualItemsExplanation = $manualExplanation
+    coveredShortcutsExplanation = $coveredExplanation
     summary = $summary
     requiredManagedMissing = @($requiredManagedMissing | Select-Object tool, category, expectedPath, checkedExactPath, checkedFallbackPaths, matchedPath, classificationReason, verification, recommendation)
     manualActionList = @($manualActionItems | Select-Object tool, category, status, expectedPath, recommendation)
+    coveredByManaged = @($coveredByManagedItems | Select-Object tool, category, status, expectedPath, verification, recommendation, classificationReason)
     hashFailures = @($hashFailureItems | Select-Object tool, category, expectedPath, sha256Expected, sha256Actual, recommendation)
     verificationPending = @($verificationPendingItems | Select-Object tool, category, expectedPath, matchedPath, verification, recommendation)
     items = $toolReports
@@ -678,6 +799,7 @@ $markdown = New-Object System.Collections.Generic.List[string]
 [void]$markdown.Add(("Health verdict: **{0}**" -f $healthVerdict))
 [void]$markdown.Add("")
 [void]$markdown.Add($manualExplanation)
+[void]$markdown.Add($coveredExplanation)
 [void]$markdown.Add("")
 [void]$markdown.Add("## Summary")
 [void]$markdown.Add(("- Installed: {0}" -f $summary.installed))
@@ -687,6 +809,7 @@ $markdown = New-Object System.Collections.Generic.List[string]
 [void]$markdown.Add(("- Verification pending: {0}" -f $summary.verificationPending))
 [void]$markdown.Add(("- Manual: {0}" -f $summary.manual))
 [void]$markdown.Add(("- Placeholder: {0}" -f $summary.placeholder))
+[void]$markdown.Add(("- Covered by managed item: {0}" -f $summary.coveredByManaged))
 [void]$markdown.Add(("- Skipped: {0}" -f $summary.skipped))
 [void]$markdown.Add(("- Unknown: {0}" -f $summary.unknown))
 [void]$markdown.Add("")
@@ -707,6 +830,16 @@ if ($manualActionItems.Count -eq 0) {
 else {
     foreach ($item in $manualActionItems) {
         [void]$markdown.Add(("- {0} ({1}) - {2}" -f $item.tool, $item.status, $item.recommendation))
+    }
+}
+[void]$markdown.Add("")
+[void]$markdown.Add("## Covered / Suppressed Shortcuts")
+if ($coveredByManagedItems.Count -eq 0) {
+    [void]$markdown.Add("- None.")
+}
+else {
+    foreach ($item in $coveredByManagedItems) {
+        [void]$markdown.Add(("- {0} ({1}) - {2}" -f $item.tool, $item.category, $item.recommendation))
     }
 }
 [void]$markdown.Add("")
@@ -749,7 +882,7 @@ if ($targetReportsWritten) {
     $markdown | Set-Content -LiteralPath $targetMarkdownPath -Encoding UTF8
 }
 
-Write-ToolkitLog ("Toolkit health scan complete. Verdict={0}; Installed={1}, MissingRequired={2}, Updates={3}, Failed={4}, Pending={5}, Manual={6}, Placeholder={7}, Skipped={8}" -f $healthVerdict, $summary.installed, $summary.missing, $summary.updates, $summary.failed, $summary.verificationPending, $summary.manual, $summary.placeholder, $summary.skipped) "OK"
+Write-ToolkitLog ("Toolkit health scan complete. Verdict={0}; Installed={1}, MissingRequired={2}, Updates={3}, Failed={4}, Pending={5}, Manual={6}, Placeholder={7}, Covered={8}, Skipped={9}" -f $healthVerdict, $summary.installed, $summary.missing, $summary.updates, $summary.failed, $summary.verificationPending, $summary.manual, $summary.placeholder, $summary.coveredByManaged, $summary.skipped) "OK"
 Write-ToolkitLog ("Local JSON report: {0}" -f $localJsonPath) "OK"
 Write-ToolkitLog ("Local Markdown report: {0}" -f $localMarkdownPath) "OK"
 if ($targetReportsWritten) {

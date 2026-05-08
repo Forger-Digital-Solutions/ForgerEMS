@@ -1,6 +1,6 @@
 # Kickstarter draft — ForgerEMS (Public Preview)
 
-**Honest positioning:** v1.2.0 is a **Public Preview** Windows desktop app — not a finished shrink-wrapped retail SKU. USB, diagnostics, and AI-assisted guidance involve real hardware risk; we lead with safety and offline-first design. **Marketplace / automated resale valuation** is **planned or stubbed**, not a shipped consumer product inside the app.
+**Honest positioning:** v1.2.1 is a **Public Preview** Windows desktop app — not a finished shrink-wrapped retail SKU. USB, diagnostics, and AI-assisted guidance involve real hardware risk; we lead with safety and offline-first design. **Marketplace / automated resale valuation** is **planned or stubbed**, not a shipped consumer product inside the app.
 
 ## Title ideas
 

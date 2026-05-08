@@ -78,6 +78,8 @@ Kyra can use offline/local answers by default. If an operator enables ForgerEMS 
 
 ForgerEMS Beta Gateway tokens are revocable access tokens, not provider API keys. They should be limited, rotatable, and replaceable during beta without shipping provider keys to testers.
 
+Current prices, availability, latest versions, weather, news, stocks, crypto, and similar realtime facts require a configured live provider/tool. Offline/local Kyra may provide local observations and verification steps, but must not present invented realtime data as fact.
+
 ---
 
 ## Kyra Intelligence Network
@@ -86,7 +88,7 @@ Kyra Intelligence Network is a beta foundation for **Local-first repair memory +
 
 - Local Kyra Memory stores sanitized machine-scoped repair notes on the user's PC.
 - Anonymous community intelligence sharing is optional, off by default, and requires explicit opt-in.
-- This phase does not include a live community upload endpoint; the community client is disabled/no-op and preview/export output must stay sanitized.
+- Community sharing is not active in this release. The setting is visible for preview only; no community data leaves the device in this build.
 - Users can keep Kyra local-only, opt out in Settings, export Kyra memory, and delete Kyra memory.
 
 ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the user explicitly enables a future sharing option. Realtime Kyra Gateway sends only sanitized request context needed to answer current-data questions. Provider API keys are stored server-side and are not included in the desktop app. Anonymous Community Intelligence sharing is optional and off by default.

@@ -99,6 +99,9 @@ public sealed class KyraGatewayResearchResponseDto
     [JsonPropertyName("confidence")]
     public string? Confidence { get; init; }
 
+    [JsonPropertyName("results")]
+    public IReadOnlyList<KyraGatewayResearchResultDto> Results { get; init; } = Array.Empty<KyraGatewayResearchResultDto>();
+
     [JsonPropertyName("errorCode")]
     public string? ErrorCode { get; init; }
 
@@ -107,6 +110,30 @@ public sealed class KyraGatewayResearchResponseDto
 
     [JsonPropertyName("retryAfterSeconds")]
     public int? RetryAfterSeconds { get; init; }
+}
+
+public sealed class KyraGatewayResearchResultDto
+{
+    [JsonPropertyName("title")]
+    public string Title { get; init; } = string.Empty;
+
+    [JsonPropertyName("url")]
+    public string Url { get; init; } = string.Empty;
+
+    [JsonPropertyName("sourceName")]
+    public string SourceName { get; init; } = string.Empty;
+
+    [JsonPropertyName("snippet")]
+    public string Snippet { get; init; } = string.Empty;
+
+    [JsonPropertyName("sourceType")]
+    public string SourceType { get; init; } = "Unknown";
+
+    [JsonPropertyName("confidence")]
+    public string Confidence { get; init; } = "unknown";
+
+    [JsonPropertyName("timestampUtc")]
+    public string TimestampUtc { get; init; } = string.Empty;
 }
 
 public sealed class KyraGatewayStatusResponseDto

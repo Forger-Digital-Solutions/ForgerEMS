@@ -184,6 +184,71 @@ public sealed class KyraHardwarePersonalityAndFactsTests
     }
 
     [Fact]
+    public void KyraRealtimeResearchClassifier_ReplacementBatteryBuy_UsesHardwarePartLookup()
+    {
+        using var env = KyraTestEnvGate.Open("https://unit.test/gateway/", "unit-test-beta-token");
+        var settings = new CopilotSettings
+        {
+            KyraRealtimeGatewayEnabled = true,
+            KyraRealtimeGatewayResearchEnabled = true,
+            KyraRealtimeGatewayResearchConsent = true
+        };
+
+        var use = KyraRealtimeResearchClassifier.ShouldUseRealtimeGateway(
+            "what replacement battery should I buy for my Dell Precision 5540",
+            settings,
+            out var intent);
+
+        Assert.True(use);
+        Assert.Equal("hardware_part_lookup", intent);
+    }
+
+    [Fact]
+    public void KyraRealtimeResearchClassifier_BatteryWear_StaysLocalFirst()
+    {
+        using var env = KyraTestEnvGate.Open("https://unit.test/gateway/", "unit-test-beta-token");
+        var settings = new CopilotSettings
+        {
+            KyraRealtimeGatewayEnabled = true,
+            KyraRealtimeGatewayResearchEnabled = true,
+            KyraRealtimeGatewayResearchConsent = true
+        };
+
+        var use = KyraRealtimeResearchClassifier.ShouldUseRealtimeGateway(
+            "what is my battery wear",
+            settings,
+            out _);
+
+        Assert.False(use);
+    }
+
+    [Fact]
+    public void KyraRealtimeResearchClassifier_CurrentBatteryPrice_RequiresResearch()
+    {
+        Assert.True(KyraRealtimeResearchClassifier.TryClassifyRealtimeNeed(
+            "current price of replacement battery",
+            out var intent));
+        Assert.Equal("hardware_part_lookup", intent);
+    }
+
+    [Fact]
+    public void KyraRealtimeResearchClassifier_ServiceManualSearch_RequiresResearch()
+    {
+        Assert.True(KyraRealtimeResearchClassifier.TryClassifyRealtimeNeed(
+            "search for the official service manual for this model",
+            out var intent));
+        Assert.NotEqual("chat", intent);
+    }
+
+    [Fact]
+    public void KyraRealtimeResearchClassifier_LocalWarning_StaysLocalFirst()
+    {
+        Assert.False(KyraRealtimeResearchClassifier.TryClassifyRealtimeNeed(
+            "explain this local warning",
+            out _));
+    }
+
+    [Fact]
     public void KyraRealtimeResearchClassifier_NvMeQuestion_StaysLocalFirst()
     {
         using var env = KyraTestEnvGate.Open("https://unit.test/gateway/", "unit-test-beta-token");
@@ -242,30 +307,62 @@ public sealed class KyraHardwarePersonalityAndFactsTests
         }
     }
 
+    [Fact]
+    public void KyraResearchResultFormatter_OfficialSourcesOutrankMarketplaceCandidates()
+    {
+        var ranked = KyraResearchResultFormatter.RankForHardwareCompatibility(
+        [
+            new KyraGatewayResearchResultDto
+            {
+                Title = "Seller compatible battery listing",
+                SourceName = "Example Marketplace",
+                SourceType = "Marketplace",
+                Confidence = "high"
+            },
+            new KyraGatewayResearchResultDto
+            {
+                Title = "Dell Precision 5540 service manual",
+                SourceName = "Dell Support",
+                SourceType = "Official",
+                Confidence = "medium"
+            }
+        ]);
+
+        Assert.Equal("Official", ranked[0].SourceType);
+        var summary = KyraResearchResultFormatter.FormatEvidenceSummary(ranked);
+        Assert.Contains("Official: Dell Precision 5540 service manual", summary, StringComparison.Ordinal);
+        Assert.Contains("candidate / verify label", summary, StringComparison.OrdinalIgnoreCase);
+    }
+
     private sealed class KyraTestEnvGate : IDisposable
     {
         private readonly string? _prevUrl;
         private readonly string? _prevTok;
+        private readonly string? _prevEnabled;
 
-        private KyraTestEnvGate(string? prevUrl, string? prevTok)
+        private KyraTestEnvGate(string? prevUrl, string? prevTok, string? prevEnabled)
         {
             _prevUrl = prevUrl;
             _prevTok = prevTok;
+            _prevEnabled = prevEnabled;
         }
 
-        public static IDisposable Open(string url, string tok)
+        public static KyraTestEnvGate Open(string url, string tok)
         {
             var prevUrl = Environment.GetEnvironmentVariable("FORGEREMS_KYRA_GATEWAY_URL");
             var prevTok = Environment.GetEnvironmentVariable("FORGEREMS_KYRA_GATEWAY_BETA_TOKEN");
+            var prevEnabled = Environment.GetEnvironmentVariable("FORGEREMS_KYRA_GATEWAY_ENABLED");
             Environment.SetEnvironmentVariable("FORGEREMS_KYRA_GATEWAY_URL", url);
             Environment.SetEnvironmentVariable("FORGEREMS_KYRA_GATEWAY_BETA_TOKEN", tok);
-            return new KyraTestEnvGate(prevUrl, prevTok);
+            Environment.SetEnvironmentVariable("FORGEREMS_KYRA_GATEWAY_ENABLED", "true");
+            return new KyraTestEnvGate(prevUrl, prevTok, prevEnabled);
         }
 
         public void Dispose()
         {
             Environment.SetEnvironmentVariable("FORGEREMS_KYRA_GATEWAY_URL", _prevUrl);
             Environment.SetEnvironmentVariable("FORGEREMS_KYRA_GATEWAY_BETA_TOKEN", _prevTok);
+            Environment.SetEnvironmentVariable("FORGEREMS_KYRA_GATEWAY_ENABLED", _prevEnabled);
         }
     }
 }

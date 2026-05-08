@@ -164,6 +164,14 @@ public static class KyraProviderConfigResolver
                 : KyraProviderCredentialState.FromSession;
         }
 
+        var encrypted = KyraProviderCredentialStore.Default.TryGetSecret(providerId);
+        if (!string.IsNullOrWhiteSpace(encrypted))
+        {
+            return IsPlaceholderSecretOrValue(encrypted)
+                ? KyraProviderCredentialState.Placeholder
+                : KyraProviderCredentialState.FromSettings;
+        }
+
         foreach (var name in ExpandCredentialNames(providerId, apiKeyEnvironmentVariable, baseUrl))
         {
             var state = ResolveNamedCredential(name);
@@ -182,6 +190,12 @@ public static class KyraProviderConfigResolver
         if (!IsMissingOrPlaceholder(session))
         {
             return session.Trim();
+        }
+
+        var encrypted = KyraProviderCredentialStore.Default.TryGetSecret(providerId);
+        if (!IsMissingOrPlaceholder(encrypted))
+        {
+            return encrypted.Trim();
         }
 
         foreach (var name in ExpandCredentialNames(providerId, apiKeyEnvironmentVariable, baseUrl))

@@ -1,3 +1,5 @@
+#pragma warning disable CA1822 // WPF XAML-bound ViewModel members must remain instance members
+#pragma warning disable CA1305 // Locale-sensitive calls; text is diagnostic/UI output not affected by number format
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -73,6 +75,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly HashSet<string> _benchmarksInProgress = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _usbBuilderActionGate = new(1, 1);
     private readonly UsbMachineProfileStore _usbMachineProfileStore;
+    private readonly MachineProfileStore _machineProfileStore;
     private readonly UsbGuidedMappingWorkflow _usbGuidedMappingWorkflow = new();
     private string _usbMappingWorkflowStatus = string.Empty;
     private string _usbMappingLabelDraft = string.Empty;
@@ -226,6 +229,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _toolkitManualCountText = "Manual 0";
     private string _toolkitPlaceholderCountText = "Skipped/Placeholder 0";
     private string _toolkitHealthVerdictText = "Health Verdict: not scanned";
+    private string _toolkitReadinessScoreText = "Toolkit readiness: Unknown / Limited Data (0/100)";
+    private string _toolkitReadinessStrengthsText = "Top strengths: refresh toolkit report to evaluate.";
+    private string _toolkitReadinessBlockersText = "Top blockers: toolkit report not loaded.";
+    private string _toolkitReadinessNextActionText = "Next action: run Refresh Health on the selected USB target.";
+    private string _machineProfileStatusText = "Profile: no previous profile";
+    private string _machineProfileLastSavedText = "Last profile saved: not yet";
+    private string _machineProfileLastHealthText = "Last health score: unknown";
+    private string _machineProfileLastToolkitReadinessText = "Last toolkit readiness: unknown";
     private string _toolkitManualExplanationText =
         "Manual Required means ForgerEMS cannot legally or safely auto-download this item (licensing, vendor gating, or verification limits). Use the provided link or instructions, place files where the manifest expects, then re-run Refresh Health.";
     private string _selectedToolkitFilter = "All";
@@ -238,6 +249,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private Brush _toolkitStatusBorderBrush = RunningBorder;
     private Brush _toolkitStatusForeground = RunningForeground;
     private readonly List<ToolkitHealthItemView> _allToolkitHealthItems = [];
+    private readonly ToolkitLinkVerifier _toolkitLinkVerifier = new();
+    private CancellationTokenSource? _toolkitLinkVerifyCts;
+    private ToolkitLinkVerificationSummaryForReadiness? _cachedLinkVerificationSummary;
+    private bool _toolkitHealthAlignedWithSelection;
+    private bool _isToolkitLinkVerificationBusy;
+    private string _toolkitLinkVerificationCountsText =
+        "Links: not verified yet (Toolkit Manager ► Verify Links).";
+    private string _toolkitLinkVerificationLastRunText = "Last verify: —";
+    private string _toolkitLinkVerificationExplanationText =
+        "Safe HTTP-only verification checks HEAD/ranged GET metadata — downloads/archives are not executed.";
+    private string _toolkitLinkVerificationSummaryForCopy = string.Empty;
     private string _copilotInput = string.Empty;
     private string _kyraActivityStatusText = string.Empty;
 
@@ -327,6 +349,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private CancellationTokenSource? _wslRunnerCancellation;
     private readonly ConcurrentQueue<string> _wslPendingOutputLines = new();
     private readonly ConcurrentQueue<LogLine> _pendingLiveLogs = new();
+    private readonly object _logDedupLock = new();
+    private string _lastEnqueuedLogText = string.Empty;
+    private LogSeverity _lastEnqueuedLogSeverity = LogSeverity.Info;
+    private DateTimeOffset _lastEnqueuedLogTimestamp = DateTimeOffset.MinValue;
     private DispatcherTimer? _wslOutputFlushTimer;
     private DispatcherTimer? _liveLogFlushTimer;
     private string _windowsSandboxStatusText = string.Empty;
@@ -383,6 +409,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             MarshalIntelligenceRefreshAsync);
         _wslExecutor = wslExecutor ?? DefaultWslCommandExecutor.Instance;
         _usbMachineProfileStore = new UsbMachineProfileStore(_appRuntimeService.RuntimeRoot);
+        _machineProfileStore = new MachineProfileStore(_appRuntimeService.RuntimeRoot);
         _benchmarkCachePath = Path.Combine(_appRuntimeService.RuntimeRoot, "cache", "usb-benchmarks.json");
         _copilotConfigPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "copilot-settings.json");
         _kyraMemoryPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "kyra-memory.json");
@@ -410,6 +437,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         RunSystemScanCommand = new AsyncRelayCommand(RunSystemScanAsync, CanRunBackendOnlyActions);
         RunElevatedSystemScanCommand = new AsyncRelayCommand(RunElevatedSystemScanAsync, CanRunBackendOnlyActions);
         RefreshToolkitHealthCommand = new AsyncRelayCommand(RunToolkitHealthScanAsync, CanRunToolkitScan);
+        VerifyToolkitLinksCommand = new AsyncRelayCommand(RunVerifyToolkitLinksAsync, CanVerifyToolkitLinks);
+        CancelVerifyToolkitLinksCommand = new RelayCommand(CancelVerifyToolkitLinks, () => IsToolkitLinkVerificationBusy);
         UpdateToolkitCommand = new AsyncRelayCommand(RunToolkitUpdateAsync, CanRunTargetedActions);
         OpenSystemReportFolderCommand = new RelayCommand(OpenSystemReportFolder);
         OpenSystemJsonReportCommand = new RelayCommand(OpenSystemJsonReport);
@@ -500,6 +529,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         CheckKyraGatewayStatusCommand = new AsyncRelayCommand(CheckKyraGatewayStatusAsync, () => !IsCopilotGenerating);
         ClearProviderSessionKeysCommand = new RelayCommand(ClearProviderSessionKeys);
         RefreshCopilotProviderStatusCommand = new RelayCommand(RefreshCopilotProviderStatus);
+        SaveProviderKeyCommand = new RelayCommand<CopilotProviderSettingView>(SaveProviderKey);
+        ClearProviderKeyCommand = new RelayCommand<CopilotProviderSettingView>(ClearProviderKey);
+        UseProviderAsDefaultCommand = new RelayCommand<CopilotProviderSettingView>(UseProviderAsDefault);
+        TestProviderConnectionCommand = new RelayCommand<CopilotProviderSettingView>(provider => _ = TestProviderConnectionAsync(provider));
         SaveKyraLiveToolsSettingsCommand = new RelayCommand(SaveCopilotSettings);
         ExportKyraMemoryCommand = new RelayCommand(ExportKyraMemory);
         ClearKyraMemoryCommand = new RelayCommand(ClearKyraMemory);
@@ -583,6 +616,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }
 
     public ObservableCollection<CopilotProviderSettingView> CopilotProviderSettings { get; } = [];
+    public ObservableCollection<CopilotProviderSettingView> LocalAiProviderSettings { get; } = [];
 
     public IReadOnlyList<string> LogLevelFilterOptions { get; } = ["All", "Info", "Success", "Warning", "Error"];
 
@@ -598,7 +632,20 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         "Skipped/Placeholder"
     ];
 
-    public IReadOnlyList<string> ToolkitCategoryFilterOptions { get; } = ["All categories", "Windows", "Linux", "Recovery", "Diagnostics", "USB Builders"];
+    public IReadOnlyList<string> ToolkitCategoryFilterOptions { get; } =
+    [
+        "All categories",
+        "USB / Boot",
+        "Disk / Storage",
+        "Backup / Imaging",
+        "Partitioning",
+        "Hardware Diagnostics",
+        "Network",
+        "Windows Repair",
+        "Linux / Rescue",
+        "Security / Malware Cleanup",
+        "Portable Apps"
+    ];
 
     public IReadOnlyList<string> CopilotModeOptions { get; } = ["ForgerEMS Beta Gateway", "BYOK", "Local Only", "Offline Only", "Free API Pool", "Hybrid", "Online/API", "Ask First"];
 
@@ -625,6 +672,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public AsyncRelayCommand RunElevatedSystemScanCommand { get; }
 
     public AsyncRelayCommand RefreshToolkitHealthCommand { get; }
+
+    public AsyncRelayCommand VerifyToolkitLinksCommand { get; }
+
+    public RelayCommand CancelVerifyToolkitLinksCommand { get; }
 
     public AsyncRelayCommand UpdateToolkitCommand { get; }
 
@@ -768,6 +819,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public RelayCommand ClearProviderSessionKeysCommand { get; }
 
     public RelayCommand RefreshCopilotProviderStatusCommand { get; }
+
+    public RelayCommand<CopilotProviderSettingView> SaveProviderKeyCommand { get; }
+
+    public RelayCommand<CopilotProviderSettingView> ClearProviderKeyCommand { get; }
+
+    public RelayCommand<CopilotProviderSettingView> UseProviderAsDefaultCommand { get; }
+
+    public RelayCommand<CopilotProviderSettingView> TestProviderConnectionCommand { get; }
 
     public RelayCommand SaveKyraLiveToolsSettingsCommand { get; }
 
@@ -1657,6 +1716,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public string AppUpdateMachineStateDisplay => UpdateCheckMachineStateResolver.Describe(_appUpdateMachineState);
 
+    public string AppUpdateCheckButtonText => _updateCheckInProgress ? "Checking..." : "Check Now";
+
+    public string AppUpdateCheckHelperText => _updateCheckInProgress
+        ? "Update check in progress"
+        : "Enabled when idle. Uses GitHub Releases metadata only.";
+
     public string AppUpdateLatestReleaseTagDisplay =>
         _lastAppliedUpdateCheckResult switch
         {
@@ -2129,6 +2194,20 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    public bool IncludeUsbToolkitStatusInKyraContext
+    {
+        get => _copilotSettings.IncludeUsbToolkitStatusInKyraContext;
+        set
+        {
+            if (_copilotSettings.IncludeUsbToolkitStatusInKyraContext != value)
+            {
+                _copilotSettings.IncludeUsbToolkitStatusInKyraContext = value;
+                OnPropertyChanged();
+                SaveCopilotSettings();
+            }
+        }
+    }
+
     public bool BetaWelcomeKyraShareRepairIntelligence
     {
         get => _betaWelcomeKyraShareRepair;
@@ -2465,9 +2544,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _safeTestingEnvironmentSummaryText, value);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:MarkMembersAsStatic", Justification = "WPF XAML-bound property must remain instance member")]
     public Visibility DiagnosticsEmbeddedWslRunnerContentVisibility =>
         DiagnosticsFeatureFlags.EmbeddedWslCommandRunnerEnabled ? Visibility.Visible : Visibility.Collapsed;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:MarkMembersAsStatic", Justification = "WPF XAML-bound property must remain instance member")]
     public Visibility DiagnosticsEmbeddedWslDisabledBannerVisibility =>
         DiagnosticsFeatureFlags.EmbeddedWslCommandRunnerEnabled ? Visibility.Collapsed : Visibility.Visible;
 
@@ -2561,6 +2642,91 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         get => _toolkitHealthVerdictText;
         private set => SetProperty(ref _toolkitHealthVerdictText, value);
+    }
+
+    public string ToolkitReadinessScoreText
+    {
+        get => _toolkitReadinessScoreText;
+        private set => SetProperty(ref _toolkitReadinessScoreText, value);
+    }
+
+    public string ToolkitReadinessStrengthsText
+    {
+        get => _toolkitReadinessStrengthsText;
+        private set => SetProperty(ref _toolkitReadinessStrengthsText, value);
+    }
+
+    public string ToolkitReadinessBlockersText
+    {
+        get => _toolkitReadinessBlockersText;
+        private set => SetProperty(ref _toolkitReadinessBlockersText, value);
+    }
+
+    public string ToolkitReadinessNextActionText
+    {
+        get => _toolkitReadinessNextActionText;
+        private set => SetProperty(ref _toolkitReadinessNextActionText, value);
+    }
+
+    public string MachineProfileStatusText
+    {
+        get => _machineProfileStatusText;
+        private set => SetProperty(ref _machineProfileStatusText, value);
+    }
+
+    public string MachineProfileLastSavedText
+    {
+        get => _machineProfileLastSavedText;
+        private set => SetProperty(ref _machineProfileLastSavedText, value);
+    }
+
+    public string MachineProfileLastHealthText
+    {
+        get => _machineProfileLastHealthText;
+        private set => SetProperty(ref _machineProfileLastHealthText, value);
+    }
+
+    public string MachineProfileLastToolkitReadinessText
+    {
+        get => _machineProfileLastToolkitReadinessText;
+        private set => SetProperty(ref _machineProfileLastToolkitReadinessText, value);
+    }
+
+    public string ToolkitLinkVerificationCountsText
+    {
+        get => _toolkitLinkVerificationCountsText;
+        private set => SetProperty(ref _toolkitLinkVerificationCountsText, value);
+    }
+
+    public string ToolkitLinkVerificationLastRunText
+    {
+        get => _toolkitLinkVerificationLastRunText;
+        private set => SetProperty(ref _toolkitLinkVerificationLastRunText, value);
+    }
+
+    public string ToolkitLinkVerificationExplanationText
+    {
+        get => _toolkitLinkVerificationExplanationText;
+        private set => SetProperty(ref _toolkitLinkVerificationExplanationText, value);
+    }
+
+    public string ToolkitLinkVerificationSummaryForCopy
+    {
+        get => _toolkitLinkVerificationSummaryForCopy;
+        private set => SetProperty(ref _toolkitLinkVerificationSummaryForCopy, value);
+    }
+
+    public bool IsToolkitLinkVerificationBusy
+    {
+        get => _isToolkitLinkVerificationBusy;
+        private set
+        {
+            if (SetProperty(ref _isToolkitLinkVerificationBusy, value))
+            {
+                VerifyToolkitLinksCommand.RaiseCanExecuteChanged();
+                CancelVerifyToolkitLinksCommand.RaiseCanExecuteChanged();
+            }
+        }
     }
 
     public string ToolkitLastScanText
@@ -3111,7 +3277,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 AppendLog(new LogLine(DateTimeOffset.Now, $"Detected {UsbTargets.Count} likely USB target(s).", LogSeverity.Info));
             }
 
-            await RefreshVentoyStatusAsync();
+            _ = RefreshVentoyStatusSafeAsync();
             uiApplyMs = phaseTimer.ElapsedMilliseconds;
             AppendLog(new LogLine(
                 DateTimeOffset.Now,
@@ -3419,6 +3585,65 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         LoadToolkitHealthReport();
     }
 
+    private async Task RunVerifyToolkitLinksAsync()
+    {
+        if (SelectedUsbTarget is null || !_toolkitHealthAlignedWithSelection)
+        {
+            return;
+        }
+
+        var inputs = BuildToolkitLinkVerificationInputs();
+        if (inputs.Count == 0)
+        {
+            _userPromptService.ShowMessage(
+                "Toolkit link verification",
+                "No HTTP(S) official URLs were found in the current toolkit report.",
+                MessageBoxImage.Information);
+            return;
+        }
+
+        _toolkitLinkVerifyCts?.Dispose();
+        _toolkitLinkVerifyCts = new CancellationTokenSource();
+        IsToolkitLinkVerificationBusy = true;
+        AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] Toolkit link verification started ({inputs.Count} URLs). Metadata-only HEAD/ranged GET.", LogSeverity.Info));
+
+        try
+        {
+            var snapshot = await _toolkitLinkVerifier.VerifyAsync(
+                SelectedUsbTarget.RootPath,
+                inputs,
+                new ToolkitLinkVerificationRunOptions(),
+                _toolkitLinkVerifyCts.Token).ConfigureAwait(true);
+
+            var toolkitPath = Path.Combine(GetRuntimeReportsDirectory(), "toolkit-health-latest.json");
+            var verifyPath = ToolkitLinkVerificationPersistence.VerificationPathForToolkitHealthReport(toolkitPath);
+            ToolkitLinkVerificationPersistence.Save(verifyPath, snapshot);
+
+            var broken = snapshot.Entries.Count(e => e.Status == ToolkitLinkVerificationStatus.Broken);
+            var warnings = snapshot.Entries.Count(e => e.Status == ToolkitLinkVerificationStatus.Warning);
+            IntelligenceLogWriter.Append(
+                "toolkit-manager.log",
+                $"Toolkit link verify completed | items={snapshot.Entries.Count} | broken={broken} | warnings={warnings} | target={SelectedUsbTarget.RootPath}");
+
+            AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Toolkit link verification saved (HTTP metadata only).", LogSeverity.Success));
+            LoadToolkitHealthReport();
+        }
+        catch (OperationCanceledException)
+        {
+            AppendLog(new LogLine(DateTimeOffset.Now, "[WARN] Toolkit link verification cancelled.", LogSeverity.Warning));
+        }
+        catch (Exception ex)
+        {
+            var message = SensitiveDataRedactor.SanitizeForSupportShare(ex.Message);
+            AppendLog(new LogLine(DateTimeOffset.Now, $"[ERROR] Toolkit link verification failed: {message}", LogSeverity.Error, isErrorStream: true));
+            _userPromptService.ShowMessage("Toolkit link verification", message, MessageBoxImage.Error);
+        }
+        finally
+        {
+            IsToolkitLinkVerificationBusy = false;
+        }
+    }
+
     private async Task RunToolkitUpdateAsync()
     {
         if (SelectedUsbTarget is null)
@@ -3436,6 +3661,116 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         await RunUpdateUsbAsync();
         LoadToolkitHealthReport();
+    }
+
+    private void CancelVerifyToolkitLinks()
+    {
+        try
+        {
+            _toolkitLinkVerifyCts?.Cancel();
+        }
+        catch
+        {
+            // ignored
+        }
+    }
+
+    private bool CanVerifyToolkitLinks() =>
+        !IsBusy &&
+        !IsToolkitLinkVerificationBusy &&
+        SelectedUsbTarget is not null &&
+        _toolkitHealthAlignedWithSelection &&
+        _allToolkitHealthItems.Exists(static item =>
+        {
+            var url = string.IsNullOrWhiteSpace(item.OfficialUrl) ? item.Url : item.OfficialUrl;
+            return Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https";
+        });
+
+    private List<ToolkitLinkVerificationInput> BuildToolkitLinkVerificationInputs()
+    {
+        var list = new List<ToolkitLinkVerificationInput>();
+        foreach (var item in _allToolkitHealthItems)
+        {
+            var url = string.IsNullOrWhiteSpace(item.OfficialUrl) ? item.Url : item.OfficialUrl;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
+            {
+                continue;
+            }
+
+            list.Add(new ToolkitLinkVerificationInput(
+                item.Tool,
+                url,
+                item.Exists && item.SizeBytes > 0 ? item.SizeBytes : null,
+                item.ChecksumStatus));
+        }
+
+        return list;
+    }
+
+    private void ResetToolkitLinkVerificationUi()
+    {
+        _cachedLinkVerificationSummary = null;
+        ToolkitLinkVerificationCountsText = "Links: not verified yet (Toolkit Manager ► Verify Links).";
+        ToolkitLinkVerificationLastRunText = "Last verify: —";
+        ToolkitLinkVerificationExplanationText =
+            "Safe HTTP-only verification checks HEAD/ranged GET metadata — downloads/archives are not executed.";
+        ToolkitLinkVerificationSummaryForCopy = string.Empty;
+    }
+
+    private void RefreshToolkitLinkVerificationUi(string toolkitHealthReportPath, string reportTargetRoot)
+    {
+        var verifyPath = ToolkitLinkVerificationPersistence.VerificationPathForToolkitHealthReport(toolkitHealthReportPath);
+        _cachedLinkVerificationSummary = ToolkitLinkVerificationSummaryForReadiness.TryLoadAligned(
+            toolkitHealthReportPath,
+            reportTargetRoot,
+            SelectedUsbTarget?.RootPath ?? string.Empty);
+
+        if (!ToolkitLinkVerificationPersistence.TryLoad(verifyPath, out var snap))
+        {
+            ToolkitLinkVerificationCountsText = "Links: not verified yet (Toolkit Manager ► Verify Links).";
+            ToolkitLinkVerificationLastRunText = "Last verify: —";
+            ToolkitLinkVerificationExplanationText =
+                "Safe HTTP-only verification checks HEAD/ranged GET metadata — downloads/archives are not executed.";
+            ToolkitLinkVerificationSummaryForCopy = string.Empty;
+            return;
+        }
+
+        var aligned =
+            ToolkitLinkVerificationPersistence.UsbRootsAligned(snap.TargetRoot, reportTargetRoot) &&
+            (SelectedUsbTarget is null ||
+             ToolkitLinkVerificationPersistence.UsbRootsAligned(snap.TargetRoot, SelectedUsbTarget.RootPath));
+
+        static int CountStatus(IEnumerable<ToolkitLinkVerificationEntryDto> entries, ToolkitLinkVerificationStatus status) =>
+            entries.Count(entry => entry.Status == status);
+
+        var verifiedMeta = CountStatus(snap.Entries, ToolkitLinkVerificationStatus.VerifiedMetadata);
+        var reachable = CountStatus(snap.Entries, ToolkitLinkVerificationStatus.Reachable);
+        var warnings = CountStatus(snap.Entries, ToolkitLinkVerificationStatus.Warning);
+        var broken = CountStatus(snap.Entries, ToolkitLinkVerificationStatus.Broken);
+        var unknown = CountStatus(snap.Entries, ToolkitLinkVerificationStatus.UnknownOffline);
+        var skipped = CountStatus(snap.Entries, ToolkitLinkVerificationStatus.NotChecked);
+
+        ToolkitLinkVerificationCountsText =
+            $"Links: {verifiedMeta} verified metadata, {reachable} reachable, {warnings} warnings, {broken} broken, {unknown} offline/timeout, {skipped} skipped (no URL).";
+
+        ToolkitLinkVerificationLastRunText =
+            $"Last verify: {snap.GeneratedUtc.LocalDateTime:g}" +
+            (snap.Cancelled ? " (cancelled before completion)" : string.Empty) +
+            (aligned ? string.Empty : " • stale USB/report pairing");
+
+        ToolkitLinkVerificationExplanationText = aligned
+            ? "Beta-safe probes confirm URLs responded with HTTP metadata; they cannot substitute toolkit checksum verification."
+            : "Saved link verification targets another USB root. Re-run Verify Links after aligning toolkit health with this USB.";
+
+        var usable =
+            aligned &&
+            snap.CompletedSuccessfully &&
+            !snap.Cancelled &&
+            _cachedLinkVerificationSummary is { HasRun: true };
+
+        ToolkitLinkVerificationSummaryForCopy = usable && _cachedLinkVerificationSummary is not null
+            ? $"Links: {_cachedLinkVerificationSummary.VerifiedMetadataCount + _cachedLinkVerificationSummary.ReachableCount} verified/reachable, {_cachedLinkVerificationSummary.WarningCount} warnings, {_cachedLinkVerificationSummary.BrokenCount} broken, checked {snap.GeneratedUtc.LocalDateTime:g}"
+            : string.Empty;
     }
 
     private void OpenSystemReportFolder()
@@ -3502,16 +3837,26 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         summary += Environment.NewLine +
+                   $"Toolkit: {ToolkitReadinessScoreText}. {ToolkitReadinessBlockersText} {ToolkitReadinessNextActionText}";
+        summary += Environment.NewLine +
+                   $"{MachineProfileStatusText}. {MachineProfileLastSavedText}.";
+
+        if (!string.IsNullOrWhiteSpace(ToolkitLinkVerificationSummaryForCopy))
+        {
+            summary += Environment.NewLine + ToolkitLinkVerificationSummaryForCopy;
+        }
+
+        summary += Environment.NewLine +
                    "Review before sharing. Reports may include hardware, network adapter, USB device, and diagnostic details. Do not send passwords, product keys, API keys, tokens, private documents, or sensitive files.";
 
         Clipboard.SetText(SensitiveDataRedactor.SanitizeForSupportShare(summary));
         AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Safe summary copied to clipboard (sanitized for sharing).", LogSeverity.Success));
     }
 
-    private string GetSystemIntelligenceJsonPath() =>
+    private static string GetSystemIntelligenceJsonPath() =>
         Path.Combine(GetRuntimeReportsDirectory(), "system-intelligence-latest.json");
 
-    private string GetSystemIntelligenceMarkdownPath() =>
+    private static string GetSystemIntelligenceMarkdownPath() =>
         Path.Combine(GetRuntimeReportsDirectory(), "flip-report-latest.md");
 
     private void OpenPathIfExists(string path, string displayName)
@@ -3650,6 +3995,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 {
                     response = await ExecuteInlineLiveToolAsync(weatherParse, reportPath, toolkitReportPath);
                 }
+                else if (TryBuildLiveToolParseForPrompt(userText, out var liveParse))
+                {
+                    response = await ExecuteInlineLiveToolAsync(liveParse, reportPath, toolkitReportPath);
+                }
                 else
                 {
                     var appVer = GetType().Assembly.GetName().Version?.ToString() ?? "unknown";
@@ -3665,10 +4014,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                     if (researchResp is not null)
                     {
                         response = researchResp;
-                    }
-                    else if (TryBuildLiveToolParseForPrompt(userText, out var liveParse))
-                    {
-                        response = await ExecuteInlineLiveToolAsync(liveParse, reportPath, toolkitReportPath);
                     }
                     else
                     {
@@ -3712,7 +4057,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Text = FormatKyraResponseText(response),
             SourceLabel = response.SourceLabel,
             OnlineEnhancementApplied = response.OnlineEnhancementApplied,
-            MetadataSummary = BuildKyraMetadataSummary(response, localMemoryUsed, _copilotSettings),
+            MetadataSummary = BuildKyraMetadataSummary(response, localMemoryUsed),
             MetadataDetails = BuildKyraMetadataDetails(response, localMemoryUsed, _copilotSettings),
             LearningUserPrompt = userText,
             LearningKyraResponsePlain = response.Text?.Trim() ?? string.Empty,
@@ -3773,12 +4118,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private static string BuildKyraMetadataSummary(
         CopilotResponse response,
-        bool localMemoryUsed = false,
-        CopilotSettings? sharingSettings = null)
+        bool localMemoryUsed = false)
     {
         var parts = new List<string>();
         var sourceLabel = response.SourceLabel ?? string.Empty;
-        var communityChip = KyraCommunityMetadataFormatter.SummaryChip(sharingSettings);
 
         if (sourceLabel.Contains("Code assist", StringComparison.OrdinalIgnoreCase) ||
             response.ProviderNotes.Any(static n => n.Contains("Intent detected: CodeAssist", StringComparison.OrdinalIgnoreCase)))
@@ -3786,7 +4129,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             parts.Add("Local tool");
             parts.Add("Code assist");
             parts.Add("Private");
-            parts.Add(communityChip);
             return string.Join(" • ", parts);
         }
 
@@ -3797,22 +4139,21 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             parts.Add("Local tool");
             parts.Add("Calculator");
             parts.Add("Private");
-            parts.Add(communityChip);
             return string.Join(" • ", parts);
         }
 
         if (response.ResponseSource == KyraResponseSource.ForgerEmsGateway && response.UsedOnlineData)
         {
-            parts.Add("Live research");
-            parts.Add("Sanitized context");
+            parts.Add(response.GroundedInSystemIntelligence ? "Local scan" : "Gateway research");
+            parts.Add("Gateway research");
             parts.Add("Private");
-            parts.Add(communityChip);
             return string.Join(" • ", parts);
         }
 
         if (sourceLabel.Contains("unavailable", StringComparison.OrdinalIgnoreCase))
         {
-            parts.Add("Live tool unavailable");
+            parts.Add("Local rules");
+            parts.Add("Live research unavailable");
         }
         else if (sourceLabel.Contains("live research", StringComparison.OrdinalIgnoreCase) ||
                  (response.UsedOnlineData && sourceLabel.Contains("live", StringComparison.OrdinalIgnoreCase)))
@@ -3833,12 +4174,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
         else
         {
-            parts.Add("Local");
+            parts.Add(response.GroundedInSystemIntelligence ? "Local scan" : "Local rules");
         }
 
         if (response.GroundedInSystemIntelligence)
         {
-            parts.Add("System scan");
+            parts.Add("System Intelligence");
         }
 
         if (response.ProviderNotes.Any(static n =>
@@ -3857,8 +4198,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             parts.Add("Online assist");
         }
 
-        parts.Add(response.UsedOnlineData ? "Sanitized context" : "Private");
-        parts.Add(communityChip);
+        parts.Add("Private");
+        if (!response.UsedOnlineData &&
+            !parts.Any(static p => p.Contains("Live research unavailable", StringComparison.OrdinalIgnoreCase)))
+        {
+            parts.Add("Live research off");
+        }
 
         return string.Join(" • ", parts.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase));
     }
@@ -3966,11 +4311,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private CopilotRequest CreateKyraCopilotRequest(string prompt, string reportPath, string toolkitReportPath)
     {
         var ui = BuildCopilotSettingsFromUi();
+        var usbReportPath = ui.IncludeUsbToolkitStatusInKyraContext
+            ? Path.Combine(GetRuntimeReportsDirectory(), "usb-intelligence-latest.json")
+            : string.Empty;
+        var effectiveToolkitReportPath = ui.IncludeUsbToolkitStatusInKyraContext ? toolkitReportPath : string.Empty;
         var cross = ui.KyraUseSanitizedSystemIntelligenceContext
             ? KyraSafeContextBuilder.BuildBriefSummary(
                 reportPath,
-                Path.Combine(GetRuntimeReportsDirectory(), "usb-intelligence-latest.json"),
-                toolkitReportPath,
+                usbReportPath,
+                effectiveToolkitReportPath,
                 Path.Combine(GetRuntimeReportsDirectory(), "diagnostics-latest.json"),
                 ui.RedactContextEnabled)
             : string.Empty;
@@ -3978,7 +4327,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             Prompt = prompt,
             SystemIntelligenceReportPath = reportPath,
-            ToolkitHealthReportPath = toolkitReportPath,
+            ToolkitHealthReportPath = effectiveToolkitReportPath,
             AppVersion = GetType().Assembly.GetName().Version?.ToString() ?? "unknown",
             RecentLogLines = Logs.Select(line => line.DisplayText).TakeLast(24).ToArray(),
             SelectedUsbTarget = SelectedUsbTarget,
@@ -3987,7 +4336,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             KyraMemorySummaryForPrompt = BuildKyraMemorySummaryForPrompt(prompt),
             KyraActivityStatusCallback = ReportKyraActivity,
             KyraSafeCrossSystemSummary = cross,
-            KyraMachineMemoryStorePath = _kyraMachineMemoryPath
+            KyraMachineMemoryStorePath = _kyraMachineMemoryPath,
+            MachineProfilesPath = MachineProfileStore.ProfilePathForRuntime(_appRuntimeService.RuntimeRoot)
         };
     }
 
@@ -4123,7 +4473,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             x.Status.Contains("INSTALLED", StringComparison.OrdinalIgnoreCase) ||
             x.Status.Contains("READY", StringComparison.OrdinalIgnoreCase));
         var toolkitLine =
-            $"{ToolkitLastScanText}; tracked={ToolkitHealthItems.Count}; installed/ready≈{installed}; missing≈{missing}; manual≈{manual}; {ToolkitHealthVerdictText}";
+            $"{ToolkitLastScanText}; tracked={ToolkitHealthItems.Count}; installed/ready≈{installed}; missing≈{missing}; manual≈{manual}; {ToolkitHealthVerdictText}; {ToolkitReadinessScoreText}";
 
         var warn = Logs.LastOrDefault(l => l.Severity is LogSeverity.Warning or LogSeverity.Error);
 
@@ -4240,16 +4590,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         sb.AppendLine(_copilotSettings.AllowOnlineSystemContextSharing ? "System context to online providers: on (sanitized summary only)." : "System context to online providers: off.");
         sb.AppendLine($"Provider priority: {_copilotSettings.ProviderPriorityCsv}");
         sb.AppendLine($"Memory: {_copilotSettings.MaxContextTurns} turns / {_copilotSettings.MemoryMode}; personality: {_copilotSettings.PersonalityProfile}.");
-        sb.AppendLine("Live tools: weather/crypto only when enabled under Kyra Advanced live APIs; news/sports/stocks/search need operator keys.");
+        sb.AppendLine("Live tools: weather/crypto/search readiness appears under Kyra AI Settings > Live Tools.");
         sb.AppendLine(_copilotSettings.ProviderConfigurationMode == KyraProviderConfigurationMode.DeveloperManaged
-            ? "Provider configuration mode: developer-managed (beta testers are not prompted for BYOK)."
-            : "Provider configuration mode: user-managed (advanced).");
+            ? "Provider setup: ForgerEMS Gateway is preferred for beta testers when configured; BYOK remains optional."
+            : "Provider setup: BYOK/local provider preferences are user controlled.");
         sb.AppendLine(ctx.SystemProfile is not null ? "System context: available from last scan." : "System context: run System Intelligence for machine-specific answers.");
         sb.AppendLine(_copilotSettings.KyraPersistentMemoryEnabled ? "Kyra memory: enabled (local disk, user-controlled)." : "Kyra memory: off.");
         sb.AppendLine(
             _copilotSettings.KyraRealtimeGatewayResearchEnabled && _copilotSettings.KyraRealtimeGatewayEnabled
                 ? "Realtime gateway research: enabled when gateway URL + token are configured (provider keys stay server-side)."
-                : "Realtime gateway research: off — current-data questions use local Kyra and Kyra Advanced live tools only.");
+                : "Realtime gateway research: off — current-data questions use local Kyra and configured live tools only.");
         sb.AppendLine(VerboseLiveLogs ? "Verbose Kyra notes: on." : "Verbose Kyra notes: off (routing noise hidden in chat footnotes).");
         sb.AppendLine(toolStatus);
         KyraAssistantStatusSummary = sb.ToString().TrimEnd();
@@ -6156,7 +6506,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             var managedMs = phaseTimer.ElapsedMilliseconds;
             RefreshManagedDownloadRunArtifactFromSelectedUsb();
             var artifactMs = phaseTimer.ElapsedMilliseconds;
-            await RefreshVentoyStatusAsync();
+            var shouldAwaitVentoyRefresh = action is ScriptActionType.VerifyBackend
+                or ScriptActionType.SetupUsb
+                or ScriptActionType.UpdateUsb
+                or ScriptActionType.RevalidateManagedDownloads;
+            if (shouldAwaitVentoyRefresh)
+            {
+                await RefreshVentoyStatusAsync();
+            }
+            else
+            {
+                _ = RefreshVentoyStatusSafeAsync();
+            }
+
             var ventoyMs = phaseTimer.ElapsedMilliseconds;
             AppendLog(new LogLine(
                 DateTimeOffset.Now,
@@ -6238,8 +6600,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             SystemIntelligenceReportPathText = "Report: not generated yet.";
             SystemIntelligenceNetworkTechnicalDetailsText = "Technical network details are hidden.";
             SystemIntelligenceNextActions.Clear();
-            SystemIntelligenceNextActions.Add("Run Scan to collect a baseline hardware/security profile.");
+            SystemIntelligenceNextActions.Add("Run Standard Scan to collect a baseline hardware/security profile.");
             SystemIntelligenceNextActions.Add("Use Run Elevated Scan if deeper TPM/Secure Boot/storage detail is needed.");
+            MachineProfileStatusText = "Profile: no previous profile";
+            MachineProfileLastSavedText = "Last profile saved: not yet";
+            MachineProfileLastHealthText = "Last health score: unknown";
+            MachineProfileLastToolkitReadinessText = "Last toolkit readiness: unknown";
             RefreshCopilotContextText();
             RefreshKyraQuickPromptVisibilities();
             return;
@@ -6388,9 +6754,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 SystemIntelligenceNextActions.Add(action);
             }
 
+            SaveMachineProfileSnapshot(root);
+            RefreshMachineProfileSummary(root);
+
             RefreshKyraQuickPromptVisibilities();
         }
-        catch (Exception exception)
+        catch
         {
             SystemIntelligenceAutomationLineText = string.Empty;
             SystemIntelligenceStatusText = "Needs attention";
@@ -6399,15 +6768,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             SystemIntelligenceHealthStatusText = "Health status: Warning";
             SystemIntelligenceWindowsReadinessText = "Windows readiness: Needs verification";
             SystemIntelligenceSummaryText =
-                "The saved system report could not be read. Run System Scan to generate a fresh report.";
+                "The saved system report could not be read. Run Standard Scan to generate a fresh report.";
             SystemIntelligenceReportSafePathText = @"Runtime\reports\system-intelligence-latest.json";
             SystemIntelligenceReportPathText = "Report needs attention (parse error).";
             SystemIntelligenceNetworkTechnicalDetailsText = "Technical network details are unavailable until the report is rebuilt.";
             SystemIntelligenceRecommendations.Clear();
-            SystemIntelligenceRecommendations.Add("Run System Scan to replace or rebuild the report file.");
+            SystemIntelligenceRecommendations.Add("Run Standard Scan to replace or rebuild the report file.");
             SystemIntelligenceNextActions.Clear();
-            SystemIntelligenceNextActions.Add("Run Scan to regenerate the System Intelligence report.");
+            SystemIntelligenceNextActions.Add("Run Standard Scan to regenerate the System Intelligence report.");
             SystemIntelligenceNextActions.Add("If TPM/Secure Boot remain unknown, run Elevated Scan.");
+            MachineProfileStatusText = "Profile: no previous profile";
+            MachineProfileLastSavedText = "Last profile saved: unavailable (scan parse failed)";
+            MachineProfileLastHealthText = "Last health score: unknown";
+            MachineProfileLastToolkitReadinessText = "Last toolkit readiness: unknown";
             ApplyStatusBrushes(
                 "UNKNOWN",
                 (background, border, foreground) =>
@@ -6425,7 +6798,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var reportPath = Path.Combine(GetRuntimeReportsDirectory(), "toolkit-health-latest.json");
         if (!File.Exists(reportPath))
         {
-            ToolkitReportPathText = $"Report: not found at {reportPath}";
+            _toolkitHealthAlignedWithSelection = false;
+            ResetToolkitLinkVerificationUi();
+            ToolkitReportPathText = @"Report: not found at Runtime\reports\toolkit-health-latest.json";
+            ToolkitReadinessScoreText = "Toolkit readiness: Unknown / Limited Data (0/100)";
+            ToolkitReadinessStrengthsText = "Top strengths: unavailable until toolkit report is generated.";
+            ToolkitReadinessBlockersText = "Top blockers: toolkit report/log evidence not available.";
+            ToolkitReadinessNextActionText = "Next action: run Refresh Health on the selected USB target.";
             return;
         }
 
@@ -6435,13 +6814,23 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             var root = document.RootElement;
             var reportTargetRoot = GetJsonString(root, "targetRoot", string.Empty);
             var selectedRoot = SelectedUsbTarget?.RootPath ?? string.Empty;
+            _toolkitHealthAlignedWithSelection =
+                string.IsNullOrWhiteSpace(selectedRoot) ||
+                string.IsNullOrWhiteSpace(reportTargetRoot) ||
+                UsbRootPathsEqual(selectedRoot, reportTargetRoot);
             if (!string.IsNullOrWhiteSpace(selectedRoot) &&
                 !string.IsNullOrWhiteSpace(reportTargetRoot) &&
                 !UsbRootPathsEqual(selectedRoot, reportTargetRoot))
             {
+                _toolkitHealthAlignedWithSelection = false;
+                ResetToolkitLinkVerificationUi();
                 ToolkitStatusText = "Needs refresh";
                 ToolkitHealthVerdictText = $"Toolkit report was cached for {reportTargetRoot}. Click Refresh Toolkit for {selectedRoot}.";
                 ToolkitReportPathText = $"Report: stale for selected target ({reportPath})";
+                ToolkitReadinessScoreText = "Toolkit readiness: Unknown / Limited Data (0/100)";
+                ToolkitReadinessStrengthsText = "Top strengths: stale report for selected target.";
+                ToolkitReadinessBlockersText = "Top blockers: readiness score is stale for this USB target.";
+                ToolkitReadinessNextActionText = "Next action: run Refresh Health for the currently selected target.";
                 ToolkitHealthItems.Clear();
                 _allToolkitHealthItems.Clear();
                 return;
@@ -6454,6 +6843,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             var pending = 0;
             var manual = 0;
             var placeholder = 0;
+            var coveredByManaged = 0;
             var skipped = 0;
             var unknown = 0;
             if (root.TryGetProperty("summary", out var summary))
@@ -6467,6 +6857,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 pending = GetJsonInt(summary, "verificationPending");
                 manual = GetJsonInt(summary, "manual");
                 placeholder = GetJsonInt(summary, "placeholder");
+                coveredByManaged = GetJsonInt(summary, "coveredByManaged");
                 skipped = GetJsonInt(summary, "skipped");
                 unknown = GetJsonInt(summary, "unknown");
             }
@@ -6476,7 +6867,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             ToolkitUpdatesCountText = $"Managed updates available: {updates}";
             ToolkitFailedCountText = $"Verification issues: {failed}";
             ToolkitManualCountText = $"Manual / Info items: {manual}";
-            ToolkitPlaceholderCountText = $"Skipped/Placeholder {skipped + placeholder}";
+            ToolkitPlaceholderCountText = $"Skipped/Placeholder/Covered {skipped + placeholder + coveredByManaged}";
             var healthVerdict = GetJsonString(root, "healthVerdict", "UNKNOWN");
             ToolkitLastScanText = $"Last scan: {FormatGeneratedUtc(GetJsonString(root, "generatedUtc", string.Empty))} | Target: {reportTargetRoot}";
             ToolkitManualExplanationText = GetJsonString(root, "manualItemsExplanation", ToolkitManualExplanationText);
@@ -6527,10 +6918,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                     var type = GetJsonString(item, "type", "UNKNOWN");
                     var verification = GetJsonString(item, "verification", string.Empty);
                     var normalized = ToolkitDisplayClassification.BuildNormalizedLabel(status, type, verification);
+                    var category = GetJsonString(item, "category", "General");
                     _allToolkitHealthItems.Add(new ToolkitHealthItemView
                     {
                         Tool = GetJsonString(item, "tool", "Unknown tool"),
-                        Category = GetJsonString(item, "category", "General"),
+                        Category = category,
                         Status = status,
                         Type = type,
                         ExpectedPath = expectedPath,
@@ -6540,6 +6932,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                         Exists = exists,
                         SizeBytes = sizeBytes,
                         Url = GetJsonString(item, "url", string.Empty),
+                        OfficialUrl = GetJsonString(item, "officialUrl", GetJsonString(item, "officialUri", GetJsonString(item, "url", string.Empty))),
+                        Purpose = GetJsonString(item, "purpose", GetJsonString(item, "description", string.Empty)),
+                        LicenseRedistributionNote = GetJsonString(item, "licenseRedistributionNote", GetJsonString(item, "licenseNote", "Check vendor terms before bundling.")),
+                        DownloadStatus = GetJsonString(item, "downloadStatus", status),
+                        ChecksumStatus = GetJsonString(item, "checksumStatus", verification),
+                        DistributionModel = GetJsonString(item, "distributionModel", type),
+                        BetaSafetyRating = GetJsonString(item, "betaSafetyRating", InferBetaSafetyRating(status, type)),
                         ClassificationReason = GetJsonString(item, "classificationReason", string.Empty),
                         Version = GetJsonString(item, "version", "Unknown"),
                         Verification = verification,
@@ -6556,18 +6955,32 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             ToolkitClassificationSummaryText = summaryBuckets.Length == 0
                 ? "Toolkit classification: no items in the last report."
                 : "Toolkit classification — " + string.Join("; ", summaryBuckets);
+            RefreshToolkitLinkVerificationUi(reportPath, reportTargetRoot);
+            ApplyToolkitReadinessScore(
+                reportAvailable: true,
+                missingRequired: missing,
+                failedVerification: failed,
+                updatesAvailable: updates,
+                verificationPending: pending);
 
             SelectedToolkitHealthItem = _allToolkitHealthItems.FirstOrDefault();
             ApplyToolkitFilter();
             ToolkitReportPathText = $"Report: {reportPath}";
             IntelligenceLogWriter.Append(
                 "toolkit-manager.log",
-                $"Toolkit health loaded | ready {installed} | missing {missing} | manual {manual} | verify issues {failed} | pending {pending} | target {reportTargetRoot} | {reportPath}");
+                $"Toolkit health loaded | ready {installed} | missing {missing} | manual {manual} | covered {coveredByManaged} | verify issues {failed} | pending {pending} | target {reportTargetRoot} | {reportPath}");
         }
         catch (Exception exception)
         {
+            var message = SensitiveDataRedactor.SanitizeForSupportShare(exception.Message);
+            _toolkitHealthAlignedWithSelection = false;
+            ResetToolkitLinkVerificationUi();
             ToolkitStatusText = "Needs attention";
-            ToolkitReportPathText = $"Report needs attention (parse error): {exception.Message}";
+            ToolkitReportPathText = $"Report needs attention (parse error): {message}";
+            ToolkitReadinessScoreText = "Toolkit readiness: Unknown / Limited Data (0/100)";
+            ToolkitReadinessStrengthsText = "Top strengths: unavailable (parse error).";
+            ToolkitReadinessBlockersText = "Top blockers: toolkit report parse error.";
+            ToolkitReadinessNextActionText = "Next action: run Refresh Health to rebuild toolkit report.";
             ApplyStatusBrushes(
                 "UNKNOWN",
                 (background, border, foreground) =>
@@ -6607,6 +7020,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ToolkitReportPathText = "Report: pending refresh for selected target.";
         ToolkitMissingCountText = "Managed Missing: --";
         ToolkitInstalledCountText = "Managed Ready: --";
+        ToolkitReadinessScoreText = "Toolkit readiness: Unknown / Limited Data (0/100)";
+        ToolkitReadinessStrengthsText = "Top strengths: pending refresh.";
+        ToolkitReadinessBlockersText = "Top blockers: toolkit readiness not evaluated for current target.";
+        ToolkitReadinessNextActionText = "Next action: refresh toolkit health for current USB target.";
+        _toolkitHealthAlignedWithSelection = false;
+        ResetToolkitLinkVerificationUi();
     }
 
     private bool ShouldShowToolkitItem(ToolkitHealthItemView item)
@@ -6620,7 +7039,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             "Verification Issues" => string.Equals(item.Status, "HASH_FAILED", StringComparison.OrdinalIgnoreCase) ||
                                      string.Equals(item.Status, "VERIFICATION_PENDING", StringComparison.OrdinalIgnoreCase),
             "Skipped/Placeholder" => string.Equals(item.Status, "SKIPPED", StringComparison.OrdinalIgnoreCase) ||
-                                     string.Equals(item.Status, "PLACEHOLDER", StringComparison.OrdinalIgnoreCase),
+                                     string.Equals(item.Status, "PLACEHOLDER", StringComparison.OrdinalIgnoreCase) ||
+                                     string.Equals(item.Status, "COVERED_BY_MANAGED", StringComparison.OrdinalIgnoreCase),
             "Manual Required" => string.Equals(item.Status, "MANUAL_REQUIRED", StringComparison.OrdinalIgnoreCase),
             "Manual / Info" => string.Equals(item.Status, "MANUAL_REQUIRED", StringComparison.OrdinalIgnoreCase),
             _ => true
@@ -6647,6 +7067,149 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         return true;
+    }
+
+    private void ApplyToolkitReadinessScore(
+        bool reportAvailable,
+        int missingRequired,
+        int failedVerification,
+        int updatesAvailable,
+        int verificationPending)
+    {
+        var toolkitLogPath = Path.Combine(_appRuntimeService.LogsRoot, "toolkit-manager.log");
+        var result = ToolkitReadinessScorer.Evaluate(
+            _allToolkitHealthItems,
+            SelectedUsbTarget,
+            VentoyStatusText,
+            reportAvailable,
+            File.Exists(toolkitLogPath),
+            missingRequired,
+            failedVerification,
+            updatesAvailable,
+            verificationPending,
+            omitLiveUsbVentoyContext: false,
+            linkVerification: _cachedLinkVerificationSummary);
+
+        ToolkitReadinessScoreText = $"Toolkit readiness: {result.LabelText} ({result.Score}/100)";
+        ToolkitReadinessStrengthsText = result.Strengths.Count == 0
+            ? $"Top strengths: {result.ConfidenceNote}"
+            : "Top strengths: " + string.Join(" | ", result.Strengths);
+        ToolkitReadinessBlockersText = result.Blockers.Count == 0
+            ? "Top blockers: none significant in current report."
+            : "Top blockers: " + string.Join(" | ", result.Blockers);
+        ToolkitReadinessNextActionText = $"Next action: {result.NextRecommendedAction}";
+    }
+
+    private void SaveMachineProfileSnapshot(JsonElement root)
+    {
+        try
+        {
+            var summary = root.TryGetProperty("summary", out var s) && s.ValueKind == JsonValueKind.Object ? s : default;
+            var manufacturer = summary.ValueKind == JsonValueKind.Object ? GetJsonString(summary, "manufacturer", "Unknown") : "Unknown";
+            var model = summary.ValueKind == JsonValueKind.Object ? GetJsonString(summary, "model", "Unknown") : "Unknown";
+            var machineLabel = summary.ValueKind == JsonValueKind.Object ? GetJsonString(summary, "computerName", Environment.MachineName) : Environment.MachineName;
+            var os = summary.ValueKind == JsonValueKind.Object ? GetJsonString(summary, "os", Environment.OSVersion.VersionString) : Environment.OSVersion.VersionString;
+            var machineHash = MachineProfileStore.ComputeMachineIdentityHash(machineLabel, manufacturer, model, os);
+            var deviceFit = root.TryGetProperty("deviceFit", out var fit) && fit.ValueKind == JsonValueKind.Object
+                ? GetJsonString(fit, "primaryFit", "Unknown")
+                : "Unknown";
+            var machineClass = root.TryGetProperty("machineClass", out var mc) && mc.ValueKind == JsonValueKind.Object
+                ? GetJsonString(mc, "primaryClass", "Unknown")
+                : "Unknown";
+            var flipBand = root.TryGetProperty("flipValue", out var fv) && fv.ValueKind == JsonValueKind.Object
+                ? GetJsonString(fv, "estimatedResaleRange", "Unknown")
+                : "Unknown";
+            var usbSummary = root.TryGetProperty("usbDiagnostics", out var usb) && usb.ValueKind == JsonValueKind.Object
+                ? GetJsonString(usb, "usbBestKnownPortSummary", "Not available")
+                : "Not available";
+            var generatedUtc = DateTimeOffset.UtcNow;
+            var generatedRaw = GetJsonString(root, "generatedUtc", string.Empty);
+            _ = DateTimeOffset.TryParse(generatedRaw, out generatedUtc);
+            var health = SystemHealthEvaluator.Evaluate(SystemProfileMapper.FromJson(root));
+            var (score, label) = ParseToolkitReadiness();
+
+            _machineProfileStore.SaveSnapshot(new MachineProfileSnapshot
+            {
+                MachineIdentityHash = machineHash,
+                FriendlyMachineLabel = $"{manufacturer} {model}".Trim(),
+                LastScanUtc = generatedUtc == default ? DateTimeOffset.UtcNow : generatedUtc,
+                HealthScore = health.HealthScore,
+                ToolkitReadinessScore = score,
+                ToolkitReadinessLabel = label,
+                BestUse = deviceFit,
+                FlipValueBand = flipBand,
+                MachineClass = machineClass,
+                UsbBenchmarkSummary = usbSummary,
+                ReportPath = @"Runtime\reports\system-intelligence-latest.json"
+            });
+        }
+        catch (Exception ex)
+        {
+            var message = SensitiveDataRedactor.SanitizeForSupportShare(ex.Message);
+            AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Machine profile snapshot save skipped: {message}", LogSeverity.Warning));
+        }
+    }
+
+    private void RefreshMachineProfileSummary(JsonElement root)
+    {
+        var summary = root.TryGetProperty("summary", out var s) && s.ValueKind == JsonValueKind.Object ? s : default;
+        var manufacturer = summary.ValueKind == JsonValueKind.Object ? GetJsonString(summary, "manufacturer", "Unknown") : "Unknown";
+        var model = summary.ValueKind == JsonValueKind.Object ? GetJsonString(summary, "model", "Unknown") : "Unknown";
+        var machineLabel = summary.ValueKind == JsonValueKind.Object ? GetJsonString(summary, "computerName", Environment.MachineName) : Environment.MachineName;
+        var os = summary.ValueKind == JsonValueKind.Object ? GetJsonString(summary, "os", Environment.OSVersion.VersionString) : Environment.OSVersion.VersionString;
+        var machineHash = MachineProfileStore.ComputeMachineIdentityHash(machineLabel, manufacturer, model, os);
+        if (_machineProfileStore.TryGetLatestForMachine(machineHash, out var latest))
+        {
+            var hasPrevious = _machineProfileStore.TryGetPreviousForMachine(machineHash, out var previous);
+            MachineProfileStatusText = hasPrevious ? "Profile: previous scan available" : "Profile: saved locally";
+            MachineProfileLastSavedText = $"Last profile saved: {latest.LastScanUtc.LocalDateTime:g}";
+            MachineProfileLastHealthText = $"Last health score: {latest.HealthScore}/100";
+            MachineProfileLastToolkitReadinessText = latest.ToolkitReadinessScore.HasValue
+                ? $"Last toolkit readiness: {latest.ToolkitReadinessLabel} ({latest.ToolkitReadinessScore}/100)"
+                : $"Last toolkit readiness: {latest.ToolkitReadinessLabel}";
+            if (hasPrevious)
+            {
+                var delta = latest.HealthScore - previous.HealthScore;
+                MachineProfileStatusText += delta == 0
+                    ? " (health unchanged)"
+                    : delta > 0
+                        ? $" (health +{delta})"
+                        : $" (health {delta})";
+            }
+        }
+        else
+        {
+            MachineProfileStatusText = "Profile: no previous profile";
+            MachineProfileLastSavedText = "Last profile saved: not yet";
+            MachineProfileLastHealthText = "Last health score: unknown";
+            MachineProfileLastToolkitReadinessText = "Last toolkit readiness: unknown";
+        }
+    }
+
+    private (int? Score, string Label) ParseToolkitReadiness()
+    {
+        var text = ToolkitReadinessScoreText;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return (null, "Unknown / Limited Data");
+        }
+
+        var start = text.LastIndexOf('(');
+        var slash = text.LastIndexOf("/100", StringComparison.OrdinalIgnoreCase);
+        var score = (int?)null;
+        if (start >= 0 && slash > start)
+        {
+            var raw = text[(start + 1)..slash];
+            if (int.TryParse(raw, out var parsed))
+            {
+                score = parsed;
+            }
+        }
+
+        var colon = text.IndexOf(':');
+        var labelEnd = start > colon && start > 0 ? start : text.Length;
+        var label = colon >= 0 ? text[(colon + 1)..labelEnd].Trim() : text.Trim();
+        return (score, string.IsNullOrWhiteSpace(label) ? "Unknown / Limited Data" : label);
     }
 
     private string ResolveBackendScriptPath(string relativeScriptPath)
@@ -7570,6 +8133,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private static IEnumerable<string> BuildSystemIntelligenceTopActions(JsonElement root, IEnumerable<string> recommendations)
     {
         var actions = new List<string>();
+        foreach (var workflowHint in TechnicianWorkflowPresetCatalog.BuildSystemActionHints(root))
+        {
+            actions.Add($"{workflowHint} (dry-run checklist)");
+        }
+
         if (TryGetBatteryWearPercent(root, out var wear) && wear >= 25d)
         {
             actions.Add($"Battery wear is high ({wear:0.#}%) — plan replacement or disclose for resale.");
@@ -7577,10 +8145,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         if (BuildWindowsReadinessSummary(root).Contains("Needs verification", StringComparison.OrdinalIgnoreCase))
         {
-            actions.Add("TPM/Secure Boot need verification — run Elevated Scan or check BIOS/UEFI.");
+            actions.Add("Verify Secure Boot/TPM (Windows readiness) — Elevated Scan or BIOS/UEFI check.");
         }
 
-        actions.Add("Flip Value can improve — add cosmetic/screen/keyboard/trackpad condition.");
+        actions.Add("Run Hardware X-Ray to confirm sensor coverage and confidence limits.");
+        actions.Add("Check storage SMART/health confidence before destructive repair decisions.");
+        actions.Add("Run USB benchmark and use the best known USB port for toolkit operations.");
+        actions.Add("Export repair summary with workflow/tool/safety notes before sharing.");
+        actions.Add("Prep for resale using confidence-based disclosure language.");
         if (CountOptionalProviderStatuses(root, "PermissionRequired") > 0)
         {
             actions.Add("Some sensors require permission/vendor support — run Elevated Scan if needed.");
@@ -7595,6 +8167,33 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         return actions.Take(5);
+    }
+
+    private static string InferBetaSafetyRating(string status, string type)
+    {
+        if (status.Equals("HASH_FAILED", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Caution: verification failed";
+        }
+
+        if (status.Equals("MISSING_REQUIRED", StringComparison.OrdinalIgnoreCase) ||
+            status.Equals("MISSING", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Needs remediation";
+        }
+
+        if (status.Equals("INSTALLED", StringComparison.OrdinalIgnoreCase) &&
+            !type.Equals("MANUAL_REQUIRED", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Ready";
+        }
+
+        if (status.Equals("MANUAL_REQUIRED", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Manual verification required";
+        }
+
+        return "Review before use";
     }
 
     private static string NormalizeSystemIntelligenceAutomationLine(string text) =>
@@ -8773,7 +9372,50 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private void AppendLifecycleFailure(string actionName, string reason)
     {
         AppendLog(new LogLine(DateTimeOffset.Now, $"[ERROR] {actionName} failed: {reason}", LogSeverity.Error, isErrorStream: true));
-        AppendLog(new LogLine(DateTimeOffset.Now, "[ACTION] Review log, verify network, and retry.", LogSeverity.Warning));
+        if (actionName.Contains("System Intelligence elevated scan", StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var guidance in BuildElevatedScanFailureGuidance(reason))
+            {
+                AppendLog(new LogLine(DateTimeOffset.Now, "[ACTION] " + guidance, LogSeverity.Warning));
+            }
+
+            return;
+        }
+
+        AppendLog(new LogLine(DateTimeOffset.Now, "[ACTION] Review log and retry.", LogSeverity.Warning));
+    }
+
+    private static IReadOnlyList<string> BuildElevatedScanFailureGuidance(string reason)
+    {
+        var exitCode = TryParseProcessExitCode(reason);
+        if (exitCode == -196608)
+        {
+            return
+            [
+                "Elevated scan did not start or was canceled before the admin scan completed.",
+                "Approve the UAC prompt or run ForgerEMS as administrator, then retry.",
+                "Your Standard Scan report is still available."
+            ];
+        }
+
+        return
+        [
+            "Elevated scan did not complete. Check local admin permission or UAC approval, then retry.",
+            "Your Standard Scan report is still available."
+        ];
+    }
+
+    private static int? TryParseProcessExitCode(string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            return null;
+        }
+
+        var match = Regex.Match(reason, @"code\s+(?<code>-?\d+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return match.Success && int.TryParse(match.Groups["code"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var code)
+            ? code
+            : null;
     }
 
     private string GetBackendVersionDisplay()
@@ -8880,6 +9522,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private void LoadCopilotSettings()
     {
         CopilotProviderSettings.Clear();
+        LocalAiProviderSettings.Clear();
         var copilotConfigExisted = File.Exists(_copilotConfigPath);
         var settings = new CopilotSettingsStore(_copilotConfigPath, _copilotProviderRegistry).Load();
         KyraInstallerIntelligenceRegistry.ApplyWhenNewConfig(settings, copilotConfigExisted);
@@ -8902,6 +9545,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 };
             }
 
+            var encryptedPresent = KyraProviderCredentialStore.Default.HasSecret(provider.Id);
             CopilotProviderSettings.Add(new CopilotProviderSettingView
             {
                 Id = provider.Id,
@@ -8916,10 +9560,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 ModelName = providerConfig.ModelName,
                 ApiKeyEnvironmentVariable = providerConfig.ApiKeyEnvironmentVariable,
                 MaskedApiKey = KyraApiKeyStore.Mask(KyraApiKeyStore.GetSessionKey(provider.Id)),
+                KeyStorageMode = string.IsNullOrWhiteSpace(providerConfig.KeyStorageMode)
+                    ? (encryptedPresent ? "encrypted-local" : "environment")
+                    : providerConfig.KeyStorageMode,
+                SavedKeyPresent = encryptedPresent || providerConfig.SavedKeyPresent,
+                SavedKeyStatus = encryptedPresent ? "Protected local key present" : "No saved key",
+                LastTestResult = providerConfig.LastTestResult,
                 ProviderStatusLabel = CopilotProviderStatusFormatter.BuildStatusLabel(provider, providerConfig),
                 CredentialSourceText = CopilotProviderStatusFormatter.BuildCredentialSourceLine(provider, providerConfig)
             });
         }
+
+        SyncLocalAiProviderSettings();
 
         var localOllamaEnabled = CopilotProviderSettings.Any(item => item.IsEnabled && string.Equals(item.Id, "ollama-local", StringComparison.OrdinalIgnoreCase));
         var localLmStudioEnabled = CopilotProviderSettings.Any(item => item.IsEnabled && string.Equals(item.Id, "lm-studio-local", StringComparison.OrdinalIgnoreCase));
@@ -8986,9 +9638,22 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(KyraRealtimeGatewayResearchEnabled));
         OnPropertyChanged(nameof(KyraRealtimeGatewayResearchConsent));
         OnPropertyChanged(nameof(KyraUseSanitizedSystemIntelligenceContext));
+        OnPropertyChanged(nameof(IncludeUsbToolkitStatusInKyraContext));
         OnPropertyChanged(nameof(KyraLiveToolsForBinding));
         OnPropertyChanged(nameof(KyraDeveloperManagedProviderUi));
         OnPropertyChanged(nameof(KyraTesterEditableProviders));
+    }
+
+    private void SyncLocalAiProviderSettings()
+    {
+        LocalAiProviderSettings.Clear();
+        foreach (var providerView in CopilotProviderSettings.Where(view =>
+                     string.Equals(view.Id, "ollama-local", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(view.Id, "lm-studio-local", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(view.Id, "local-offline", StringComparison.OrdinalIgnoreCase)))
+        {
+            LocalAiProviderSettings.Add(providerView);
+        }
     }
 
     private void LoadBetaSettings()
@@ -9089,6 +9754,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         settings.KyraRealtimeGatewayResearchEnabled = KyraRealtimeGatewayResearchEnabled;
         settings.KyraRealtimeGatewayResearchConsent = KyraRealtimeGatewayResearchConsent;
         settings.KyraUseSanitizedSystemIntelligenceContext = KyraUseSanitizedSystemIntelligenceContext;
+        settings.IncludeUsbToolkitStatusInKyraContext = IncludeUsbToolkitStatusInKyraContext;
         settings.MaxContextTurns = Math.Clamp(settings.MaxContextTurns <= 0 ? ForgerEmsEnvironmentConfiguration.KyraMaxContextTurns : settings.MaxContextTurns, 1, 200);
         settings.ProviderPriorityCsv = string.IsNullOrWhiteSpace(settings.ProviderPriorityCsv)
             ? ForgerEmsEnvironmentConfiguration.KyraProviderPriority
@@ -9125,6 +9791,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             providerConfig.ApiKeyEnvironmentVariable = string.IsNullOrWhiteSpace(view?.ApiKeyEnvironmentVariable)
                 ? provider.DefaultApiKeyEnvironmentVariable
                 : view!.ApiKeyEnvironmentVariable;
+            providerConfig.KeyStorageMode = string.IsNullOrWhiteSpace(view?.KeyStorageMode)
+                ? providerConfig.KeyStorageMode
+                : view!.KeyStorageMode;
+            providerConfig.SavedKeyPresent = view?.SavedKeyPresent == true || KyraProviderCredentialStore.Default.HasSecret(provider.Id);
+            providerConfig.LastTestResult = view?.LastTestResult ?? providerConfig.LastTestResult;
             providerConfig.TimeoutSeconds = providerConfig.TimeoutSeconds <= 0 ? settings.TimeoutSeconds : providerConfig.TimeoutSeconds;
             providerConfig.MaxRequestsPerMinute = providerConfig.MaxRequestsPerMinute <= 0 ? 12 : providerConfig.MaxRequestsPerMinute;
             providerConfig.MaxRetries = providerConfig.MaxRetries < 0 ? 0 : providerConfig.MaxRetries;
@@ -9134,13 +9805,35 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             if (!string.IsNullOrWhiteSpace(view?.SessionApiKey))
             {
-                KyraApiKeyStore.SetSessionKey(provider.Id, view.SessionApiKey);
-                view.MaskedApiKey = KyraApiKeyStore.Mask(view.SessionApiKey);
+                if (string.Equals(view.KeyStorageMode, "encrypted-local", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (KyraProviderCredentialStore.Default.SaveSecret(provider.Id, view.SessionApiKey, out var status))
+                    {
+                        KyraApiKeyStore.ClearSessionKey(provider.Id);
+                        view.SavedKeyPresent = true;
+                        view.SavedKeyStatus = status;
+                        view.MaskedApiKey = string.Empty;
+                    }
+                    else
+                    {
+                        KyraApiKeyStore.SetSessionKey(provider.Id, view.SessionApiKey);
+                        view.KeyStorageMode = "session";
+                        view.SavedKeyStatus = status;
+                        view.MaskedApiKey = KyraApiKeyStore.Mask(view.SessionApiKey);
+                    }
+                }
+                else if (string.Equals(view.KeyStorageMode, "session", StringComparison.OrdinalIgnoreCase))
+                {
+                    KyraApiKeyStore.SetSessionKey(provider.Id, view.SessionApiKey);
+                    view.MaskedApiKey = KyraApiKeyStore.Mask(view.SessionApiKey);
+                }
                 view.SessionApiKey = string.Empty;
             }
 
             if (view is not null)
             {
+                view.SavedKeyPresent = KyraProviderCredentialStore.Default.HasSecret(provider.Id);
+                providerConfig.SavedKeyPresent = view.SavedKeyPresent;
                 view.IsConfigured = provider.IsConfigured(providerConfig);
                 view.ProviderStatusLabel = CopilotProviderStatusFormatter.BuildStatusLabel(provider, providerConfig);
                 view.CredentialSourceText = CopilotProviderStatusFormatter.BuildCredentialSourceLine(provider, providerConfig);
@@ -9266,6 +9959,127 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         SaveCopilotSettings();
+    }
+
+    private void SaveProviderKey(CopilotProviderSettingView? providerView)
+    {
+        if (providerView is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(providerView.SessionApiKey))
+        {
+            providerView.LastTestResult = "No key entered. Paste a key, choose storage, then save.";
+            return;
+        }
+
+        if (string.Equals(providerView.KeyStorageMode, "encrypted-local", StringComparison.OrdinalIgnoreCase))
+        {
+            if (KyraProviderCredentialStore.Default.SaveSecret(providerView.Id, providerView.SessionApiKey, out var status))
+            {
+                KyraApiKeyStore.ClearSessionKey(providerView.Id);
+                providerView.SessionApiKey = string.Empty;
+                providerView.MaskedApiKey = string.Empty;
+                providerView.SavedKeyPresent = true;
+                providerView.SavedKeyStatus = status;
+                providerView.LastTestResult = "Protected key saved. Test connection when ready.";
+            }
+            else
+            {
+                KyraApiKeyStore.SetSessionKey(providerView.Id, providerView.SessionApiKey);
+                providerView.MaskedApiKey = KyraApiKeyStore.Mask(providerView.SessionApiKey);
+                providerView.SessionApiKey = string.Empty;
+                providerView.KeyStorageMode = "session";
+                providerView.SavedKeyStatus = status;
+                providerView.LastTestResult = "Protected storage unavailable; using session-only key until app closes.";
+            }
+        }
+        else
+        {
+            providerView.KeyStorageMode = "session";
+            KyraApiKeyStore.SetSessionKey(providerView.Id, providerView.SessionApiKey);
+            providerView.MaskedApiKey = KyraApiKeyStore.Mask(providerView.SessionApiKey);
+            providerView.SessionApiKey = string.Empty;
+            providerView.LastTestResult = "Session key saved until app closes.";
+        }
+
+        SaveCopilotSettings();
+        RefreshCopilotProviderStatus();
+    }
+
+    private void ClearProviderKey(CopilotProviderSettingView? providerView)
+    {
+        if (providerView is null)
+        {
+            return;
+        }
+
+        KyraApiKeyStore.ClearSessionKey(providerView.Id);
+        KyraProviderCredentialStore.Default.ClearSecret(providerView.Id);
+        providerView.SessionApiKey = string.Empty;
+        providerView.MaskedApiKey = string.Empty;
+        providerView.SavedKeyPresent = false;
+        providerView.SavedKeyStatus = "No saved key";
+        providerView.LastTestResult = "Key cleared.";
+        SaveCopilotSettings();
+        RefreshCopilotProviderStatus();
+    }
+
+    private void UseProviderAsDefault(CopilotProviderSettingView? providerView)
+    {
+        if (providerView is null)
+        {
+            return;
+        }
+
+        foreach (var item in CopilotProviderSettings)
+        {
+            item.IsEnabled = string.Equals(item.Id, providerView.Id, StringComparison.OrdinalIgnoreCase) ||
+                             string.Equals(item.Id, "local-offline", StringComparison.OrdinalIgnoreCase);
+        }
+
+        SelectedCopilotMode = providerView.Id switch
+        {
+            "forgerems-gateway" => "ForgerEMS Beta Gateway",
+            "ollama-local" or "lm-studio-local" or "local-offline" => "Local Only",
+            _ => "BYOK"
+        };
+        providerView.LastTestResult = "Selected as preferred provider. Local fallback remains available.";
+        SaveCopilotSettings();
+        RefreshCopilotProviderStatus();
+    }
+
+    private async Task TestProviderConnectionAsync(CopilotProviderSettingView? providerView)
+    {
+        if (providerView is null)
+        {
+            return;
+        }
+
+        var provider = _copilotProviderRegistry.Providers.FirstOrDefault(p =>
+            string.Equals(p.Id, providerView.Id, StringComparison.OrdinalIgnoreCase));
+        if (provider is null)
+        {
+            providerView.LastTestResult = "Provider not found.";
+            return;
+        }
+
+        var settings = BuildCopilotSettingsFromUi();
+        var cfg = settings.Providers.TryGetValue(provider.Id, out var providerConfig)
+            ? providerConfig
+            : new CopilotProviderConfiguration();
+        cfg.LastTestedUtc = DateTimeOffset.UtcNow;
+
+        providerView.LastTestResult = "Testing connection with sanitized prompt...";
+        var result = await new KyraProviderConnectionTester()
+            .TestAsync(provider, cfg, settings, GetType().Assembly.GetName().Version?.ToString() ?? "unknown")
+            .ConfigureAwait(true);
+        providerView.LastTestResult = result.UserMessage;
+
+        cfg.LastTestResult = providerView.LastTestResult;
+        SaveCopilotSettings();
+        RefreshCopilotProviderStatus();
     }
 
     private void UpdateProviderDiagnosticsSummary()
@@ -9826,7 +10640,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void AppendDiagnosticsLog(string message, Exception? ex = null)
+    private static void AppendDiagnosticsLog(string message, Exception? ex = null)
     {
         try
         {
@@ -10391,7 +11205,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             using var client = new HttpClient();
             client.Timeout = TimeSpan.FromSeconds(10);
-            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "ForgerEMS/1.2.0-preview.1 (beta link checker; no execute)");
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "ForgerEMS/1.2.1-preview.1 (beta link checker; no execute)");
             using var request = new HttpRequestMessage(HttpMethod.Head, uri);
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
             var sb = new StringBuilder(baseText);
@@ -10450,7 +11264,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             using var client = new HttpClient();
             client.Timeout = TimeSpan.FromMinutes(3);
-            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "ForgerEMS/1.2.0-preview.1 (beta quarantine download; no execute)");
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "ForgerEMS/1.2.1-preview.1 (beta quarantine download; no execute)");
             await using var network = await client.GetStreamAsync(uri).ConfigureAwait(false);
             await using var file = File.Create(targetPath);
             using var incremental = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
@@ -10716,6 +11530,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 CheckForUpdatesNowCommand.RaiseCanExecuteChanged();
                 CopyUpdateDiagnosticsCommand.RaiseCanExecuteChanged();
                 AppUpdateDownloadInstallerCommand.RaiseCanExecuteChanged();
+                OnPropertyChanged(nameof(AppUpdateCheckButtonText));
+                OnPropertyChanged(nameof(AppUpdateCheckHelperText));
             });
         }
     }
@@ -10817,11 +11633,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         _appUpdateMachineState = UpdateCheckMachineStateResolver.Resolve(inProgress, _lastAppliedUpdateCheckResult);
         RaiseAppUpdateStatusDetailProperties();
+        OnPropertyChanged(nameof(AppUpdateCheckButtonText));
+        OnPropertyChanged(nameof(AppUpdateCheckHelperText));
     }
 
     private void RaiseAppUpdateStatusDetailProperties()
     {
         OnPropertyChanged(nameof(AppUpdateMachineStateDisplay));
+        OnPropertyChanged(nameof(AppUpdateCheckButtonText));
+        OnPropertyChanged(nameof(AppUpdateCheckHelperText));
         OnPropertyChanged(nameof(AppUpdateLatestReleaseTagDisplay));
         OnPropertyChanged(nameof(AppUpdateLatestPublishedDisplay));
         OnPropertyChanged(nameof(AppUpdateAssetFoundDisplay));
@@ -11187,6 +12007,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             view.ProviderStatusLabel = CopilotProviderStatusFormatter.BuildStatusLabel(provider, providerConfig);
             view.CredentialSourceText = CopilotProviderStatusFormatter.BuildCredentialSourceLine(provider, providerConfig);
             view.MaskedApiKey = KyraApiKeyStore.Mask(KyraApiKeyStore.GetSessionKey(provider.Id));
+            view.SavedKeyPresent = KyraProviderCredentialStore.Default.HasSecret(provider.Id);
+            view.SavedKeyStatus = KyraProviderCredentialStore.Default.BuildSanitizedStatus(provider.Id);
+            view.LastTestResult = providerConfig.LastTestResult;
         }
 
         UpdateCopilotOnlineIndicator();
@@ -11501,6 +12324,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         RunSystemScanCommand.RaiseCanExecuteChanged();
         RunElevatedSystemScanCommand.RaiseCanExecuteChanged();
         RefreshToolkitHealthCommand.RaiseCanExecuteChanged();
+        VerifyToolkitLinksCommand.RaiseCanExecuteChanged();
+        CancelVerifyToolkitLinksCommand.RaiseCanExecuteChanged();
         UpdateToolkitCommand.RaiseCanExecuteChanged();
         OpenToolkitUsbReportsCommand.RaiseCanExecuteChanged();
         RecheckSelectedToolCommand.RaiseCanExecuteChanged();
@@ -11552,6 +12377,22 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         var redacted = CopilotRedactor.Redact(line.Text, enabled: true);
         var normalizedForDisplay = UsbLogDisplayNormalizer.NormalizeHashProviderLabels(redacted);
+
+        lock (_logDedupLock)
+        {
+            var isDuplicate = string.Equals(_lastEnqueuedLogText, normalizedForDisplay, StringComparison.Ordinal) &&
+                              _lastEnqueuedLogSeverity == line.Severity &&
+                              (line.Timestamp - _lastEnqueuedLogTimestamp) <= TimeSpan.FromMilliseconds(900);
+            if (isDuplicate)
+            {
+                return;
+            }
+
+            _lastEnqueuedLogText = normalizedForDisplay;
+            _lastEnqueuedLogSeverity = line.Severity;
+            _lastEnqueuedLogTimestamp = line.Timestamp;
+        }
+
         var sanitized = new LogLine(
             line.Timestamp,
             normalizedForDisplay,
@@ -11984,6 +12825,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         _safeTestingEnvironmentRefreshCts?.Dispose();
+        try
+        {
+            _toolkitLinkVerifyCts?.Cancel();
+        }
+        catch
+        {
+        }
+
+        _toolkitLinkVerifyCts?.Dispose();
+        _toolkitLinkVerifier.Dispose();
         _updateCheckService.Dispose();
         try
         {

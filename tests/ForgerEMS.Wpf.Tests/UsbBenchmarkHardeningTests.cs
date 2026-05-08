@@ -201,6 +201,17 @@ public sealed class UsbBenchmarkHardeningTests
             ResultKind = UsbBenchmarkResultKind.BlockedBySafety
         };
         Assert.False(blocked.ShouldPersistSuccessfulHistory);
+
+        var cachedRead = new UsbBenchmarkResult
+        {
+            Succeeded = true,
+            Status = "Complete",
+            WriteSpeedMBps = 58.8,
+            ReadSpeedMBps = 3851.1,
+            ReadLikelyCached = true,
+            ResultKind = UsbBenchmarkResultKind.Completed
+        };
+        Assert.False(cachedRead.ShouldPersistSuccessfulHistory);
     }
 
     [Fact]
@@ -275,6 +286,59 @@ public sealed class UsbBenchmarkHardeningTests
 
         Assert.False(assessment.ReadLikelyCached);
         Assert.Equal("Measured", assessment.ConfidenceLabel);
+    }
+
+    [Fact]
+    public void RecommendationEngine_CachedReadDoesNotProduceIdeal()
+    {
+        var recommendation = UsbBuilderRecommendationEngine.Build(
+            selectedTarget: BenchmarkTarget(),
+            matchedDevice: null,
+            controllers: [],
+            diff: null,
+            profile: null,
+            benchmark: new UsbIntelligenceBenchmarkResult
+            {
+                Succeeded = true,
+                WriteSpeedMBps = 59.7,
+                ReadSpeedMBps = 4121.6,
+                Classification = UsbSpeedMeasurementClass.Usb3,
+                ConfidenceScore = 85,
+                ReadLikelyCached = true,
+                ReadIsEstimate = true,
+                SummaryLine = "Benchmark complete with warning"
+            },
+            portRecord: null);
+
+        Assert.Equal(UsbBuilderQuality.Good, recommendation.Quality);
+        Assert.DoesNotContain("Ideal", recommendation.ClassificationLine, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Read ignored: cache suspected", recommendation.Detail, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void RecommendationEngine_MeasuredReadWriteCanStillBeIdeal()
+    {
+        var recommendation = UsbBuilderRecommendationEngine.Build(
+            selectedTarget: BenchmarkTarget(),
+            matchedDevice: null,
+            controllers: [],
+            diff: null,
+            profile: null,
+            benchmark: new UsbIntelligenceBenchmarkResult
+            {
+                Succeeded = true,
+                WriteSpeedMBps = 58.8,
+                ReadSpeedMBps = 265.4,
+                Classification = UsbSpeedMeasurementClass.Usb3,
+                ConfidenceScore = 80,
+                ReadLikelyCached = false,
+                ReadIsEstimate = false,
+                SummaryLine = "Measured"
+            },
+            portRecord: null);
+
+        Assert.NotEqual(UsbBuilderQuality.Unknown, recommendation.Quality);
+        Assert.DoesNotContain("cache suspected", recommendation.Detail, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

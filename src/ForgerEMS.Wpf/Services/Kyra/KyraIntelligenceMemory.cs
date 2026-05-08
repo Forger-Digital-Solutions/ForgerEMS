@@ -1,3 +1,4 @@
+#pragma warning disable CA1305 // Locale-sensitive calls; text is diagnostic/UI output
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -149,10 +150,17 @@ public sealed class KyraMachineMemoryStore : IKyraMemoryStore
             return false;
         }
 
-        var profile = Load();
-        profile.Entries.Add(entry);
-        Save(profile);
-        return true;
+        try
+        {
+            var profile = Load();
+            profile.Entries.Add(entry);
+            Save(profile);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public void Delete()
@@ -433,6 +441,7 @@ public static partial class KyraMemorySanitizer
         text = WindowsPathRegex().Replace(text, "[local path redacted]");
         text = ProductKeyRegex().Replace(text, "[product key redacted]");
         text = TokenLikeRegex().Replace(text, "[token redacted]");
+        text = SerialLikeRegex().Replace(text, "[serial-like redacted]");
         foreach (var marker in SecretMarkers)
         {
             text = Regex.Replace(text, Regex.Escape(marker), "[sensitive label redacted]", RegexOptions.IgnoreCase);
@@ -664,7 +673,7 @@ public static partial class KyraMemorySanitizer
     [GeneratedRegex(@"\b(?:sk|pk|ghp|github_pat|xox[baprs]|AIza)[A-Za-z0-9_\-]{16,}\b", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
     private static partial Regex TokenLikeRegex();
 
-    [GeneratedRegex(@"\b[A-Z0-9]{8,}\b", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
+    [GeneratedRegex(@"\b(?=[A-Z0-9]*\d)(?=[A-Z0-9]*[A-Z])[A-Z0-9]{10,}\b", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
     private static partial Regex SerialLikeRegex();
 }
 

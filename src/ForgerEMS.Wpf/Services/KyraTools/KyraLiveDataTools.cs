@@ -1,3 +1,4 @@
+#pragma warning disable CA1305 // Locale-sensitive calls; text is diagnostic/UI output
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;

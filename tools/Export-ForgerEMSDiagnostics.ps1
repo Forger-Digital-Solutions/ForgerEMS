@@ -2,11 +2,11 @@
 <#
 .SYNOPSIS
   Builds a redacted operator diagnostics ZIP (logs + README + metadata).
-  Complements the in-app Export Support Bundle; uses the same path redaction style as the app.
+  Complements the in-app Create Support Bundle; uses the same path redaction style as the app.
 #>
 param(
     [string]$OutputZip = "",
-    [string]$Version = "1.2.0-preview.1"
+    [string]$Version = "1.2.1-preview.1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -31,7 +31,7 @@ $meta = @"
 ForgerEMS diagnostics export (operator script)
 GeneratedUtc: $((Get-Date).ToUniversalTime().ToString("o"))
 AppSemanticVersion: $Version
-DisplayVersion: ForgerEMS v1.2.0 Public Preview
+DisplayVersion: ForgerEMS v1.2.1 Public Preview
 FORGEREMS_RELEASE_CHANNEL: $env:FORGEREMS_RELEASE_CHANNEL
 Update owner/repo: $env:FORGEREMS_GITHUB_OWNER / $env:FORGEREMS_GITHUB_REPO
 

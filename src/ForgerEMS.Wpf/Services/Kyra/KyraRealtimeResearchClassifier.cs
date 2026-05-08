@@ -13,10 +13,6 @@ public static class KyraRealtimeResearchClassifier
         out string gatewayIntent)
     {
         gatewayIntent = "chat";
-        if (string.IsNullOrWhiteSpace(prompt))
-        {
-            return false;
-        }
 
         if (!ForgerEmsEnvironmentConfiguration.KyraGatewayEnabled)
         {
@@ -47,24 +43,31 @@ public static class KyraRealtimeResearchClassifier
             return false;
         }
 
-        var p = prompt.Trim();
-        if (IsLocalFirstPrompt(p))
+        if (!TryClassifyRealtimeNeed(prompt, out gatewayIntent))
+        {
+            gatewayIntent = "chat";
+            return false;
+        }
+
+        return true;
+    }
+
+    public static bool TryClassifyRealtimeNeed(string prompt, out string gatewayIntent)
+    {
+        gatewayIntent = "chat";
+        if (string.IsNullOrWhiteSpace(prompt))
         {
             return false;
         }
 
-        if (KyraSimpleMathEvaluator.LooksLikeSimpleArithmeticQuestion(p))
+        var p = prompt.Trim();
+        if (IsLocalFirstPrompt(p) || KyraSimpleMathEvaluator.LooksLikeSimpleArithmeticQuestion(p))
         {
             return false;
         }
 
         gatewayIntent = MapGatewayIntent(p);
-        if (HasRealtimeCue(p))
-        {
-            return true;
-        }
-
-        return gatewayIntent is not ("chat" or "web");
+        return HasRealtimeCue(p) || gatewayIntent is not ("chat" or "web");
     }
 
     private static bool IsLocalFirstPrompt(string p)
@@ -107,8 +110,19 @@ public static class KyraRealtimeResearchClassifier
     private static bool LooksLikeLocalOnlyHardwareFactsQuestion(string l)
     {
         if (l.Contains("cheapest", StringComparison.Ordinal) ||
+            l.Contains("price", StringComparison.Ordinal) ||
+            l.Contains("current ", StringComparison.Ordinal) ||
+            l.Contains("latest", StringComparison.Ordinal) ||
+            l.Contains("where can i buy", StringComparison.Ordinal) ||
             l.Contains("where to buy", StringComparison.Ordinal) ||
+            l.Contains("what should i buy", StringComparison.Ordinal) ||
+            l.Contains("which should i buy", StringComparison.Ordinal) ||
+            l.Contains("should i buy", StringComparison.Ordinal) ||
+            l.Contains("in stock", StringComparison.Ordinal) ||
+            l.Contains("availability", StringComparison.Ordinal) ||
             l.Contains("find compatible", StringComparison.Ordinal) ||
+            l.Contains("compatible replacement", StringComparison.Ordinal) ||
+            l.Contains("official compatibility", StringComparison.Ordinal) ||
             l.Contains("part lookup", StringComparison.Ordinal) ||
             l.Contains("lookup part", StringComparison.Ordinal))
         {
@@ -148,9 +162,25 @@ public static class KyraRealtimeResearchClassifier
                l.Contains("hows ", StringComparison.Ordinal) ||
                l.Contains("how is ", StringComparison.Ordinal) ||
                l.Contains("price", StringComparison.Ordinal) ||
+               l.Contains("buy", StringComparison.Ordinal) ||
+               l.Contains("purchase", StringComparison.Ordinal) ||
+               l.Contains("where can i buy", StringComparison.Ordinal) ||
+               l.Contains("where to buy", StringComparison.Ordinal) ||
+               l.Contains("in stock", StringComparison.Ordinal) ||
+               l.Contains("availability", StringComparison.Ordinal) ||
+               l.Contains("compatible", StringComparison.Ordinal) ||
+               l.Contains("replacement part", StringComparison.Ordinal) ||
+               l.Contains("service manual", StringComparison.Ordinal) ||
+               l.Contains("manuals", StringComparison.Ordinal) ||
+               l.Contains("look up", StringComparison.Ordinal) ||
+               l.Contains("lookup", StringComparison.Ordinal) ||
+               l.Contains("search", StringComparison.Ordinal) ||
+               l.Contains("dig ", StringComparison.Ordinal) ||
+               l.Contains("find ", StringComparison.Ordinal) ||
                l.Contains("cheapest", StringComparison.Ordinal) ||
                l.Contains("lowest price", StringComparison.Ordinal) ||
                l.Contains("best deal", StringComparison.Ordinal) ||
+               l.Contains("download", StringComparison.Ordinal) ||
                l.Contains("cve", StringComparison.Ordinal) ||
                l.Contains("advisory", StringComparison.Ordinal);
     }

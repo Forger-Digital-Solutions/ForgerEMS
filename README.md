@@ -2,9 +2,9 @@
 
 **Forger Engineering Maintenance Suite** — a Windows desktop app for technicians who work with USB toolkits, repairs, and diagnostics.
 
-**Current release line:** **v1.2.0-preview.1** — **ForgerEMS v1.2.0 Public Preview** (Kickstarter-facing polish, config/env layer, support bundle export, licensing foundations, and documentation pass; core WPF/.NET 8 architecture unchanged).
+**Current release line:** **v1.2.1-preview.1** — **ForgerEMS v1.2.1 Public Preview** (toolkit catalog metadata, workflow presets, Toolkit Readiness Score, local machine profiles, Verify Links, Kyra awareness for the technician suite, config/env layer, support bundle export, and documentation pass; core WPF/.NET 8 architecture unchanged).
 
-**Kickstarter:** [Campaign link — add when live](https://www.kickstarter.com/)
+**Kickstarter:** Coming soon.
 
 **Support:** [ForgerDigitalSolutions@outlook.com](mailto:ForgerDigitalSolutions@outlook.com) — send **sanitized** screenshots and short log excerpts only; never passwords, keys, or private files.
 
@@ -23,14 +23,16 @@ This is **Public Preview / prerelease** software: behavior and packaging can cha
 | Feature | What it does |
 |--------|----------------|
 | **USB Builder** | Guided flows to verify, prepare, and update Ventoy-oriented USB maintenance media, with managed downloads and careful drive selection. |
-| **USB Intelligence** | Measure write/read on a **safe removable** target, flag likely cached read samples honestly, map **which physical USB port** you used, and get practical guidance from benchmarks and topology hints (best-effort; varies by PC). |
+| **USB Intelligence** | Measure write/read on a **safe removable** target, flag likely cached read samples honestly, map **which physical USB port** you used, and get practical guidance from benchmarks and topology hints (best-effort; varies by PC). Cache-suspected reads are treated as unverified and do not upgrade recommendation quality on their own. |
 | **System Intelligence** | Local scan summaries with Hardware X-Ray sensor coverage, health scoring, FlipValue, Best Use / Device Fit, and honest Unknown/NotExposed handling before repair or resale prep. |
 | **Diagnostics** | Unified health checklist, file/link safety helpers, and technician-oriented tools (including WSL-related helpers where applicable). |
-| **Toolkit Manager** | Manifest-driven health for what is on your USB; clear paths when something must be supplied manually. |
-| **Kyra** | In-app assistant: offline local answers first, with optional **Kyra Beta Gateway** cloud access via gateway URL + revocable beta token. **Beta testers are not asked to supply direct provider API keys.** After System Intelligence, Kyra can answer many **hardware / upgrade / parts** questions from local scan data; live part pricing and exact SKUs require configured research paths and source confirmation — not guesses. |
+| **Toolkit Manager** | Manifest-driven health for what is on your USB, now with technician-focused categories and catalog metadata (purpose, official URL, license/redistribution note, download/checksum status, distribution model, beta safety rating). Health checks distinguish verified managed tools, present-but-not-verified tools, manual/info shortcuts, shortcuts covered/suppressed by installed managed tools, and missing required items. **Verify Links** runs optional **HTTP metadata-only** checks (HEAD / tiny ranged GET): reachability, redirects, and trust hints — **no full downloads and no execution** of third-party payloads. |
+| **Kyra** | In-app assistant: offline local answers first, with optional **Kyra Beta Gateway**, **Bring Your Own Key**, local AI, and live-tool paths shown in **Kyra AI Settings**. BYOK keys are optional, hidden, and never stored as plaintext appsettings. After System Intelligence, Kyra can answer many **hardware / upgrade / parts** questions from local scan data, and can explain dry-run **Technician Workflow Presets** (checklist guidance only; no destructive automation). |
 | **Kyra Intelligence Network** | Local-first repair memory plus optional anonymous community learning foundations. Default is **Local Only**; community upload is off/disabled in this phase. |
 
 More context: [docs/ABOUT_FORGEREMS.md](docs/ABOUT_FORGEREMS.md) · Behavior notes: [KYRA_BEHAVIOR_SPEC.md](KYRA_BEHAVIOR_SPEC.md) (repository root).
+
+**Visual Effects:** The app defaults to **Static / Low Power** backgrounds for public preview responsiveness. Animated CyberViking/circuit effects remain optional in Settings, and **Off / Plain dark** is available for slower machines or remote sessions.
 
 **Hardware X-Ray / Deep Sensor Mode:** Deep Sensor Mode is optional and uses bundled local read-only hardware sensors when enabled, including LibreHardwareMonitorLib where packaged. No separate LibreHardwareMonitor download is required. ForgerEMS does not control fans, voltages, clocks, overclocking, undervolting, BIOS, or firmware. Unavailable readings are coverage limits, not failures.
 
@@ -44,6 +46,14 @@ More context: [docs/ABOUT_FORGEREMS.md](docs/ABOUT_FORGEREMS.md) · Behavior not
 - Local/offline fallback remains available if gateway is missing, rate-limited, or unavailable.
 - Do not paste provider keys or beta tokens in docs, screenshots, logs, support email, or Kyra chat.
 
+## Kyra AI Settings and BYOK
+
+- **Kyra AI Settings** has clean tabs for Overview, Providers, Bring Your Own Key, Live Tools, Privacy & Context, Local AI, and Diagnostics.
+- BYOK is optional. Session keys are kept in memory until the app closes; saved keys use Windows protected local storage when available and fall back to session-only if protection fails.
+- Environment variable setup remains supported for advanced operators under the settings panel's advanced environment setup and [docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md](docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md).
+- Provider precedence is session key, protected saved key, environment variable, then Gateway/local/offline fallback.
+- Diagnostics and support email must not include API keys, tokens, private documents, serial numbers, service tags, private paths, or raw exception chains.
+
 ## Kyra Intelligence Network
 
 Kyra Intelligence Network is the safe foundation for **local-first repair memory + optional anonymous community learning**.
@@ -51,7 +61,9 @@ Kyra Intelligence Network is the safe foundation for **local-first repair memory
 - **Local Kyra Memory** can store sanitized, machine-scoped repair notes on this PC: machine class, hardware category summary, health score band, issue/warning category, suggested or user-confirmed fixes, USB target safety result, best-use category, resale prep category, scan timestamp, confidence, and a ForgerEMS-generated local machine profile ID.
 - **Optional Anonymous Community Learning** is off by default. The app must not share community intelligence unless the user explicitly opts in. In this phase the community client is disabled/no-op and only sanitized preview/export foundations exist.
 - **Research Mode** routes current/live prompts such as crypto, stocks, weather, news, latest versions, drivers, CVEs, and market pricing to configured live tools/providers first. If no live tool is available, Kyra must say so honestly instead of inventing current data.
-- Settings include **Kyra Intelligence** controls to keep local-only, view what would be shared, export Kyra memory, and delete Kyra memory.
+- **Hardware part research** uses the local System Intelligence scan for device facts, then uses configured live research/gateway tools for external truth such as official compatibility, current availability, and pricing. For batteries, Kyra should prefer OEM support/service manuals/parts pages first, treat seller listings as secondary candidates, and tell you to match voltage, watt-hour rating, connector, shape, service manual, and physical label before buying.
+- Normal Kyra chat shows compact privacy/source footers. Provider routing and debug detail stays in logs, diagnostics, support bundles, or explicit technical detail flows.
+- Settings include **Kyra Intelligence** controls to keep local-only, use System Intelligence context, allow gateway research when configured, view what would be shared, export Kyra memory, and delete Kyra memory.
 
 ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the user explicitly enables a future sharing option. Realtime Kyra Gateway sends only sanitized request context needed to answer current-data questions. Provider API keys are stored server-side and are not included in the desktop app. Anonymous Community Intelligence sharing is optional and off by default.
 
@@ -119,16 +131,16 @@ Staging without compiling the installer:
 .\tools\build-release.ps1 -DryRun
 ```
 
-Full local release (version follows `src/ForgerEMS.Wpf/ForgerEMS.Wpf.csproj`, currently **1.2.0-preview.1** / **ForgerEMS v1.2.0 Public Preview**):
+Full local release (version follows `src/ForgerEMS.Wpf/ForgerEMS.Wpf.csproj`, currently **1.2.1-preview.1** / **ForgerEMS v1.2.1 Public Preview**):
 
 ```powershell
-.\tools\build-release.ps1 -Version 1.2.0-preview.1
+.\tools\build-release.ps1 -Version 1.2.1-preview.1
 ```
 
 Without Inno Setup (skips installer + dual ZIP bundle; still stages `release\current\` app + backend + `release.json` + checksums):
 
 ```powershell
-.\tools\build-release.ps1 -Version 1.2.0-preview.1 -SkipInstaller
+.\tools\build-release.ps1 -Version 1.2.1-preview.1 -SkipInstaller
 ```
 
 Release layout, CI, and operator checklists: [RELEASE_PROCESS.md](RELEASE_PROCESS.md), [BETA_RELEASE_CHECKLIST.md](BETA_RELEASE_CHECKLIST.md), [BETA_TESTING_GUIDE.md](BETA_TESTING_GUIDE.md).
@@ -153,17 +165,9 @@ ForgerEMS/
 └── LICENSE
 ```
 
-## Screenshots (placeholders)
+## Screenshots
 
-Add campaign-quality PNGs under `docs/screenshots/` when ready.
-
-| Shot | Suggested filename |
-|------|---------------------|
-| Main dashboard | `docs/screenshots/main-dashboard.png` |
-| USB Builder | `docs/screenshots/usb-toolkit-workflow.png` |
-| USB Intelligence | `docs/screenshots/usb-intelligence-pro.png` |
-| Kyra | `docs/screenshots/kyra-assistant.png` |
-| System Intelligence | `docs/screenshots/system-intelligence.png` |
+Campaign-quality screenshots coming with launch. Add PNGs under `docs/screenshots/` when ready.
 
 ## License
 

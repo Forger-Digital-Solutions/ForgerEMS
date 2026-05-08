@@ -172,6 +172,8 @@ public static class UsbDiagnosticsComposer
         var ranked = profile.KnownPorts
             .Where(p => p.LastBenchmark?.Succeeded == true &&
                         p.LastBenchmark.WriteSpeedMBps > 0 &&
+                        !p.LastBenchmark.ReadLikelyCached &&
+                        !p.LastBenchmark.ReadIsEstimate &&
                         p.LastBenchmark.AttachedToVerifiedPort != false)
             .OrderByDescending(p => p.LastBenchmark!.WriteSpeedMBps)
             .FirstOrDefault();
@@ -179,7 +181,10 @@ public static class UsbDiagnosticsComposer
         if (ranked is null)
         {
             var unverified = profile.UnverifiedBenchmarkByDriveLetter.Values
-                .Where(b => b.Succeeded && b.WriteSpeedMBps > 0)
+                .Where(b => b.Succeeded &&
+                            b.WriteSpeedMBps > 0 &&
+                            !b.ReadLikelyCached &&
+                            !b.ReadIsEstimate)
                 .OrderByDescending(b => b.WriteSpeedMBps)
                 .FirstOrDefault();
             if (unverified is not null)

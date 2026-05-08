@@ -111,6 +111,11 @@ repacks, or unofficial checksum sites just to preserve automation.
 - For 7-Zip, use `https://7-zip.org/`; do not substitute lookalike domains.
 - For rolling ISOs such as Arch, use the official download page so the operator
   sees the current checksum/signature guidance.
+- If an info shortcut points to an active managed download and the managed file
+  is installed with a verified checksum, Toolkit Health may mark the missing
+  shortcut as covered/suppressed instead of Manual Required. Do not count that
+  as a blocker; restore the shortcut only if the managed item is missing or no
+  longer verified.
 
 ## Operator Decision Guide
 

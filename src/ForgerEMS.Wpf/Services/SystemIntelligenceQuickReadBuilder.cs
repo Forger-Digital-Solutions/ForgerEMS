@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using VentoyToolkitSetup.Wpf.Services.Intelligence;
 
 namespace VentoyToolkitSetup.Wpf.Services;
 
@@ -18,6 +19,9 @@ public static class SystemIntelligenceQuickReadBuilder
         var flipValue = profile.FlipValue;
         var strengths = BuildStrengths(profile, deviceFit);
         var watchOuts = BuildWatchOuts(profile, health, root);
+        var workflowHints = TechnicianWorkflowPresetCatalog.BuildSystemActionHints(root);
+        var toolRecommendations = BuildToolRecommendations(root);
+        var missingInfo = BuildMissingInfo(root);
         var nextAction = BuildNextAction(profile, deviceFit, watchOuts);
         var needsSensorNote = watchOuts.Any(item =>
             item.Contains("not exposed", StringComparison.OrdinalIgnoreCase) ||
@@ -32,8 +36,9 @@ public static class SystemIntelligenceQuickReadBuilder
             $"Best Use: {deviceFit.PrimaryFit}",
             $"Flip Value: {NormalizeRange(flipValue.EstimatedResaleRange)} | Basis: {BuildFlipBasis(flipValue)}",
             $"Key Strengths: {JoinList(strengths, "core specs captured")}",
-            $"Watch-outs: {JoinList(watchOuts, "none obvious from local scan")}",
-            $"Next Action: {nextAction}"
+            $"Watch-outs: {JoinList(watchOuts.Select(CompactPhrase).Take(3), "none obvious from local scan")} | Missing info: {CompactPhrase(missingInfo)}",
+            $"Workflow suggestion: {JoinList(workflowHints, "Diagnose Slow Laptop (dry-run)")}",
+            $"Next Action: {nextAction} | Tool recommendations: {JoinList(toolRecommendations, "System Intelligence + Toolkit Manager")}"
         };
 
         if (needsSensorNote && lines.Count < 8)
@@ -41,7 +46,7 @@ public static class SystemIntelligenceQuickReadBuilder
             lines.Add("Sensor Notes: Unknown lowers confidence; NotExposed/PermissionRequired means Windows limited optional detail, not failure.");
         }
 
-        return string.Join(Environment.NewLine, lines.Take(8));
+        return string.Join(Environment.NewLine, lines.Take(9));
     }
 
     private static MachineClassResult? ReadMachineClass(JsonElement root)
@@ -80,7 +85,7 @@ public static class SystemIntelligenceQuickReadBuilder
         };
     }
 
-    private static IReadOnlyList<string> BuildStrengths(SystemProfile profile, DeviceFitResult fit)
+    private static string[] BuildStrengths(SystemProfile profile, DeviceFitResult fit)
     {
         var strengths = new List<string>();
         var cpu = profile.Cpu ?? string.Empty;
@@ -135,7 +140,7 @@ public static class SystemIntelligenceQuickReadBuilder
         return strengths.Distinct(StringComparer.OrdinalIgnoreCase).Take(4).ToArray();
     }
 
-    private static IReadOnlyList<string> BuildWatchOuts(SystemProfile profile, SystemHealthEvaluation health, JsonElement root)
+    private static string[] BuildWatchOuts(SystemProfile profile, SystemHealthEvaluation health, JsonElement root)
     {
         var watch = new List<string>();
         if (profile.Batteries.Count > 0 && profile.Batteries.All(b => b.WearPercent is null && b.CycleCount is null))
@@ -196,6 +201,51 @@ public static class SystemIntelligenceQuickReadBuilder
         }
 
         return $"List around the strongest verified fit: {ListingPhrase(fit)}.";
+    }
+
+    private static string[] BuildToolRecommendations(JsonElement root)
+    {
+        var tools = new List<string>
+        {
+            "System Intelligence",
+            "Hardware X-Ray"
+        };
+
+        if (root.TryGetProperty("usbDiagnostics", out var usb) && usb.ValueKind == JsonValueKind.Object)
+        {
+            tools.Add("USB benchmark");
+        }
+
+        tools.Add("Toolkit Manager");
+        return tools.Distinct(StringComparer.OrdinalIgnoreCase).Take(3).ToArray();
+    }
+
+    private static string BuildMissingInfo(JsonElement root)
+    {
+        var parts = new List<string>();
+        if (!root.TryGetProperty("summary", out var summary) || summary.ValueKind != JsonValueKind.Object)
+        {
+            return "summary not available";
+        }
+
+        var tpm = summary.TryGetProperty("tpmInfo", out var tpmInfo) ? GetJsonString(tpmInfo, "status", "Unknown") : "Unknown";
+        var secureBoot = summary.TryGetProperty("secureBootInfo", out var sbInfo) ? GetJsonString(sbInfo, "status", "Unknown") : "Unknown";
+        if (IsUnknown(tpm) || IsUnknown(secureBoot))
+        {
+            parts.Add("TPM/Secure Boot verification");
+        }
+
+        if (root.TryGetProperty("batteries", out var batteries) && batteries.ValueKind == JsonValueKind.Array)
+        {
+            var hasUnknownWear = batteries.EnumerateArray()
+                .Any(b => IsUnknown(GetJsonString(b, "wearDisplay", "Unknown")));
+            if (hasUnknownWear)
+            {
+                parts.Add("battery wear/runtime confidence");
+            }
+        }
+
+        return parts.Count == 0 ? "none critical" : string.Join("; ", parts);
     }
 
     private static string BuildFlipBasis(FlipValueProfile flip)

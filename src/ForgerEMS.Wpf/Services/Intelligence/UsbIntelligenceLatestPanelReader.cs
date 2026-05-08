@@ -103,8 +103,20 @@ public static class UsbIntelligenceLatestPanelReader
             benchSucceeded = true;
             var w = bench.TryGetProperty("writeSpeedMBps", out var ww) ? ww.GetDouble() : 0;
             var r = bench.TryGetProperty("readSpeedMBps", out var rr) ? rr.GetDouble() : 0;
-            benchLine =
-                $"{r.ToString("0.0", CultureInfo.InvariantCulture)} MB/s read · {w.ToString("0.0", CultureInfo.InvariantCulture)} MB/s write";
+            var readLikelyCached = bench.TryGetProperty("readLikelyCached", out var readCachedEl) &&
+                                   readCachedEl.ValueKind == JsonValueKind.True;
+            var readIsEstimate = bench.TryGetProperty("readIsEstimate", out var readEstimateEl) &&
+                                 readEstimateEl.ValueKind == JsonValueKind.True;
+            if (readLikelyCached || readIsEstimate)
+            {
+                benchLine =
+                    $"Write verified: {w.ToString("0.0", CultureInfo.InvariantCulture)} MB/s · Read ignored: cache suspected · Rerun recommended";
+            }
+            else
+            {
+                benchLine =
+                    $"{r.ToString("0.0", CultureInfo.InvariantCulture)} MB/s read · {w.ToString("0.0", CultureInfo.InvariantCulture)} MB/s write";
+            }
             if (bench.TryGetProperty("attachedToVerifiedPort", out var attached) &&
                 attached.ValueKind == JsonValueKind.False)
             {

@@ -17,6 +17,7 @@ public sealed class SystemIntelligenceQuickReadBuilderTests
         Assert.Contains("Flip Value:", summary);
         Assert.Contains("Key Strengths:", summary);
         Assert.Contains("Watch-outs:", summary);
+        Assert.Contains("Workflow suggestion:", summary);
         Assert.Contains("Next Action:", summary);
     }
 
@@ -59,9 +60,9 @@ public sealed class SystemIntelligenceQuickReadBuilderTests
         var summary = BuildQuickRead(PrecisionReportJson());
         var lines = summary.Split(Environment.NewLine);
 
-        Assert.InRange(lines.Length, 7, 8);
+        Assert.InRange(lines.Length, 8, 9);
         Assert.All(lines, line => Assert.True(line.Length <= 220, $"Line too long: {line}"));
-        Assert.True(summary.Length <= 1200);
+        Assert.True(summary.Length <= 1500);
     }
 
     [Fact]

@@ -24,6 +24,20 @@ public sealed class ToolkitHealthItemView
 
     public string Url { get; init; } = string.Empty;
 
+    public string Purpose { get; init; } = string.Empty;
+
+    public string OfficialUrl { get; init; } = string.Empty;
+
+    public string LicenseRedistributionNote { get; init; } = string.Empty;
+
+    public string DownloadStatus { get; init; } = string.Empty;
+
+    public string ChecksumStatus { get; init; } = string.Empty;
+
+    public string DistributionModel { get; init; } = string.Empty;
+
+    public string BetaSafetyRating { get; init; } = string.Empty;
+
     public string ClassificationReason { get; init; } = string.Empty;
 
     public string Version { get; init; } = string.Empty;
@@ -50,6 +64,7 @@ public sealed class ToolkitHealthItemView
         "UPDATE_AVAILABLE" => "Update available",
         "HASH_FAILED" => "Verification issue",
         "VERIFICATION_PENDING" => "Present / verification pending",
+        "COVERED_BY_MANAGED" => "Covered by managed download",
         "MANUAL_REQUIRED" => string.IsNullOrWhiteSpace(MatchedPath)
             ? "Manual shortcut missing"
             : "Manual shortcut present",
@@ -79,6 +94,11 @@ public sealed class ToolkitHealthItemView
                 return $"Checksum mismatch | {compactExpected}";
             }
 
+            if (Status.Equals("COVERED_BY_MANAGED", StringComparison.OrdinalIgnoreCase))
+            {
+                return $"Covered by managed download | {compactExpected}";
+            }
+
             return $"Missing | {compactExpected}";
         }
     }
@@ -87,6 +107,7 @@ public sealed class ToolkitHealthItemView
     {
         "INSTALLED" => "Verified",
         "VERIFICATION_PENDING" => "Pending",
+        "COVERED_BY_MANAGED" => "Covered",
         "HASH_FAILED" => "Checksum mismatch",
         "MISSING_REQUIRED" => "Not present",
         "MANUAL_REQUIRED" => "Manual",
@@ -100,6 +121,7 @@ public sealed class ToolkitHealthItemView
         "HASH_FAILED" => "Checksum issue",
         "UPDATE_AVAILABLE" => "Download/update",
         "MISSING_REQUIRED" => "Run Setup USB Toolkit",
+        "COVERED_BY_MANAGED" => "No action needed",
         "MANUAL_REQUIRED" => string.IsNullOrWhiteSpace(MatchedPath) ? "Open shortcut" : "No action needed",
         _ => string.IsNullOrWhiteSpace(Recommendation) ? "Review detail" : TruncateSingleLine(Recommendation, 44)
     };
@@ -108,6 +130,13 @@ public sealed class ToolkitHealthItemView
 
     public string DetailText =>
         $"{Tool} ({Category}){Environment.NewLine}" +
+        $"Purpose: {(string.IsNullOrWhiteSpace(Purpose) ? "Not provided in current report." : Purpose)}{Environment.NewLine}" +
+        $"Official URL: {(string.IsNullOrWhiteSpace(OfficialUrl) ? (string.IsNullOrWhiteSpace(Url) ? "Not provided." : Url) : OfficialUrl)}{Environment.NewLine}" +
+        $"License / redistribution: {(string.IsNullOrWhiteSpace(LicenseRedistributionNote) ? "Check vendor terms before bundling." : LicenseRedistributionNote)}{Environment.NewLine}" +
+        $"Distribution model: {(string.IsNullOrWhiteSpace(DistributionModel) ? TypeDisplay : DistributionModel)}{Environment.NewLine}" +
+        $"Beta safety rating: {(string.IsNullOrWhiteSpace(BetaSafetyRating) ? "Needs review" : BetaSafetyRating)}{Environment.NewLine}" +
+        $"Download status: {(string.IsNullOrWhiteSpace(DownloadStatus) ? StatusDisplayUi : DownloadStatus)}{Environment.NewLine}" +
+        $"Checksum status: {(string.IsNullOrWhiteSpace(ChecksumStatus) ? VerificationDisplay : ChecksumStatus)}{Environment.NewLine}" +
         $"Classification: {NormalizedCategoryLabel}{Environment.NewLine}" +
         $"Status: {StatusDisplayUi}{Environment.NewLine}" +
         $"Type: {TypeDisplay}{Environment.NewLine}" +

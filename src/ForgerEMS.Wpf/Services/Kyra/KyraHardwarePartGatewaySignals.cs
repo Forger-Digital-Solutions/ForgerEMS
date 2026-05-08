@@ -21,6 +21,17 @@ public static class KyraHardwarePartGatewaySignals
             return true;
         }
 
+        if ((l.Contains("buy", StringComparison.Ordinal) ||
+             l.Contains("purchase", StringComparison.Ordinal) ||
+             l.Contains("replacement", StringComparison.Ordinal) ||
+             l.Contains("compatible", StringComparison.Ordinal) ||
+             l.Contains("should i get", StringComparison.Ordinal) ||
+             l.Contains("should i order", StringComparison.Ordinal)) &&
+            HasPartKeyword(prompt))
+        {
+            return true;
+        }
+
         if (l.Contains("find compatible", StringComparison.Ordinal) ||
             l.Contains("find a compatible", StringComparison.Ordinal) ||
             l.Contains("find replacement", StringComparison.Ordinal) ||
@@ -30,7 +41,9 @@ public static class KyraHardwarePartGatewaySignals
             return true;
         }
 
-        return l.Contains(" where to buy", StringComparison.Ordinal) ||
+        return l.Contains(" where can i buy", StringComparison.Ordinal) ||
+               l.StartsWith("where can i buy", StringComparison.Ordinal) ||
+               l.Contains(" where to buy", StringComparison.Ordinal) ||
                l.StartsWith("where to buy", StringComparison.Ordinal);
     }
 

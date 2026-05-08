@@ -68,7 +68,7 @@ public sealed class DeepSensorDisclosureCopyTests
     public void About_MentionsHardwareXrayAndBundledReadOnlyProviders()
     {
         var docsText = Read("docs", "ABOUT_FORGEREMS.md");
-        var appText = InfoDocumentTexts.BuildAbout("1.2.0-preview.1", "ForgerEMS v1.2.0 Public Preview", "frontend", "backend");
+        var appText = InfoDocumentTexts.BuildAbout("1.2.1-preview.1", "ForgerEMS v1.2.1 Public Preview", "frontend", "backend");
 
         foreach (var text in new[] { docsText, appText })
         {

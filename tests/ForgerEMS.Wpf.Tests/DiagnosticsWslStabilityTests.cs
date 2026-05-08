@@ -28,15 +28,13 @@ public sealed class DiagnosticsWslStabilityTests
     }
 
     [Fact]
-    public void ProbeWithWslStatus_WslTimeoutLikeExit_YieldsWarningOrUnknownLine()
+    public async Task ProbeWithWslStatus_WslTimeoutLikeExit_YieldsWarningOrUnknownLine()
     {
         var fake = new TimeoutLikeWslExecutor();
-        var status = SafeTestingEnvironmentProbe.ProbeWithWslStatusAsync(
-                fake,
-                TimeSpan.FromMilliseconds(50),
-                CancellationToken.None)
-            .GetAwaiter()
-            .GetResult();
+        var status = await SafeTestingEnvironmentProbe.ProbeWithWslStatusAsync(
+            fake,
+            TimeSpan.FromMilliseconds(50),
+            CancellationToken.None);
 
         Assert.Contains("Warning", status.DefaultWslDistroOrStatus, StringComparison.OrdinalIgnoreCase);
     }

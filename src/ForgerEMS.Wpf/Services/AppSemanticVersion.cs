@@ -207,4 +207,15 @@ public readonly struct AppSemanticVersion : IComparable<AppSemanticVersion>
 
         return true;
     }
+
+    public override bool Equals(object? obj) => obj is AppSemanticVersion other && CompareTo(other) == 0;
+    public bool Equals(AppSemanticVersion other) => CompareTo(other) == 0;
+    public override int GetHashCode() => HashCode.Combine(Major, Minor, Patch, Revision, Prerelease);
+
+    public static bool operator ==(AppSemanticVersion left, AppSemanticVersion right) => left.CompareTo(right) == 0;
+    public static bool operator !=(AppSemanticVersion left, AppSemanticVersion right) => left.CompareTo(right) != 0;
+    public static bool operator <(AppSemanticVersion left, AppSemanticVersion right) => left.CompareTo(right) < 0;
+    public static bool operator >(AppSemanticVersion left, AppSemanticVersion right) => left.CompareTo(right) > 0;
+    public static bool operator <=(AppSemanticVersion left, AppSemanticVersion right) => left.CompareTo(right) <= 0;
+    public static bool operator >=(AppSemanticVersion left, AppSemanticVersion right) => left.CompareTo(right) >= 0;
 }

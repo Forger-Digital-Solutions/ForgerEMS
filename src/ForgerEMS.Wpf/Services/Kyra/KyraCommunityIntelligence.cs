@@ -1,3 +1,4 @@
+#pragma warning disable CA1822 // DI-injected service; methods called via instance reference
 using System;
 using System.Collections.Generic;
 using System.Linq;

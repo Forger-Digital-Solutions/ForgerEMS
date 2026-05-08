@@ -14,12 +14,12 @@ Use this checklist on a **VM or spare PC** before uploading GitHub Release asset
 
 ## 3. Settings — App updates
 
-- [ ] **Check for updates now** completes (or fails soft offline with clear copy).
+- [ ] **Check Now** completes (or fails soft offline with clear copy).
 - [ ] **Copy update diagnostics** produces clipboard text without raw secrets.
 
 ## 4. Diagnostics — support bundle
 
-- [ ] **Export Support Bundle** saves a `.zip`.
+- [ ] **Create Support Bundle** saves a `.zip`.
 - [ ] ZIP contains `README.txt`, `bundle-metadata.txt`, redacted logs where paths appeared.
 - [ ] Optional: run `.\tools\Export-ForgerEMSDiagnostics.ps1` and confirm README + redacted logs.
 

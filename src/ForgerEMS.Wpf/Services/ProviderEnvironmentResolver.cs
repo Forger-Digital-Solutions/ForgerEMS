@@ -6,6 +6,7 @@ public enum KyraCredentialSource
 {
     None,
     Session,
+    EncryptedLocal,
     ProcessEnvironment,
     UserEnvironment,
     MachineEnvironment
@@ -30,6 +31,7 @@ public readonly struct KyraCredentialResolution
         return Source switch
         {
             KyraCredentialSource.Session => "Configured via session key",
+            KyraCredentialSource.EncryptedLocal => "Configured via protected local key",
             KyraCredentialSource.ProcessEnvironment => "Configured via process env",
             KyraCredentialSource.UserEnvironment => "Configured via user env",
             KyraCredentialSource.MachineEnvironment => "Configured via machine env",
@@ -40,7 +42,7 @@ public readonly struct KyraCredentialResolution
 }
 
 /// <summary>
-/// Resolves provider secrets from session (highest priority) then process, user, and machine environment blocks.
+/// Resolves provider secrets from session (highest priority), protected local storage, then process, user, and machine environment blocks.
 /// Never logs or persists raw values.
 /// </summary>
 public static class ProviderEnvironmentResolver
@@ -51,6 +53,12 @@ public static class ProviderEnvironmentResolver
         if (!KyraProviderConfigResolver.IsMissingOrPlaceholder(session))
         {
             return new KyraCredentialResolution(session, KyraCredentialSource.Session);
+        }
+
+        var encrypted = KyraProviderCredentialStore.Default.TryGetSecret(providerId);
+        if (!KyraProviderConfigResolver.IsMissingOrPlaceholder(encrypted))
+        {
+            return new KyraCredentialResolution(encrypted, KyraCredentialSource.EncryptedLocal);
         }
 
         if (string.IsNullOrWhiteSpace(apiKeyEnvironmentVariable))

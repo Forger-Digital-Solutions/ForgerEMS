@@ -1,3 +1,4 @@
+#pragma warning disable CA1305 // Locale-sensitive calls; text is diagnostic/UI output
 using System.Linq;
 using System.Text;
 using VentoyToolkitSetup.Wpf.Services;
@@ -89,6 +90,11 @@ public static class KyraHardwarePartsAnswerBuilder
                l.Contains("best deal", StringComparison.Ordinal) ||
                l.Contains("lowest price", StringComparison.Ordinal) ||
                l.Contains("where to buy", StringComparison.Ordinal) ||
+               l.Contains("where can i buy", StringComparison.Ordinal) ||
+               l.Contains("should i buy", StringComparison.Ordinal) ||
+               l.Contains("what should i buy", StringComparison.Ordinal) ||
+               l.Contains("which should i buy", StringComparison.Ordinal) ||
+               l.Contains("compatible", StringComparison.Ordinal) ||
                (l.Contains("price", StringComparison.Ordinal) && !l.Contains("price range", StringComparison.Ordinal));
     }
 

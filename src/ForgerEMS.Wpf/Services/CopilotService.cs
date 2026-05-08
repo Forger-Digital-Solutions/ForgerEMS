@@ -1,3 +1,4 @@
+#pragma warning disable CA1822 // DI-injected service; methods called via instance reference
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -316,6 +317,9 @@ public sealed class CopilotSettings
     /// </summary>
     public bool KyraUseSanitizedSystemIntelligenceContext { get; set; } = true;
 
+    /// <summary>When false, USB and Toolkit status summaries are omitted from Kyra context packages.</summary>
+    public bool IncludeUsbToolkitStatusInKyraContext { get; set; } = true;
+
     public Dictionary<string, CopilotProviderConfiguration> Providers { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
@@ -328,6 +332,15 @@ public sealed class CopilotProviderConfiguration
     public string ModelName { get; set; } = string.Empty;
 
     public string ApiKeyEnvironmentVariable { get; set; } = string.Empty;
+
+    /// <summary>none, session, encrypted-local, environment. Non-secret metadata only.</summary>
+    public string KeyStorageMode { get; set; } = "environment";
+
+    public bool SavedKeyPresent { get; set; }
+
+    public DateTimeOffset? LastTestedUtc { get; set; }
+
+    public string LastTestResult { get; set; } = string.Empty;
 
     public int TimeoutSeconds { get; set; } = 12;
 
@@ -372,6 +385,8 @@ public sealed class CopilotRequest
 
     /// <summary>On-disk Kyra machine memory JSON (sanitized learning events; used for scan deltas).</summary>
     public string KyraMachineMemoryStorePath { get; init; } = string.Empty;
+
+    public string MachineProfilesPath { get; init; } = string.Empty;
 }
 
 public sealed class CopilotResponse
@@ -1030,15 +1045,21 @@ public static class KyraPromptBuilder
 {
     /// <summary>Prepended to online provider payloads so answers stay on-brand as Kyra and respect local truth.</summary>
     public const string KyraOnlineIdentityPreamble =
-        "You are Kyra, the ForgerEMS assistant. Speak as Kyra; do not present yourself as the API vendor, model brand, or a separate bot.\n" +
+        "You are Kyra, the ForgerEMS repair copilot: a cute, bubbly, confident technician assistant with playful upgrade-goblin / internet-navigator energy. Speak as Kyra; do not present yourself as the API vendor, model brand, or a separate bot.\n" +
+        "VOICE:\n" +
+        "- Be warm, concise, practical, and a little playful; keep it professional/SFW and never cringe or overdo jokes.\n" +
+        "- You may use tiny phrases like \"quick fix map\", \"repair note\", \"internet navigator mode\", or \"tiny upgrade check-in\" when they fit.\n" +
+        "- Use at most 0-2 emoji per answer, and use none for serious safety/error answers.\n" +
+        "- Hide provider/debug/routing details from normal answers. Give practical next actions first; send technical routing detail to logs/diagnostics instead.\n" +
         "HARD RULES:\n" +
         "- When a sanitized ForgerEMS / System Intelligence context block is present, it is the source of truth for THIS machine.\n" +
+        "- Clearly separate local fact, local inference, and anything that needs live research.\n" +
         "- Never claim you cannot see the device, lack access, or have no information about this PC when that context is present.\n" +
         "- Never contradict CPU, GPU, RAM, storage, OS, USB selection, toolkit, or update state from the context package.\n" +
         "- Do not invent, replace, or guess hardware specs. Use only the SystemProfile / facts ledger in the prompt. If a field is missing, say it is unavailable — never substitute a generic gaming-laptop or example PC.\n" +
         "- Do not use prior conversation specs unless they appear in the current SystemProfile block.\n" +
         "- Do not invent serial numbers, license keys, full file paths, or API secrets.\n" +
-        "- If live weather/news/stock/crypto data is not supplied by a labeled tool block, say live tools are not enabled for that in this build — do not fabricate live numbers.\n" +
+        "- If live weather/news/stock/crypto/pricing/availability/latest-version data is not supplied by a labeled tool block, say what you can infer locally and that current data needs live research — do not fabricate live numbers.\n" +
         "- Never recommend C:\\ or the Windows OS volume as a Ventoy/USB imaging target; ForgerEMS blocks that by design.\n\n";
 
     public static string BuildOnlinePrompt(CopilotContext context, bool includeSystemContext)
@@ -2435,8 +2456,9 @@ public sealed class SystemHealthEvaluator
         status.Equals("NOT_EXPOSED", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsConfirmedProblemStatus(string? status) =>
-        status.Equals("WARNING", StringComparison.OrdinalIgnoreCase) ||
-        status.Equals("CRITICAL", StringComparison.OrdinalIgnoreCase);
+        status is not null &&
+        (status.Equals("WARNING", StringComparison.OrdinalIgnoreCase) ||
+         status.Equals("CRITICAL", StringComparison.OrdinalIgnoreCase));
 
     private static bool IsDedicatedGpuName(string name) =>
         Regex.IsMatch(name ?? string.Empty, "nvidia|geforce|quadro|rtx|gtx|amd radeon|\\brx\\b|arc", RegexOptions.IgnoreCase) &&
@@ -2926,7 +2948,7 @@ public sealed class CopilotService : ICopilotService
                 Succeeded = false,
                 FailureReason = KyraProviderFailureReason.NotConfigured,
                 UserMessage = $"{provider.DisplayName} is not configured.",
-                DiagnosticMessage = resolvedConfig.SafeSkipReason
+                DiagnosticMessage = resolvedConfig.SafeSkipReason ?? string.Empty
             };
         }
 
@@ -3250,6 +3272,7 @@ public sealed class CopilotService : ICopilotService
 
 public sealed class CopilotContextBuilder : ICopilotContextBuilder
 {
+    private static readonly JsonSerializerOptions _profileLoadOptions = new() { PropertyNameCaseInsensitive = true };
     private readonly PricingEngine _pricingEngine = new();
 
     public CopilotContext Build(CopilotRequest request)
@@ -3307,7 +3330,8 @@ public sealed class CopilotContextBuilder : ICopilotContextBuilder
         }
 
         parts.Add(BuildUsbSummary(request.SelectedUsbTarget, settings.RedactContextEnabled));
-        parts.Add(BuildToolkitSummary(request.ToolkitHealthReportPath, settings.RedactContextEnabled));
+        parts.Add(BuildToolkitSummary(request.ToolkitHealthReportPath, settings.RedactContextEnabled, request.SelectedUsbTarget));
+        parts.Add(BuildMachineProfileSummary(request.MachineProfilesPath, request.SystemIntelligenceReportPath, settings.RedactContextEnabled));
         if (!string.IsNullOrWhiteSpace(request.KyraSafeCrossSystemSummary))
         {
             parts.Add(
@@ -3503,7 +3527,7 @@ public sealed class CopilotContextBuilder : ICopilotContextBuilder
             redact);
     }
 
-    private static string BuildToolkitSummary(string reportPath, bool redact)
+    private static string BuildToolkitSummary(string reportPath, bool redact, UsbTargetInfo? usbTarget)
     {
         if (string.IsNullOrWhiteSpace(reportPath) || !File.Exists(reportPath))
         {
@@ -3514,21 +3538,149 @@ public sealed class CopilotContextBuilder : ICopilotContextBuilder
         {
             using var document = JsonDocument.Parse(File.ReadAllText(reportPath));
             var root = document.RootElement;
+            var toolkitTargetRoot = GetJsonString(root, "targetRoot", string.Empty);
             var lines = new List<string>
             {
                 $"Toolkit health verdict: {GetJsonString(root, "healthVerdict", "Unknown")}"
             };
+            var missing = 0;
+            var failed = 0;
+            var updates = 0;
+            var pending = 0;
 
             if (root.TryGetProperty("summary", out var summary))
             {
-                lines.Add($"Toolkit summary: installed {GetJsonString(summary, "installed", "0")}; missing {GetJsonString(summary, "missingRequired", "0")}; failed {GetJsonString(summary, "failed", "0")}; manual {GetJsonString(summary, "manual", "0")}");
+                _ = int.TryParse(GetJsonString(summary, "missingRequired", GetJsonString(summary, "missing", "0")), out missing);
+                _ = int.TryParse(GetJsonString(summary, "failed", "0"), out failed);
+                _ = int.TryParse(GetJsonString(summary, "updates", "0"), out updates);
+                _ = int.TryParse(GetJsonString(summary, "verificationPending", "0"), out pending);
+                lines.Add($"Toolkit summary: installed {GetJsonString(summary, "installed", "0")}; missing {missing}; failed {failed}; manual {GetJsonString(summary, "manual", "0")}");
             }
+
+            var items = new List<ToolkitHealthItemView>();
+            if (root.TryGetProperty("items", out var itemsElement) && itemsElement.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in itemsElement.EnumerateArray())
+                {
+                    var status = GetJsonString(item, "status", "UNKNOWN");
+                    var type = GetJsonString(item, "type", "UNKNOWN");
+                    items.Add(new ToolkitHealthItemView
+                    {
+                        Status = status,
+                        Type = type,
+                        OfficialUrl = GetJsonString(item, "officialUrl", GetJsonString(item, "url", string.Empty)),
+                        DownloadStatus = GetJsonString(item, "downloadStatus", status),
+                        ChecksumStatus = GetJsonString(item, "checksumStatus", GetJsonString(item, "verification", string.Empty))
+                    });
+                }
+            }
+
+            var linkSummary = ToolkitLinkVerificationSummaryForReadiness.TryLoadAligned(
+                reportPath,
+                toolkitTargetRoot,
+                usbTarget?.RootPath ?? string.Empty);
+
+            var readiness = ToolkitReadinessScorer.Evaluate(
+                items,
+                selectedTarget: null,
+                ventoyStatusText: string.Empty,
+                toolkitReportAvailable: true,
+                toolkitLogAvailable: true,
+                missingRequiredCount: missing,
+                verificationFailedCount: failed,
+                updatesAvailableCount: updates,
+                verificationPendingCount: pending,
+                omitLiveUsbVentoyContext: true,
+                linkVerification: linkSummary);
+            lines.Add($"Toolkit readiness: {readiness.LabelText} ({readiness.Score}/100)");
+            if (readiness.Blockers.Count > 0)
+            {
+                lines.Add("Toolkit blockers: " + string.Join("; ", readiness.Blockers));
+            }
+
+            if (linkSummary is { HasRun: true })
+            {
+                lines.Add(
+                    $"Toolkit link verification: verified metadata {linkSummary.VerifiedMetadataCount}; reachable {linkSummary.ReachableCount}; warnings {linkSummary.WarningCount}; broken {linkSummary.BrokenCount}; offline/timeouts {linkSummary.UnknownOfflineCount} (HEAD/ranged GET metadata only).");
+            }
+            else
+            {
+                lines.Add(
+                    "Toolkit link verification: not available for this pairing yet — refresh toolkit health, pick the matching USB target, then run Verify Links in Toolkit Manager.");
+            }
+
+            var checksumRows = items.Count > 0
+                ? items.Count(row =>
+                    !string.IsNullOrWhiteSpace(row.ChecksumStatus) &&
+                    !row.ChecksumStatus.Contains("unknown", StringComparison.OrdinalIgnoreCase))
+                : 0;
+            lines.Add(checksumRows > 0
+                ? $"Toolkit checksum coverage (report columns): {checksumRows}/{items.Count} rows include checksum/status hints."
+                : "Toolkit checksum coverage (report columns): limited — refresh toolkit health for checksum columns.");
 
             return CopilotRedactor.Redact(string.Join(Environment.NewLine, lines), redact);
         }
         catch (Exception exception)
         {
             return $"Toolkit health: report could not be parsed ({exception.Message}).";
+        }
+    }
+
+    private static string BuildMachineProfileSummary(string profilesPath, string systemReportPath, bool redact)
+    {
+        if (string.IsNullOrWhiteSpace(profilesPath) || !File.Exists(profilesPath) || string.IsNullOrWhiteSpace(systemReportPath) || !File.Exists(systemReportPath))
+        {
+            return "Machine profile: no previous profile.";
+        }
+
+        try
+        {
+            using var reportDoc = JsonDocument.Parse(File.ReadAllText(systemReportPath));
+            var summary = reportDoc.RootElement.TryGetProperty("summary", out var s) && s.ValueKind == JsonValueKind.Object ? s : default;
+            var manufacturer = summary.ValueKind == JsonValueKind.Object ? GetJsonString(summary, "manufacturer", "Unknown") : "Unknown";
+            var model = summary.ValueKind == JsonValueKind.Object ? GetJsonString(summary, "model", "Unknown") : "Unknown";
+            var machineLabel = summary.ValueKind == JsonValueKind.Object ? GetJsonString(summary, "computerName", Environment.MachineName) : Environment.MachineName;
+            var os = summary.ValueKind == JsonValueKind.Object ? GetJsonString(summary, "os", Environment.OSVersion.VersionString) : Environment.OSVersion.VersionString;
+            var hash = MachineProfileStore.ComputeMachineIdentityHash(machineLabel, manufacturer, model, os);
+            var store = JsonSerializer.Deserialize<List<MachineProfileSnapshot>>(
+                File.ReadAllText(profilesPath),
+                _profileLoadOptions) ?? [];
+            var entries = store
+                .Where(item => item.MachineIdentityHash.Equals(hash, StringComparison.Ordinal))
+                .OrderByDescending(item => item.LastScanUtc)
+                .Take(2)
+                .ToArray();
+            if (entries.Length == 0)
+            {
+                return "Machine profile: no previous profile.";
+            }
+
+            var latest = entries[0];
+            var lines = new List<string>
+            {
+                entries.Length > 1 ? "Machine profile: previous scan available." : "Machine profile: saved locally.",
+                $"Profile last scan: {latest.LastScanUtc.LocalDateTime:g}",
+                $"Profile last health: {latest.HealthScore}/100",
+                latest.ToolkitReadinessScore.HasValue
+                    ? $"Profile last toolkit readiness: {latest.ToolkitReadinessLabel} ({latest.ToolkitReadinessScore}/100)"
+                    : $"Profile last toolkit readiness: {latest.ToolkitReadinessLabel}"
+            };
+            if (entries.Length > 1)
+            {
+                var previous = entries[1];
+                var healthDelta = latest.HealthScore - previous.HealthScore;
+                var toolkitSegment = latest.ToolkitReadinessScore.HasValue && previous.ToolkitReadinessScore.HasValue
+                    ? $"toolkit {(latest.ToolkitReadinessScore.Value - previous.ToolkitReadinessScore.Value >= 0 ? "+" : string.Empty)}{latest.ToolkitReadinessScore.Value - previous.ToolkitReadinessScore.Value}"
+                    : "toolkit delta not recorded on both snapshots";
+                lines.Add(
+                    $"Profile change since previous: health {(healthDelta >= 0 ? "+" : string.Empty)}{healthDelta}; {toolkitSegment}.");
+            }
+
+            return CopilotRedactor.Redact(string.Join(Environment.NewLine, lines), redact);
+        }
+        catch
+        {
+            return "Machine profile: unavailable (profile data parse error).";
         }
     }
 
@@ -4816,6 +4968,11 @@ public sealed class LocalRulesCopilotEngine
             return BuildSafeCommandsAnswer(context);
         }
 
+        if (TechnicianWorkflowPresetCatalog.TryBuildKyraWorkflowAnswer(normalizedPrompt, out var workflowAnswer))
+        {
+            return workflowAnswer;
+        }
+
         return context.Intent switch
         {
             KyraIntent.PerformanceLag => BuildTroubleshootingAnswer(normalizedPrompt, context),
@@ -5262,6 +5419,24 @@ public sealed class LocalRulesCopilotEngine
             return BuildMachineSpecificScanRequiredResponse(context.SystemContext);
         }
 
+        var q = context.UserQuestion;
+        if (ContainsAny(q, "scanned this machine before", "have we scanned", "previous scan"))
+        {
+            var profileLine = FindLine(context.ContextText, "Machine profile:");
+            var saved = FindLine(context.ContextText, "Profile last scan:");
+            return string.IsNullOrWhiteSpace(profileLine)
+                ? "I do not see a previous local machine profile yet. Run System Intelligence again after profile save to compare scans."
+                : $"{profileLine} {saved}".Trim();
+        }
+
+        if (ContainsAny(q, "what changed since last scan", "changed since last scan", "since last scan"))
+        {
+            var delta = FindLine(context.ContextText, "Profile change since previous:");
+            return string.IsNullOrWhiteSpace(delta)
+                ? "I do not have enough previous local profile data to compare this scan yet."
+                : delta;
+        }
+
         return $"""
             Short answer:
             This machine looks like a {profile.Manufacturer} {profile.Model} with a local health score of {context.HealthEvaluation?.HealthScore ?? 0}/100.
@@ -5385,9 +5560,74 @@ public sealed class LocalRulesCopilotEngine
 
     private static string BuildToolkitManagerAnswer(CopilotContext context)
     {
+        var readiness = FindLine(context.ContextText, "Toolkit readiness:");
+        var blockers = FindLine(context.ContextText, "Toolkit blockers:");
+        var verifyLine = FindLine(context.ContextText, "Toolkit link verification:");
+        var checksumLine = FindLine(context.ContextText, "Toolkit checksum coverage");
+
+        var q = context.UserQuestion;
+        if (ContainsAny(q, "toolkit links", "links good", "links bad", "broken link", "official url", "link verification"))
+        {
+            if (string.IsNullOrWhiteSpace(verifyLine) || verifyLine.Contains("not available", StringComparison.OrdinalIgnoreCase))
+            {
+                return """
+                    Short answer:
+                    Toolkit link verification has not been captured for the current toolkit-health + USB pairing yet.
+
+                    Next steps:
+                    1. Refresh toolkit health for your USB target.
+                    2. Run Verify Links in Toolkit Manager (safe HTTP metadata HEAD/ranged GET — downloads/archives are not executed).
+
+                    What I'm seeing now:
+                    """ + Environment.NewLine + readiness + Environment.NewLine + blockers;
+            }
+
+            return $"""
+                Short answer:
+                {verifyLine}
+
+                Checksum guidance:
+                {(string.IsNullOrWhiteSpace(checksumLine) ? "Use toolkit checksum columns plus Refresh Health — HTTP metadata cannot prove payload hashes." : checksumLine)}
+
+                Caveat:
+                Metadata probes confirm hosts responded; they do not execute installers or replace toolkit checksum verification.
+
+                Related readiness context:
+                {readiness}
+                {blockers}
+                """;
+        }
+
+        if (ContainsAny(q, "checksum coverage", "checksum hints", "hash coverage", "have checksum"))
+        {
+            return string.IsNullOrWhiteSpace(checksumLine)
+                ? """
+                    Short answer:
+                    Refresh toolkit health first so checksum columns populate, then compare against vendor-published hashes.
+
+                    Note:
+                    Kyra cannot infer hashes from HTTP metadata alone—Verify Links only checks transport-level signals.
+                    """
+                : $"""
+                    Short answer:
+                    {checksumLine}
+
+                    Note:
+                    Verified checksums still require the toolkit health scan + managed verification—not link metadata alone.
+                    """;
+        }
+
+        if (ContainsAny(context.UserQuestion, "last toolkit readiness", "what was my last toolkit readiness"))
+        {
+            var previousReadiness = FindLine(context.ContextText, "Profile last toolkit readiness:");
+            return string.IsNullOrWhiteSpace(previousReadiness)
+                ? "I do not have a saved previous toolkit readiness for this machine yet."
+                : previousReadiness;
+        }
+
         return $"""
             Short answer:
-            Toolkit health is about managed downloads vs items you must supply yourself.
+            Toolkit readiness combines missing tools, checksum health, managed download freshness, USB safety context, Ventoy readiness, and report/log coverage.
 
             Likely cause:
             Managed Missing usually means a download/verify/path issue. Manual Required means licensing, vendor gating, or verification limits block auto-download.
@@ -5401,6 +5641,8 @@ public sealed class LocalRulesCopilotEngine
 
             What I'm seeing:
             {FindLine(context.ContextText, "Toolkit health")}
+            {readiness}
+            {blockers}
             """;
     }
 

@@ -30,6 +30,12 @@ You get **one bundle** with `START_HERE.bat`, verification hints, checksums, and
 
 ---
 
+## Why is the animated background static by default?
+
+For public preview, ForgerEMS prioritizes launch speed, scrolling, toolkit checks, and Kyra responsiveness. **Settings → Visual Effects** defaults to **Static / Low Power**. You can choose **Animated** if you want the circuit motion, or **Off / Plain dark** for slower systems, remote sessions, or battery-saving work.
+
+---
+
 ## What is `START_HERE.bat`?
 
 It is the **supported entry point** after you extract the release ZIP. It walks you through checks and launches the installer **from the verified folder** you chose, instead of fighting the strictest “unknown EXE from the internet” path first.
@@ -38,19 +44,20 @@ It is the **supported entry point** after you extract the release ZIP. It walks 
 
 ## Does Kyra need an API key?
 
-**No — not for normal beta use.** Kyra works **offline** with built-in rules and optional **local** reports you already generated (for example System Intelligence). The app **does not prompt beta testers to paste API keys** for basic help.
+**No — not for normal beta use.** Kyra works **offline** with built-in rules and optional **local** reports you already generated (for example System Intelligence).
 
-Optional **online** models only appear when an **operator** has already configured the machine or deployment (advanced). Beta builds may use **ForgerEMS Gateway** so testers get limited Kyra API time without receiving owner provider API keys. Operators: [KYRA_PROVIDER_ENVIRONMENT_SETUP.md](KYRA_PROVIDER_ENVIRONMENT_SETUP.md).
+Optional online paths are configured in **Kyra AI Settings**. Beta builds may use **ForgerEMS Gateway** so testers get limited Kyra API time without receiving owner provider API keys. Advanced users can also use **Bring Your Own Key** provider cards for OpenAI-compatible, Claude, Gemini, OpenRouter, Groq, Mistral, Cerebras, GitHub Models, Cloudflare, LM Studio, or Ollama. Operators: [KYRA_PROVIDER_ENVIRONMENT_SETUP.md](KYRA_PROVIDER_ENVIRONMENT_SETUP.md).
 
-When API-first mode is enabled, Kyra tries configured providers in priority order. For beta Gateway mode, it tries `forgerems-gateway` first, then BYOK/local/offline fallback if configured. Missing keys, placeholders, disabled providers, failed calls, rate limits, and timeouts are skipped or handled safely.
+When API-first mode is enabled, Kyra tries configured providers in priority order. Credential precedence is session key, protected saved key, environment variable, then Gateway/local/offline fallback. Missing keys, placeholders, disabled providers, failed calls, rate limits, and timeouts are skipped or handled safely.
 
 Placeholder values such as `REPLACE_ME`, `YOUR_*`, `local-model-name`, or `example.local` are ignored and do not count as configured providers. For installed-app testing, use Windows **User** environment variables and check them with `tools/show-forgerems-env-status.ps1`.
 
 ### Kyra Beta Gateway quick answers
 
-- The **beta gateway** is aimed at **live research / tool** calls (crypto, weather, news, etc.), not every casual “hello.” Everyday chat uses your normal free/BYOK LLM providers when configured. If the gateway fails for chat-like prompts, that can be expected — check **Kyra Advanced** provider order and **Check gateway status**.
+- The **beta gateway** is aimed at **live research / tool** calls (crypto, weather, news, etc.), not every casual “hello.” Everyday chat uses your normal free/BYOK LLM providers when configured. If the gateway fails for chat-like prompts, that can be expected — check **Kyra AI Settings** provider order and gateway status.
 - Beta users only need gateway vars (`FORGEREMS_KYRA_GATEWAY_URL` and `FORGEREMS_KYRA_GATEWAY_BETA_TOKEN`) when cloud access is enabled.
 - Direct provider keys are optional BYOK and are not required for default beta.
+- Session BYOK keys are never written to disk. Saved BYOK keys use Windows protected local storage when available and are never written as plaintext appsettings JSON.
 - Gateway beta tokens are revocable and can be rotated quickly.
 - If gateway limit is reached, Kyra can return a friendly beta-limit message and still fall back to local/offline.
 
@@ -62,7 +69,9 @@ Kyra is **not a live web browser**. Offline answers use **rules and what is alre
 
 Weather and crypto can use built-in no-key paths when enabled. News requires NewsAPI/GNews configuration. Stocks support `finnhub`, `alphavantage`, or `fmp` when configured. Economic/statistics data is limited/shell status unless a supported provider is wired. Kyra should not make up live prices, weather, or breaking news.
 
-Kyra Research Mode should route current/live prompts first to the **ForgerEMS realtime gateway** (`/v1/kyra/research`) when that path is enabled and configured, then to **Kyra Advanced live tools** (local API keys) where applicable: crypto, stocks/finance, weather, news, sports, latest/current software versions, drivers, Ventoy/tool versions, resale/current market pricing, current Windows issues, security advisories, CVEs, and general current research. If the live tool is unavailable or rate-limited, Kyra should say so honestly and avoid stale “knowledge cutoff” pricing or fabricated versions.
+Kyra Research Mode should route current/live prompts first to the **ForgerEMS realtime gateway** (`/v1/kyra/research`) when that path is enabled and configured, then to **Kyra AI Settings live tools** where applicable: crypto, stocks/finance, weather, news, sports, latest/current software versions, drivers, Ventoy/tool versions, resale/current market pricing, current Windows issues, security advisories, CVEs, and general current research. If the live tool is unavailable or rate-limited, Kyra should say so honestly and avoid stale “knowledge cutoff” pricing or fabricated versions.
+
+Normal Kyra replies hide provider routing dumps. Beta troubleshooting detail remains available in logs, Diagnostics, support bundles, and explicit technical-detail flows.
 
 ---
 
@@ -70,7 +79,7 @@ Kyra Research Mode should route current/live prompts first to the **ForgerEMS re
 
 **Yes — local scan first.** After **System Intelligence**, Kyra can explain storage type (e.g. NVMe vs SATA when the scan shows it), RAM summary when exposed, battery wear bands, and realistic upgrade advice (for example, laptop GPU/CPU usually not upgradable).
 
-**Exact part numbers and “cheapest” prices** need **live research** (gateway or other configured tools) with real sources; otherwise Kyra should say what is known locally, call out **likely compatible candidates**, and tell you to **confirm against the service manual, battery label, or official compatibility** before buying.
+**Exact part numbers and “cheapest” prices** need **live research** (gateway or other configured tools) with real sources; otherwise Kyra should say what is known locally, call out **likely compatible candidates**, and tell you to **confirm against the service manual, battery label, or official compatibility** before buying. For Dell battery questions, the source priority is Dell support/service manual/parts pages first, Dell-compatible part numbers from trustworthy references second, and reputable sellers only as availability references. Marketplace titles alone are not proof of fit.
 
 **Privacy:** realtime part lookup uses **sanitized** model family and coarse bands — not service tags, serials, full paths, or secrets by default. See [PRIVACY.md](PRIVACY.md) and [KYRA_BEHAVIOR_SPEC.md](../KYRA_BEHAVIOR_SPEC.md).
 
@@ -93,7 +102,8 @@ Kyra Intelligence Network is **Local-first repair memory + optional anonymous co
 - Default is **Local Only**.
 - Anonymous community intelligence sharing is **off by default**.
 - Declining does not block app usage.
-- This foundation phase has a disabled/no-op community client; it can show a sanitized preview/export only.
+- Community sharing is not active in this release. The setting is visible for preview only.
+
 ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the user explicitly enables a future sharing option. Realtime Kyra Gateway sends only sanitized request context needed to answer current-data questions. Provider API keys are stored server-side and are not included in the desktop app. Anonymous Community Intelligence sharing is optional and off by default.
 
 ---
@@ -123,6 +133,26 @@ If a benchmark was never run for the current selection, speed may show as **not 
 ## What does “Manual Required” mean in Toolkit Manager?
 
 Licensing, vendor rules, or verification limits mean ForgerEMS **cannot legally or safely auto-download** that item. Use the **link or instructions** in the app, place files where the manifest expects, then run **Refresh Health**.
+If a managed file is present but checksum source resolution is currently unavailable, ForgerEMS reports it as present with pending verification rather than missing.
+If a related managed download is already installed and checksum-verified, a missing info shortcut can show as **covered by managed download** / **shortcut suppressed** with **no action needed**. That is not a Manual Required blocker.
+
+---
+
+## What does “Verify Links” do in Toolkit Manager?
+
+**Verify Links** asks ForgerEMS to contact official toolkit URLs using **safe HTTP metadata checks** — typically **HEAD**, with a **small ranged GET** fallback when some hosts block HEAD. The verifier records reachability, HTTP status (when available), redirect hosts, content-length hints when exposed, and compares those signals to your manifest/checksum columns **without fetching entire installers or ISOs** and **without executing anything it downloads**. Runs are **timeout-bounded** and **cancellable**, and work gracefully **offline** (results fall back to Unknown / Offline rather than pretending links were validated). Kyra can summarize the latest saved verification when it aligns with your toolkit-health report and USB scope.
+
+---
+
+## What is the Toolkit Readiness Score?
+
+A 0–100 score for your current toolkit state on the selected USB target. It starts at 100 and is reduced by: missing required items (−12 each, max −50), checksum verification failures (−15 each, max −40), managed updates available (−6 each), pending verification items (−3 each), link verification failures from **Verify Links** (−6 each, max −18), USB target warnings, and Ventoy issues. Labels: **Ready** (≥85), **Mostly Ready** (70–84), **Needs Attention** (45–69), **Not Ready** (<45 or hard blockers present). Run **Refresh Health** to recalculate. The score also shows your top strengths, top blockers, and a next recommended action.
+
+---
+
+## What is a machine profile?
+
+A local file ForgerEMS saves under `%LOCALAPPDATA%\ForgerEMS\Runtime\profiles\` to remember this machine's health score, toolkit readiness, USB benchmark results, best-use category, and resale estimates between sessions. The profile uses a ForgerEMS-generated ID — not your hardware serial number. It is never uploaded automatically. You can view, export, or delete it from **Settings → Kyra Intelligence → Export Memory / Delete Memory**.
 
 ---
 
@@ -137,7 +167,7 @@ No beta program can promise “100% safe,” but ForgerEMS is designed for **tec
 Open PowerShell in the folder that contains the ZIP and `CHECKSUMS.sha256`. For example:
 
 ```powershell
-Get-FileHash .\ForgerEMS-v1.2.0-preview.1.zip -Algorithm SHA256
+Get-FileHash .\ForgerEMS-v1.2.1-preview.1.zip -Algorithm SHA256
 ```
 
 Compare the `Hash` line to the line in `CHECKSUMS.sha256` for that filename.
@@ -147,6 +177,7 @@ Compare the `Hash` line to the line in `CHECKSUMS.sha256` for that filename.
 ## Why does USB speed say “Not measured yet”?
 
 Read/write labels come from a **USB benchmark** on a **safe removable** target you selected. Until a benchmark completes for that selection, the UI shows that speed has not been measured.
+When Windows cache effects are suspected, ForgerEMS marks read speed as unverified and prioritizes measured write speed plus topology/port evidence for builder recommendations. A later clean benchmark can replace the suspect reading.
 
 ---
 

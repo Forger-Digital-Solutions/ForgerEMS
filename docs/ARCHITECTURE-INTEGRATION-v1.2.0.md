@@ -10,7 +10,7 @@ This note maps how major subsystems connect. Paths are typical for an installed 
 4. **Managed downloads** — backend scripts emit `ForgerEMS-managed-download-result.json` on the **USB root**. `ManagedDownloadRunArtifact` feeds Toolkit Manager rows and USB Builder banners (`ScriptStatusParser` readiness: READY / PARTIALLY STAGED / etc.).
 5. **Toolkit Manager** — manifest-driven health; manual/info states are expected for licensed or vendor-hosted payloads.
 6. **Update checker** — `GitHubReleaseUpdateCheckService` lists GitHub releases (owner/repo from `ForgerEmsEnvironmentConfiguration` with defaults). Results flow to **Settings** and **UpdateCheckDiagnosticsFormatter** for clipboard / support bundle.
-7. **Diagnostics** — unified checklist from on-disk diagnostics JSON when present; **Export Support Bundle** zips redacted logs + SI JSON + benchmark cache + managed-download JSON + update summary (`SupportBundleExporter`).
+7. **Diagnostics** — unified checklist from on-disk diagnostics JSON when present; **Create Support Bundle** zips redacted logs + SI JSON + benchmark cache + managed-download JSON + update summary (`SupportBundleExporter`).
 8. **Configuration** — `ForgerEmsEnvironmentConfiguration` centralizes env reads; feature flags default telemetry **off**. **FeatureGateService** / **FeatureStatusService** provide tier labels for future Free vs Pro enforcement without blocking Public Preview testers.
 
 ## Integration contract (in-code)

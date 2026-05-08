@@ -10,6 +10,11 @@ namespace ForgerEMS.Wpf.Tests;
 
 public sealed class UsbIntelligenceProTests
 {
+    private static readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
     [Fact]
     public void UsbSnapshotJson_DoesNotLeakRawPnpOrWmiIds()
     {
@@ -36,11 +41,7 @@ public sealed class UsbIntelligenceProTests
             SummaryLine = "test"
         };
 
-        var json = JsonSerializer.Serialize(snap, new JsonSerializerOptions
-        {
-            WriteIndented = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        });
+        var json = JsonSerializer.Serialize(snap, _jsonOptions);
 
         Assert.DoesNotContain("USBSTOR", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("PHYSICALDRIVE", json, StringComparison.OrdinalIgnoreCase);
@@ -484,11 +485,7 @@ public sealed class UsbIntelligenceProTests
             SelectedTargetBenchmark = bench
         };
 
-        var json = JsonSerializer.Serialize(snap, new JsonSerializerOptions
-        {
-            WriteIndented = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        });
+        var json = JsonSerializer.Serialize(snap, _jsonOptions);
 
         Assert.DoesNotContain("USBSTOR", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("PHYSICALDRIVE", json, StringComparison.OrdinalIgnoreCase);

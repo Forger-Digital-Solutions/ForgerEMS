@@ -20,6 +20,11 @@ public static class ToolkitDisplayClassification
             return "Managed Missing";
         }
 
+        if (s.Contains("COVERED_BY_MANAGED", StringComparison.Ordinal))
+        {
+            return "Covered / Suppressed";
+        }
+
         if (s.Contains("MANUAL", StringComparison.Ordinal) || t.Contains("MANUAL", StringComparison.Ordinal))
         {
             return "Manual Required";

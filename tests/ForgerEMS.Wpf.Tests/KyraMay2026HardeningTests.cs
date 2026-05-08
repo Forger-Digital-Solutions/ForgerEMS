@@ -116,6 +116,28 @@ public sealed class KyraMay2026HardeningTests
         Assert.DoesNotContain("99000", merged, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("what is the current price of a Dell Precision 5540 battery", "hardware_part_lookup")]
+    [InlineData("latest Ventoy version", "software_version")]
+    [InlineData("where can I buy a compatible NVMe drive", "hardware_part_lookup")]
+    [InlineData("news about Windows update issues today", "news")]
+    [InlineData("weather tomorrow", "weather")]
+    [InlineData("AAPL stock price", "finance")]
+    [InlineData("BTC crypto price right now", "crypto")]
+    public void KyraRealtimeResearchClassifier_DetectsCurrentDataNeeds(string prompt, string expectedIntent)
+    {
+        Assert.True(KyraRealtimeResearchClassifier.TryClassifyRealtimeNeed(prompt, out var intent));
+        Assert.Equal(expectedIntent, intent);
+    }
+
+    [Fact]
+    public void KyraRealtimeResearchClassifier_LocalBatteryFactsCanStayLocal()
+    {
+        Assert.False(KyraRealtimeResearchClassifier.TryClassifyRealtimeNeed(
+            "what battery does my machine have",
+            out _));
+    }
+
     [Fact]
     public void KyraCodeAssist_AfterUsbWarning_IsolatedFromHistory()
     {

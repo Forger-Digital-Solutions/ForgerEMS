@@ -1,3 +1,4 @@
+#pragma warning disable CA1305 // Locale-sensitive calls; text is diagnostic/UI output
 using System;
 using Microsoft.Win32;
 using VentoyToolkitSetup.Wpf.Services;

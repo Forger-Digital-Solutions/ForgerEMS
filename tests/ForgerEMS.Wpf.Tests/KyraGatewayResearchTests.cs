@@ -197,6 +197,50 @@ public sealed class KyraGatewayResearchTests
     }
 
     [Fact]
+    public async Task KyraGatewayResearchCoordinator_HardwareLookupUnavailable_DoesNotFabricateExactSku()
+    {
+        var prevUrlProcess = Environment.GetEnvironmentVariable("FORGEREMS_KYRA_GATEWAY_URL", EnvironmentVariableTarget.Process);
+        var prevTokProcess = Environment.GetEnvironmentVariable("FORGEREMS_KYRA_GATEWAY_BETA_TOKEN", EnvironmentVariableTarget.Process);
+        var prevGatewayEnabled = Environment.GetEnvironmentVariable("FORGEREMS_KYRA_GATEWAY_ENABLED", EnvironmentVariableTarget.Process);
+        Environment.SetEnvironmentVariable("FORGEREMS_KYRA_GATEWAY_URL", null, EnvironmentVariableTarget.Process);
+        Environment.SetEnvironmentVariable("FORGEREMS_KYRA_GATEWAY_BETA_TOKEN", null, EnvironmentVariableTarget.Process);
+        Environment.SetEnvironmentVariable("FORGEREMS_KYRA_GATEWAY_ENABLED", "false", EnvironmentVariableTarget.Process);
+        var path = Path.Combine(Path.GetTempPath(), $"kyra-battery-{Guid.NewGuid():N}.json");
+        File.WriteAllText(path, """{"schemaVersion":1,"summary":{"manufacturer":"Dell","model":"Precision 5540"},"batteries":[{"name":"Internal Battery","designCapacityDisplay":"90000 mWh","fullChargeCapacityDisplay":"54000 mWh","wearPercent":40.2}],"health":{"overallScore":80}}""");
+        try
+        {
+            var resp = await KyraGatewayResearchCoordinator.TryRealtimeResearchAsync(
+                "what replacement battery should I buy for my Dell Precision 5540",
+                new CopilotSettings
+                {
+                    KyraRealtimeGatewayEnabled = true,
+                    KyraRealtimeGatewayResearchEnabled = true,
+                    KyraRealtimeGatewayResearchConsent = true
+                },
+                path,
+                toolkitReportPath: null,
+                appVersion: "1.0.0",
+                client: null,
+                CancellationToken.None);
+
+            Assert.NotNull(resp);
+            Assert.False(resp!.UsedOnlineData);
+            Assert.Contains("I can’t verify the exact part from live sources right now", resp.Text, StringComparison.Ordinal);
+            Assert.Contains("90000 mWh", resp.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Not verified externally", resp.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("verified SKU", resp.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Dell part number:", resp.Text, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            File.Delete(path);
+            Environment.SetEnvironmentVariable("FORGEREMS_KYRA_GATEWAY_URL", prevUrlProcess, EnvironmentVariableTarget.Process);
+            Environment.SetEnvironmentVariable("FORGEREMS_KYRA_GATEWAY_BETA_TOKEN", prevTokProcess, EnvironmentVariableTarget.Process);
+            Environment.SetEnvironmentVariable("FORGEREMS_KYRA_GATEWAY_ENABLED", prevGatewayEnabled, EnvironmentVariableTarget.Process);
+        }
+    }
+
+    [Fact]
     public void KyraGatewayResearchConsent_CommunitySharing_RemainsIndependent()
     {
         var settings = new CopilotSettings { KyraCommunitySharingEnabled = false };

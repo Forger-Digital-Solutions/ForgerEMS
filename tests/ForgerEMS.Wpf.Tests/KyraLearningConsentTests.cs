@@ -128,6 +128,17 @@ public sealed class KyraLearningConsentTests
     }
 
     [Fact]
+    public void KyraMemorySanitizer_SanitizeText_StripsTokensProductKeysAndSerialLikeIds()
+    {
+        var t = KyraMemorySanitizer.SanitizeText(
+            "token sk-abcdefghijklmnopqrstuvwxyz product ABCDE-FGHIJ-KLMNO-PQRST-UVWXY serial ABCD1234EFGH",
+            400);
+        Assert.DoesNotContain("abcdefghijklmnopqrstuvwxyz", t, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("FGHIJ", t, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ABCD1234EFGH", t, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void KyraCommunityPayloadPreview_LocalOnly_StatusInJson()
     {
         var profile = new KyraMachineMemoryProfile();
@@ -252,6 +263,32 @@ public sealed class KyraLearningConsentTests
                 {
                     File.Delete(path);
                 }
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public void KyraMemoryStore_WhenStoragePathInvalid_DoesNotThrowOrAppend()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "kyra-test-denied-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var fileWhereDirectoryShouldBe = Path.Combine(root, "not-a-directory");
+        File.WriteAllText(fileWhereDirectoryShouldBe, "occupied");
+        var store = new KyraMachineMemoryStore(Path.Combine(fileWhereDirectoryShouldBe, "memory.json"));
+        var entry = KyraMemorySanitizer.BuildEntryFromPrompt("system scan completed", "battery warning guidance", null, null);
+
+        try
+        {
+            Assert.False(store.TryAppend(entry, new KyraMemorySettings { LocalRepairMemoryEnabled = true }));
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, recursive: true);
             }
             catch
             {

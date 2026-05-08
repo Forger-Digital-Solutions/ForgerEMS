@@ -4,8 +4,8 @@
 
 | Audience | What you need to know |
 |----------|------------------------|
-| **Beta testers** | **You do not need API keys** for the normal app. **Kyra works offline** with built-in rules and local reports. The **standard beta download does not ask you to configure third-party API keys.** |
-| **Developers & operators** | This page describes **optional** online or local-server providers and **Windows environment variables** for machines **you** control. |
+| **Beta testers** | **You do not need API keys** for the normal app. **Kyra works offline** with built-in rules and local reports. Optional Gateway, BYOK, and local AI providers live in **Kyra AI Settings**. |
+| **Developers & operators** | This page describes **optional** online or local-server providers, protected/session BYOK storage, and **Windows environment variables** for machines **you** control. |
 
 **Kyra** is the in-app assistant (user-facing name throughout the product).
 
@@ -41,6 +41,18 @@ Routing rule:
 
 Live data limitations are expected in beta. Crypto can use the configured crypto provider/CoinGecko path. Stocks require a configured finance provider. Weather uses Open-Meteo/configured weather provider. News, resale comps, driver/vendor lookups, and general web research require matching provider/tool support; otherwise Kyra should be honest that live research is unavailable.
 
+### Hardware part research
+
+Prompts about replacement parts, prices, current availability, official compatibility, service manuals, current docs, or “find/search/look up” should be classified as research-required. The local System Intelligence JSON supplies device facts only; it must not be treated as proof of external compatibility.
+
+For battery questions, especially Dell systems, source priority is:
+
+1. OEM support, service manual, or official parts page.
+2. Trustworthy references for OEM-compatible part numbers.
+3. Reputable sellers only as secondary availability references.
+
+If the gateway or live tools are unavailable, Kyra should say that clearly and provide only local facts plus verification guidance: match voltage, watt-hour rating, connector, shape, Dell service/manual compatibility, and the physical battery label before buying.
+
 ---
 
 ## Kyra Intelligence privacy controls
@@ -65,23 +77,27 @@ ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the
 
 ---
 
-## How credentials are resolved (operator)
+## How credentials are resolved
 
-When online providers are enabled for a deployment:
+When online providers are enabled:
 
-1. **Session-only** provider credential entered for the current run (highest priority; kept **in memory**, not written to ordinary settings JSON).  
-2. **Process** environment variable  
-3. **User** environment variable  
-4. **Machine** environment variable  
+1. **Session-only** provider credential entered for the current run (highest priority; kept **in memory** until app close).
+2. **Protected saved key** from Kyra AI Settings when Windows protected local storage is available.
+3. **Process** environment variable
+4. **User** environment variable
+5. **Machine** environment variable
+6. **Gateway/local/offline fallback** when no direct BYOK credential is usable.
 
-After changing **user** or **machine** variables in Windows, use **Refresh Provider Status** in Kyra Advanced so the app re-reads the environment without a full restart.
+Saved BYOK keys are not written to normal `appsettings` or `copilot-settings.json`; the settings file only records non-secret provider choices such as enabled state, selected model, base URL, storage mode, and last test status. If protected storage fails, Kyra falls back to session-only and warns the user.
+
+After changing **user** or **machine** variables in Windows, use **Refresh Status** in Kyra AI Settings so the app re-reads credentials without a full restart.
 
 ---
 
 ## Confirm mode in the app
 
 - Open the **Kyra** area → check the **mode** and **provider** indicator (Offline Local vs online vs hybrid).  
-- **Kyra Advanced** shows which provider is active, base URL, model, and redaction / data-sharing toggles.
+- **Kyra AI Settings** shows Overview, Providers, Bring Your Own Key, Live Tools, Privacy & Context, Local AI, and Diagnostics. Normal tabs avoid raw routing internals; technical diagnostics are behind a collapsed expander and are sanitized.
 
 ---
 
@@ -109,6 +125,8 @@ Set-FdsEnv "FORGEREMS_KYRA_GATEWAY_REQUIRE_CONSENT" "false"
 ```
 
 Do not put provider API keys in the desktop app, installer, release ZIP, registry defaults, docs, source code, or tester Windows User env vars.
+
+For BYOK providers, use **Kyra AI Settings → Bring Your Own Key**. Use **Use until app closes** for session-only credentials, or **protected local key** when available. Environment variable setup remains available under **Advanced environment setup** for operators who prefer Windows-scoped deployment.
 
 ### Rotation / revoke
 
@@ -155,7 +173,7 @@ Many providers expose OpenAI-style `/v1/chat/completions`.
 
 - Default OpenAI cloud base URL: **`https://api.openai.com/v1`**  
 - Typical env var for a cloud key: **`OPENAI_API_KEY`** (operator sets this on the machine or process — **not** a beta tester checklist item).  
-- Kyra Advanced may allow **base URL** and **model** overrides for compatible gateways.
+- Kyra AI Settings allows **base URL** and **model** overrides for compatible gateways and BYOK providers.
 
 **Wrong base URL** → 404 or connection errors. **Wrong model** → “model not found”. **Bad key** → 401.
 
@@ -175,7 +193,7 @@ When your organization enables these integrations, keys are supplied **outside**
 | Mistral | `MISTRAL_API_KEY` |
 | GitHub Models | `GITHUB_MODELS_TOKEN` |
 
-Use **Kyra Advanced** to enable the matching slot where applicable, then **Refresh Provider Status**.
+Use **Kyra AI Settings** to enable the matching slot where applicable, then **Refresh Status**.
 
 GitHub Models can also route across optional model slots with the same token:
 
@@ -205,7 +223,7 @@ Run **cmd.exe** as the normal user. Replace the placeholder with a real secret f
 setx GEMINI_API_KEY REPLACE_ME
 ```
 
-Close and reopen ForgerEMS, then **Refresh Provider Status** in Kyra Advanced.
+Close and reopen ForgerEMS, then **Refresh Status** in Kyra AI Settings.
 
 **Remove a user var:** Windows Settings → System → About → **Advanced system settings** → Environment Variables → User variables → delete the row.
 

@@ -28,6 +28,6 @@ public static class KyraOnboardingCopy
             "• “Run a quick check on this PC” (after a System Scan)\n" +
             "• “What’s missing before beta testing?”\n\n" +
             "Beta safety note: double-check USB targets before destructive steps.\n\n" +
-            "Slash commands still work — e.g. /help, /diagnose, /usb, /resale, /fixcode.";
+            "Slash commands still work — e.g. /help, /diagnose, /usb, /resale.";
     }
 }

@@ -54,7 +54,7 @@ public static class KyraHardwareFactsEngine
 
     public static KyraStorageBusKind PrimaryStorageBusKind(SystemProfile profile)
     {
-        var disk = profile.Disks.FirstOrDefault();
+        var disk = profile.Disks.Count > 0 ? profile.Disks[0] : null;
         if (disk is null)
         {
             return KyraStorageBusKind.Unknown;

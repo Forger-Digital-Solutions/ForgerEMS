@@ -1,4 +1,6 @@
+using System;
 using System.Linq;
+using System.IO;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
@@ -15,6 +17,47 @@ namespace ForgerEMS.Wpf.Tests;
 /// </summary>
 public sealed class MainWindowXamlLoadTests
 {
+    [Fact]
+    public void MainWindow_XamlContainsUpdatedPolishLabels()
+    {
+        var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
+        var text = File.ReadAllText(xamlPath);
+
+        Assert.Contains("Refresh USB Targets", text, StringComparison.Ordinal);
+        Assert.Contains("Run Standard Scan", text, StringComparison.Ordinal);
+        Assert.Contains("Refresh Results", text, StringComparison.Ordinal);
+        Assert.Contains("Create Support Bundle", text, StringComparison.Ordinal);
+        Assert.Contains("Copy Update Diagnostics", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Run Elevated Scan for more detail", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Copy update-check diagnostics (safe summary)", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainWindow_SettingsTabUsesCompactSafetyAndUpdateWording()
+    {
+        var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
+        var text = File.ReadAllText(xamlPath);
+        var settingsStart = text.IndexOf("<TabItem Header=\"☰  Settings\">", StringComparison.Ordinal);
+        Assert.True(settingsStart >= 0);
+        var settings = text[settingsStart..];
+
+        Assert.Contains("System Intelligence sensors / Deep Sensor Mode", settings, StringComparison.Ordinal);
+        Assert.Contains("Mode: Off / Read-only local sensors", settings, StringComparison.Ordinal);
+        Assert.Contains("Safety: read-only", settings, StringComparison.Ordinal);
+        Assert.Contains("No fan, voltage, clock, BIOS, or firmware control.", settings, StringComparison.Ordinal);
+        Assert.Contains("Keep Local Only", settings, StringComparison.Ordinal);
+        Assert.Contains("Help Improve Kyra", settings, StringComparison.Ordinal);
+        Assert.Contains("Learn More", settings, StringComparison.Ordinal);
+        Assert.Contains("View Shared Preview", settings, StringComparison.Ordinal);
+        Assert.Contains("Export Memory", settings, StringComparison.Ordinal);
+        Assert.Contains("Delete Memory", settings, StringComparison.Ordinal);
+        Assert.Contains("Reset Learning", settings, StringComparison.Ordinal);
+        Assert.Contains("AppUpdateCheckButtonText", settings, StringComparison.Ordinal);
+        Assert.Contains("AppUpdateCheckHelperText", settings, StringComparison.Ordinal);
+        Assert.Contains("Copy Update Diagnostics", settings, StringComparison.Ordinal);
+        Assert.Contains("Copies a safe summary for support sharing.", settings, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void MainWindowConstructsWithoutStaticResourceErrors()
     {
@@ -84,5 +127,22 @@ public sealed class MainWindowXamlLoadTests
         thread.Start();
         Assert.True(thread.Join(TimeSpan.FromSeconds(120)), "STA thread timed out.");
         Assert.Null(caught);
+    }
+
+    private static string FindRepoFile(params string[] segments)
+    {
+        var current = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (current is not null)
+        {
+            var candidate = Path.Combine(new[] { current.FullName }.Concat(segments).ToArray());
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            current = current.Parent;
+        }
+
+        throw new FileNotFoundException("Could not locate repo file.", Path.Combine(segments));
     }
 }

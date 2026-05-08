@@ -16,6 +16,7 @@ public sealed class KyraUxPolishTests
         };
 
         Assert.Equal("Direct answer only.", msg.Text);
+        Assert.True(msg.HasMetadataSummary);
         Assert.True(msg.HasMetadataDetails);
         Assert.DoesNotContain("provider=", msg.Text, StringComparison.OrdinalIgnoreCase);
     }
@@ -45,12 +46,31 @@ public sealed class KyraUxPolishTests
     }
 
     [Fact]
-    public void MainWindow_BindsMetadataInDetailsNotBodyFooterLabel()
+    public void MainWindow_BindsCompactMetadataFooterWithoutDetailsExpander()
     {
         var xaml = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "ForgerEMS.Wpf", "MainWindow.xaml"));
         Assert.Contains("MetadataSummary", xaml, StringComparison.Ordinal);
-        Assert.Contains("MetadataDetails", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Header=\"Details\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"{Binding MetadataDetails}\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Text=\"{Binding SourceLabel}\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainWindow_VisualEffectsDefaultIsStaticLowPower()
+    {
+        var root = FindRepoRoot();
+        var xaml = File.ReadAllText(Path.Combine(root, "src", "ForgerEMS.Wpf", "MainWindow.xaml"));
+        var code = File.ReadAllText(Path.Combine(root, "src", "ForgerEMS.Wpf", "MainWindow.xaml.cs"));
+
+        Assert.Contains("Text=\"Visual Effects\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Off / Plain dark", xaml, StringComparison.Ordinal);
+        Assert.Contains("Static / Low Power", xaml, StringComparison.Ordinal);
+        Assert.Contains("Animated", xaml, StringComparison.Ordinal);
+        Assert.Contains("private VisualEffectsMode _visualEffectsMode = VisualEffectsMode.Static;", code, StringComparison.Ordinal);
+        Assert.Contains("private bool _animatedBackgroundEnabled;", code, StringComparison.Ordinal);
+        Assert.Contains("CanRunBackgroundAnimation()", code, StringComparison.Ordinal);
+        Assert.Contains("WindowState != WindowState.Minimized", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("private bool _animatedBackgroundEnabled = true;", code, StringComparison.Ordinal);
     }
 
     [Fact]

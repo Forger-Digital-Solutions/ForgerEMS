@@ -59,7 +59,7 @@ public sealed class GitHubModelsProviderConfig
             _ => string.Empty
         };
 
-    private IReadOnlyList<GitHubModelChoice> BuildChoices(bool includeFallback)
+    private GitHubModelChoice[] BuildChoices(bool includeFallback)
     {
         var choices = new[]
             {

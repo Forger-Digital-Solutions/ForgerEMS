@@ -1,4 +1,4 @@
-# Public FAQ — ForgerEMS v1.2.0 Public Preview
+# Public FAQ — ForgerEMS v1.2.1 Public Preview
 
 ## What is ForgerEMS?
 
@@ -46,4 +46,4 @@ Commercial terms are TBD. For now `FORGEREMS_LICENSE_TIER=BetaTesterPro` or the 
 
 ## Something broke — what should I send?
 
-Version, steps, screenshots, and **Diagnostics → Export Support Bundle** ZIP to **ForgerDigitalSolutions@outlook.com** — not private documents.
+Version, steps, screenshots, and **Diagnostics → Create Support Bundle** ZIP to **ForgerDigitalSolutions@outlook.com** — not private documents.

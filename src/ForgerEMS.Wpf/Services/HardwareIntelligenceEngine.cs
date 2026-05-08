@@ -643,7 +643,7 @@ public static class MachineClassifier
         };
     }
 
-    private static void Add(IDictionary<string, int> scores, string key, int amount)
+    private static void Add(Dictionary<string, int> scores, string key, int amount)
     {
         if (scores.ContainsKey(key))
         {
@@ -651,7 +651,7 @@ public static class MachineClassifier
         }
     }
 
-    private static void AddSignal(string name, string value, int weight, string source, IList<MachineClassSignal> signals)
+    private static void AddSignal(string name, string value, int weight, string source, List<MachineClassSignal> signals)
     {
         if (!string.IsNullOrWhiteSpace(value))
         {

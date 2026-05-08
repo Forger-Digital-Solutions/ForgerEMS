@@ -1,3 +1,5 @@
+#pragma warning disable CA1822 // DI-injected service; methods called via instance reference
+#pragma warning disable CA1305 // Locale-sensitive calls; text is diagnostic/UI output
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -10,6 +12,11 @@ using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services;
 
 namespace VentoyToolkitSetup.Wpf.Services.KyraTools;
+
+file static class KyraToolRegistryConstants
+{
+    internal static readonly string[] FinanceProviders = ["finnhub", "alphavantage", "fmp"];
+}
 
 public sealed class KyraToolRegistry
 {
@@ -193,7 +200,7 @@ public sealed class KyraToolRegistry
                 Configured = !string.IsNullOrWhiteSpace(lt.StocksApiKey) &&
                              !KyraProviderConfigResolver.IsPlaceholderSecretOrValue(lt.StocksApiKey),
                 KeyStatus = KeyStatusFromSetting(lt.StocksApiKey),
-                Implemented = new[] { "finnhub", "alphavantage", "fmp" }.Contains(NormalizeFinanceProvider(lt.StocksProvider), StringComparer.OrdinalIgnoreCase),
+                Implemented = KyraToolRegistryConstants.FinanceProviders.Contains(NormalizeFinanceProvider(lt.StocksProvider), StringComparer.OrdinalIgnoreCase),
                 RequiresNetwork = true,
                 SupportsNoKey = false
             },

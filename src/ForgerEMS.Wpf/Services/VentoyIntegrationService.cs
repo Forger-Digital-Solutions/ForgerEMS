@@ -1,3 +1,5 @@
+#pragma warning disable CA1001 // VentoyIntegrationService.SemaphoreSlim is long-lived; disposal handled by host
+#pragma warning disable CS0414 // _ownsHttpClient: reserved for future disposal path
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;

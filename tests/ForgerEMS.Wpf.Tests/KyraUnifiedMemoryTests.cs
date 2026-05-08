@@ -84,14 +84,19 @@ public sealed class KyraUnifiedMemoryTests
     }
 
     [Fact]
-    public void KyraAdvancedSettingsXaml_DoesNotAskTestersToEnterApiKeys()
+    public void KyraAdvancedSettingsXaml_ByokIsOptionalAndUserSafe()
     {
         var root = FindRepoRootWithMainWindow();
         var path = Path.Combine(root, "src", "ForgerEMS.Wpf", "KyraAdvancedSettingsWindow.xaml");
         var text = File.ReadAllText(path);
+        Assert.Contains("Header=\"Bring Your Own Key\"", text, StringComparison.Ordinal);
+        Assert.Contains("BYOK is optional", text, StringComparison.Ordinal);
+        Assert.Contains("PasswordBox", text, StringComparison.Ordinal);
+        Assert.Contains("Keys stay hidden", text, StringComparison.Ordinal);
         Assert.DoesNotContain("enter your api key", text, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("add your api key", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Provider Status Help", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Header=\"Provider Status Help\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Header=\"Debug / Source\"", text, StringComparison.Ordinal);
     }
 
     [Fact]

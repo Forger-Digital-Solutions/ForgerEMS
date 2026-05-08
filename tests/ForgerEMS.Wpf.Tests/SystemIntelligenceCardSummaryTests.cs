@@ -274,12 +274,42 @@ public sealed class SystemIntelligenceCardSummaryTests
     {
         var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
         Assert.Contains("Run Elevated Scan", xaml, StringComparison.Ordinal);
+        Assert.Contains("Run Standard Scan", xaml, StringComparison.Ordinal);
+        Assert.Contains("Refresh Results", xaml, StringComparison.Ordinal);
+        Assert.Contains("Create Support Bundle", xaml, StringComparison.Ordinal);
         Assert.Contains("RunElevatedSystemScanCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("Copy Quick Summary", xaml, StringComparison.Ordinal);
         Assert.Contains("Open JSON Report", xaml, StringComparison.Ordinal);
+        Assert.Contains("Open Markdown Report", xaml, StringComparison.Ordinal);
+        Assert.Contains("Open Reports Folder", xaml, StringComparison.Ordinal);
         Assert.Contains("Copy Safe Path", xaml, StringComparison.Ordinal);
         Assert.Contains("SystemIntelligenceScanStatusText", xaml, StringComparison.Ordinal);
         Assert.Contains("SystemIntelligenceHealthStatusText", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ElevatedScanExitCodeMinus196608_MapsToUacCanceledGuidance()
+    {
+        var guidance = InvokeElevatedGuidance("Elevated scan exited with code -196608.");
+        var joined = string.Join(' ', guidance);
+
+        Assert.Contains("canceled", joined, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("UAC", joined, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("administrator", joined, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Standard Scan report is still available", joined, StringComparison.Ordinal);
+        Assert.DoesNotContain("network", joined, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ElevatedScanUnknownExitCode_UsesLocalAdminGuidance()
+    {
+        var guidance = InvokeElevatedGuidance("Elevated scan exited with code 123.");
+        var joined = string.Join(' ', guidance);
+
+        Assert.Contains("local admin", joined, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("UAC", joined, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Standard Scan report is still available", joined, StringComparison.Ordinal);
+        Assert.DoesNotContain("network", joined, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -347,6 +377,13 @@ public sealed class SystemIntelligenceCardSummaryTests
         var result = method!.Invoke(null, [root]);
         Assert.IsType<string>(result);
         return (string)result!;
+    }
+
+    private static IReadOnlyList<string> InvokeElevatedGuidance(string reason)
+    {
+        var method = typeof(MainViewModel).GetMethod("BuildElevatedScanFailureGuidance", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+        return Assert.IsAssignableFrom<IReadOnlyList<string>>(method!.Invoke(null, [reason]));
     }
 
     private static string FindRepoFile(params string[] segments)
