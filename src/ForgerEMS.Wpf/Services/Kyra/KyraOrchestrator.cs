@@ -199,7 +199,7 @@ public sealed class KyraOrchestrator
                 return localSpecDone;
             }
 
-            if (KyraSimpleMathEvaluator.TryBuildCopilotResponse(request.Prompt, out var deterministicMath))
+            if (KyraMathCopilotResponseBuilder.TryBuildCopilotResponse(request.Prompt, out var deterministicMath))
             {
                 Report("Formatting Kyra response…");
                 if (KyraResponseCache.IsCacheablePrompt(request.Prompt))

@@ -1,9 +1,8 @@
 using System.Data;
 using System.Globalization;
 using System.Text.RegularExpressions;
-using VentoyToolkitSetup.Wpf.Services;
 
-namespace VentoyToolkitSetup.Wpf.Services.Kyra;
+namespace Kyra.Core;
 
 /// <summary>Deterministic local arithmetic for short prompts (word numbers, times/plus/minus/division, percent-of).</summary>
 public static class KyraSimpleMathEvaluator
@@ -184,28 +183,5 @@ public static class KyraSimpleMathEvaluator
         }
 
         return t;
-    }
-
-    public static bool TryBuildCopilotResponse(string? prompt, out CopilotResponse response)
-    {
-        response = new CopilotResponse();
-        if (!TryEvaluate(prompt, out var text, out _))
-        {
-            return false;
-        }
-
-        response = new CopilotResponse
-        {
-            Text = text.Trim(),
-            UsedOnlineData = false,
-            OnlineStatus = "Kyra local calculator (deterministic).",
-            ProviderType = CopilotProviderType.LocalOffline,
-            ProviderNotes = ["Kyra routing: local calculator -> success"],
-            ResponseSource = KyraResponseSource.LocalKyra,
-            SourceLabel = "Local tool • Calculator",
-            GroundedInSystemIntelligence = false,
-            ActionSuggestions = []
-        };
-        return true;
     }
 }

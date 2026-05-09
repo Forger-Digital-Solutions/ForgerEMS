@@ -296,7 +296,7 @@ public static class ToolkitReadinessScorer
         return "Medium confidence: readiness from toolkit-health JSON only (USB/Ventoy not evaluated in Kyra context).";
     }
 
-    private static string BuildNextAction(ToolkitReadinessLabel label, IReadOnlyList<string> blockers) => label switch
+    private static string BuildNextAction(ToolkitReadinessLabel label, List<string> blockers) => label switch
     {
         ToolkitReadinessLabel.Ready => "Export a toolkit summary and proceed with technician workflow presets.",
         ToolkitReadinessLabel.MostlyReady => "Resolve top blockers, then rerun Refresh Health to confirm readiness.",

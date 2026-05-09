@@ -31,8 +31,8 @@ public static class KyraLocalCodeLint
 
         if (lang.Contains("xaml", StringComparison.Ordinal) || t.Contains("<Window", StringComparison.Ordinal))
         {
-            var open = Regex.Matches(t, @"<\w+").Count;
-            var close = Regex.Matches(t, @"</\w+>").Count;
+            var open = Regex.Count(t, @"<\w+");
+            var close = Regex.Count(t, @"</\w+>");
             if (open > close + 2)
             {
                 issues.Add("XAML: possible unclosed tags — check matching elements.");
