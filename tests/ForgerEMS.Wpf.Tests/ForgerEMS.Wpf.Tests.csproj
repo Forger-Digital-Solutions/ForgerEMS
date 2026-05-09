@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="Kyra.Core" />
   </ItemGroup>
 
   <ItemGroup>
