@@ -9,6 +9,7 @@ public static class KyraSimpleMathEvaluator
 {
     private const int MaxPromptLength = 220;
 
+    /// <summary>Returns <see langword="true"/> when <paramref name="prompt"/> looks like a short arithmetic question that <see cref="TryEvaluate"/> can handle deterministically without an online provider.</summary>
     public static bool LooksLikeSimpleArithmeticQuestion(string? prompt)
     {
         if (string.IsNullOrWhiteSpace(prompt) || prompt.Length > MaxPromptLength)
@@ -48,6 +49,7 @@ public static class KyraSimpleMathEvaluator
         return true;
     }
 
+    /// <summary>Attempts to evaluate <paramref name="prompt"/> as a simple arithmetic expression. Returns <see langword="true"/> on success, setting <paramref name="answer"/> to the formatted result and <paramref name="normalizedExpression"/> to the normalised numeric expression used for computation.</summary>
     public static bool TryEvaluate(string? prompt, out string answer, out string? normalizedExpression)
     {
         answer = string.Empty;

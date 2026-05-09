@@ -6,6 +6,7 @@ namespace Kyra.Core;
 /// <summary>Lightweight local checks before sending snippets to providers.</summary>
 public static class KyraLocalCodeLint
 {
+    /// <summary>Returns a list of human-readable issue strings for <paramref name="text"/>, or an empty list when no issues are found. Uses <paramref name="languageHint"/> to enable language-specific checks (e.g. "json", "powershell", "xaml").</summary>
     public static IReadOnlyList<string> AnalyzeSnippet(string text, string languageHint)
     {
         var issues = new List<string>();

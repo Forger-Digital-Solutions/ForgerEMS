@@ -2,8 +2,10 @@ using System.Text.RegularExpressions;
 
 namespace Kyra.Core;
 
+/// <summary>Detects whether a string looks like a code snippet or programming prompt.</summary>
 public static partial class KyraCodeSnippetDetector
 {
+    /// <summary>Returns <see langword="true"/> when <paramref name="prompt"/> appears to contain or request a code snippet.</summary>
     public static bool LooksLikeCodeSnippet(string prompt)
     {
         if (string.IsNullOrWhiteSpace(prompt))
@@ -38,6 +40,7 @@ public static partial class KyraCodeSnippetDetector
                LineLooksLikeCode(t);
     }
 
+    /// <summary>Returns a language display name ("PowerShell", "C#", "JSON", "YAML", "XAML") inferred from <paramref name="prompt"/>, or <c>"code"</c> if the language cannot be identified.</summary>
     public static string GuessLanguageHint(string prompt)
     {
         var t = prompt.Trim();

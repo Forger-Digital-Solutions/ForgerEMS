@@ -7,6 +7,7 @@ namespace Kyra.Core;
 /// </summary>
 public static class KyraFollowUpDetector
 {
+    /// <summary>Returns <see langword="true"/> when <paramref name="prompt"/> contains phrasing that refers back to a prior assistant reply (e.g. "those issues", "fix them", "what you said").</summary>
     public static bool LooksLikeConversationFollowUp(string prompt)
     {
         var t = prompt.ToLowerInvariant();
@@ -53,6 +54,7 @@ public static class KyraFollowUpDetector
         return false;
     }
 
+    /// <summary>Returns <see langword="true"/> when <paramref name="prompt"/> explicitly requests resuming or continuing the current conversation thread.</summary>
     public static bool LooksLikeExplicitThreadContinuation(string prompt)
     {
         var t = prompt.Trim().ToLowerInvariant();

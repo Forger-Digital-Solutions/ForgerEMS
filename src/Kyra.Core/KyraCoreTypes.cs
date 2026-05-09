@@ -7,6 +7,7 @@ public enum KyraProviderConfigurationMode
     UserManagedFuture
 }
 
+/// <summary>Lifecycle state of a configured provider slot.</summary>
 public enum KyraProviderStatus
 {
     NotConfigured,
@@ -18,6 +19,7 @@ public enum KyraProviderStatus
     Disabled
 }
 
+/// <summary>Coarse health signal surfaced in diagnostics and status badges.</summary>
 public enum KyraProviderHealth
 {
     Healthy,
@@ -25,6 +27,7 @@ public enum KyraProviderHealth
     Unavailable
 }
 
+/// <summary>Categorised failure cause attached to <see cref="CopilotProviderResult"/> and <see cref="KyraProviderQuotaState"/> for routing and UI display.</summary>
 public enum KyraProviderFailureReason
 {
     None,
@@ -40,6 +43,7 @@ public enum KyraProviderFailureReason
     Unknown
 }
 
+/// <summary>Capability flags used when scoring providers against a request's needs.</summary>
 [Flags]
 public enum KyraModelCapability
 {
@@ -50,6 +54,7 @@ public enum KyraModelCapability
     WritingPolish = 8
 }
 
+/// <summary>Reason a routing decision kept a turn local rather than forwarding to an online provider.</summary>
 public enum KyraStayLocalReason
 {
     None = 0,
@@ -59,6 +64,7 @@ public enum KyraStayLocalReason
     CodeAssistIsolation = 4
 }
 
+/// <summary>Per-provider runtime configuration: endpoint, credentials reference, rate-limit, and quota settings.</summary>
 public sealed class CopilotProviderConfiguration
 {
     public bool IsEnabled { get; set; }
@@ -91,6 +97,7 @@ public sealed class CopilotProviderConfiguration
     public int MaxOutputTokens { get; set; } = 700;
 }
 
+/// <summary>Outcome record returned by a single provider call: success flag, message, and structured failure reason for routing fallback.</summary>
 public sealed class CopilotProviderResult
 {
     public bool Succeeded { get; init; }
@@ -106,6 +113,7 @@ public sealed class CopilotProviderResult
     public KyraProviderFailureReason FailureReason { get; init; } = KyraProviderFailureReason.None;
 }
 
+/// <summary>Routing decision for a turn: whether a local tool handles the answer and whether an online provider should polish the result.</summary>
 public sealed class KyraToolCallPlan
 {
     public bool ShouldUseLocalToolAnswer { get; init; }
@@ -114,6 +122,7 @@ public sealed class KyraToolCallPlan
     public KyraStayLocalReason StayLocalReason { get; init; }
 }
 
+/// <summary>Thrown by provider infrastructure when a call cannot be completed; carries a structured <see cref="KyraProviderFailureReason"/> for routing decisions.</summary>
 public sealed class KyraProviderException : Exception
 {
     public KyraProviderException(string message, KyraProviderFailureReason reason)
@@ -125,6 +134,7 @@ public sealed class KyraProviderException : Exception
     public KyraProviderFailureReason Reason { get; }
 }
 
+/// <summary>Mutable per-provider quota and health tracking: daily request counts, consecutive failures, and cooldown window.</summary>
 public sealed class KyraProviderQuotaState
 {
     public bool IsConfigured { get; set; }

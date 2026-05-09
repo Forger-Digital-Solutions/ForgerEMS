@@ -8,6 +8,7 @@ namespace Kyra.Core;
 /// </summary>
 public static class KyraDestructiveIntentDetector
 {
+    /// <summary>Returns <see langword="true"/> when <paramref name="t"/> references credential theft, ransomware, unauthorized access bypass, or similar malicious techniques.</summary>
     public static bool LooksLikeMaliciousOrUnauthorized(string t) =>
         ContainsAny(t,
             "ransomware", "keylogger", "steal password", "steal credentials", "dump sam", "mimikatz",
@@ -28,11 +29,13 @@ public static class KyraDestructiveIntentDetector
             "destroy all data", "wipe hard drive completely") &&
         !ContainsAny(t, "ventoy", "removable", "flash drive");
 
+    /// <summary>Returns <see langword="true"/> when <paramref name="t"/> appears to request sharing or exfiltrating API keys, passwords, or other secrets.</summary>
     public static bool LooksLikeCredentialExfiltration(string t) =>
         (ContainsAny(t, "paste your", "send your", "share your", "give me your") &&
          ContainsAny(t, "api key", "password", "secret", "token", "private key")) ||
         Regex.IsMatch(t, @"\b(exfil|exfiltrate|harvest)\b.*\b(password|token|secret|credential)\b");
 
+    /// <summary>Returns <see langword="true"/> when <paramref name="haystack"/> contains any of the <paramref name="needles"/> using <see cref="StringComparison.Ordinal"/> comparison.</summary>
     public static bool ContainsAny(string haystack, params string[] needles)
     {
         foreach (var n in needles)

@@ -9,6 +9,9 @@ public static class KyraSafetyPolicy
     /// When local facts exist, reject API answers that falsely deny access to this machine or contradict
     /// obvious local identifiers (simple heuristics — conservative discard only).
     /// </summary>
+    /// <param name="onlineText">The raw text returned by the online provider.</param>
+    /// <param name="localReferenceText">Reserved for future direct-comparison checks; not evaluated in the current implementation.</param>
+    /// <param name="ledger">Authoritative local hardware facts used for the contradiction check.</param>
     public static bool ShouldDiscardOnlineAnswer(string onlineText, string? localReferenceText, KyraFactsLedger ledger)
     {
         if (string.IsNullOrWhiteSpace(onlineText))

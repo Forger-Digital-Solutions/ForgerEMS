@@ -3,6 +3,7 @@ namespace Kyra.Core;
 /// <summary>Per-turn playful vs professional phrasing for Kyra (respects the host's PersonalityProfile setting and explicit user cues).</summary>
 public static class KyraPersonalityTone
 {
+    /// <summary>Returns <see langword="true"/> when the active personality and prompt cues indicate playful phrasing is appropriate. Explicit prompt cues ("be serious", "be cute") override the <paramref name="personalityProfile"/> setting.</summary>
     public static bool UsePlayfulWording(string? personalityProfile, string userPrompt)
     {
         var p = userPrompt.ToLowerInvariant();
@@ -26,6 +27,7 @@ public static class KyraPersonalityTone
         return profile is "bubbly-tech" or "bubbly" or "playful";
     }
 
+    /// <summary>Returns a short greeting line for the session-start context prompt, toned to <paramref name="playful"/>.</summary>
     public static string CasualGreetingLine(bool playful)
     {
         return playful
@@ -33,6 +35,7 @@ public static class KyraPersonalityTone
             : "Hey — Kyra here. What do you want to work on?";
     }
 
+    /// <summary>Returns a transition line used when shifting from repair-drill mode back to conversational mode, toned to <paramref name="playful"/>.</summary>
     public static string NormalConversationRelaxLine(bool playful)
     {
         return playful
@@ -40,6 +43,7 @@ public static class KyraPersonalityTone
             : "Understood — I'll keep this conversational. When you want device help, say the word and I'll pull in the System Intelligence context.";
     }
 
+    /// <summary>Returns an empathy/acknowledgement line used when the user expresses frustration, toned to <paramref name="playful"/>.</summary>
     public static string FrustrationAckLine(bool playful)
     {
         return playful

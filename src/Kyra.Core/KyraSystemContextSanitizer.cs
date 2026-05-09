@@ -8,6 +8,7 @@ namespace Kyra.Core;
 /// </summary>
 public static partial class KyraSystemContextSanitizer
 {
+    /// <summary>Redacts Windows paths, UNC paths, product-key patterns, email addresses, and long hex/base64 tokens from <paramref name="text"/> before it is sent to an external API provider.</summary>
     public static string SanitizeForExternalProviders(string text)
     {
         if (string.IsNullOrEmpty(text))

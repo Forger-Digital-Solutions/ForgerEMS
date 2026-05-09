@@ -5,6 +5,7 @@ namespace Kyra.Core;
 /// <summary>Strips credentials, PII, private paths, and hardware serials from text before persistence or provider transmission.</summary>
 public static class CopilotRedactor
 {
+    /// <summary>Returns <paramref name="value"/> with API keys, tokens, Windows paths, IP addresses, MAC addresses, email addresses, and hardware serials replaced by safe placeholder strings. Pass <paramref name="enabled"/> as <see langword="false"/> to bypass redaction (e.g. in tests).</summary>
     public static string Redact(string value, bool enabled = true)
     {
         if (!enabled || string.IsNullOrEmpty(value))

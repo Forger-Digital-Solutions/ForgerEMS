@@ -51,6 +51,7 @@ public sealed class KyraFactsLedger
         (!string.IsNullOrWhiteSpace(CpuSummary) && !CpuSummary.Contains("Unknown", StringComparison.OrdinalIgnoreCase)) ||
         (!string.IsNullOrWhiteSpace(DeviceSummary) && !DeviceSummary.Contains("Unknown device", StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>Returns a compact multi-line text block suitable for injecting into provider prompts as an authoritative local hardware summary.</summary>
     public string ToPromptSummaryBlock()
     {
         if (!HasTrustedLocalHardwareFacts)
