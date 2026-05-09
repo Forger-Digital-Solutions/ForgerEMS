@@ -199,9 +199,21 @@ No. ForgerEMS ships its approved local providers with the app where legally allo
 
 ---
 
+## What is the difference between Standard Scan and Elevated Scan?
+
+**Standard Scan** runs without administrator privileges and covers most hardware, health, USB, and toolkit checks. It is always available and is the default.
+
+**Elevated Scan** is an optional deeper scan that requests Windows administrator access to extend coverage — for example, certain security checks, low-level sensor data, and system areas that Windows restricts to admin processes. If ForgerEMS is already running as administrator, the Elevated Scan path runs directly without a UAC prompt. If ForgerEMS is not elevated, the app requests UAC by relaunching itself as administrator and continues the scan automatically after approval.
+
+If Windows or your security policy blocks the admin handoff (UAC cancelled, endpoint security policy, execution policy, or SmartScreen), ForgerEMS now shows a friendly explanation rather than a raw error code. The Standard Scan result remains available and is not affected.
+
+**Restart as Administrator** is optional. It improves Elevated Scan and Deep Sensor Mode coverage but is not required for normal use. **Copy Admin Command** remains a beta diagnostic fallback for environments where UAC launch cannot be automated.
+
+---
+
 ## What is Deep Sensor Mode?
 
-Deep Sensor Mode is an optional local read-only sensor mode that may improve **Hardware X-Ray** sensor coverage for temperatures, clocks, load, fan RPM, and storage wear when supported.
+Deep Sensor Mode is an optional local read-only sensor mode that may improve **Hardware X-Ray** sensor coverage for temperatures, clocks, load, fan RPM, and storage wear when supported. It enables the bundled LibreHardwareMonitorLib provider where packaged; it is not permanent administrator permission.
 
 ---
 
@@ -225,7 +237,7 @@ No automatic upload. Reports and logs stay local unless you choose to copy, expo
 
 ## Can Deep Sensor Mode require administrator access?
 
-Some sensors may require admin access, vendor drivers, or firmware support, but normal scans should not require admin. ForgerEMS reports unavailable readings honestly.
+Some sensors may require admin access, vendor drivers, or firmware support, but Deep Sensor Mode itself is not the same as admin permission. Windows may ask for UAC approval when you run Elevated Scan; ForgerEMS reports unavailable readings honestly when approval or hardware support is not available.
 
 ---
 

@@ -1,17 +1,26 @@
 using System;
 using System.Linq;
 using VentoyToolkitSetup.Wpf.Models;
+using VentoyToolkitSetup.Wpf.Services.Intelligence;
 
 namespace VentoyToolkitSetup.Wpf.Services;
 
 public interface IScriptStatusParser
 {
-    ScriptExecutionResult Parse(ScriptActionType action, string displayName, PowerShellRunResult runResult);
+    ScriptExecutionResult Parse(
+        ScriptActionType action,
+        string displayName,
+        PowerShellRunResult runResult,
+        bool elevatedScanOutputLikelyMissing = false);
 }
 
 public sealed class ScriptStatusParser : IScriptStatusParser
 {
-    public ScriptExecutionResult Parse(ScriptActionType action, string displayName, PowerShellRunResult runResult)
+    public ScriptExecutionResult Parse(
+        ScriptActionType action,
+        string displayName,
+        PowerShellRunResult runResult,
+        bool elevatedScanOutputLikelyMissing = false)
     {
         var hasWarnings = runResult.OutputLines.Any(line => line.Severity == LogSeverity.Warning);
         var hasErrors = runResult.OutputLines.Any(line => line.Severity == LogSeverity.Error);
@@ -32,12 +41,22 @@ public sealed class ScriptStatusParser : IScriptStatusParser
         var succeeded = runResult.Succeeded;
         var partialStaged = indicatesPartial && runResult.Succeeded;
 
+        ElevatedScanFailureAnalysis? elevatedAnalysis = null;
+        if (!succeeded &&
+            action is ScriptActionType.SystemIntelligence &&
+            displayName.Contains("elevated", StringComparison.OrdinalIgnoreCase))
+        {
+            elevatedAnalysis = ElevatedScanLaunchClassifier.Analyze(runResult, elevatedScanOutputLikelyMissing);
+        }
+
         var summary = !runResult.Succeeded
-            ? (!string.IsNullOrWhiteSpace(lastError)
-                ? lastError
-                : !string.IsNullOrWhiteSpace(readinessLine)
-                    ? readinessLine
-                    : $"{displayName} exited with code {runResult.ExitCode}.")
+            ? elevatedAnalysis is not null
+                ? elevatedAnalysis.PrimaryUserMessage
+                : (!string.IsNullOrWhiteSpace(lastError)
+                    ? lastError
+                    : !string.IsNullOrWhiteSpace(readinessLine)
+                        ? readinessLine
+                        : $"{displayName} exited with code {runResult.ExitCode}.")
             : partialStaged
                 ? "USB built; managed downloads partially staged — use Retry Failed Downloads or fallback shortcuts; manual/info items are not failed downloads."
                 : BuildSuccessSummary(action, displayName, hasWarnings || hasErrors);
@@ -55,6 +74,13 @@ public sealed class ScriptStatusParser : IScriptStatusParser
             failuresLine,
             warningsLine,
             checksLine);
+
+        if (elevatedAnalysis is not null)
+        {
+            details = string.IsNullOrWhiteSpace(details)
+                ? elevatedAnalysis.AdvancedDiagnosticsLine
+                : $"{details} {elevatedAnalysis.AdvancedDiagnosticsLine}";
+        }
 
         return new ScriptExecutionResult
         {

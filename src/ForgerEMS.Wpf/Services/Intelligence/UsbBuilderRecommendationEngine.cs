@@ -63,12 +63,12 @@ public static class UsbBuilderRecommendationEngine
             if (bench.ReadLikelyCached || bench.ReadIsEstimate)
             {
                 return BenchRec(
-                    "Benchmark complete with warning.",
-                    $"Write verified: {bench.WriteSpeedMBps:0.0} MB/s. Read ignored: cache suspected. Rerun recommended for verified read speed.",
+                    "Good write speed; read unverified.",
+                    $"Write verified: {bench.WriteSpeedMBps:0.0} MB/s. Read speed not verified — cache suspected. Rerun recommended for verified read speed.",
                     UsbPortRiskLevel.Low,
                     bench.Classification == UsbSpeedMeasurementClass.Usb2 ? UsbSpeedClassification.Usb2 : UsbSpeedClassification.Usb3,
                     UsbBuilderQuality.Good,
-                    "Quality: Good — read cache suspected.",
+                    "Quality: Good — read unverified/cache suspected.",
                     bench,
                     matchedDevice,
                     diff,

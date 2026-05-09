@@ -25,6 +25,13 @@ public static class UsbBenchmarkRefinery
             EndKind = benchmark.EndKind,
             WriteSpeedMBps = benchmark.WriteSpeedMBps,
             ReadSpeedMBps = benchmark.ReadSpeedMBps,
+            VerifiedWriteMbps = benchmark.VerifiedWriteMbps > 0 ? benchmark.VerifiedWriteMbps : benchmark.WriteSpeedMBps,
+            VerifiedReadMbps = benchmark.VerifiedReadMbps ?? ((benchmark.ReadLikelyCached || benchmark.ReadIsEstimate) ? null : benchmark.ReadSpeedMBps),
+            RawReadMbps = benchmark.RawReadMbps ?? ((benchmark.ReadLikelyCached || benchmark.ReadIsEstimate) ? benchmark.ReadSpeedMBps : null),
+            IsReadCacheSuspected = benchmark.IsReadCacheSuspected || benchmark.ReadLikelyCached || benchmark.ReadIsEstimate,
+            ReadVerificationStatus = string.IsNullOrWhiteSpace(benchmark.ReadVerificationStatus)
+                ? ((benchmark.ReadLikelyCached || benchmark.ReadIsEstimate) ? "Unverified / cache suspected" : "Verified")
+                : benchmark.ReadVerificationStatus,
             DurationMs = benchmark.DurationMs,
             TestSizeMb = benchmark.TestSizeMb,
             Classification = cls,

@@ -25,7 +25,7 @@ public static class UsbConfidenceAggregator
         {
             var readUnverified = benchmark.ReadLikelyCached || benchmark.ReadIsEstimate;
             var benchmarkContribution = readUnverified
-                ? Math.Clamp(benchmark.ConfidenceScore / 4, 6, 16)
+                ? Math.Clamp(benchmark.ConfidenceScore / 6, 4, 10)
                 : Math.Clamp(benchmark.ConfidenceScore / 3, 12, 28);
             score += benchmarkContribution;
             parts.Add(readUnverified

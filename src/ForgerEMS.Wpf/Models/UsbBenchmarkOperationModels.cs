@@ -129,7 +129,7 @@ public static class UsbBenchmarkUiMessages
         {
             UsbBenchmarkResultKind.Completed =>
                 readMayBeCached
-                    ? FormattableString.Invariant($"Benchmark completed: Write {writeMbps:0.0} MB/s measured. Read {readMbps:0.0} MB/s cache suspected / rerun recommended. Confidence: {NormalizeConfidenceLabel(safeDetail)}.")
+                    ? FormattableString.Invariant($"Benchmark completed: Write {writeMbps:0.0} MB/s verified. Read speed not verified — cache suspected. Confidence: Read verification needed.")
                     : FormattableString.Invariant($"Benchmark completed: Read {readMbps:0.0} MB/s, Write {writeMbps:0.0} MB/s. Confidence: {NormalizeConfidenceLabel(safeDetail)}."),
             UsbBenchmarkResultKind.CancelledByUser => "Benchmark cancelled by user.",
             UsbBenchmarkResultKind.TargetChanged => "Benchmark stopped because the selected USB target changed.",

@@ -11,6 +11,7 @@ using VentoyToolkitSetup.Wpf.Configuration;
 using VentoyToolkitSetup.Wpf.Infrastructure;
 using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services;
+using VentoyToolkitSetup.Wpf.Services.Intelligence;
 using VentoyToolkitSetup.Wpf.ViewModels;
 
 namespace VentoyToolkitSetup.Wpf;
@@ -54,6 +55,8 @@ public partial class App : Application
                 return;
             }
 
+            var elevatedScanStartupRequest = ElevatedScanStartupRequest.Parse(e.Args);
+
             var mainViewModel = new MainViewModel(
                 backendDiscoveryService,
                 powerShellRunnerService,
@@ -66,6 +69,7 @@ public partial class App : Application
                 usbBenchmarkService,
                 copilotService,
                 copilotProviderRegistry);
+            mainViewModel.ElevatedScanStartupRequest = elevatedScanStartupRequest;
 
             var mainWindow = new MainWindow(mainViewModel);
             AppendStartupLog("MainWindow constructed");

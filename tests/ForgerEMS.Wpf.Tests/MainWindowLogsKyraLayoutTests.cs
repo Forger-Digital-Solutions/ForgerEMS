@@ -127,9 +127,9 @@ public sealed class MainWindowLogsKyraLayoutTests
         Assert.Contains("Fill=\"#FFFFC58F\"", mainXaml, StringComparison.Ordinal);
 
         var missionStart = mainXaml.IndexOf("Text=\"1) Mission Control\"", StringComparison.Ordinal);
-        var actionCenterStart = mainXaml.IndexOf("Text=\"2) Action Center\"", StringComparison.Ordinal);
-        Assert.True(missionStart >= 0 && actionCenterStart > missionStart);
-        var missionRegion = mainXaml[missionStart..actionCenterStart];
+        var evidenceStart = mainXaml.IndexOf("Header=\"2) Evidence &amp; Logs\"", StringComparison.Ordinal);
+        Assert.True(missionStart >= 0 && evidenceStart > missionStart);
+        var missionRegion = mainXaml[missionStart..evidenceStart];
 
         Assert.Contains("DiagnosticsStatusChipTextStyle", missionRegion, StringComparison.Ordinal);
         Assert.DoesNotContain("SuccessPillStyle", missionRegion, StringComparison.Ordinal);
@@ -137,7 +137,7 @@ public sealed class MainWindowLogsKyraLayoutTests
         Assert.DoesNotContain("WorkingPillStyle", missionRegion, StringComparison.Ordinal);
         Assert.DoesNotContain("PartialPillStyle", missionRegion, StringComparison.Ordinal);
 
-        var safetyStart = mainXaml.IndexOf("Header=\"4) Safety Lab\"", StringComparison.Ordinal);
+        var safetyStart = mainXaml.IndexOf("Header=\"3) Safety Lab\"", StringComparison.Ordinal);
         var settingsStart = mainXaml.IndexOf("<TabItem Header=\"☰  Settings\">", StringComparison.Ordinal);
         Assert.True(safetyStart >= 0 && settingsStart > safetyStart);
         var safetyRegion = mainXaml[safetyStart..settingsStart];

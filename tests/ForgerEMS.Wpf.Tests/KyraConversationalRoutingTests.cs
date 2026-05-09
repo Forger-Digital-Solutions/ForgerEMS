@@ -6,6 +6,7 @@ using Xunit;
 
 namespace ForgerEMS.Wpf.Tests;
 
+[Collection("GatewayEnv")]
 public sealed class KyraConversationalRoutingTests
 {
     private static CopilotSettings GatewayOnSettings() =>

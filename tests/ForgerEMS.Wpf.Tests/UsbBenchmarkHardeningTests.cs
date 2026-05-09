@@ -234,8 +234,9 @@ public sealed class UsbBenchmarkHardeningTests
             "Read may be cached",
             readMayBeCached: true);
 
-        Assert.Contains("Write 58.2 MB/s measured", s, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Read 4536.4 MB/s cache suspected / rerun recommended", s, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Write 58.2 MB/s verified", s, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Read speed not verified", s, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("cache suspected", s, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -270,7 +271,7 @@ public sealed class UsbBenchmarkHardeningTests
             readMayBeCached: assessment.ReadLikelyCached || assessment.ReadIsEstimate);
 
         Assert.True(assessment.ReadLikelyCached);
-        Assert.Contains("cache suspected / rerun recommended", summary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Read speed not verified", summary, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -312,7 +313,7 @@ public sealed class UsbBenchmarkHardeningTests
 
         Assert.Equal(UsbBuilderQuality.Good, recommendation.Quality);
         Assert.DoesNotContain("Ideal", recommendation.ClassificationLine, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Read ignored: cache suspected", recommendation.Detail, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Read speed not verified", recommendation.Detail, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -478,5 +479,70 @@ public sealed class UsbBenchmarkHardeningTests
         Assert.Equal(UsbBenchmarkResultKind.DeviceRemoved, result.ResultKind);
         Assert.Contains("USB target is no longer available", result.Details, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(logs, line => line.Contains("USB target unavailable", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void KyraNarrative_CacheSuspectedRead_ConfidenceIsMediumNotHigh()
+    {
+        var snapshot = new UsbTopologySnapshot
+        {
+            GeneratedUtc = DateTimeOffset.UtcNow,
+            Devices = [],
+            Controllers = [],
+            Ports = [],
+            SummaryLine = "test",
+            CombinedConfidenceScore = 85,
+            SelectedTargetBenchmark = new UsbIntelligenceBenchmarkResult
+            {
+                Succeeded = true,
+                WriteSpeedMBps = 59.9,
+                ReadSpeedMBps = 4666.0,
+                Classification = UsbSpeedMeasurementClass.Usb3,
+                ConfidenceScore = 85,
+                ReadLikelyCached = true,
+                ReadIsEstimate = true,
+                SummaryLine = "Good write speed; read unverified."
+            }
+        };
+
+        var narrative = UsbKyraNarrativeBuilder.Build(snapshot);
+
+        Assert.DoesNotContain("confidence is high", narrative.ShortAnswer, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("read is unverified", narrative.ShortAnswer, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("cache suspected", narrative.ShortAnswer, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ProfileSync_CacheSuspectedRead_PopulatesVerifiedWriteAndNullVerifiedRead()
+    {
+        // Simulate a result as UsbBenchmarkService produces it: VerifiedWriteMbps set,
+        // VerifiedReadMbps null, RawReadMbps = the impossible cached value.
+        var result = new UsbBenchmarkResult
+        {
+            Succeeded = true,
+            Status = "Complete",
+            WriteSpeedMBps = 59.9,
+            ReadSpeedMBps = 4666.0,
+            VerifiedWriteMbps = 59.9,
+            VerifiedReadMbps = null,
+            RawReadMbps = 4666.0,
+            IsReadCacheSuspected = true,
+            ReadVerificationStatus = "Unverified / cache suspected",
+            TestSizeMb = 512,
+            IntelligenceMeasurementClass = UsbSpeedMeasurementClass.Usb3.ToString(),
+            IntelligenceConfidenceScore = 60,
+            ReadLikelyCached = true,
+            ReadIsEstimate = true,
+            BenchmarkConfidence = "Read may be cached"
+        };
+
+        var profileResult = UsbBenchmarkProfileSync.FromServiceResult(result);
+
+        Assert.NotNull(profileResult);
+        Assert.True(profileResult!.IsReadCacheSuspected);
+        Assert.True(profileResult.VerifiedWriteMbps > 0);
+        Assert.Null(profileResult.VerifiedReadMbps);
+        Assert.Equal(4666.0, profileResult.RawReadMbps);
+        Assert.Equal("Unverified / cache suspected", profileResult.ReadVerificationStatus);
     }
 }

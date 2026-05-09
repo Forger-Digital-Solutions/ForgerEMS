@@ -72,8 +72,8 @@ public static class UpdateCheckUiPresenter
     {
         var status = result.FailureKind switch
         {
-            UpdateCheckFailureKind.Network => "Could not check for updates (offline or network unavailable).",
-            UpdateCheckFailureKind.Timeout => "Update check timed out. Try again later.",
+            UpdateCheckFailureKind.Network => "Unable to check right now. Check your internet connection or GitHub availability.",
+            UpdateCheckFailureKind.Timeout => "Unable to check right now. Timed out after 15 seconds.",
             UpdateCheckFailureKind.ReleaseEndpointNotFound => "Update source could not be reached.",
             UpdateCheckFailureKind.UpdateSourceUnreachable => "Update source could not be reached (GitHub or TLS/proxy).",
             UpdateCheckFailureKind.AccessDeniedOrRateLimited =>
@@ -100,7 +100,7 @@ public static class UpdateCheckUiPresenter
         {
             return new UpdateCheckViewState(
                 StatusText: status,
-                LatestChannelSummary: "Latest release: could not refresh — see status below · GitHub Releases",
+                LatestChannelSummary: "Latest release: unable to check right now · GitHub Releases",
                 BannerVisibility: Visibility.Visible,
                 BannerTitle: "Update check failed",
                 BannerDetail: detail,

@@ -6,7 +6,7 @@ namespace VentoyToolkitSetup.Wpf.Infrastructure;
 public static class InfoDocumentTexts
 {
     private const string DeepSensorShortDisclosure =
-        "Hardware X-Ray uses local read-only hardware sensors. When Deep Sensor Mode is enabled, ForgerEMS may use the bundled LibreHardwareMonitor provider to improve sensor coverage for temperatures, clocks, load, fan RPM, and storage wear where supported. Sensor access is local; ForgerEMS does not control fans, voltages, clocks, overclocking, undervolting, BIOS, or firmware. Unavailable readings are coverage limits, not failures.";
+        "Hardware X-Ray uses local read-only hardware sensors. When Deep Sensor Mode is enabled, ForgerEMS may use the bundled LibreHardwareMonitor provider to improve sensor coverage for temperatures, clocks, load, fan RPM, and storage wear where supported. Sensor access is local; ForgerEMS does not control fans, voltages, clocks, overclocking, undervolting, BIOS, firmware, or hardware writes. Deep Sensor Mode is not permanent admin permission; Windows may ask for UAC approval when you run Elevated Scan. Unavailable readings are coverage limits, not failures.";
 
     public static string BuildAbout(string appVersion, string displayVersion, string frontendVersion, string backendVersion)
     {
@@ -49,7 +49,7 @@ public static class InfoDocumentTexts
             Local Kyra Memory stores sanitized machine-scoped repair notes on this PC. Anonymous community intelligence sharing is off by default and requires explicit opt-in. Community sharing is not active in this release — the setting is visible for preview only. ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless you explicitly enable a future sharing option. Provider API keys are stored server-side and are not included in the desktop app.
 
             UPDATES
-            GitHub Releases power the in-app update checker (stable / beta / RC / preview semantics depend on Settings and release tags). See docs/UPDATE-SYSTEM-v1.2.0.md.
+            GitHub Releases power the in-app update checker (stable / beta / RC / preview semantics depend on Settings and release tags). See docs/UPDATE_SYSTEM.md.
 
             VERSIONS
             App / frontend metadata: {frontendVersion}
@@ -90,7 +90,7 @@ public static class InfoDocumentTexts
             No. ForgerEMS ships approved local providers with the app where legally allowed. Deep Sensor Mode uses bundled read-only providers and does not require separate user downloads.
 
             What is Deep Sensor Mode?
-            Deep Sensor Mode is an optional local read-only sensor mode that may improve Hardware X-Ray sensor coverage for temperatures, clocks, load, fan RPM, and storage wear when supported.
+            Deep Sensor Mode is an optional local read-only sensor mode that may improve Hardware X-Ray sensor coverage for temperatures, clocks, load, fan RPM, and storage wear when supported. It is not permanent administrator permission.
 
             Does ForgerEMS control my fans, voltage, clocks, BIOS, or firmware?
             No. ForgerEMS only reads supported sensor data. It does not control fans, voltages, clocks, overclocking, undervolting, BIOS, or firmware.
@@ -102,7 +102,7 @@ public static class InfoDocumentTexts
             No automatic upload. Sensor reports and logs are local unless you choose to copy, export, or share them.
 
             Can Deep Sensor Mode require administrator access?
-            Some sensors may require admin access, vendor drivers, or firmware support, but normal scans should not require admin. ForgerEMS reports unavailable readings honestly.
+            Some sensors may require admin access, vendor drivers, or firmware support, but Deep Sensor Mode itself does not grant admin rights. Windows may ask for UAC approval when you run Elevated Scan. ForgerEMS reports unavailable readings honestly.
 
             Is LibreHardwareMonitor included?
             Yes, where packaged, ForgerEMS includes LibreHardwareMonitorLib as a bundled local read-only sensor provider under MPL-2.0 with license and notice files included.

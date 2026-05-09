@@ -41,6 +41,7 @@ ForgerEMS runs diagnostics locally. **Deep Sensor Mode** reads supported local h
 - Reports are **not automatically sent** to support.
 - You choose when to copy, export, or share reports.
 - Deep Sensor Mode is read-only. It does not control fans, voltage, clocks, overclocking, undervolting, BIOS, firmware, or device settings.
+- Deep Sensor Mode is not permanent administrator permission. Windows may ask for UAC approval at runtime when you choose Elevated Scan, and security policy can still block that approval.
 
 Reports may include hardware model, CPU/GPU/RAM/storage info, battery info, network adapter details, USB device details, Windows version, provider status, and diagnostic notes.
 

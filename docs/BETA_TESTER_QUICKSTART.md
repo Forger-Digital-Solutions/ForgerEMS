@@ -36,7 +36,9 @@ Complete install if you want a traditional Program Files deployment; otherwise f
 
 ## 5. Run System Intelligence
 
-Use **Run Scan** (System Intelligence). Wait for completion.
+Use **Run Standard Scan** (System Intelligence). Wait for completion.
+
+For deeper coverage, use **Run Elevated Scan**. If ForgerEMS is not already running as administrator, it will ask Windows for UAC approval, relaunch itself elevated, and continue the scan automatically. Deep Sensor Mode is read-only local sensor coverage; it does not grant permanent admin permission during install.
 
 ---
 
@@ -105,4 +107,4 @@ ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the
 
 Use [BETA_ISSUE_REPORT_TEMPLATE.md](BETA_ISSUE_REPORT_TEMPLATE.md). Attach screenshots and **redacted** log excerpts. **Do not** include passwords, API keys, product keys, serial numbers, or private documents.
 
-Manual QA checklist for this build: [PUBLIC_PREVIEW_MANUAL_QA_v1.2.1-preview.1.md](PUBLIC_PREVIEW_MANUAL_QA_v1.2.1-preview.1.md).
+Manual QA checklist reference: [PUBLIC_PREVIEW_MANUAL_QA_v1.2.0-preview.1.md](PUBLIC_PREVIEW_MANUAL_QA_v1.2.0-preview.1.md) (v1.2.0 checklist, updated for v1.2.1 where noted in release notes).

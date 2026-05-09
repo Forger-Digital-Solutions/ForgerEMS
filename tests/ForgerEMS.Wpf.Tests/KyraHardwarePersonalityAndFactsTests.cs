@@ -5,6 +5,7 @@ using Xunit;
 
 namespace ForgerEMS.Wpf.Tests;
 
+[Collection("GatewayEnv")]
 public sealed class KyraHardwarePersonalityAndFactsTests
 {
     [Fact]

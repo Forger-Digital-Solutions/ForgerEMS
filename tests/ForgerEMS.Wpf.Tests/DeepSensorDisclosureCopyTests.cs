@@ -33,6 +33,8 @@ public sealed class DeepSensorDisclosureCopyTests
         Assert.Contains("What is Deep Sensor Mode?", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("local read-only sensor mode", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("does not require separate user downloads", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not permanent administrator permission", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Windows may ask for UAC approval", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Unavailable readings are coverage limits, not failures", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Does ForgerEMS control my fans, voltage, clocks, BIOS, or firmware?", text, StringComparison.OrdinalIgnoreCase);
     }
@@ -47,6 +49,8 @@ public sealed class DeepSensorDisclosureCopyTests
         Assert.Contains("not automatically sent", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("You choose when to copy, export, or share reports", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("review reports before sharing", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not permanent administrator permission", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("UAC approval at runtime", text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -86,11 +90,37 @@ public sealed class DeepSensorDisclosureCopyTests
         var installer = Read("installer", "ForgerEMS.iss");
 
         Assert.Contains("Read-only local sensors", mainViewModel, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("ForgerEMS does not control fans, voltages, clocks, BIOS, or firmware", mainViewModel, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Enable Deep Sensor Mode (local read-only hardware sensors)", installer, StringComparison.Ordinal);
+        Assert.Contains("Running Elevated Scan as administrator may improve sensor/security coverage", mainViewModel, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ForgerEMS does not control fans, voltages, clocks, BIOS, firmware, or hardware writes", mainViewModel, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Enable Deep Sensor Mode by default (read-only local hardware sensors", installer, StringComparison.Ordinal);
         Assert.Contains("bundled local read-only sensor provider", installer, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Some readings depend on firmware, drivers, permissions, and hardware support", installer, StringComparison.Ordinal);
+        Assert.Contains("Windows administrator approval when you run Elevated Scan", installer, StringComparison.Ordinal);
+        Assert.Contains("does not grant permanent admin permission", installer, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("MPL-2.0", installer, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DeepSensorAdminCopy_DoesNotClaimUacBypassOrPermanentRights()
+    {
+        var relativeFiles = new[]
+        {
+            Path.Combine("installer", "ForgerEMS.iss"),
+            Path.Combine("installer", "ForgerEMS-Installed-README.txt"),
+            Path.Combine("docs", "FAQ.md"),
+            Path.Combine("docs", "SENSOR-PROVIDER-POLICY.md"),
+            Path.Combine("docs", "PRIVACY.md"),
+            Path.Combine("docs", "BETA_TESTER_QUICKSTART.md"),
+            Path.Combine("src", "ForgerEMS.Wpf", "Infrastructure", "InfoDocumentTexts.cs")
+        };
+
+        foreach (var relative in relativeFiles)
+        {
+            var text = File.ReadAllText(Path.Combine(RepoRoot, relative));
+            Assert.DoesNotContain("bypass UAC", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Admin permission was granted during install", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Deep Sensor Mode requires admin", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("permanent administrator permission was granted", text, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     [Fact]

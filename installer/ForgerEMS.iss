@@ -70,12 +70,12 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "deepsensormode"; Description: "Enable Deep Sensor Mode (local read-only hardware sensors)"; GroupDescription: "ForgerEMS Deep Sensor Mode:"; Flags: unchecked
+Name: "deepsensormode"; Description: "Enable Deep Sensor Mode by default (read-only local sensors)"; GroupDescription: "ForgerEMS Deep Sensor Mode:"; Flags: unchecked
 
 [Registry]
 Root: HKLM; Subkey: "Software\ForgerEMS"; ValueType: string; ValueName: "DeepSensorMode"; ValueData: "ReadOnly"; Flags: uninsdeletevalue; Tasks: deepsensormode
 Root: HKLM; Subkey: "Software\ForgerEMS"; ValueType: string; ValueName: "DeepSensorMode"; ValueData: "Off"; Flags: uninsdeletevalue; Check: IsDeepSensorModeTaskDisabled
-Root: HKLM; Subkey: "Software\ForgerEMS"; ValueType: string; ValueName: "DeepSensorDisclosure"; ValueData: "ForgerEMS includes LibreHardwareMonitorLib as a bundled local read-only sensor provider under MPL-2.0 with notices. Deep Sensor Mode reads supported hardware sensor data while the app is running or System Intelligence scans execute. Sensor access is local only. ForgerEMS does not control fans, voltage, clocks, BIOS, firmware, or overclocking. Some readings depend on firmware, drivers, permissions, and hardware support."; Flags: uninsdeletevalue
+Root: HKLM; Subkey: "Software\ForgerEMS"; ValueType: string; ValueName: "DeepSensorDisclosure"; ValueData: "ForgerEMS includes LibreHardwareMonitorLib as a bundled local read-only sensor provider under MPL-2.0 with notices. Deep Sensor Mode reads supported hardware sensor data while the app is running or System Intelligence scans execute. Sensor access is local only. ForgerEMS does not control fans, voltage, clocks, BIOS, firmware, overclocking, undervolting, or hardware writes. Some deeper sensor/security checks may ask for Windows administrator approval when you run Elevated Scan; the installer does not grant permanent admin permission."; Flags: uninsdeletevalue
 
 [InstallDelete]
 Type: files; Name: "{autodesktop}\ForgerEMS.lnk"

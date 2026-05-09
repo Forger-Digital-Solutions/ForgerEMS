@@ -56,6 +56,7 @@ public sealed class MainWindowXamlLoadTests
         Assert.Contains("AppUpdateCheckHelperText", settings, StringComparison.Ordinal);
         Assert.Contains("Copy Update Diagnostics", settings, StringComparison.Ordinal);
         Assert.Contains("Copies a safe summary for support sharing.", settings, StringComparison.Ordinal);
+        Assert.DoesNotContain("Check Now", settings, StringComparison.Ordinal);
     }
 
     [Fact]

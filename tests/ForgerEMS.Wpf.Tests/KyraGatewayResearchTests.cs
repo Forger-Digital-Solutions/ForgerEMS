@@ -6,6 +6,7 @@ using VentoyToolkitSetup.Wpf.Services.Kyra;
 
 namespace ForgerEMS.Wpf.Tests;
 
+[Collection("GatewayEnv")]
 public sealed class KyraGatewayResearchTests
 {
     private static EnvRestore EnvGate(string url, string token)

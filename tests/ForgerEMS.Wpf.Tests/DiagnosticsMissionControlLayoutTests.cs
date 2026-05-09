@@ -9,9 +9,20 @@ public sealed class DiagnosticsMissionControlLayoutTests
     {
         var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
         Assert.Contains("Text=\"1) Mission Control\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Text=\"2) Action Center\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Header=\"3) Evidence &amp; Logs\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Header=\"4) Safety Lab\" IsExpanded=\"False\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Action Center", xaml, StringComparison.Ordinal);
+        Assert.Contains("Header=\"2) Evidence &amp; Logs\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Header=\"3) Safety Lab\" IsExpanded=\"False\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EvidenceAndLogs_RetainsCopySafeSummaryButton()
+    {
+        var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
+        var evidenceStart = xaml.IndexOf("Header=\"2) Evidence &amp; Logs\"", StringComparison.Ordinal);
+        var safetyStart = xaml.IndexOf("Header=\"3) Safety Lab\"", StringComparison.Ordinal);
+        Assert.True(evidenceStart >= 0 && safetyStart > evidenceStart);
+        var evidenceRegion = xaml[evidenceStart..safetyStart];
+        Assert.Contains("CopySafeTestingSummaryCommand", evidenceRegion, StringComparison.Ordinal);
     }
 
     [Fact]

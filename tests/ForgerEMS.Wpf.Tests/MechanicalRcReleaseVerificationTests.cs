@@ -206,7 +206,8 @@ public sealed class MechanicalRcReleaseVerificationTests
         Assert.Contains("providers\\sensors", project, StringComparison.Ordinal);
         Assert.Contains("CopyToPublishDirectory", project, StringComparison.Ordinal);
         Assert.Contains(@"{#PublishDir}\providers\*", installer, StringComparison.Ordinal);
-        Assert.Contains("Enable Deep Sensor Mode (local read-only hardware sensors)", installer, StringComparison.Ordinal);
+        Assert.Contains("Enable Deep Sensor Mode by default (read-only local hardware sensors", installer, StringComparison.Ordinal);
+        Assert.Contains("Windows UAC approval", installer, StringComparison.Ordinal);
         Assert.Contains(@"HKLM", installer, StringComparison.Ordinal);
         Assert.Contains(@"Software\ForgerEMS", installer, StringComparison.Ordinal);
         Assert.Contains("DeepSensorMode", installer, StringComparison.Ordinal);

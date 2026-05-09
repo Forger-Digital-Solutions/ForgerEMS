@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using LibreHardwareMonitor.Hardware;
 using VentoyToolkitSetup.Wpf.Configuration;
+using VentoyToolkitSetup.Wpf.Infrastructure;
 
 namespace VentoyToolkitSetup.Wpf.Services;
 
@@ -36,7 +37,7 @@ public class LibreHardwareMonitorSensorProvider : IHardwareSensorProvider
         {
             return BuildDisabledResult(
                 packaged,
-                "LibreHardwareMonitor provider assembly is not packaged in this build.",
+                "Not packaged / unavailable — LibreHardwareMonitorLib.dll was not found under providers/sensors.",
                 resolution);
         }
 
@@ -48,6 +49,10 @@ public class LibreHardwareMonitorSensorProvider : IHardwareSensorProvider
             "Some sensors may require admin access, vendor drivers, or firmware support.",
             "No fan, voltage, clock, BIOS, or firmware control is exposed."
         };
+        if (!ProcessElevationHelper.IsRunningElevated())
+        {
+            notes.Add("Running ForgerEMS as administrator may improve LibreHardwareMonitor sensor coverage on some systems.");
+        }
         var failures = new List<string>();
         Computer? computer = null;
         try

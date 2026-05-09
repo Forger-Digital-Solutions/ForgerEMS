@@ -395,7 +395,7 @@ public static class SensorProviderRegistry
         },
         TechnicianNotes =
         [
-            "Deep Sensor Mode may require admin access. It only reads supported sensors and does not change fan, voltage, clock, or firmware settings."
+            "Deep Sensor Mode is local/read-only. Running Elevated Scan as administrator may improve sensor coverage; Windows UAC approval is still required at runtime."
         ]
     };
 

@@ -1,5 +1,11 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
+using VentoyToolkitSetup.Wpf.Models;
+using VentoyToolkitSetup.Wpf.Services;
+using VentoyToolkitSetup.Wpf.Services.Intelligence;
 using VentoyToolkitSetup.Wpf.ViewModels;
 
 namespace ForgerEMS.Wpf.Tests;
@@ -72,7 +78,7 @@ public sealed class SystemIntelligenceCardSummaryTests
                 "statusGuide":"guide",
                 "sensorProviders":[
                   { "providerName":"Windows Native", "isEnabled":true, "isBundled":true, "runtimeMode":"DefaultSafe" },
-                  { "providerName":"LibreHardwareMonitor", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled", "failureReason":"LibreHardwareMonitor provider assembly is not packaged in this build." },
+                  { "providerName":"LibreHardwareMonitor", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled", "failureReason":"Not packaged / unavailable — LibreHardwareMonitorLib.dll was not found under providers/sensors." },
                   { "providerName":"ForgerEMS Admin Sensor Bridge", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled" },
                   { "providerName":"ForgerEMS Signed Driver Provider", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled" }
                 ],
@@ -95,7 +101,7 @@ public sealed class SystemIntelligenceCardSummaryTests
         Assert.Contains("Sensor Providers: Windows Native: Active", text);
         Assert.Contains("Deep Sensor Mode: Off via built-in default", text);
         Assert.Contains("no fan/voltage/clock/firmware control", text);
-        Assert.Contains("LibreHardwareMonitor: Not packaged", text);
+        Assert.Contains("LibreHardwareMonitor: Not packaged / unavailable", text);
         Assert.Contains("Admin Bridge: Off", text);
         Assert.Contains("Driver Provider: Not included", text);
         Assert.Contains("may require deep/vendor sensor support", text);
@@ -278,6 +284,8 @@ public sealed class SystemIntelligenceCardSummaryTests
         Assert.Contains("Refresh Results", xaml, StringComparison.Ordinal);
         Assert.Contains("Create Support Bundle", xaml, StringComparison.Ordinal);
         Assert.Contains("RunElevatedSystemScanCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("CopyElevatedScanAdminCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("RestartAsAdministratorCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("Copy Quick Summary", xaml, StringComparison.Ordinal);
         Assert.Contains("Open JSON Report", xaml, StringComparison.Ordinal);
         Assert.Contains("Open Markdown Report", xaml, StringComparison.Ordinal);
@@ -288,28 +296,105 @@ public sealed class SystemIntelligenceCardSummaryTests
     }
 
     [Fact]
-    public void ElevatedScanExitCodeMinus196608_MapsToUacCanceledGuidance()
+    public void ElevatedScanLauncher_DirectAdminPathAndTimeoutAreWired()
     {
-        var guidance = InvokeElevatedGuidance("Elevated scan exited with code -196608.");
-        var joined = string.Join(' ', guidance);
+        var source = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "ViewModels", "MainViewModel.cs"));
 
-        Assert.Contains("canceled", joined, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("UAC", joined, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("administrator", joined, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Standard Scan report is still available", joined, StringComparison.Ordinal);
-        Assert.DoesNotContain("network", joined, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("if (!appElevated)", source, StringComparison.Ordinal);
+        Assert.Contains("RequestElevatedRelaunchAndRunScan", source, StringComparison.Ordinal);
+        Assert.Contains("Verb = \"runas\"", source, StringComparison.Ordinal);
+        Assert.Contains("startInfo.ArgumentList.Add(arg)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Start-Process -FilePath $ps -ArgumentList $args -Verb RunAs -PassThru", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("$p.WaitForExit($timeoutMs)", source, StringComparison.Ordinal);
+        Assert.Contains("skipping UAC relaunch", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Timeout = ElevatedScanDiagnostics.ElevatedScanWaitTimeout", source, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ElevatedScanUnknownExitCode_UsesLocalAdminGuidance()
+    public void ElevatedScanStartupResume_ConsumesRequestAndDoesNotLoop()
     {
-        var guidance = InvokeElevatedGuidance("Elevated scan exited with code 123.");
-        var joined = string.Join(' ', guidance);
+        var app = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "App.xaml.cs"));
+        var source = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "ViewModels", "MainViewModel.cs"));
 
-        Assert.Contains("local admin", joined, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("UAC", joined, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Standard Scan report is still available", joined, StringComparison.Ordinal);
-        Assert.DoesNotContain("network", joined, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ElevatedScanStartupRequest.Parse(e.Args)", app, StringComparison.Ordinal);
+        Assert.Contains("ElevatedScanStartupRequest = ElevatedScanStartupRequest.None", source, StringComparison.Ordinal);
+        Assert.Contains("ForgerEMS is still not running as administrator", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("RequestElevatedRelaunchAndRunScan(reportsDir, correlationId);", source[
+            source.IndexOf("private async Task ConsumeElevatedScanStartupRequestAsync", StringComparison.Ordinal)..], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UacCancelCopy_IsFriendly()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "ViewModels", "MainViewModel.cs"));
+
+        Assert.Contains("Elevated Scan was cancelled before administrator permission was approved. Standard Scan results are still available.", source, StringComparison.Ordinal);
+        Assert.Contains("NativeError=1223", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CopyAdminCommand_UsesSelectedPowerShellAndQuotedFileArguments()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "ViewModels", "MainViewModel.cs"));
+
+        Assert.Contains("var exe = File.Exists(windowsPs) ? windowsPs : \"powershell.exe\";", source, StringComparison.Ordinal);
+        Assert.Contains("BuildPowerShellQuotedFileArgs(scriptPath, reportsDir, writeMarkers: true)", source, StringComparison.Ordinal);
+        Assert.Contains("Clipboard.SetText(line)", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ElevatedScanExitCodeMinus196608_MapsToLaunchFailureWithAdvancedDiagnostics()
+    {
+        var run = CreateElevatedRun(
+            exitCode: ElevatedScanLaunchClassifier.KnownShellElevatedLaunchPseudoExit,
+            "[FAIL] Elevated scan exited with code -196608.");
+        var analysis = ElevatedScanLaunchClassifier.Analyze(run, scanOutputLikelyMissing: false);
+
+        Assert.Equal(ElevatedScanFailureKind.ElevatedScanLaunchFailed, analysis.Kind);
+        Assert.DoesNotContain("-196608", analysis.PrimaryUserMessage, StringComparison.Ordinal);
+        Assert.Contains("UAC", analysis.PrimaryUserMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Standard Scan results are still available", analysis.PrimaryUserMessage, StringComparison.Ordinal);
+        Assert.Contains("-196608", analysis.AdvancedDiagnosticsLine, StringComparison.Ordinal);
+        Assert.Contains("0xFFFD0000", analysis.AdvancedDiagnosticsLine, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ElevatedScanUnknownExitCode_UsesGenericLaunchGuidance()
+    {
+        var run = CreateElevatedRun(123, "[FAIL] Elevated scan exited with code 123.");
+        var analysis = ElevatedScanLaunchClassifier.Analyze(run, scanOutputLikelyMissing: false);
+
+        Assert.Equal(ElevatedScanFailureKind.UnknownElevatedLaunchFailure, analysis.Kind);
+        Assert.Contains("UAC", analysis.PrimaryUserMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Standard Scan results are still available", analysis.PrimaryUserMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ElevatedScanTimeout_MapsToTimeoutGuidance()
+    {
+        var run = CreateElevatedRun(
+            ElevatedScanDiagnostics.TimeoutExitCode,
+            "[FAIL] Elevated scan timed out waiting for completion.");
+        var analysis = ElevatedScanLaunchClassifier.Analyze(run, scanOutputLikelyMissing: false);
+
+        Assert.Equal(ElevatedScanFailureKind.ElevatedProcessTimedOut, analysis.Kind);
+        Assert.Contains("did not finish in time", analysis.PrimaryUserMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Standard Scan results are still available", analysis.PrimaryUserMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain(ElevatedScanDiagnostics.TimeoutExitCode.ToString(CultureInfo.InvariantCulture), analysis.PrimaryUserMessage, StringComparison.Ordinal);
+        Assert.Contains(ElevatedScanDiagnostics.TimeoutExitCode.ToString(CultureInfo.InvariantCulture), analysis.AdvancedDiagnosticsLine, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ElevatedScanTimedOutResult_MapsToTimeoutEvenWithDifferentExitCode()
+    {
+        var run = CreateElevatedRun(
+            1,
+            timedOut: true,
+            "[FAIL] System Intelligence elevated scan timed out after 15 minutes.");
+        var analysis = ElevatedScanLaunchClassifier.Analyze(run, scanOutputLikelyMissing: false);
+
+        Assert.Equal(ElevatedScanFailureKind.ElevatedProcessTimedOut, analysis.Kind);
+        Assert.Contains("did not finish in time", analysis.PrimaryUserMessage, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -379,11 +464,84 @@ public sealed class SystemIntelligenceCardSummaryTests
         return (string)result!;
     }
 
-    private static IReadOnlyList<string> InvokeElevatedGuidance(string reason)
+    [Fact]
+    public void ElevatedScanFailure_GuidanceDoesNotSayBackendBroken()
     {
-        var method = typeof(MainViewModel).GetMethod("BuildElevatedScanFailureGuidance", BindingFlags.NonPublic | BindingFlags.Static);
-        Assert.NotNull(method);
-        return Assert.IsAssignableFrom<IReadOnlyList<string>>(method!.Invoke(null, [reason]));
+        var run = CreateElevatedRun(
+            ElevatedScanLaunchClassifier.KnownShellElevatedLaunchPseudoExit,
+            "[FAIL] Elevated scan exited with code -196608.");
+        var analysis = ElevatedScanLaunchClassifier.Analyze(run, false);
+        var joined = analysis.PrimaryUserMessage + " " + string.Join(' ', analysis.SupplementalActionLines);
+
+        Assert.DoesNotContain("backend", joined, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("broken", joined, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Standard Scan results are still available", joined, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ElevatedScanParser_ReplacesRawFailLineWithFriendlySummary()
+    {
+        var parser = new ScriptStatusParser();
+        var run = CreateElevatedRun(
+            ElevatedScanLaunchClassifier.KnownShellElevatedLaunchPseudoExit,
+            "[FAIL] Elevated scan exited with code -196608.");
+        var parsed = parser.Parse(ScriptActionType.SystemIntelligence, "System Intelligence elevated scan", run, false);
+
+        Assert.False(parsed.Succeeded);
+        Assert.DoesNotContain("-196608", parsed.Summary, StringComparison.Ordinal);
+        Assert.Contains("UAC", parsed.Summary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("-196608", parsed.Details, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ElevatedScanParser_UsesFriendlyTimeoutSummary()
+    {
+        var parser = new ScriptStatusParser();
+        var run = CreateElevatedRun(
+            ElevatedScanDiagnostics.TimeoutExitCode,
+            "[FAIL] Elevated scan timed out waiting for completion.");
+        var parsed = parser.Parse(ScriptActionType.SystemIntelligence, "System Intelligence elevated scan", run, false);
+
+        Assert.False(parsed.Succeeded);
+        Assert.Contains("did not finish in time", parsed.Summary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Standard Scan results are still available", parsed.Summary, StringComparison.Ordinal);
+        Assert.DoesNotContain(ElevatedScanDiagnostics.TimeoutExitCode.ToString(CultureInfo.InvariantCulture), parsed.Summary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Win32Exit1223_MapsToUacCancelled()
+    {
+        var run = CreateElevatedRun(1223, "[FAIL] Elevation handoff failed: canceled NativeError=1223");
+        var analysis = ElevatedScanLaunchClassifier.Analyze(run, false);
+        Assert.Equal(ElevatedScanFailureKind.UacCancelled, analysis.Kind);
+    }
+
+    [Fact]
+    public void ScriptMissingExit2_MapsToBackendScriptMissing()
+    {
+        var run = CreateElevatedRun(2, "[FAIL] System Intelligence script missing.");
+        var analysis = ElevatedScanLaunchClassifier.Analyze(run, false);
+        Assert.Equal(ElevatedScanFailureKind.BackendScriptMissing, analysis.Kind);
+    }
+
+    private static PowerShellRunResult CreateElevatedRun(int exitCode, params string[] hostLines) =>
+        CreateElevatedRun(exitCode, timedOut: false, hostLines);
+
+    private static PowerShellRunResult CreateElevatedRun(int exitCode, bool timedOut, params string[] hostLines)
+    {
+        var lines = new List<LogLine>();
+        foreach (var text in hostLines)
+        {
+            lines.Add(new LogLine(DateTimeOffset.UtcNow, text, LogSeverity.Error, isErrorStream: false));
+        }
+
+        return new PowerShellRunResult
+        {
+            ExitCode = exitCode,
+            OutputLines = lines,
+            StandardOutputText = string.Join(Environment.NewLine, hostLines),
+            TimedOut = timedOut
+        };
     }
 
     private static string FindRepoFile(params string[] segments)

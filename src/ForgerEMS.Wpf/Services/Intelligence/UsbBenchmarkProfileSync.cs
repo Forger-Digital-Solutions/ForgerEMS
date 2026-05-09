@@ -36,6 +36,13 @@ public static class UsbBenchmarkProfileSync
                 EndKind = UsbNativeBenchmarkEndKind.Success,
                 WriteSpeedMBps = result.WriteSpeedMBps,
                 ReadSpeedMBps = result.ReadSpeedMBps,
+                VerifiedWriteMbps = result.VerifiedWriteMbps > 0 ? result.VerifiedWriteMbps : result.WriteSpeedMBps,
+                VerifiedReadMbps = result.VerifiedReadMbps,
+                RawReadMbps = result.RawReadMbps,
+                IsReadCacheSuspected = result.IsReadCacheSuspected || result.ReadLikelyCached || result.ReadIsEstimate,
+                ReadVerificationStatus = string.IsNullOrWhiteSpace(result.ReadVerificationStatus)
+                    ? ((result.ReadLikelyCached || result.ReadIsEstimate) ? "Unverified / cache suspected" : "Verified")
+                    : result.ReadVerificationStatus,
                 DurationMs = result.BenchmarkDurationMs,
                 TestSizeMb = result.TestSizeMb,
                 Classification = cls,

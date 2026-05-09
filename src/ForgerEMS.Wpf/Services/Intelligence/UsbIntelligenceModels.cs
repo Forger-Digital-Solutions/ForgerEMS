@@ -77,6 +77,16 @@ public sealed class UsbIntelligenceBenchmarkResult
 
     public double ReadSpeedMBps { get; init; }
 
+    public double VerifiedWriteMbps { get; init; }
+
+    public double? VerifiedReadMbps { get; init; }
+
+    public double? RawReadMbps { get; init; }
+
+    public bool IsReadCacheSuspected { get; init; }
+
+    public string ReadVerificationStatus { get; init; } = string.Empty;
+
     public int DurationMs { get; init; }
 
     public int TestSizeMb { get; init; }

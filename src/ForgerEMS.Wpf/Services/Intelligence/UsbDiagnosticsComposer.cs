@@ -75,6 +75,7 @@ public static class UsbDiagnosticsComposer
         {
             if (bench.ReadLikelyCached || bench.ReadIsEstimate)
             {
+                confidence = "medium";
                 issues.Add(new UsbDiagnosticIssue
                 {
                     Severity = DiagnosticSeverityLevel.Warning,
@@ -126,11 +127,15 @@ public static class UsbDiagnosticsComposer
         var recommendWithBench = recommendLine;
         if (bench is { Succeeded: true } && !string.IsNullOrWhiteSpace(bench.SummaryLine))
         {
-            var readNote = bench.ReadLikelyCached || bench.ReadIsEstimate ? " read may be cached" : string.Empty;
+            var readNote = bench.ReadLikelyCached || bench.ReadIsEstimate
+                ? " read unverified/cache suspected"
+                : $" read {bench.ReadSpeedMBps:0.0} MB/s verified";
             var portNote = bench.AttachedToVerifiedPort == false
                 ? " Benchmark measured on unverified current port; save/update a port label to attach it to a physical port."
                 : string.Empty;
-            recommendWithBench = $"{recommendWithBench} Measured: {bench.WriteSpeedMBps:0.0}/{bench.ReadSpeedMBps:0.0} MB/s ({bench.Classification}{readNote}).{portNote}".Trim();
+            recommendWithBench = bench.ReadLikelyCached || bench.ReadIsEstimate
+                ? $"{recommendWithBench} Measured: write {bench.WriteSpeedMBps:0.0} MB/s verified; read unverified (cache suspected). Raw cached read sample {bench.ReadSpeedMBps:0.0} MB/s.{portNote}".Trim()
+                : $"{recommendWithBench} Measured: write {bench.WriteSpeedMBps:0.0} MB/s, {readNote} ({bench.Classification}).{portNote}".Trim();
         }
 
         var riskSummary = rec is null

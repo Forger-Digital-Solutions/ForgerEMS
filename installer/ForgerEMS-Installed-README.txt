@@ -46,8 +46,9 @@ Beta safety notes:
 - Optional Cloudflare Workers AI needs CLOUDFLARE_API_KEY and CLOUDFLARE_ACCOUNT_ID; use Refresh Provider Status after changing environment variables.
 - The app may check GitHub for newer ForgerEMS releases (Settings → App updates). It does not silently download or install updates.
 - Deep Sensor Mode is optional and off unless you enable it during install or later in Settings.
-- It uses bundled local read-only hardware sensors for deeper Hardware X-Ray coverage. It reads only while ForgerEMS is running or scanning.
-- Deep Sensor Mode does not control fans, voltages, clocks, BIOS, firmware, overclocking, or undervolting. It does not install a background service, use cloud sensor telemetry, or require third-party downloads.
+- It uses bundled LibreHardwareMonitorLib for local read-only Hardware X-Ray coverage. It reads only while ForgerEMS is running or scanning.
+- Deep Sensor Mode does not control fans, voltages, clocks, BIOS, firmware, overclocking, undervolting, or perform hardware writes. It does not install a background service, use cloud sensor telemetry, require third-party downloads, or grant permanent admin permission.
+- Some deeper sensor/security checks may ask for Windows administrator approval when you run Elevated Scan. Windows UAC/security policy still controls that approval at runtime.
 - LibreHardwareMonitorLib is included where packaged under MPL-2.0 with notices:
   providers\sensors\THIRD-PARTY-NOTICES.txt
   providers\sensors\LICENSES\LibreHardwareMonitor-MPL-2.0.txt

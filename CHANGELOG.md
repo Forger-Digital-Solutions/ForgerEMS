@@ -2,6 +2,14 @@
 
 ## v1.2.1-preview.1 — Public Preview (2026-05-08)
 
+### Elevated Scan and LibreHWM pass
+
+- **Standard Scan / Elevated Scan split:** System Intelligence now offers a Standard Scan (no admin required) and an optional Elevated Scan that requests Windows administrator access for deeper coverage.
+- **ElevatedProcessTimedOut wired:** when the elevated helper process does not respond within the configured timeout, ForgerEMS now surfaces `ElevatedProcessTimedOut` as a first-class result instead of propagating a raw exit code.
+- **Friendly UAC/admin handoff messaging:** raw exit code `-196608` (0xFFFD0000) is no longer the primary user-facing error. If Windows, UAC, SmartScreen, execution policy, or endpoint security blocks the admin handoff, the app shows a descriptive explanation. Raw codes appear only in advanced diagnostics and logs.
+- **Restart as Administrator / Copy Admin Command:** optional helpers surfaced in UI for environments where UAC launch cannot be automated. Both are labeled as beta diagnostics and not presented as required steps.
+- **LibreHWM probing aligned:** elevated scan probing and LibreHardwareMonitorLib packaging now match. The DLL is packaged under `app/providers/sensors/` with MPL notices; missing runtime shows "Not packaged / unavailable" rather than crashing.
+
 ### Stabilization pass
 
 - **Label consistency:** "Run System Scan" → "Run Standard Scan" (welcome overlay, ViewModel next-action strings); "Local Only" → "Keep Local Only" (Settings Kyra Intelligence); "Export Support Bundle" → "Create Support Bundle" (docs and scripts).

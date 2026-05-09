@@ -2,7 +2,8 @@
 
 [CmdletBinding()]
 param(
-    [string]$OutputDirectory = ""
+    [string]$OutputDirectory = "",
+    [switch]$WriteElevatedScanMarkers
 )
 
 $ErrorActionPreference = "Stop"
@@ -1405,6 +1406,16 @@ if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
 }
 
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
+if ($WriteElevatedScanMarkers) {
+    $heartbeatPath = Join-Path $OutputDirectory "elevated-scan-heartbeat.json"
+    $heartbeatPayload = [ordered]@{
+        kind = "elevated-scan-heartbeat"
+        utc  = (Get-Date).ToUniversalTime().ToString("o")
+        pid  = $PID
+        phase = "scan-body-started"
+    }
+    $heartbeatPayload | ConvertTo-Json | Set-Content -LiteralPath $heartbeatPath -Encoding UTF8
+}
 $jsonPath = Join-Path $OutputDirectory "system-intelligence-latest.json"
 $markdownPath = Join-Path $OutputDirectory "flip-report-latest.md"
 $usbIntelligencePath = Join-Path $OutputDirectory "usb-intelligence-latest.json"
@@ -2238,6 +2249,16 @@ catch {
 
 try {
     $report | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $jsonPath -Encoding UTF8
+    if ($WriteElevatedScanMarkers) {
+        $elevatedResultPath = Join-Path $OutputDirectory "elevated-scan-result.json"
+        $resultPayload = [ordered]@{
+            kind = "elevated-scan-result"
+            utc  = (Get-Date).ToUniversalTime().ToString("o")
+            ok   = $true
+            json = "system-intelligence-latest.json"
+        }
+        $resultPayload | ConvertTo-Json | Set-Content -LiteralPath $elevatedResultPath -Encoding UTF8
+    }
 }
 catch {
     $position = if ($_.InvocationInfo -and $_.InvocationInfo.PositionMessage) { $_.InvocationInfo.PositionMessage.Trim() } else { "position unavailable" }

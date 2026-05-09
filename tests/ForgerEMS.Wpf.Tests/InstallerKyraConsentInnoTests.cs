@@ -61,10 +61,26 @@ public sealed class InstallerKyraConsentInnoTests
         Assert.True(tasksIdx >= 0 && registryIdx > tasksIdx);
         var tasksSection = iss[tasksIdx..registryIdx];
 
-        Assert.Contains("Enable Deep Sensor Mode (local read-only hardware sensors)", tasksSection, StringComparison.Ordinal);
+        Assert.Contains("ForgerEMS Deep Sensor Mode:", tasksSection, StringComparison.Ordinal);
+        Assert.Contains("Enable Deep Sensor Mode by default (read-only local hardware sensors", tasksSection, StringComparison.Ordinal);
+        Assert.Contains("Elevated Scan may still ask for Windows UAC approval", tasksSection, StringComparison.Ordinal);
         Assert.Contains("Flags: unchecked", tasksSection, StringComparison.Ordinal);
         Assert.DoesNotContain("checkedonce", tasksSection, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("firmware, drivers, permissions", tasksSection, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("grant", tasksSection, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("permanent admin", tasksSection, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ForgerEMS_Iss_DeepSensorRegistry_MapsSelectedToReadOnlyAndUnselectedToOff()
+    {
+        var root = KyraIntelligenceNetworkTests.FindRepoRoot();
+        var iss = File.ReadAllText(Path.Combine(root, "installer", "ForgerEMS.iss"));
+
+        Assert.Contains("ValueName: \"DeepSensorMode\"; ValueData: \"ReadOnly\"; Flags: uninsdeletevalue; Tasks: deepsensormode", iss, StringComparison.Ordinal);
+        Assert.Contains("ValueName: \"DeepSensorMode\"; ValueData: \"Off\"; Flags: uninsdeletevalue; Check: IsDeepSensorModeTaskDisabled", iss, StringComparison.Ordinal);
+        Assert.Contains("the installer does not grant permanent admin permission", iss, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Windows administrator approval when you run Elevated Scan", iss, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("bypass UAC", iss, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -86,6 +102,9 @@ public sealed class InstallerKyraConsentInnoTests
         var readme = File.ReadAllText(Path.Combine(root, "installer", "ForgerEMS-Installed-README.txt"));
 
         Assert.Contains("Deep Sensor Mode is optional and off unless you enable it", readme, StringComparison.Ordinal);
+        Assert.Contains("Windows UAC/security policy still controls that approval at runtime", readme, StringComparison.Ordinal);
+        Assert.Contains("does not", readme, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("grant permanent admin permission", readme, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Leave every box unchecked to keep Kyra Local Only", readme, StringComparison.Ordinal);
         Assert.Contains("turn realtime gateway research on or off", readme, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ForgerEMS never shares API keys, gateway tokens, passwords", readme, StringComparison.Ordinal);

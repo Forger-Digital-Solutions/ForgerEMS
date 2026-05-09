@@ -39,9 +39,11 @@ Bundled providers must:
 - clearly label admin requirements
 - be disabled by default if experimental
 
-ForgerEMS v1.2.0 preview pins `LibreHardwareMonitorLib` 0.9.6 as the reviewed local read-only deep sensor provider. Users do not download it manually; release packaging ships the provider DLL and notices inside the installer and portable bundle.
+ForgerEMS v1.2.1 Public Preview pins `LibreHardwareMonitorLib` 0.9.6 as the reviewed local read-only deep sensor provider. Users do not download it manually; release packaging ships the provider DLL and notices inside the installer and portable bundle.
 
 ForgerEMS Deep Sensor Mode is disclosed in the installer and Settings. It only reads supported local hardware sensor data while ForgerEMS is running or a System Intelligence / Hardware X-Ray scan is executing. It does not install a background service, create a startup task, send sensor telemetry, use cloud sensor services, or auto-send reports.
+
+The installer Deep Sensor Mode checkbox only sets the default sensor mode (`Off` or `ReadOnly`). It does not grant permanent administrator permission, skip Windows UAC, or make ForgerEMS always run elevated. Some deeper sensor/security checks may ask for Windows administrator approval when the user runs Elevated Scan.
 
 ## MPL-Style Library Handling
 
@@ -55,4 +57,4 @@ ForgerEMS uses the unmodified LibreHardwareMonitor NuGet package. No MPL-covered
 
 Deep Sensor Mode wording should be:
 
-> Deep Sensor Mode may require admin access. It only reads supported sensors and does not change fan, voltage, clock, or firmware settings.
+> Deep Sensor Mode uses bundled LibreHardwareMonitorLib for local read-only sensor coverage. No fan control, voltage control, overclocking, BIOS, firmware, or hardware writes. Some deeper sensor checks may ask for Windows administrator approval when you run Elevated Scan.

@@ -87,6 +87,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly GitHubReleaseUpdateCheckService _updateCheckService;
     private AppUpdateSettings _appUpdateSettings = new();
     private bool _updateCheckInProgress;
+    private CancellationTokenSource? _updateCheckCancellation;
     private bool _updateDownloadInProgress;
     private string _pendingInstallerUrl = string.Empty;
     private string _pendingAdvancedInstallerUrl = string.Empty;
@@ -435,7 +436,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         RenameUsbCommand = new AsyncRelayCommand(RunRenameUsbAsync, CanRunTargetedActions);
         InstallOrUpdateVentoyCommand = new AsyncRelayCommand(RunInstallOrUpdateVentoyAsync, CanRunTargetedActions);
         RunSystemScanCommand = new AsyncRelayCommand(RunSystemScanAsync, CanRunBackendOnlyActions);
-        RunElevatedSystemScanCommand = new AsyncRelayCommand(RunElevatedSystemScanAsync, CanRunBackendOnlyActions);
+        RunElevatedSystemScanCommand = new AsyncRelayCommand(() => RunElevatedSystemScanAsync(), CanRunBackendOnlyActions);
+        CopyElevatedScanAdminCommand = new RelayCommand(CopyElevatedScanAdminCommandExecute, CanRunBackendOnlyActions);
+        RestartAsAdministratorCommand = new RelayCommand(RestartAsAdministratorExecute);
         RefreshToolkitHealthCommand = new AsyncRelayCommand(RunToolkitHealthScanAsync, CanRunToolkitScan);
         VerifyToolkitLinksCommand = new AsyncRelayCommand(RunVerifyToolkitLinksAsync, CanVerifyToolkitLinks);
         CancelVerifyToolkitLinksCommand = new RelayCommand(CancelVerifyToolkitLinks, () => IsToolkitLinkVerificationBusy);
@@ -671,6 +674,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public AsyncRelayCommand RunElevatedSystemScanCommand { get; }
 
+    public RelayCommand CopyElevatedScanAdminCommand { get; }
+
+    public RelayCommand RestartAsAdministratorCommand { get; }
+
     public AsyncRelayCommand RefreshToolkitHealthCommand { get; }
 
     public AsyncRelayCommand VerifyToolkitLinksCommand { get; }
@@ -900,6 +907,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     /// <summary>Navigates main window tab when header contains the given substring (e.g. "Settings").</summary>
     public Action<string>? MainTabNavigationAction { get; set; }
 
+    public ElevatedScanStartupRequest ElevatedScanStartupRequest { get; set; } = ElevatedScanStartupRequest.None;
+
     public UsbTargetInfo? SelectedUsbTarget
     {
         get => _selectedUsbTarget;
@@ -1018,7 +1027,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return
                 $"Deep Sensor Mode: {resolution.Mode}. Current source: {resolution.DisplaySource}. " +
                 "Read-only local sensors may improve Hardware X-Ray sensor coverage while ForgerEMS is running or scanning. " +
-                "ForgerEMS does not control fans, voltages, clocks, BIOS, or firmware.";
+                "Running Elevated Scan as administrator may improve sensor/security coverage. " +
+                "ForgerEMS does not control fans, voltages, clocks, BIOS, firmware, or hardware writes.";
         }
     }
 
@@ -1716,7 +1726,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public string AppUpdateMachineStateDisplay => UpdateCheckMachineStateResolver.Describe(_appUpdateMachineState);
 
-    public string AppUpdateCheckButtonText => _updateCheckInProgress ? "Checking..." : "Check Now";
+    public string AppUpdateCheckButtonText => _updateCheckInProgress ? "Checking..." : "Check for Updates";
 
     public string AppUpdateCheckHelperText => _updateCheckInProgress
         ? "Update check in progress"
@@ -1899,7 +1909,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             (resolution.IsInvalid ? "Invalid configured value was ignored; using Off." : resolution.TechnicianNote);
         DeepSensorModeConsentNotice =
             "Read-only local sensors may reveal CPU/GPU/storage temperatures, clocks, loads, fan RPM, and storage wear when supported. " +
-            "Some sensors require admin access, vendor drivers, or firmware support. No fan, voltage, clock, BIOS, firmware, cloud, or telemetry control is used.";
+            "Running Elevated Scan as administrator may improve sensor/security coverage, but Windows UAC approval is still requested at runtime. " +
+            "No fan, voltage, clock, BIOS, firmware, cloud, telemetry control, or hardware writes are used.";
         OnPropertyChanged(nameof(DeepSensorModeSettingsSummary));
     }
 
@@ -2850,6 +2861,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         HydrateFromCachedReportsEarly();
         await RefreshAllAsync();
         StartUsbAutoDetectionMonitor();
+        await ConsumeElevatedScanStartupRequestAsync();
     }
 
     private void HydrateFromCachedReportsEarly()
@@ -3491,7 +3503,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         TryRecordKyraSystemScanLearning();
     }
 
-    private async Task RunElevatedSystemScanAsync()
+    private async Task RunElevatedSystemScanAsync(bool resumedFromElevatedLaunch = false)
     {
         var scriptPath = ResolveBackendScriptPath(Path.Combine("SystemIntelligence", "Invoke-ForgerEMSSystemScan.ps1"));
         if (!File.Exists(scriptPath))
@@ -3509,38 +3521,268 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ClearLogs();
         LastCommandText = "System Intelligence elevated scan";
         AppendLifecycleStart("System Intelligence elevated scan", null);
+        if (resumedFromElevatedLaunch)
+        {
+            AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Elevated launch detected; continuing requested Elevated Scan.", LogSeverity.Info));
+        }
+
         AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Elevated scan: unlocks additional hardware/security detail where Windows requires admin permission.", LogSeverity.Info));
         AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Standard scan remains safe and useful; elevated scan does not bypass Windows security.", LogSeverity.Info));
 
-        var reportsDir = Path.Combine(_appRuntimeService.RuntimeRoot, "reports");
+        var reportsDir = GetRuntimeReportsDirectory();
         Directory.CreateDirectory(reportsDir);
-        var launchCommand = $$"""
-            $ErrorActionPreference = 'Stop'
-            $ps = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
-            if (-not (Test-Path -LiteralPath $ps)) { $ps = 'powershell.exe' }
-            $script = {{ToSingleQuotedPowerShellLiteral(scriptPath)}}
-            $outDir = {{ToSingleQuotedPowerShellLiteral(reportsDir)}}
-            $args = @('-NoProfile','-ExecutionPolicy','Bypass','-File',$script,'-OutputDirectory',$outDir)
-            $p = Start-Process -FilePath $ps -ArgumentList $args -Verb RunAs -Wait -PassThru
-            if ($null -eq $p) { throw 'Elevation was cancelled before the scan started.' }
-            if ($p.ExitCode -ne 0) { throw ('Elevated scan exited with code ' + $p.ExitCode + '.') }
-            Write-Host '[OK] Elevated System Intelligence scan completed.'
-            """;
+        var correlationId = Guid.NewGuid().ToString("N");
+        var deep = DeepSensorModeResolver.Resolve();
+        var appElevated = ProcessElevationHelper.IsRunningElevated();
+        var backendWd = _backendContext.WorkingDirectory;
+        var windowsPs = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+        var psForLog = File.Exists(windowsPs) ? windowsPs : "powershell.exe";
 
+        ElevatedScanDiagnostics.WriteStartedMarker(
+            reportsDir,
+            correlationId,
+            appElevated,
+            deep.Mode,
+            deep.DisplaySource,
+            Path.GetFileName(psForLog),
+            backendScriptExists: true,
+            Directory.Exists(backendWd));
+
+        AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] Elevated scan preflight: backend script present; file {Path.GetFileName(scriptPath)}", LogSeverity.Info));
+        AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Reports output folder is ready under your ForgerEMS user runtime (see Open Reports Folder).", LogSeverity.Info));
+        AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] Backend working directory exists: {Directory.Exists(backendWd)}", LogSeverity.Info));
+        AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] PowerShell path selected: {psForLog}", LogSeverity.Info));
+        AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] Deep Sensor Mode: {deep.Mode} (source: {deep.DisplaySource})", LogSeverity.Info));
+        AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] App is elevated (administrator): {appElevated}", LogSeverity.Info));
+
+        Func<PowerShellRunResult, bool> inferMissing = run => ElevatedScanDiagnostics.InferLikelyMissingOutput(reportsDir, run);
+
+        if (!appElevated)
+        {
+            RequestElevatedRelaunchAndRunScan(reportsDir, correlationId);
+            return;
+        }
+
+        AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Running elevated scan directly (app is already elevated; skipping UAC relaunch).", LogSeverity.Info));
         var result = await RunScriptAsync(
             ScriptActionType.SystemIntelligence,
             new PowerShellRunRequest
             {
                 DisplayName = "System Intelligence elevated scan",
-                WorkingDirectory = _backendContext.WorkingDirectory,
-                InlineCommand = launchCommand,
-                HeartbeatKind = PowerShellHeartbeatKind.LongRunningScan
-            });
+                WorkingDirectory = backendWd,
+                ScriptPath = scriptPath,
+                Arguments = ["-OutputDirectory", reportsDir, "-WriteElevatedScanMarkers"],
+                HeartbeatKind = PowerShellHeartbeatKind.LongRunningScan,
+                Timeout = ElevatedScanDiagnostics.ElevatedScanWaitTimeout
+            },
+            resetLogPane: false,
+            appendLifecycleHeader: false,
+            elevatedScanLikelyMissingOutput: inferMissing);
+
+        if (result is { Succeeded: false })
+        {
+            var analysis = ElevatedScanLaunchClassifier.Analyze(result.RawRun, inferMissing(result.RawRun));
+            ElevatedScanDiagnostics.WriteErrorMarker(reportsDir, analysis, correlationId);
+        }
 
         if (result is not null)
         {
             LoadSystemIntelligenceReport();
             TryRecordKyraSystemScanLearning();
+        }
+    }
+
+    private async Task ConsumeElevatedScanStartupRequestAsync()
+    {
+        var request = ElevatedScanStartupRequest;
+        ElevatedScanStartupRequest = ElevatedScanStartupRequest.None;
+        if (!request.OpenSystemIntelligence && !request.HasPendingElevatedScan)
+        {
+            return;
+        }
+
+        MainTabNavigationAction?.Invoke("System Intelligence");
+        await Task.Yield();
+
+        if (!request.HasPendingElevatedScan)
+        {
+            return;
+        }
+
+        if (!ProcessElevationHelper.IsRunningElevated())
+        {
+            ClearLogs();
+            AppendLog(new LogLine(DateTimeOffset.Now, "[ERROR] Elevated Scan resume request was received, but ForgerEMS is still not running as administrator.", LogSeverity.Error));
+            AppendLog(new LogLine(DateTimeOffset.Now, "[ACTION] Retry Elevated Scan and approve the Windows UAC prompt. Standard Scan results are still available.", LogSeverity.Warning));
+            SetStatus(
+                "Elevated Scan could not resume",
+                "ForgerEMS was relaunched for Elevated Scan, but Windows did not grant administrator permission. Standard Scan results are still available.",
+                ErrorBackground,
+                ErrorBorder,
+                ErrorForeground);
+            return;
+        }
+
+        await RunElevatedSystemScanAsync(resumedFromElevatedLaunch: true);
+    }
+
+    private void RequestElevatedRelaunchAndRunScan(string reportsDir, string correlationId)
+    {
+        var requestId = ElevatedScanStartupRequest.CreateRequestId();
+        AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] ForgerEMS needs administrator permission for Elevated Scan. Approve the Windows UAC prompt and ForgerEMS will continue automatically.", LogSeverity.Info));
+        AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Requesting administrator permission by relaunching ForgerEMS.", LogSeverity.Info));
+        AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Approve the Windows UAC prompt to continue.", LogSeverity.Info));
+        SetStatus(
+            "Requesting administrator permission",
+            "Approve the Windows UAC prompt and ForgerEMS will continue Elevated Scan automatically. You do not need to right-click the app manually.",
+            RunningBackground,
+            RunningBorder,
+            RunningForeground);
+
+        try
+        {
+            var exe = ResolveCurrentExecutablePath();
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = exe,
+                WorkingDirectory = Path.GetDirectoryName(exe) ?? AppContext.BaseDirectory,
+                UseShellExecute = true,
+                Verb = "runas"
+            };
+            var args = new ProcessStartInfoBuilder();
+            ElevatedScanStartupRequest.AddArguments(args, requestId);
+            foreach (var arg in args.Arguments)
+            {
+                startInfo.ArgumentList.Add(arg);
+            }
+
+            var process = Process.Start(startInfo);
+            if (process is null)
+            {
+                throw new InvalidOperationException("Windows did not return an elevated ForgerEMS process.");
+            }
+
+            AppendLog(new LogLine(DateTimeOffset.Now, $"[OK] Administrator relaunch requested. Request id: {requestId}", LogSeverity.Success, channel: LiveLogChannel.Diagnostics));
+            Application.Current?.MainWindow?.Dispatcher.BeginInvoke(() =>
+            {
+                if (Application.Current.MainWindow is not null)
+                {
+                    Application.Current.MainWindow.WindowState = WindowState.Minimized;
+                }
+            });
+        }
+        catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            var analysis = ElevatedScanLaunchClassifier.AnalyzeReasonLine(
+                "Elevation handoff failed: UAC cancelled NativeError=1223",
+                exitCode: 1223);
+            ElevatedScanDiagnostics.WriteErrorMarker(reportsDir, analysis, correlationId);
+            AppendLog(new LogLine(DateTimeOffset.Now, "[WARN] Elevated Scan was cancelled before administrator permission was approved. Standard Scan results are still available.", LogSeverity.Warning));
+            SetStatus(
+                "Elevated Scan cancelled",
+                "Elevated Scan was cancelled before administrator permission was approved. Standard Scan results are still available.",
+                WarningBackground,
+                WarningBorder,
+                WarningForeground);
+        }
+        catch (Win32Exception ex)
+        {
+            var analysis = ElevatedScanLaunchClassifier.AnalyzeReasonLine(
+                $"Elevation handoff failed: {ex.Message} NativeError={ex.NativeErrorCode}",
+                exitCode: ex.NativeErrorCode);
+            ElevatedScanDiagnostics.WriteErrorMarker(reportsDir, analysis, correlationId);
+            AppendLog(new LogLine(DateTimeOffset.Now, "[ERROR] " + analysis.PrimaryUserMessage, LogSeverity.Error));
+            AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] " + analysis.AdvancedDiagnosticsLine, LogSeverity.Info, channel: LiveLogChannel.Diagnostics));
+            SetStatus(
+                "Elevated Scan could not start",
+                analysis.PrimaryUserMessage,
+                ErrorBackground,
+                ErrorBorder,
+                ErrorForeground);
+        }
+        catch (Exception ex)
+        {
+            var analysis = ElevatedScanLaunchClassifier.AnalyzeReasonLine(
+                $"Elevation handoff failed: {ex.Message}",
+                exitCode: -1);
+            ElevatedScanDiagnostics.WriteErrorMarker(reportsDir, analysis, correlationId);
+            AppendLog(new LogLine(DateTimeOffset.Now, "[ERROR] " + analysis.PrimaryUserMessage, LogSeverity.Error));
+            AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] " + analysis.AdvancedDiagnosticsLine, LogSeverity.Info, channel: LiveLogChannel.Diagnostics));
+            SetStatus(
+                "Elevated Scan could not start",
+                analysis.PrimaryUserMessage,
+                ErrorBackground,
+                ErrorBorder,
+                ErrorForeground);
+        }
+    }
+
+    private static string ResolveCurrentExecutablePath()
+    {
+        var exe = Environment.ProcessPath;
+        if (!string.IsNullOrWhiteSpace(exe) && File.Exists(exe))
+        {
+            return exe;
+        }
+
+        exe = Process.GetCurrentProcess().MainModule?.FileName;
+        if (!string.IsNullOrWhiteSpace(exe) && File.Exists(exe))
+        {
+            return exe;
+        }
+
+        throw new InvalidOperationException("Could not resolve the app executable path.");
+    }
+
+    private void CopyElevatedScanAdminCommandExecute()
+    {
+        var scriptPath = ResolveBackendScriptPath(Path.Combine("SystemIntelligence", "Invoke-ForgerEMSSystemScan.ps1"));
+        if (!File.Exists(scriptPath))
+        {
+            _userPromptService.ShowMessage("Copy Admin Command", "System Intelligence script was not found; nothing to copy.", MessageBoxImage.Warning);
+            return;
+        }
+
+        var reportsDir = GetRuntimeReportsDirectory();
+        var windowsPs = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+        var exe = File.Exists(windowsPs) ? windowsPs : "powershell.exe";
+        var argTail = ElevatedScanDiagnostics.BuildPowerShellQuotedFileArgs(scriptPath, reportsDir, writeMarkers: true);
+        var line = $"& {ToSingleQuotedPowerShellLiteral(exe)} {argTail}";
+        try
+        {
+            Clipboard.SetText(line);
+            AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Copied elevated scan PowerShell command to the clipboard. Paste into an elevated PowerShell window.", LogSeverity.Success));
+        }
+        catch (Exception ex)
+        {
+            _userPromptService.ShowMessage("Copy Admin Command", ex.Message, MessageBoxImage.Error);
+        }
+    }
+
+    private void RestartAsAdministratorExecute()
+    {
+        if (!_userPromptService.Confirm(
+                "Restart as administrator",
+                "ForgerEMS will close and try to restart with administrator rights. Save your work first. Continue?"))
+        {
+            return;
+        }
+
+        try
+        {
+            var exe = ResolveCurrentExecutablePath();
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = exe,
+                UseShellExecute = true,
+                Verb = "runas"
+            });
+            Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            _userPromptService.ShowMessage("Restart as administrator", ex.Message, MessageBoxImage.Error);
         }
     }
 
@@ -5712,7 +5954,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             }
             else
             {
-                AppendLifecycleFailure("Install / Update Ventoy", result.Details);
+                AppendLifecycleFailure("Install / Update Ventoy", result.Details, null);
                 SetStatus(
                     result.Summary,
                     result.Details,
@@ -5724,7 +5966,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         catch (Exception exception)
         {
             AppendLog(new LogLine(DateTimeOffset.Now, exception.Message, LogSeverity.Error, isErrorStream: true));
-            AppendLifecycleFailure("Install / Update Ventoy", exception.Message);
+            AppendLifecycleFailure("Install / Update Ventoy", exception.Message, null);
             SetStatus(
                 "Ventoy package preparation failed",
                 exception.Message,
@@ -6439,7 +6681,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private async Task<ScriptExecutionResult?> RunScriptAsync(ScriptActionType action, PowerShellRunRequest request)
+    private async Task<ScriptExecutionResult?> RunScriptAsync(
+        ScriptActionType action,
+        PowerShellRunRequest request,
+        bool resetLogPane = true,
+        bool appendLifecycleHeader = true,
+        Func<PowerShellRunResult, bool>? elevatedScanLikelyMissingOutput = null)
     {
         if (!_backendContext.IsAvailable)
         {
@@ -6462,7 +6709,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             ? await EnterUsbBuilderActionGateAsync(request.DisplayName).ConfigureAwait(true)
             : null;
 
-        ClearLogs();
+        if (resetLogPane)
+        {
+            ClearLogs();
+        }
+
         LastCommandText = $"{request.DisplayName} -> {Path.GetFileName(request.ScriptPath ?? "inline command")}";
         _lastCommandStartedAt = DateTimeOffset.Now;
         _lastCommandFinishedAt = null;
@@ -6478,7 +6729,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         var startedAt = DateTimeOffset.Now;
         _usbManagedHeartbeatPhase = UsbManagedHeartbeatPhase.Unknown;
-        AppendLifecycleStart(request.DisplayName, SelectedUsbTarget);
+        if (appendLifecycleHeader)
+        {
+            AppendLifecycleStart(request.DisplayName, SelectedUsbTarget);
+        }
 
         AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] Working directory: {request.WorkingDirectory}", LogSeverity.Info));
         if (!string.IsNullOrWhiteSpace(request.ScriptPath))
@@ -6500,7 +6754,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             var effectiveRequest = WithOptionalManagedDownloadHeartbeat(request);
             var runResult = await _powerShellRunnerService.RunAsync(effectiveRequest, AppendLog);
             var runMs = phaseTimer.ElapsedMilliseconds;
-            var parsed = _scriptStatusParser.Parse(action, request.DisplayName, runResult);
+            var likelyMissingElevatedOutput = elevatedScanLikelyMissingOutput?.Invoke(runResult) ?? false;
+            var parsed = _scriptStatusParser.Parse(action, request.DisplayName, runResult, likelyMissingElevatedOutput);
 
             await LoadManagedSummaryAsync();
             var managedMs = phaseTimer.ElapsedMilliseconds;
@@ -6540,14 +6795,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             }
             else
             {
-                AppendLifecycleFailure(request.DisplayName, parsed.Summary);
+                AppendLifecycleFailure(request.DisplayName, parsed.Summary, parsed.RawRun);
                 SetStatus(
                     parsed.Summary,
                     parsed.Details,
                     ErrorBackground,
                     ErrorBorder,
                     ErrorForeground);
-                _lastCommandExitCode = 1;
+                _lastCommandExitCode = parsed.RawRun.ExitCode;
                 LastCommandStatusText = "Failed";
             }
 
@@ -6562,7 +6817,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         catch (Exception exception)
         {
             AppendLog(new LogLine(DateTimeOffset.Now, exception.Message, LogSeverity.Error, isErrorStream: true));
-            AppendLifecycleFailure(request.DisplayName, exception.Message);
+            AppendLifecycleFailure(request.DisplayName, exception.Message, null);
             SetStatus(
                 $"{request.DisplayName} failed to start",
                 exception.Message,
@@ -6593,7 +6848,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             SystemIntelligenceStaleBannerText = string.Empty;
             SystemIntelligenceAutomationLineText = string.Empty;
             SystemIntelligenceWarningReasonText = "Warning reason: waiting for first scan.";
-            SystemIntelligenceScanStatusText = "Scan status: Not scanned";
+            SystemIntelligenceScanStatusText = $"Scan status: Not scanned · App elevation: {ProcessElevationHelper.DescribeElevationUiShort()}";
             SystemIntelligenceHealthStatusText = "Health status: Unknown";
             SystemIntelligenceWindowsReadinessText = "Windows readiness: Needs verification";
             SystemIntelligenceReportSafePathText = @"Runtime\reports\system-intelligence-latest.json";
@@ -6633,7 +6888,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             var overallStatus = GetJsonString(root, "overallStatus", "UNKNOWN");
             SystemIntelligenceStatusText = overallStatus;
-            SystemIntelligenceScanStatusText = $"Scan status: {GetJsonString(root, "scanMode", "Standard")} scan READY";
+            SystemIntelligenceScanStatusText =
+                $"Scan status: {GetJsonString(root, "scanMode", "Standard")} scan READY · App elevation: {ProcessElevationHelper.DescribeElevationUiShort()}";
             SystemIntelligenceHealthStatusText = $"Health status: {MapHealthStatusLabel(root, overallStatus)}";
             SystemIntelligenceWindowsReadinessText = BuildWindowsReadinessSummary(root);
             SystemIntelligenceLastScanText = $"Last scan: {FormatGeneratedUtc(GetJsonString(root, "generatedUtc", string.Empty))}";
@@ -6718,7 +6974,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             SystemIntelligenceSecurityCardText = SystemIntelligenceSecurityText;
             SystemIntelligenceFlipValueCardText = BuildFlipValueSummary(root);
             SystemIntelligenceDeviceFitCardText = BuildDeviceFitSummary(root);
-            SystemIntelligenceHardwareXrayCardText = BuildHardwareXraySummary(root);
+            SystemIntelligenceHardwareXrayCardText = BuildHardwareXraySummary(root) + BuildHardwareXrayElevationFooter();
             SystemIntelligenceWarningReasonText = BuildSystemIntelligenceWarningReason(root, UnifiedDiagnosticsSummaryText);
             var scanMode = GetJsonString(root, "scanMode", "Standard");
             var permissionLimitedProviders = CountOptionalProviderStatuses(root, "PermissionRequired");
@@ -6764,7 +7020,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             SystemIntelligenceAutomationLineText = string.Empty;
             SystemIntelligenceStatusText = "Needs attention";
             SystemIntelligenceWarningReasonText = "Warning: scan report needs regeneration.";
-            SystemIntelligenceScanStatusText = "Scan status: Needs attention";
+            SystemIntelligenceScanStatusText = $"Scan status: Needs attention · App elevation: {ProcessElevationHelper.DescribeElevationUiShort()}";
             SystemIntelligenceHealthStatusText = "Health status: Warning";
             SystemIntelligenceWindowsReadinessText = "Windows readiness: Needs verification";
             SystemIntelligenceSummaryText =
@@ -7317,7 +7573,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             var overallSeverity = GetJsonString(root, "overallSeverity", "Unknown");
             DiagnosticsAppActionStatusText = $"App action status: {CurrentTaskState}";
             DiagnosticsHealthStatusText = $"Diagnostics health: {DiagnosticsUiFormatter.FormatSeverityLabel(overallSeverity)}";
-            DiagnosticsBackendChipText = $"Backend: {(BackendDiagnosticText.Contains("compatible", StringComparison.OrdinalIgnoreCase) ? "Compatible" : "Problem")}";
+            DiagnosticsBackendChipText = $"Backend: {GetBackendDiagnosticsChipState()}";
             DiagnosticsUsbChipText = $"USB: {(SelectedUsbTarget?.DisplayName ?? "none")}";
             DiagnosticsSystemChipText = $"System Intelligence: {SystemIntelligenceStatusText}";
             DiagnosticsToolkitChipText = $"Toolkit: {ToolkitStatusText}";
@@ -7885,6 +8141,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    private static string BuildHardwareXrayElevationFooter()
+    {
+        var elev = ProcessElevationHelper.DescribeElevationUiShort();
+        var lines = $"{Environment.NewLine}App elevation: {elev}.";
+        if (!ProcessElevationHelper.IsRunningElevated() && DeepSensorModeResolver.Resolve().IsEnabled)
+        {
+            lines += " LibreHardwareMonitor coverage may improve when the app runs as administrator (optional).";
+        }
+
+        return lines;
+    }
+
     private static string FindLiveSensorNames(JsonElement sensorMatrix)
     {
         if (!sensorMatrix.TryGetProperty("groups", out var groups) || groups.ValueKind != JsonValueKind.Array)
@@ -7973,9 +8241,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             if (!enabled &&
                 (label.Equals("Deep Sensor Provider", StringComparison.OrdinalIgnoreCase) ||
                  label.Equals("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase)) &&
-                failure.Contains("not packaged", StringComparison.OrdinalIgnoreCase))
+                (failure.Contains("not packaged", StringComparison.OrdinalIgnoreCase) ||
+                 failure.Contains("unavailable", StringComparison.OrdinalIgnoreCase)))
             {
-                status = "Not packaged";
+                status = "Not packaged / unavailable";
             }
 
             if (!enabled && mode.Equals("Disabled", StringComparison.OrdinalIgnoreCase))
@@ -8014,9 +8283,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             if (!provider.IsEnabled &&
                 (label.Equals("Deep Sensor Provider", StringComparison.OrdinalIgnoreCase) ||
                  label.Equals("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase)) &&
-                provider.FailureReason.Contains("not packaged", StringComparison.OrdinalIgnoreCase))
+                (provider.FailureReason.Contains("not packaged", StringComparison.OrdinalIgnoreCase) ||
+                 provider.FailureReason.Contains("unavailable", StringComparison.OrdinalIgnoreCase)))
             {
-                status = "Not packaged";
+                status = "Not packaged / unavailable";
             }
 
             return $"{label}: {status}";
@@ -9369,12 +9639,22 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         AppendLog(new LogLine(DateTimeOffset.Now, $"[COMPLETE] {actionName} completed in {FormatDuration(DateTimeOffset.Now - startedAt)}", LogSeverity.Success));
     }
 
-    private void AppendLifecycleFailure(string actionName, string reason)
+    private void AppendLifecycleFailure(string actionName, string reason, PowerShellRunResult? rawRun)
     {
         AppendLog(new LogLine(DateTimeOffset.Now, $"[ERROR] {actionName} failed: {reason}", LogSeverity.Error, isErrorStream: true));
         if (actionName.Contains("System Intelligence elevated scan", StringComparison.OrdinalIgnoreCase))
         {
-            foreach (var guidance in BuildElevatedScanFailureGuidance(reason))
+            var missingOutput = rawRun is not null &&
+                                ElevatedScanDiagnostics.InferLikelyMissingOutput(GetRuntimeReportsDirectory(), rawRun);
+            var analysis = rawRun is not null
+                ? ElevatedScanLaunchClassifier.Analyze(rawRun, missingOutput)
+                : ElevatedScanLaunchClassifier.AnalyzeReasonLine(reason, exitCode: -1);
+            AppendLog(new LogLine(
+                DateTimeOffset.Now,
+                "[INFO] " + analysis.AdvancedDiagnosticsLine,
+                LogSeverity.Info,
+                channel: LiveLogChannel.Diagnostics));
+            foreach (var guidance in analysis.SupplementalActionLines)
             {
                 AppendLog(new LogLine(DateTimeOffset.Now, "[ACTION] " + guidance, LogSeverity.Warning));
             }
@@ -9385,37 +9665,23 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         AppendLog(new LogLine(DateTimeOffset.Now, "[ACTION] Review log and retry.", LogSeverity.Warning));
     }
 
-    private static IReadOnlyList<string> BuildElevatedScanFailureGuidance(string reason)
+    private string GetBackendDiagnosticsChipState()
     {
-        var exitCode = TryParseProcessExitCode(reason);
-        if (exitCode == -196608)
+        var backendStatus = GetBackendCompatibilityStatus();
+        if (backendStatus.Equals("Error", StringComparison.OrdinalIgnoreCase))
         {
-            return
-            [
-                "Elevated scan did not start or was canceled before the admin scan completed.",
-                "Approve the UAC prompt or run ForgerEMS as administrator, then retry.",
-                "Your Standard Scan report is still available."
-            ];
+            return "Problem";
         }
 
-        return
-        [
-            "Elevated scan did not complete. Check local admin permission or UAC approval, then retry.",
-            "Your Standard Scan report is still available."
-        ];
-    }
-
-    private static int? TryParseProcessExitCode(string reason)
-    {
-        if (string.IsNullOrWhiteSpace(reason))
+        if (!string.IsNullOrWhiteSpace(SystemIntelligenceStatusText) &&
+            SystemIntelligenceStatusText.Contains("Needs", StringComparison.OrdinalIgnoreCase))
         {
-            return null;
+            return "Needs admin retry";
         }
 
-        var match = Regex.Match(reason, @"code\s+(?<code>-?\d+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        return match.Success && int.TryParse(match.Groups["code"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var code)
-            ? code
-            : null;
+        return backendStatus.Equals("Warning", StringComparison.OrdinalIgnoreCase)
+            ? "Warning"
+            : "Compatible";
     }
 
     private string GetBackendVersionDisplay()
@@ -11355,6 +11621,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 "[INFO] Update check already running; this request was skipped.",
                 LogSeverity.Info,
                 channel: LiveLogChannel.Update));
+            if (manual)
+            {
+                RunOnUi(() =>
+                {
+                    AppUpdateStateDisplay = "Unable to check right now: a check is already in progress.";
+                    AppUpdateBannerVisibility = Visibility.Visible;
+                    AppUpdateBannerTitle = "Update check already in progress";
+                    AppUpdateBannerDetail = "Please wait for the current check to finish, then retry.";
+                    AppUpdateDiagnosticsHintVisibility = Visibility.Visible;
+                });
+            }
+
             return;
         }
 
@@ -11399,9 +11677,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 var channel = _appUpdateSettings.IncludeBetaRcChannels
                     ? UpdateReleaseChannel.BetaRcAllowed
                     : UpdateReleaseChannel.StableOnly;
+                var timeout = manual ? TimeSpan.FromSeconds(15) : TimeSpan.FromSeconds(25);
+                using var timeoutCts = new CancellationTokenSource(timeout);
+                _updateCheckCancellation?.Dispose();
+                _updateCheckCancellation = timeoutCts;
                 result = await _updateCheckService
-                    .CheckForNewerReleaseAsync(installedLabel, ignored, channel, CancellationToken.None)
-                    .WaitAsync(TimeSpan.FromSeconds(45), CancellationToken.None)
+                    .CheckForNewerReleaseAsync(installedLabel, ignored, channel, timeoutCts.Token)
+                    .WaitAsync(timeoutCts.Token)
                     .ConfigureAwait(false);
             }
             catch (TimeoutException)
@@ -11411,14 +11693,33 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                     Succeeded = false,
                     Outcome = UpdateCheckOutcome.Failed,
                     FailureKind = UpdateCheckFailureKind.Timeout,
-                    ErrorMessage = "Update check timed out. Try again later.",
-                    DiagnosticDetail = "Overall update-check deadline exceeded."
+                    ErrorMessage = manual
+                        ? "Unable to check right now. Timed out after 15 seconds."
+                        : "Unable to check right now. Background check timed out.",
+                    DiagnosticDetail = manual
+                        ? "Timed out after 15 seconds."
+                        : "Background update check timed out after 25 seconds."
                 };
                 AppendLog(new LogLine(
                     DateTimeOffset.Now,
                     "[WARN] Update check timed out.",
                     LogSeverity.Warning,
                     channel: LiveLogChannel.Update));
+            }
+            catch (OperationCanceledException) when (_updateCheckCancellation?.IsCancellationRequested == true)
+            {
+                result = new UpdateCheckResult
+                {
+                    Succeeded = false,
+                    Outcome = UpdateCheckOutcome.Failed,
+                    FailureKind = UpdateCheckFailureKind.Timeout,
+                    ErrorMessage = manual
+                        ? "Unable to check right now. Timed out after 15 seconds."
+                        : "Unable to check right now. Background check timed out.",
+                    DiagnosticDetail = manual
+                        ? "Timed out after 15 seconds."
+                        : "Background update check timed out after 25 seconds."
+                };
             }
 
             result = ReconcileIgnoredInFlightUpdatePrompt(result, _appUpdateSettings.IgnoredVersion);
@@ -11523,6 +11824,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             SaveUpdateSettings();
 
             _updateCheckInProgress = false;
+            _updateCheckCancellation?.Dispose();
+            _updateCheckCancellation = null;
             var applyResult = result;
             RunOnUi(() => ApplyUpdateCheckResultToUi(applyResult, manual));
             RunOnUi(() =>
@@ -11570,6 +11873,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _lastAppliedUpdateCheckResult = result;
         _appUpdateMachineState = UpdateCheckMachineStateResolver.Resolve(updateCheckInProgress: false, result);
         RaiseAppUpdateStatusDetailProperties();
+        DiagnosticsUpdateChipText = $"Update: {AppUpdateMachineStateDisplay}";
 
         var state = UpdateCheckUiPresenter.Map(result, manual, AppReleaseInfo.Version);
 
@@ -12323,6 +12627,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         InstallOrUpdateVentoyCommand.RaiseCanExecuteChanged();
         RunSystemScanCommand.RaiseCanExecuteChanged();
         RunElevatedSystemScanCommand.RaiseCanExecuteChanged();
+        CopyElevatedScanAdminCommand.RaiseCanExecuteChanged();
         RefreshToolkitHealthCommand.RaiseCanExecuteChanged();
         VerifyToolkitLinksCommand.RaiseCanExecuteChanged();
         CancelVerifyToolkitLinksCommand.RaiseCanExecuteChanged();

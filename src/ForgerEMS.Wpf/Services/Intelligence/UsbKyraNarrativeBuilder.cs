@@ -11,7 +11,8 @@ public static class UsbKyraNarrativeBuilder
 
         var bench = snapshot.SelectedTargetBenchmark;
         var label = snapshot.SelectedTargetPortUserLabel?.Trim();
-        var confPhrase = ConfidencePhrase(snapshot.CombinedConfidenceScore);
+        var readUnverified = bench is { ReadLikelyCached: true } || bench is { ReadIsEstimate: true };
+        var confPhrase = ConfidencePhrase(snapshot.CombinedConfidenceScore, readUnverified);
 
         var shortAnswer = bench is { Succeeded: true }
             ? BuildBenchmarkShortAnswer(bench, label, confPhrase)
@@ -73,21 +74,24 @@ public static class UsbKyraNarrativeBuilder
         string? label,
         string confPhrase)
     {
-        var speeds =
-            $"It benchmarked at ~{bench.WriteSpeedMBps:0.0} MB/s write and ~{bench.ReadSpeedMBps:0.0} MB/s read ({bench.Classification}).";
+        var speeds = bench.ReadLikelyCached || bench.ReadIsEstimate
+            ? $"It benchmarked at ~{bench.WriteSpeedMBps:0.0} MB/s verified write. Read speed is unverified because cache was suspected (raw cached sample ~{bench.ReadSpeedMBps:0.0} MB/s)."
+            : $"It benchmarked at ~{bench.WriteSpeedMBps:0.0} MB/s write and ~{bench.ReadSpeedMBps:0.0} MB/s read ({bench.Classification}).";
         if (!string.IsNullOrWhiteSpace(label))
         {
             return
                 $"Short answer: use the port labeled {label}. {speeds} Confidence is {confPhrase}.";
         }
 
-        return $"Short answer: last file benchmark measured ~{bench.WriteSpeedMBps:0.0} MB/s write and ~{bench.ReadSpeedMBps:0.0} MB/s read ({bench.Classification}). Confidence is {confPhrase}.";
+        return bench.ReadLikelyCached || bench.ReadIsEstimate
+            ? $"Short answer: last file benchmark measured ~{bench.WriteSpeedMBps:0.0} MB/s verified write; read is unverified (cache suspected). Confidence is {confPhrase}."
+            : $"Short answer: last file benchmark measured ~{bench.WriteSpeedMBps:0.0} MB/s write and ~{bench.ReadSpeedMBps:0.0} MB/s read ({bench.Classification}). Confidence is {confPhrase}.";
     }
 
-    private static string ConfidencePhrase(int score) =>
+    private static string ConfidencePhrase(int score, bool readUnverified = false) =>
         score switch
         {
-            >= 70 => "high",
+            >= 70 when !readUnverified => "high",
             >= 40 => "medium",
             _ => "low"
         };

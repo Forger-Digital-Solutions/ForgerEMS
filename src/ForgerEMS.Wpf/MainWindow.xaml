@@ -2167,8 +2167,20 @@
                                                 Margin="0,0,8,8"
                                                 Style="{StaticResource SecondaryButtonStyle}"
                                                 Content="Run Elevated Scan"
-                                                ToolTip="Run elevated for more detail."
+                                                ToolTip="Asks Windows for administrator approval to extend hardware and security coverage. Standard Scan results remain available."
                                                 Command="{Binding RunElevatedSystemScanCommand}" />
+                                        <Button Width="170"
+                                                Margin="0,0,8,8"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Content="Copy Admin Command"
+                                                ToolTip="Copy a PowerShell command to run the same scan in an elevated window."
+                                                Command="{Binding CopyElevatedScanAdminCommand}" />
+                                        <Button Width="190"
+                                                Margin="0,0,8,8"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Content="Restart as Administrator"
+                                                ToolTip="Close ForgerEMS and relaunch with administrator rights."
+                                                Command="{Binding RestartAsAdministratorCommand}" />
                                         <Button Width="160"
                                                 Margin="0,0,8,8"
                                                 Style="{StaticResource SecondaryButtonStyle}"
@@ -2302,12 +2314,28 @@
                                                 <StackPanel>
                                                     <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Sensors / Hardware X-Ray" />
                                                     <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceHardwareXrayCardText}" TextWrapping="Wrap" />
-                                                    <Button Margin="0,8,0,0"
-                                                            Width="220"
-                                                            Content="Run Elevated Scan"
-                                                            ToolTip="Run elevated for more detail."
-                                                            Style="{StaticResource SecondaryButtonStyle}"
-                                                            Command="{Binding RunElevatedSystemScanCommand}" />
+                                                    <StackPanel Margin="0,8,0,0" Orientation="Vertical">
+                                                        <Button Width="220"
+                                                                Margin="0,0,0,6"
+                                                                HorizontalAlignment="Left"
+                                                                Content="Run Elevated Scan"
+                                                                ToolTip="Asks Windows for administrator approval to extend hardware and security coverage. Standard Scan results remain available."
+                                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                                Command="{Binding RunElevatedSystemScanCommand}" />
+                                                        <Button Width="220"
+                                                                Margin="0,0,0,6"
+                                                                HorizontalAlignment="Left"
+                                                                Content="Copy Admin Command"
+                                                                ToolTip="Copy a PowerShell command to run the same scan in an elevated window."
+                                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                                Command="{Binding CopyElevatedScanAdminCommand}" />
+                                                        <Button Width="220"
+                                                                HorizontalAlignment="Left"
+                                                                Content="Restart as Administrator"
+                                                                ToolTip="Close ForgerEMS and relaunch with administrator rights."
+                                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                                Command="{Binding RestartAsAdministratorCommand}" />
+                                                    </StackPanel>
                                                 </StackPanel>
                                             </Border>
                                         </StackPanel>
@@ -3144,29 +3172,7 @@
                                         </StackPanel>
                                     </Border>
 
-                                    <Border Margin="0,0,0,12" Padding="12" Background="#FF0A101A" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="8">
-                                        <StackPanel>
-                                            <TextBlock FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="2) Action Center" />
-                                            <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding DiagnosticsActionCenterItems}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <TextBlock Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding StringFormat=•  {0}}" TextWrapping="Wrap" />
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                            <WrapPanel Margin="0,8,0,0">
-                                                <Button MinWidth="190" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Create Support Bundle" Command="{Binding ExportSupportBundleCommand}" />
-                                                <Button MinWidth="180" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Copy Safe Summary" Command="{Binding CopySafeTestingSummaryCommand}" />
-                                                <Button MinWidth="190" Margin="0,0,8,8" Content="Run Backend Quick Check" Command="{Binding VerifyCommand}" />
-                                                <Button MinWidth="210" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Run System Intelligence Scan" Command="{Binding RunSystemScanCommand}" />
-                                                <Button MinWidth="130" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Open Full Logs" Command="{Binding OpenLogsFolderCommand}" />
-                                                <Button MinWidth="160" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Open Reports Folder" Command="{Binding OpenReportsFolderCommand}" />
-                                                <Button MinWidth="180" Margin="0,0,8,8" Content="Refresh Backend Context" Command="{Binding RefreshAllCommand}" />
-                                            </WrapPanel>
-                                        </StackPanel>
-                                    </Border>
-
-                                    <GroupBox Margin="0,0,0,12" Header="3) Evidence &amp; Logs">
+                                    <GroupBox Margin="0,0,0,12" Header="2) Evidence &amp; Logs">
                                         <ScrollViewer MaxHeight="360" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                                             <StackPanel>
                                                 <TextBlock FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Last command evidence" />
@@ -3182,6 +3188,7 @@
                                                 <TextBlock Margin="0,0,0,8" FontSize="12" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding LastCommandSummaryText}" TextWrapping="Wrap" />
                                                 <WrapPanel Margin="0,0,0,8">
                                                     <Button MinWidth="170" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Copy command summary" Command="{Binding CopyDiagnosticsCommandSummaryCommand}" />
+                                                    <Button MinWidth="160" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Copy safe summary" Command="{Binding CopySafeTestingSummaryCommand}" />
                                                     <Button MinWidth="130" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Open related log" Command="{Binding OpenLogsFolderCommand}" />
                                                     <Button MinWidth="180" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Open output folder/report" Command="{Binding OpenReportsFolderCommand}" />
                                                 </WrapPanel>
@@ -3201,7 +3208,7 @@
                                         </ScrollViewer>
                                     </GroupBox>
 
-                                    <Expander Margin="0,14,0,0" Header="4) Safety Lab" IsExpanded="False" Style="{StaticResource DiagnosticsExpanderStyle}">
+                                    <Expander Margin="0,8,0,0" Header="3) Safety Lab" IsExpanded="False" Style="{StaticResource DiagnosticsExpanderStyle}">
                                         <StackPanel>
                                             <TextBlock FontSize="12" Foreground="{DynamicResource PanelTextBrush}" TextWrapping="Wrap" Text="ForgerEMS can flag obvious risks and compute hashes, but cannot guarantee files are safe." />
                                             <GroupBox Margin="0,10,0,0" Header="Command Center / Safe Checks">

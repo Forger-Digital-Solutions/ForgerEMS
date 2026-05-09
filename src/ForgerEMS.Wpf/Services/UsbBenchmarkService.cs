@@ -45,6 +45,16 @@ public sealed class UsbBenchmarkResult
     /// <summary>Native/PowerShell measured read MB/s.</summary>
     public double ReadSpeedMBps { get; init; }
 
+    public double VerifiedWriteMbps { get; init; }
+
+    public double? VerifiedReadMbps { get; init; }
+
+    public double? RawReadMbps { get; init; }
+
+    public bool IsReadCacheSuspected { get; init; }
+
+    public string ReadVerificationStatus { get; init; } = string.Empty;
+
     public int BenchmarkDurationMs { get; init; }
 
     /// <summary><see cref="UsbSpeedMeasurementClass"/> name for cache JSON.</summary>
@@ -203,7 +213,9 @@ public sealed class UsbBenchmarkService : IUsbBenchmarkService
             {
                 onOutput?.Invoke(new LogLine(
                     DateTimeOffset.Now,
-                    $"[OK] USB benchmark completed. runId={runId:N} native: write {native.WriteSpeedMBps:0.0} MB/s, read {native.ReadSpeedMBps:0.0} MB/s ({native.Classification}; confidence={native.BenchmarkConfidence}).",
+                    native.ReadLikelyCached || native.ReadIsEstimate
+                        ? $"[OK] USB benchmark completed. runId={runId:N} Verified write {native.WriteSpeedMBps:0.0} MB/s. Read unverified; cache suspected. Raw cached read sample {native.ReadSpeedMBps:0.0} MB/s."
+                        : $"[OK] USB benchmark completed. runId={runId:N} native: write {native.WriteSpeedMBps:0.0} MB/s, read {native.ReadSpeedMBps:0.0} MB/s ({native.Classification}; confidence={native.BenchmarkConfidence}).",
                     LogSeverity.Success));
                 if (native.ReadLikelyCached || native.ReadIsEstimate)
                 {
@@ -457,7 +469,7 @@ PowerShellFallback:
         var accuracy = UsbBenchmarkAccuracy.Assess(writeSpeed, readSpeed, null, target);
         var adjustedConfidence = Math.Clamp(conf - accuracy.ConfidencePenalty, 20, 95);
         var readDisplay = accuracy.ReadLikelyCached || accuracy.ReadIsEstimate
-            ? $"{readSpeed.ToString("0.0", CultureInfo.InvariantCulture)} MB/s (cache suspected / rerun recommended)"
+            ? "Unverified (cache suspected)"
             : $"{readSpeed.ToString("0.0", CultureInfo.InvariantCulture)} MB/s{accuracy.ReadDisplaySuffix}";
         var summarySuffix = accuracy.ReadLikelyCached || accuracy.ReadIsEstimate
             ? " Read may be cached; treat read speed as an estimate."
@@ -465,7 +477,9 @@ PowerShellFallback:
 
         onOutput?.Invoke(new LogLine(
             DateTimeOffset.Now,
-            $"[OK] USB benchmark completed (PowerShell path). runId={runId:N} write={writeSpeed:0.0} MB/s read={readSpeed:0.0} MB/s size={testSizeMb} MB confidence={accuracy.ConfidenceLabel}",
+            accuracy.ReadLikelyCached || accuracy.ReadIsEstimate
+                ? $"[OK] USB benchmark completed (PowerShell path). runId={runId:N} Verified write {writeSpeed:0.0} MB/s. Read unverified; cache suspected. Raw cached read sample {readSpeed:0.0} MB/s."
+                : $"[OK] USB benchmark completed (PowerShell path). runId={runId:N} write={writeSpeed:0.0} MB/s read={readSpeed:0.0} MB/s size={testSizeMb} MB confidence={accuracy.ConfidenceLabel}",
             LogSeverity.Success));
         if (accuracy.ReadLikelyCached || accuracy.ReadIsEstimate)
         {
@@ -484,7 +498,9 @@ PowerShellFallback:
             Status = "Complete",
             Summary =
                 $"USB benchmark complete: {measClass} (legacy tag {legacyTag})",
-            Details = $"{testSizeMb} MB file speed check. Write {writeSpeed:0.0} MB/s, read {readSpeed:0.0} MB/s. Confidence: {accuracy.ConfidenceLabel}.{summarySuffix}",
+            Details = accuracy.ReadLikelyCached || accuracy.ReadIsEstimate
+                ? $"{testSizeMb} MB file speed check. Verified write {writeSpeed:0.0} MB/s. Read speed not verified; cache suspected. Raw cached read sample {readSpeed:0.0} MB/s. Confidence: Read verification needed."
+                : $"{testSizeMb} MB file speed check. Write {writeSpeed:0.0} MB/s, read {readSpeed:0.0} MB/s. Confidence: {accuracy.ConfidenceLabel}.{summarySuffix}",
             WriteSpeedDisplay = $"{writeSpeed.ToString("0.0", CultureInfo.InvariantCulture)} MB/s",
             ReadSpeedDisplay = readDisplay,
             TestSizeMb = testSizeMb,
@@ -492,6 +508,11 @@ PowerShellFallback:
             Classification = legacyTag,
             WriteSpeedMBps = writeSpeed,
             ReadSpeedMBps = readSpeed,
+            VerifiedWriteMbps = writeSpeed,
+            VerifiedReadMbps = accuracy.ReadLikelyCached || accuracy.ReadIsEstimate ? null : readSpeed,
+            RawReadMbps = accuracy.ReadLikelyCached || accuracy.ReadIsEstimate ? readSpeed : null,
+            IsReadCacheSuspected = accuracy.ReadLikelyCached || accuracy.ReadIsEstimate,
+            ReadVerificationStatus = accuracy.ReadLikelyCached || accuracy.ReadIsEstimate ? "Unverified / cache suspected" : "Verified",
             BenchmarkDurationMs = 0,
             IntelligenceMeasurementClass = measClass.ToString(),
             IntelligenceConfidenceScore = adjustedConfidence,
@@ -528,13 +549,18 @@ PowerShellFallback:
             Details = native.SummaryLine,
             WriteSpeedDisplay = $"{native.WriteSpeedMBps.ToString("0.0", CultureInfo.InvariantCulture)} MB/s",
             ReadSpeedDisplay = native.ReadLikelyCached || native.ReadIsEstimate
-                ? $"{native.ReadSpeedMBps.ToString("0.0", CultureInfo.InvariantCulture)} MB/s (cache suspected / rerun recommended)"
+                ? "Unverified (cache suspected)"
                 : $"{native.ReadSpeedMBps.ToString("0.0", CultureInfo.InvariantCulture)} MB/s",
             TestSizeMb = native.TestSizeMb,
             LastTestedAt = native.Timestamp,
             Classification = native.Classification.ToString(),
             WriteSpeedMBps = native.WriteSpeedMBps,
             ReadSpeedMBps = native.ReadSpeedMBps,
+            VerifiedWriteMbps = native.WriteSpeedMBps,
+            VerifiedReadMbps = native.ReadLikelyCached || native.ReadIsEstimate ? null : native.ReadSpeedMBps,
+            RawReadMbps = native.ReadLikelyCached || native.ReadIsEstimate ? native.ReadSpeedMBps : null,
+            IsReadCacheSuspected = native.ReadLikelyCached || native.ReadIsEstimate,
+            ReadVerificationStatus = native.ReadLikelyCached || native.ReadIsEstimate ? "Unverified / cache suspected" : "Verified",
             BenchmarkDurationMs = native.DurationMs,
             IntelligenceMeasurementClass = native.Classification.ToString(),
             IntelligenceConfidenceScore = native.ConfidenceScore,
