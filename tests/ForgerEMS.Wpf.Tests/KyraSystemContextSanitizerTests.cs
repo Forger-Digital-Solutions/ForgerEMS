@@ -1,5 +1,3 @@
-using VentoyToolkitSetup.Wpf.Services;
-
 namespace ForgerEMS.Wpf.Tests;
 
 public sealed class KyraSystemContextSanitizerTests

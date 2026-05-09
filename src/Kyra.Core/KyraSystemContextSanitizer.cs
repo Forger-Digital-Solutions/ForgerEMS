@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace VentoyToolkitSetup.Wpf.Services;
+namespace Kyra.Core;
 
 /// <summary>
 /// Extra scrubbing for strings that may be sent to external API providers after CopilotRedactor.
