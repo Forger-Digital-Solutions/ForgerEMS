@@ -1,3 +1,5 @@
+﻿// KYRA_CORE_CANDIDATE: No ForgerEMS-specific coupling; eligible for Kyra.Core in Phase 3.
+// Clean orchestration seam; IKyraOrchestrationHost decouples host from core.
 using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services;
 using VentoyToolkitSetup.Wpf.Services.KyraTools;

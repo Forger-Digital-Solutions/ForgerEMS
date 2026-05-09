@@ -94,10 +94,10 @@ public sealed class KyraUxPolishTests
     [Fact]
     public void BuildLiveDataAnswer_DoesNotUseCutoffStyleWording()
     {
-        var serviceFile = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "ForgerEMS.Wpf", "Services", "CopilotService.cs"));
-        Assert.Contains("BuildLiveDataAnswer", serviceFile, StringComparison.Ordinal);
-        Assert.Contains("KyraLiveToolRouter.LiveToolsUnavailableMessage", serviceFile, StringComparison.Ordinal);
-        Assert.DoesNotContain("knowledge cutoff", serviceFile, StringComparison.OrdinalIgnoreCase);
+        var engineFile = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "ForgerEMS.Wpf", "Services", "LocalRulesCopilotEngine.cs"));
+        Assert.Contains("BuildLiveDataAnswer", engineFile, StringComparison.Ordinal);
+        Assert.Contains("KyraLiveToolRouter.LiveToolsUnavailableMessage", engineFile, StringComparison.Ordinal);
+        Assert.DoesNotContain("knowledge cutoff", engineFile, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string FindRepoRoot()

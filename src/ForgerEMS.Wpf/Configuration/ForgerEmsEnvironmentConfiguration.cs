@@ -1,3 +1,5 @@
+﻿// FORGEREMS_KYRA_ADAPTER: ForgerEMS-specific coupling; stays in ForgerEMS.KyraAdapter.
+// All FORGEREMS_* env-var bindings; Kyra.Core would use generic config abstractions.
 using System;
 using System.Globalization;
 

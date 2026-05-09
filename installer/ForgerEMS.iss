@@ -70,7 +70,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "deepsensormode"; Description: "Enable Deep Sensor Mode by default (read-only local sensors)"; GroupDescription: "ForgerEMS Deep Sensor Mode:"; Flags: unchecked
+Name: "deepsensormode"; Description: "Enable Deep Sensor Mode by default (read-only local hardware sensors). Elevated Scan may still ask for Windows UAC approval."; GroupDescription: "ForgerEMS Deep Sensor Mode:"; Flags: unchecked
 
 [Registry]
 Root: HKLM; Subkey: "Software\ForgerEMS"; ValueType: string; ValueName: "DeepSensorMode"; ValueData: "ReadOnly"; Flags: uninsdeletevalue; Tasks: deepsensormode

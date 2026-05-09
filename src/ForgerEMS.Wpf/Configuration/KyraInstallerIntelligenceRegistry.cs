@@ -1,4 +1,6 @@
-#pragma warning disable CA1305 // Locale-sensitive calls; text is diagnostic/UI output
+﻿#pragma warning disable CA1305 // Locale-sensitive calls; text is diagnostic/UI output
+// FORGEREMS_KYRA_ADAPTER: ForgerEMS-specific coupling; stays in ForgerEMS.KyraAdapter.
+// Reads HKLM\\Software\\ForgerEMS registry; pure ForgerEMS installer integration.
 using System;
 using Microsoft.Win32;
 using VentoyToolkitSetup.Wpf.Services;
