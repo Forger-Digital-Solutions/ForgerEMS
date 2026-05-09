@@ -173,7 +173,7 @@ public sealed class KyraOrchestrator
                 }
             }
 
-            var ledger = KyraFactsLedger.FromCopilotContext(context);
+            var ledger = KyraFactsLedgerFactory.FromCopilotContext(context);
             var ctxPackage = KyraContextBuilder.BuildPackage(context, ledger, _host.Memory, plan, settings);
             KyraOrchestrationLog.Append(
                 $"Kyra ctx intent={ctxPackage.Intent} localTruth={ctxPackage.LocalTruthAvailable} requiresLocal={ctxPackage.RequiresLocalTruth} caps={decision.EffectiveCapabilities} liveUnavailable={(plan.StayLocalReason == KyraStayLocalReason.LiveDataNotConfigured ? 1 : 0)}");
@@ -282,7 +282,7 @@ public sealed class KyraOrchestrator
                     var result = await RunInstrumentedAsync(provider, request, settings, context, notes, cancellationToken).ConfigureAwait(false);
                     if (result.Succeeded)
                     {
-                        var ledgerGuard = KyraFactsLedger.FromCopilotContext(context);
+                        var ledgerGuard = KyraFactsLedgerFactory.FromCopilotContext(context);
                         var onlineText = result.UserMessage ?? string.Empty;
                         if (provider.IsOnlineProvider &&
                             result.UsedOnlineData &&
@@ -408,7 +408,7 @@ public sealed class KyraOrchestrator
                     var responseProvider = provider;
                     if (provider.IsOnlineProvider && !plan.ShouldPolishWithProvider)
                     {
-                        var ledgerLocal = KyraFactsLedger.FromCopilotContext(context);
+                        var ledgerLocal = KyraFactsLedgerFactory.FromCopilotContext(context);
                         if (KyraSafetyPolicy.ShouldDiscardOnlineAnswer(
                                 effectiveResult.UserMessage ?? string.Empty,
                                 localReferenceText: null,
@@ -543,7 +543,7 @@ public sealed class KyraOrchestrator
             $"Kyra provider_run intent={context.Intent} providerId={norm.ProviderId} success={norm.Success} " +
             $"latencyMs={norm.LatencyMs} errorCategory={norm.ErrorCategory} usedOnlineData={legacy.UsedOnlineData} " +
             $"enhancementApplied={(norm.EnhancementApplied ? 1 : 0)} refused={norm.Refused} discarded={norm.WasDiscarded} " +
-            $"localTruth={(KyraFactsLedger.FromCopilotContext(context).HasTrustedLocalHardwareFacts ? 1 : 0)}");
+            $"localTruth={(KyraFactsLedgerFactory.FromCopilotContext(context).HasTrustedLocalHardwareFacts ? 1 : 0)}");
 
         return legacy;
     }

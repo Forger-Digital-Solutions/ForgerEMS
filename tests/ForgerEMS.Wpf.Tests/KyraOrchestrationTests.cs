@@ -19,7 +19,7 @@ public sealed class KyraOrchestrationTests
             ContextText = "ctx body",
             SystemProfile = new SystemProfile { Cpu = "Intel i5", Manufacturer = "Dell", Model = "7400" }
         };
-        var ledger = KyraFactsLedger.FromCopilotContext(ctx);
+        var ledger = KyraFactsLedgerFactory.FromCopilotContext(ctx);
         var plan = new KyraToolCallPlan { ShouldUseLocalToolAnswer = false };
         var settings = new CopilotSettings { RedactContextEnabled = true };
         var pkg = KyraContextBuilder.BuildPackage(ctx, ledger, memory, plan, settings);
@@ -89,7 +89,7 @@ public sealed class KyraOrchestrationTests
         {
             SystemProfile = new SystemProfile { Cpu = "AMD Ryzen 5", Manufacturer = "HP", Model = "14" }
         };
-        var ledger = KyraFactsLedger.FromCopilotContext(ctx);
+        var ledger = KyraFactsLedgerFactory.FromCopilotContext(ctx);
         var online = "I cannot see your device or CPU.";
         Assert.True(KyraSafetyPolicy.ShouldDiscardOnlineAnswer(online, null, ledger));
     }

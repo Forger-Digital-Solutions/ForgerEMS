@@ -398,7 +398,7 @@ public static class KyraPrivacyGate
             $"Recommendations: {string.Join("; ", recs)}" + Environment.NewLine +
             $"Warnings: {string.Join("; ", problems)}";
 
-        var ledger = KyraFactsLedger.FromCopilotContext(context);
+        var ledger = KyraFactsLedgerFactory.FromCopilotContext(context);
         block += Environment.NewLine + ledger.ToPromptSummaryBlock();
         return KyraSystemContextSanitizer.SanitizeForExternalProviders(CopilotRedactor.Redact(block, enabled: true));
     }

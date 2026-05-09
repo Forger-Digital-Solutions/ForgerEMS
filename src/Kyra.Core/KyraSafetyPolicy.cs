@@ -1,9 +1,8 @@
-using System;
 using System.Text.RegularExpressions;
 
-namespace VentoyToolkitSetup.Wpf.Services.Kyra;
+namespace Kyra.Core;
 
-/// <summary>Decides when online provider prose must be discarded in favor of local ForgerEMS truth.</summary>
+/// <summary>Decides when online provider prose must be discarded in favor of local truth.</summary>
 public static class KyraSafetyPolicy
 {
     /// <summary>
@@ -52,7 +51,7 @@ public static class KyraSafetyPolicy
     }
 
     /// <summary>
-    /// Detects confident online prose that names a different CPU family than the local System Intelligence ledger
+    /// Detects confident online prose that names a different CPU family than the local hardware ledger
     /// (common LLM failure mode: inventing a "representative" gaming laptop).
     /// </summary>
     public static bool ContradictsLocalHardwareLedger(string onlineText, KyraFactsLedger ledger)
