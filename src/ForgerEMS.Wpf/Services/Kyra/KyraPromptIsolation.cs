@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using VentoyToolkitSetup.Wpf.Services;
 
 namespace VentoyToolkitSetup.Wpf.Services.Kyra;
@@ -48,42 +47,12 @@ public static class KyraPromptIsolation
                t.Contains("privacy mode", StringComparison.Ordinal);
     }
 
-    public static bool LooksLikeExplicitThreadContinuation(string prompt)
-    {
-        var t = prompt.Trim().ToLowerInvariant();
-        if (KyraFollowUpClassifier.LooksLikeConversationFollowUp(prompt))
-        {
-            return true;
-        }
+    public static bool LooksLikeExplicitThreadContinuation(string prompt) =>
+        KyraFollowUpDetector.LooksLikeExplicitThreadContinuation(prompt);
 
-        return Regex.IsMatch(t,
-            @"\b(continue|continuing|pick\s+up\s+where|where\s+we\s+left|what\s+were\s+we\s+doing|as\s+we\s+were\s+saying|going\s+back\s+to)\b");
-    }
+    private static readonly string[] _envConfigAliases =
+        ["kyra", "forgerems", "forger ems", "for you", "gateway", "provider", "beta"];
 
-    public static bool LooksLikeKyraWindowsEnvConfigurationQuestion(string? prompt)
-    {
-        if (string.IsNullOrWhiteSpace(prompt))
-        {
-            return false;
-        }
-
-        var t = prompt.Trim().ToLowerInvariant();
-        var envCue = t.Contains("environment variable", StringComparison.OrdinalIgnoreCase) ||
-                     t.Contains("environment variables", StringComparison.OrdinalIgnoreCase) ||
-                     (t.Contains("env", StringComparison.OrdinalIgnoreCase) &&
-                      (t.Contains("variable", StringComparison.OrdinalIgnoreCase) ||
-                       t.Contains("var ", StringComparison.OrdinalIgnoreCase)));
-        if (!envCue)
-        {
-            return false;
-        }
-
-        return t.Contains("kyra", StringComparison.OrdinalIgnoreCase) ||
-               t.Contains("forgerems", StringComparison.OrdinalIgnoreCase) ||
-               t.Contains("forger ems", StringComparison.OrdinalIgnoreCase) ||
-               t.Contains("for you", StringComparison.OrdinalIgnoreCase) ||
-               t.Contains("gateway", StringComparison.OrdinalIgnoreCase) ||
-               t.Contains("provider", StringComparison.OrdinalIgnoreCase) ||
-               t.Contains("beta", StringComparison.OrdinalIgnoreCase);
-    }
+    public static bool LooksLikeKyraWindowsEnvConfigurationQuestion(string? prompt) =>
+        KyraEnvConfigDetector.LooksLikeWindowsEnvConfigurationQuestion(prompt, _envConfigAliases);
 }

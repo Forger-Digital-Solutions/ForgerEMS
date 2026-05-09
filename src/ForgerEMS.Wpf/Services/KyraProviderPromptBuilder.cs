@@ -1,6 +1,5 @@
 #pragma warning disable CA1305 // Locale-sensitive calls; text is diagnostic/UI output
 using System.Text;
-using System.Text.RegularExpressions;
 using VentoyToolkitSetup.Wpf.Services.Intelligence;
 using VentoyToolkitSetup.Wpf.Services.Kyra;
 
@@ -118,51 +117,8 @@ public static class KyraProviderPromptBuilder
 
 public static class KyraFollowUpClassifier
 {
-    public static bool LooksLikeConversationFollowUp(string prompt)
-    {
-        var t = prompt.ToLowerInvariant();
-        if (string.IsNullOrWhiteSpace(t))
-        {
-            return false;
-        }
-
-        if (t.Contains("those issues", StringComparison.OrdinalIgnoreCase) ||
-            t.Contains("these issues", StringComparison.OrdinalIgnoreCase) ||
-            t.Contains("that issue", StringComparison.OrdinalIgnoreCase) ||
-            t.Contains("that problem", StringComparison.OrdinalIgnoreCase) ||
-            t.Contains("what you said", StringComparison.OrdinalIgnoreCase) ||
-            t.Contains("what you mentioned", StringComparison.OrdinalIgnoreCase) ||
-            t.Contains("the things you listed", StringComparison.OrdinalIgnoreCase) ||
-            t.Contains("the usb thing", StringComparison.OrdinalIgnoreCase) ||
-            t.Contains("that usb", StringComparison.OrdinalIgnoreCase) ||
-            t.Contains("the usb", StringComparison.OrdinalIgnoreCase) ||
-            t.Contains("what about the usb", StringComparison.OrdinalIgnoreCase) ||
-            t.Contains("do the next step", StringComparison.OrdinalIgnoreCase) ||
-            (t.Contains("next step", StringComparison.OrdinalIgnoreCase) && t.Contains("you", StringComparison.OrdinalIgnoreCase)) ||
-            Regex.IsMatch(t, @"explain\s*#\s*\d", RegexOptions.IgnoreCase) ||
-            Regex.IsMatch(t, @"\bnumber\s+\d\b", RegexOptions.IgnoreCase))
-        {
-            return true;
-        }
-
-        if (t.Contains("how do i fix", StringComparison.OrdinalIgnoreCase) ||
-            t.Contains("how can i fix", StringComparison.OrdinalIgnoreCase) ||
-            t.Contains("fix those", StringComparison.OrdinalIgnoreCase) ||
-            t.Contains("fix them", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        if (t.Equals("fix it", StringComparison.OrdinalIgnoreCase) ||
-            t.Contains("fix it ", StringComparison.OrdinalIgnoreCase) ||
-            t.StartsWith("fix it.", StringComparison.OrdinalIgnoreCase) ||
-            t.StartsWith("fix it!", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        return false;
-    }
+    public static bool LooksLikeConversationFollowUp(string prompt) =>
+        KyraFollowUpDetector.LooksLikeConversationFollowUp(prompt);
 
     public static bool LooksLikeRepairContinuation(string prompt, KyraIntent previousIntent, bool lastListedIssues) =>
         (LooksLikeConversationFollowUp(prompt) || prompt.Contains("walk me through", StringComparison.OrdinalIgnoreCase)) &&
