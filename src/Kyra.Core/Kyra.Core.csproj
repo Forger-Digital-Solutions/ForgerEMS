@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
+    <AssemblyName>Kyra.Core</AssemblyName>
+    <Product>Kyra.Core</Product>
+    <Company>Forger Digital Solutions</Company>
+  </PropertyGroup>
+
+</Project>

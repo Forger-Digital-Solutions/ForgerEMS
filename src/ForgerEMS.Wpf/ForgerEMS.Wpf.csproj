@@ -35,6 +35,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Kyra.Core\Kyra.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Kyra.Core" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
     <PackageReference Include="System.Management" Version="10.0.2" />
   </ItemGroup>

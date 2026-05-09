@@ -29,10 +29,17 @@
   </ItemGroup>
 
   <Target Name="BuildWpfReferenceForSolution" BeforeTargets="ResolveAssemblyReferences" Condition="'$(BuildingSolutionFile)' == 'true'">
+    <!-- Build Kyra.Core first so its reference assembly (obj/ref/Kyra.Core.dll) is present
+         before ForgerEMS.Wpf rebuilds. ForgerEMS.Wpf is rebuilt with BuildProjectReferences=false
+         to prevent its Rebuild from cleaning Kyra.Core's obj and invalidating the ref assembly. -->
+    <MSBuild
+      Projects="..\..\src\Kyra.Core\Kyra.Core.csproj"
+      Targets="Build"
+      Properties="Configuration=$(Configuration)" />
     <MSBuild
       Projects="..\..\src\ForgerEMS.Wpf\ForgerEMS.Wpf.csproj"
       Targets="Rebuild"
-      Properties="Configuration=$(Configuration);Platform=AnyCPU;RuntimeIdentifier=win-x64" />
+      Properties="Configuration=$(Configuration);Platform=AnyCPU;RuntimeIdentifier=win-x64;BuildProjectReferences=false" />
   </Target>
 
 </Project>

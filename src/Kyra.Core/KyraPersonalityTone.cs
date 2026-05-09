@@ -1,6 +1,6 @@
-namespace VentoyToolkitSetup.Wpf.Services.Kyra;
+namespace Kyra.Core;
 
-/// <summary>Per-turn playful vs professional phrasing for Local Kyra (respects <see cref="VentoyToolkitSetup.Wpf.Services.CopilotSettings.PersonalityProfile"/> and explicit user cues).</summary>
+/// <summary>Per-turn playful vs professional phrasing for Kyra (respects the host's PersonalityProfile setting and explicit user cues).</summary>
 public static class KyraPersonalityTone
 {
     public static bool UsePlayfulWording(string? personalityProfile, string userPrompt)
@@ -36,14 +36,14 @@ public static class KyraPersonalityTone
     public static string NormalConversationRelaxLine(bool playful)
     {
         return playful
-            ? "Fair — I went full repair-drill-sergeant there. I can absolutely just chat too. When you want device stuff, I’ve got the scan ready; otherwise I’ll keep it chill."
-            : "Understood — I’ll keep this conversational. When you want device help, say the word and I’ll pull in the System Intelligence context.";
+            ? "Fair — I went full repair-drill-sergeant there. I can absolutely just chat too. When you want device stuff, I've got the scan ready; otherwise I'll keep it chill."
+            : "Understood — I'll keep this conversational. When you want device help, say the word and I'll pull in the System Intelligence context.";
     }
 
     public static string FrustrationAckLine(bool playful)
     {
         return playful
-            ? "Yeah, that sounds annoying — I’m on your side. Tell me what’s going wrong (or if you just need a breather), and we’ll tackle it step by step."
-            : "I hear you — that sounds frustrating. Tell me what’s going wrong and we’ll work through it step by step.";
+            ? "Yeah, that sounds annoying — I'm on your side. Tell me what's going wrong (or if you just need a breather), and we'll tackle it step by step."
+            : "I hear you — that sounds frustrating. Tell me what's going wrong and we'll work through it step by step.";
     }
 }

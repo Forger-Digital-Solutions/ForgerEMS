@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace VentoyToolkitSetup.Wpf.Services;
+namespace Kyra.Core;
 
 public static partial class KyraCodeSnippetDetector
 {

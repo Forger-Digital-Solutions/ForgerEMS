@@ -1,4 +1,4 @@
-using VentoyToolkitSetup.Wpf.Services;
+using Kyra.Core;
 
 namespace ForgerEMS.Wpf.Tests;
 

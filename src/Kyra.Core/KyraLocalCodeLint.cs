@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace VentoyToolkitSetup.Wpf.Services;
+namespace Kyra.Core;
 
 /// <summary>Lightweight local checks before sending snippets to providers.</summary>
 public static class KyraLocalCodeLint
