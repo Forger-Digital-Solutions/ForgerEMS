@@ -15,6 +15,8 @@ public sealed class KyraCoreArchitectureGuardTests
         "%LOCALAPPDATA%\\ForgerEMS",
         "HKLM\\Software\\ForgerEMS",
         "FORGEREMS_",
+        "ForgerDigitalSolutions",
+        "Forger Digital Solutions",
     ];
 
     [Fact]
@@ -24,7 +26,9 @@ public sealed class KyraCoreArchitectureGuardTests
         var kyraCoreSrcDir = Path.Combine(root, "src", "Kyra.Core");
         Assert.True(Directory.Exists(kyraCoreSrcDir), $"Kyra.Core src directory not found at {kyraCoreSrcDir}");
 
-        var files = Directory.GetFiles(kyraCoreSrcDir, "*.cs", SearchOption.AllDirectories);
+        var files = Directory.GetFiles(kyraCoreSrcDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar))
+            .ToArray();
         Assert.NotEmpty(files);
 
         foreach (var file in files)

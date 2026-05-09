@@ -1,6 +1,4 @@
-using VentoyToolkitSetup.Wpf.Infrastructure;
-
-namespace VentoyToolkitSetup.Wpf.Services.Kyra;
+namespace Kyra.Core;
 
 /// <summary>Central redaction for Kyra persistence and provider-bound text.</summary>
 public static class KyraRedactionService
