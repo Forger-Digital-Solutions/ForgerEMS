@@ -27,7 +27,9 @@ public sealed class KyraCoreArchitectureGuardTests
         Assert.True(Directory.Exists(kyraCoreSrcDir), $"Kyra.Core src directory not found at {kyraCoreSrcDir}");
 
         var files = Directory.GetFiles(kyraCoreSrcDir, "*.cs", SearchOption.AllDirectories)
+            .Append(Path.Combine(kyraCoreSrcDir, "Kyra.Core.csproj"))
             .Where(f => !f.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar))
+            .Where(File.Exists)
             .ToArray();
         Assert.NotEmpty(files);
 

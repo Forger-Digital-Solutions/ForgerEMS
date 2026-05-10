@@ -35,7 +35,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Kyra.Core\Kyra.Core.csproj" />
+    <ProjectReference Include="..\Kyra.Core\Kyra.Core.csproj" BuildReference="true" ReferenceOutputAssembly="true" SkipGetTargetFrameworkProperties="true" />
   </ItemGroup>
 
   <ItemGroup>

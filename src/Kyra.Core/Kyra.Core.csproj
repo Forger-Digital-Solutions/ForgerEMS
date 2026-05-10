@@ -7,7 +7,7 @@
     <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
     <AssemblyName>Kyra.Core</AssemblyName>
     <Product>Kyra.Core</Product>
-    <Company>Forger Digital Solutions</Company>
+    <Company>Kyra</Company>
   </PropertyGroup>
 
 </Project>

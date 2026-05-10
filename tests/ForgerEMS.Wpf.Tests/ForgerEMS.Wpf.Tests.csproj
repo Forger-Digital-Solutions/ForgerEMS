@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFramework>net8.0-windows</TargetFramework>
     <IsPackable>false</IsPackable>
+    <BuildInParallel>false</BuildInParallel>
     <NoWarn>$(NoWarn);CA1707</NoWarn>
   </PropertyGroup>
 
@@ -19,28 +20,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\ForgerEMS.Wpf\ForgerEMS.Wpf.csproj" />
+    <ProjectReference Include="..\..\src\Kyra.Core\Kyra.Core.csproj" BuildReference="true" ReferenceOutputAssembly="true" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="..\..\src\ForgerEMS.Wpf\ForgerEMS.Wpf.csproj" BuildReference="true" ReferenceOutputAssembly="true" SkipGetTargetFrameworkProperties="true" />
   </ItemGroup>
-
-  <ItemGroup Condition="'$(BuildingSolutionFile)' == 'true'">
-    <Reference Include="ForgerEMS">
-      <HintPath>..\..\src\ForgerEMS.Wpf\bin\$(Configuration)\net8.0-windows\win-x64\ForgerEMS.dll</HintPath>
-      <Private>true</Private>
-    </Reference>
-  </ItemGroup>
-
-  <Target Name="BuildWpfReferenceForSolution" BeforeTargets="ResolveAssemblyReferences" Condition="'$(BuildingSolutionFile)' == 'true'">
-    <!-- Build Kyra.Core first so its reference assembly (obj/ref/Kyra.Core.dll) is present
-         before ForgerEMS.Wpf rebuilds. ForgerEMS.Wpf is rebuilt with BuildProjectReferences=false
-         to prevent its Rebuild from cleaning Kyra.Core's obj and invalidating the ref assembly. -->
-    <MSBuild
-      Projects="..\..\src\Kyra.Core\Kyra.Core.csproj"
-      Targets="Build"
-      Properties="Configuration=$(Configuration)" />
-    <MSBuild
-      Projects="..\..\src\ForgerEMS.Wpf\ForgerEMS.Wpf.csproj"
-      Targets="Rebuild"
-      Properties="Configuration=$(Configuration);Platform=AnyCPU;RuntimeIdentifier=win-x64;BuildProjectReferences=false" />
-  </Target>
 
 </Project>
