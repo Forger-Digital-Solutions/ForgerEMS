@@ -6,7 +6,14 @@
   "scripts": {
     "deploy": "npx wrangler@latest deploy",
     "check": "npx wrangler@latest check",
+    "build": "npx wrangler@latest deploy --dry-run",
+    "test": "vitest run",
     "tail": "npx wrangler@latest tail",
     "secrets:list": "npx wrangler@latest secret list"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250214.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.4"
   }
 }

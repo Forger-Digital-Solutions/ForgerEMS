@@ -1348,7 +1348,7 @@
         <Border Grid.Row="0"
                 Margin="0,0,0,10"
                 Padding="12,8"
-                MinHeight="52"
+                MinHeight="0"
                 Background="#E6090F18"
                 BorderBrush="#FF394659"
                 BorderThickness="1"
@@ -1365,12 +1365,13 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <Border Width="34"
                         Height="34"
-                        Margin="0,0,10,0"
-                        VerticalAlignment="Center"
+                        Margin="0,2,10,0"
+                        VerticalAlignment="Top"
                         Background="#FF111827"
                         BorderBrush="#FFCF8C5C"
                         BorderThickness="1.2"
@@ -1383,8 +1384,8 @@
 
                 <TextBlock Grid.Column="1"
                            Grid.Row="0"
-                           Margin="0,0,18,0"
-                           VerticalAlignment="Center"
+                           Margin="0,1,18,0"
+                           VerticalAlignment="Top"
                            FontSize="21"
                            FontFamily="Bahnschrift SemiCondensed"
                            FontWeight="Bold"
@@ -1394,8 +1395,8 @@
 
                 <TextBlock Grid.Column="2"
                            Grid.Row="0"
-                           Margin="0,0,18,0"
-                           VerticalAlignment="Center"
+                           Margin="0,5,18,0"
+                           VerticalAlignment="Top"
                            FontSize="13"
                            FontWeight="SemiBold"
                            Foreground="#FFD7DEE8"
@@ -1403,47 +1404,286 @@
                            TextTrimming="CharacterEllipsis"
                            TextWrapping="NoWrap" />
 
-                <Border Grid.Column="3"
-                        Grid.Row="0"
-                        Margin="0,0,12,0"
-                        Style="{StaticResource StatusPillBorderStyle}"
-                        VerticalAlignment="Center"
-                        Background="{Binding StatusBackground}"
-                        BorderBrush="{Binding StatusBorderBrush}"
-                        BorderThickness="1">
-                    <TextBlock Style="{StaticResource StatusPillTextStyle}"
-                               FontWeight="Bold"
-                               Foreground="{Binding StatusForeground}"
-                               Text="{Binding CurrentTaskState}"
-                               TextWrapping="NoWrap" />
-                </Border>
+                <Grid x:Name="HeaderRightStatusGrid"
+                      Grid.Row="0"
+                      Grid.Column="4"
+                      Grid.ColumnSpan="3"
+                      Grid.RowSpan="2"
+                      HorizontalAlignment="Right"
+                      VerticalAlignment="Top"
+                      MaxWidth="360">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Right">
+                        <Border Margin="0,0,12,0"
+                                Style="{StaticResource StatusPillBorderStyle}"
+                                VerticalAlignment="Center"
+                                Background="{Binding StatusBackground}"
+                                BorderBrush="{Binding StatusBorderBrush}"
+                                BorderThickness="1">
+                            <TextBlock Style="{StaticResource StatusPillTextStyle}"
+                                       FontWeight="Bold"
+                                       Foreground="{Binding StatusForeground}"
+                                       Text="{Binding CurrentTaskState}"
+                                       TextWrapping="NoWrap" />
+                        </Border>
 
-                <TextBlock Grid.Column="4"
-                           Grid.Row="0"
-                           Margin="0,0,14,0"
-                           VerticalAlignment="Center"
-                           FontSize="12"
-                           FontWeight="SemiBold"
-                           Foreground="#FFE0E8F4"
-                           Text="{Binding HeaderUsbTargetText}"
-                           TextTrimming="CharacterEllipsis"
-                           TextWrapping="NoWrap" />
+                        <TextBlock Margin="0,0,14,0"
+                                   VerticalAlignment="Center"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   Foreground="#FFE0E8F4"
+                                   Text="{Binding HeaderUsbTargetText}"
+                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="NoWrap" />
 
-                <TextBlock Grid.Column="5"
-                           Grid.Row="0"
-                           VerticalAlignment="Center"
-                           FontSize="12"
-                           FontWeight="SemiBold"
-                           Foreground="#FFD9B392"
-                           Text="{Binding AppVersionText}"
-                           TextWrapping="NoWrap" />
-                <StackPanel Grid.Row="1"
+                        <TextBlock VerticalAlignment="Center"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   Foreground="#FFD9B392"
+                                   Text="{Binding AppVersionText}"
+                                   TextWrapping="NoWrap" />
+                    </StackPanel>
+
+                    <Border x:Name="NetworkPulseHeaderCompactIsland"
+                            Grid.Row="1"
+                            Margin="0,3,0,0"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            MaxWidth="340"
+                            Visibility="{Binding NetworkPulse.HeaderWidgetVisibility}"
+                            Background="#33101824"
+                            BorderBrush="#55394659"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="5,2">
+                        <Grid>
+                            <Button x:Name="NetworkPulseFlyoutTarget"
+                                    HorizontalContentAlignment="Stretch"
+                                    HorizontalAlignment="Stretch"
+                                    Padding="0"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Cursor="Hand"
+                                    Command="{Binding NetworkPulse.ToggleDetailsCommand}"
+                                    ToolTip="{Binding NetworkPulse.HeaderToolTip}">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding NetworkPulse.InternetWidgetLine1}"
+                                               Foreground="#FFE8F4FF"
+                                               FontSize="10.5"
+                                               FontWeight="SemiBold"
+                                               LineHeight="13"
+                                               TextTrimming="CharacterEllipsis"
+                                               TextWrapping="NoWrap" />
+                                    <TextBlock Margin="0,1,0,0"
+                                               Text="{Binding NetworkPulse.InternetWidgetLine2}"
+                                               Foreground="#FFC9D8EE"
+                                               FontSize="10"
+                                               LineHeight="12"
+                                               TextTrimming="CharacterEllipsis"
+                                               TextWrapping="NoWrap" />
+                                </StackPanel>
+                            </Button>
+                        <Popup PlacementTarget="{Binding ElementName=NetworkPulseFlyoutTarget}"
+                               IsOpen="{Binding NetworkPulse.IsDetailsOpen, Mode=TwoWay}"
+                               StaysOpen="False"
+                               AllowsTransparency="True"
+                               Placement="Bottom">
+                            <Border MinWidth="300"
+                                    MaxWidth="460"
+                                    Padding="12,10"
+                                    Background="#F0101824"
+                                    BorderBrush="#FF394659"
+                                    BorderThickness="1"
+                                    CornerRadius="8">
+                                <StackPanel>
+                                    <TextBlock FontWeight="Bold"
+                                               FontSize="13"
+                                               Foreground="{DynamicResource HeroTextBrush}"
+                                               Text="Network Pulse" />
+                                    <TextBlock Margin="0,8,0,0"
+                                               FontWeight="SemiBold"
+                                               FontSize="11.5"
+                                               Foreground="{DynamicResource PanelLabelBrush}"
+                                               Text="Adapter" />
+                                    <TextBlock Foreground="{DynamicResource PanelTextBrush}"
+                                               Text="{Binding NetworkPulse.DetailAdapterText}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,8,0,0"
+                                               FontWeight="SemiBold"
+                                               FontSize="11.5"
+                                               Foreground="{DynamicResource PanelLabelBrush}"
+                                               Text="Connection type" />
+                                    <TextBlock Foreground="{DynamicResource PanelTextBrush}"
+                                               Text="{Binding NetworkPulse.DetailConnectionText}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,8,0,0"
+                                               FontWeight="SemiBold"
+                                               FontSize="11.5"
+                                               Foreground="{DynamicResource PanelLabelBrush}"
+                                               Text="Wi-Fi context"
+                                               Visibility="{Binding NetworkPulse.DetailWifiVisibility}" />
+                                    <TextBlock Foreground="{DynamicResource PanelMutedTextBrush}"
+                                               FontSize="11"
+                                               Text="{Binding NetworkPulse.DetailWifiContextText}"
+                                               TextWrapping="Wrap"
+                                               Visibility="{Binding NetworkPulse.DetailWifiVisibility}" />
+                                    <TextBlock Margin="0,8,0,0"
+                                               FontWeight="SemiBold"
+                                               FontSize="11.5"
+                                               Foreground="{DynamicResource PanelLabelBrush}"
+                                               Text="Download" />
+                                    <TextBlock Foreground="{DynamicResource PanelTextBrush}"
+                                               Text="{Binding NetworkPulse.DetailDownloadText}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,8,0,0"
+                                               FontWeight="SemiBold"
+                                               FontSize="11.5"
+                                               Foreground="{DynamicResource PanelLabelBrush}"
+                                               Text="Upload" />
+                                    <TextBlock Foreground="{DynamicResource PanelTextBrush}"
+                                               Text="{Binding NetworkPulse.DetailUploadText}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,8,0,0"
+                                               FontWeight="SemiBold"
+                                               FontSize="11.5"
+                                               Foreground="{DynamicResource PanelLabelBrush}"
+                                               Text="Ping / jitter / loss" />
+                                    <TextBlock Foreground="{DynamicResource PanelTextBrush}"
+                                               Text="{Binding NetworkPulse.DetailPingText}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,2,0,0"
+                                               Foreground="{DynamicResource PanelTextBrush}"
+                                               Text="{Binding NetworkPulse.DetailJitterText}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,2,0,0"
+                                               Foreground="{DynamicResource PanelTextBrush}"
+                                               Text="{Binding NetworkPulse.DetailLossText}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,10,0,0"
+                                               FontWeight="SemiBold"
+                                               FontSize="11.5"
+                                               Foreground="{DynamicResource PanelLabelBrush}"
+                                               Text="Recent ping (relative)"
+                                               Visibility="{Binding NetworkPulse.DetailSparklineVisibility}" />
+                                    <Border Height="28"
+                                            Margin="0,4,0,0"
+                                            HorizontalAlignment="Left"
+                                            Width="132"
+                                            Background="Transparent"
+                                            SnapsToDevicePixels="True"
+                                            Visibility="{Binding NetworkPulse.DetailSparklineVisibility}">
+                                        <Path Data="{Binding NetworkPulse.PingSparklineGeometry}"
+                                              Stroke="#809BB8D8"
+                                              StrokeThickness="1.25"
+                                              StrokeLineJoin="Round"
+                                              Stretch="Fill" />
+                                    </Border>
+                                    <TextBlock Margin="0,10,0,0"
+                                               FontWeight="SemiBold"
+                                               FontSize="11.5"
+                                               Foreground="{DynamicResource PanelLabelBrush}"
+                                               Text="Reliability (derived)" />
+                                    <TextBlock Foreground="{DynamicResource PanelTextBrush}"
+                                               Text="{Binding NetworkPulse.DetailReliabilityTierText}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,2,0,0"
+                                               Foreground="{DynamicResource PanelMutedTextBrush}"
+                                               FontSize="11"
+                                               Text="{Binding NetworkPulse.DetailReliabilityExplainText}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,8,0,0"
+                                               Foreground="{DynamicResource PanelMutedTextBrush}"
+                                               FontSize="10.5"
+                                               Text="{Binding NetworkPulse.DetailSmoothingNoteText}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,8,0,0"
+                                               FontWeight="SemiBold"
+                                               FontSize="11.5"
+                                               Foreground="{DynamicResource PanelLabelBrush}"
+                                               Text="Gateway / DNS samples" />
+                                    <TextBlock Foreground="{DynamicResource PanelTextBrush}"
+                                               Text="{Binding NetworkPulse.DetailGatewayText}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,2,0,0"
+                                               Foreground="{DynamicResource PanelTextBrush}"
+                                               Text="{Binding NetworkPulse.DetailDnsText}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,8,0,0"
+                                               FontWeight="SemiBold"
+                                               FontSize="11.5"
+                                               Foreground="{DynamicResource PanelLabelBrush}"
+                                               Text="Status / confidence" />
+                                    <StackPanel Margin="0,8,0,0" Orientation="Horizontal">
+                                        <TextBlock Foreground="{DynamicResource PanelTextBrush}"
+                                                   Text="{Binding NetworkPulse.DetailStatusText}" />
+                                        <TextBlock Foreground="{DynamicResource PanelTextBrush}"
+                                                   Text=" · " />
+                                        <TextBlock Foreground="{DynamicResource PanelTextBrush}"
+                                                   Text="{Binding NetworkPulse.DetailConfidenceText}" />
+                                    </StackPanel>
+                                    <TextBlock Margin="0,8,0,0"
+                                               FontWeight="SemiBold"
+                                               FontSize="11.5"
+                                               Foreground="{DynamicResource PanelLabelBrush}"
+                                               Text="Last checked" />
+                                    <TextBlock Foreground="{DynamicResource PanelTextBrush}"
+                                               Text="{Binding NetworkPulse.DetailLastCheckedText}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,8,0,0"
+                                               FontWeight="SemiBold"
+                                               FontSize="11.5"
+                                               Foreground="{DynamicResource PanelLabelBrush}"
+                                               Text="Adapter link (estimated ceiling)" />
+                                    <TextBlock Foreground="{DynamicResource PanelMutedTextBrush}"
+                                               FontSize="11"
+                                               Text="{Binding NetworkPulse.DetailLinkCeilingText}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,8,0,0"
+                                               Visibility="{Binding NetworkPulse.DetailPauseReasonVisibility}"
+                                               FontSize="11"
+                                               Foreground="#FFFFE8CC"
+                                               Text="{Binding NetworkPulse.DetailPauseReasonText}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,10,0,0"
+                                               FontWeight="SemiBold"
+                                               FontSize="11.5"
+                                               Foreground="{DynamicResource PanelLabelBrush}"
+                                               Text="Data sources" />
+                                    <TextBlock Foreground="{DynamicResource PanelMutedTextBrush}"
+                                               FontSize="11"
+                                               Text="{Binding NetworkPulse.DetailDataNotesText}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,8,0,0"
+                                               FontWeight="SemiBold"
+                                               FontSize="11.5"
+                                               Foreground="{DynamicResource PanelLabelBrush}"
+                                               Text="Safety" />
+                                    <TextBlock Foreground="{DynamicResource PanelMutedTextBrush}"
+                                               FontSize="11"
+                                               Text="{Binding NetworkPulse.DetailSafetyNotesText}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                        </Popup>
+                        </Grid>
+                    </Border>
+                </Grid>
+                <StackPanel x:Name="HeaderLeftSupportCopyGroup"
+                            Grid.Row="1"
                             Grid.Column="0"
-                            Grid.ColumnSpan="6"
-                            Margin="0,4,0,0">
+                            Grid.ColumnSpan="3"
+                            Margin="44,-4,16,0"
+                            VerticalAlignment="Top">
                     <TextBlock FontSize="11"
                                Foreground="#FFE8F0FF"
-                               TextWrapping="Wrap">
+                               LineHeight="13"
+                               TextTrimming="CharacterEllipsis"
+                               TextWrapping="NoWrap">
                         <Run FontWeight="SemiBold" Text="Beta issue? Send logs/screenshots to " />
                         <Hyperlink NavigateUri="{Binding SupportMailtoUri, Mode=OneWay}"
                                    RequestNavigate="SupportMailto_OnRequestNavigate"
@@ -1457,13 +1697,17 @@
                     <TextBlock Margin="0,2,0,0"
                                FontSize="10.5"
                                Foreground="#99B8CCE8"
-                               TextWrapping="Wrap"
+                               LineHeight="12"
+                               TextTrimming="CharacterEllipsis"
+                               TextWrapping="NoWrap"
                                Text="{Binding SupportEmailDoNotSecretsText, Mode=OneWay}" />
-                    <TextBlock Margin="0,6,0,0"
+                    <TextBlock Margin="0,2,0,0"
                                FontSize="11"
                                Foreground="#CCF0F7FF"
                                FontStyle="Italic"
-                               TextWrapping="Wrap"
+                               LineHeight="13"
+                               TextTrimming="CharacterEllipsis"
+                               TextWrapping="NoWrap"
                                Text="{Binding PublicPreviewBannerText, Mode=OneWay}" />
                 </StackPanel>
             </Grid>
@@ -1567,7 +1811,7 @@
                     <Button x:Name="NavUsbButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="0" Click="OnSidebarNavigateClick" Content="▣  USB Builder" />
                     <Button x:Name="NavSystemButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="1" Click="OnSidebarNavigateClick" Content="◎  System Intelligence" />
                     <Button x:Name="NavToolkitButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="2" Click="OnSidebarNavigateClick" Content="▤  Toolkit Manager" />
-                    <Button x:Name="NavCopilotButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="3" Click="OnSidebarNavigateClick" Content="◇  Kyra" />
+                    <Button x:Name="NavCopilotButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="3" Click="OnSidebarNavigateClick" Content="◇  Kyra (Beta)" />
                     <Button x:Name="NavDiagnosticsButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="4" Click="OnSidebarNavigateClick" Content="⚙  Diagnostics" />
                     <Button x:Name="NavSettingsButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="5" Click="OnSidebarNavigateClick" Content="☰  Settings" />
                 </StackPanel>
@@ -2797,7 +3041,7 @@
                         </StackPanel>
                     </TabItem>
 
-                    <TabItem Header="◇  Kyra">
+                    <TabItem Header="◇  Kyra (Beta)">
                         <Grid Margin="24,8,24,16" MaxWidth="1040" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                             <Image Panel.ZIndex="0"
                                    Width="260"
@@ -2822,7 +3066,7 @@
                                         <TextBlock VerticalAlignment="Center"
                                                    Foreground="{DynamicResource PanelTextBrush}"
                                                    FontWeight="SemiBold"
-                                                   Text="Kyra" />
+                                                   Text="Kyra (Beta)" />
                                     </StackPanel>
                                 </GroupBox.Header>
                                 <Grid>
@@ -3331,7 +3575,7 @@
                                             </Grid>
                                         </StackPanel>
                                     </GroupBox>
-                                    <GroupBox Margin="0,0,0,14" Header="Kyra Intelligence">
+                                    <GroupBox Margin="0,0,0,14" Header="Kyra Intelligence (Beta)">
                                         <StackPanel>
                                             <WrapPanel Margin="0,0,0,8">
                                                 <Border Style="{StaticResource DiagnosticsStatusChipReadyStyle}"><TextBlock Text="Local Only available" Style="{StaticResource DiagnosticsStatusChipTextStyle}" /></Border>
@@ -3490,6 +3734,57 @@
                                                        Text="Default: Static / Low Power. Animated circuit effects are optional and pause when the app is minimized."
                                                        TextWrapping="Wrap" />
                                         </Grid>
+                                    </GroupBox>
+
+                                    <GroupBox Margin="0,0,0,14" Header="Network Pulse">
+                                        <StackPanel>
+                                            <WrapPanel Margin="0,0,0,8">
+                                                <Border Style="{StaticResource DiagnosticsStatusChipNeutralStyle}"><TextBlock Text="Lightweight" Style="{StaticResource DiagnosticsStatusChipTextStyle}" /></Border>
+                                                <Border Style="{StaticResource DiagnosticsStatusChipReadyStyle}"><TextBlock Text="Privacy-safe" Style="{StaticResource DiagnosticsStatusChipTextStyle}" /></Border>
+                                                <Border Style="{StaticResource DiagnosticsStatusChipReadyStyle}"><TextBlock Text="Measured vs estimated" Style="{StaticResource DiagnosticsStatusChipTextStyle}" /></Border>
+                                            </WrapPanel>
+                                            <TextBlock Margin="0,0,0,10"
+                                                       FontSize="11.5"
+                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                       Text="Small HTTPS/ICMP checks only. Not a full speed test. Adapter link speed is never shown as internet speed."
+                                                       TextWrapping="Wrap" />
+                                            <CheckBox IsChecked="{Binding NetworkPulse.NetworkPulseEnabled, Mode=TwoWay}"
+                                                      Content="Enable Network Pulse" />
+                                            <CheckBox Margin="0,6,0,0"
+                                                      IsChecked="{Binding NetworkPulse.NetworkPulseShowInHeader, Mode=TwoWay}"
+                                                      Content="Show in header" />
+                                            <CheckBox Margin="0,6,0,0"
+                                                      IsChecked="{Binding NetworkPulse.NetworkPulseAutoTestSpeed, Mode=TwoWay}"
+                                                      Content="Auto-test speed lightly (small download samples)" />
+                                            <CheckBox Margin="0,6,0,0"
+                                                      IsChecked="{Binding NetworkPulse.NetworkPulseUploadProbesEnabled, Mode=TwoWay}"
+                                                      Content="Upload probes (off by default; small POST when enabled)" />
+                                            <CheckBox Margin="0,6,0,0"
+                                                      IsChecked="{Binding NetworkPulse.NetworkPulsePauseOnMetered, Mode=TwoWay}"
+                                                      Content="Pause on metered networks" />
+                                            <CheckBox Margin="0,6,0,0"
+                                                      IsChecked="{Binding NetworkPulse.NetworkPulsePauseOnBatterySaver, Mode=TwoWay}"
+                                                      Content="Pause on battery saver" />
+                                            <CheckBox Margin="0,6,0,0"
+                                                      IsChecked="{Binding NetworkPulse.NetworkPulsePauseDuringHostHeavy, Mode=TwoWay}"
+                                                      Content="Pause during busy ForgerEMS network / update / USB benchmark work" />
+                                            <TextBlock Margin="0,14,0,6"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource PanelLabelBrush}"
+                                                       Text="Mode" />
+                                            <ComboBox Width="220"
+                                                      HorizontalAlignment="Left"
+                                                      SelectedIndex="{Binding NetworkPulse.NetworkPulseModeSelectedIndex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                                                <ComboBoxItem Content="Light (slowest cadence, smallest samples)" />
+                                                <ComboBoxItem Content="Balanced (default)" />
+                                                <ComboBoxItem Content="Full (more frequent, larger cap)" />
+                                            </ComboBox>
+                                            <TextBlock Margin="0,10,0,0"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                       Text="{Binding NetworkPulse.NetworkPulseIntervalSummaryText}"
+                                                       TextWrapping="Wrap" />
+                                        </StackPanel>
                                     </GroupBox>
 
                                     <GroupBox Margin="0,0,0,14" Header="App Updates">

@@ -30,6 +30,7 @@ using VentoyToolkitSetup.Wpf.Services.Intelligence;
 using VentoyToolkitSetup.Wpf.Services.Kyra;
 using VentoyToolkitSetup.Wpf.Services.KyraTools;
 using VentoyToolkitSetup.Wpf.Services.Licensing;
+using VentoyToolkitSetup.Wpf.Services.NetworkPulse;
 
 namespace VentoyToolkitSetup.Wpf.ViewModels;
 
@@ -84,6 +85,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly string _betaConfigPath;
     private readonly string _updateConfigPath;
     private readonly AppUpdateSettingsStore _updateSettingsStore;
+    private readonly NetworkPulseSettingsStore _networkPulseSettingsStore;
+    private readonly NetworkPulseViewModel _networkPulseViewModel;
+    private readonly NetworkPulseService _networkPulseService;
     private readonly GitHubReleaseUpdateCheckService _updateCheckService;
     private AppUpdateSettings _appUpdateSettings = new();
     private bool _updateCheckInProgress;
@@ -418,6 +422,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _betaConfigPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "beta-settings.json");
         _updateConfigPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "update-settings.json");
         _updateSettingsStore = new AppUpdateSettingsStore(_updateConfigPath);
+        _networkPulseSettingsStore = new NetworkPulseSettingsStore(
+            Path.Combine(_appRuntimeService.RuntimeRoot, "config", "network-pulse-settings.json"));
+        _networkPulseViewModel = new NetworkPulseViewModel(_networkPulseSettingsStore);
+        _networkPulseService = new NetworkPulseService(
+            _networkPulseViewModel,
+            () => _networkPulseViewModel.CurrentSettings,
+            () => new NetworkPulseHostActivityHints(
+                IsBusy,
+                _updateDownloadInProgress,
+                _benchmarksInProgress.Count > 0),
+            SynchronizationContext.Current,
+            () => Path.Combine(_appRuntimeService.RuntimeRoot, "reports"),
+            line => _appRuntimeService.AppendSessionLog(line));
         _updateCheckService = new GitHubReleaseUpdateCheckService();
         LoadBenchmarkCache();
         LoadCopilotSettings();
@@ -425,6 +442,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         LoadUpdateSettings();
         RefreshDeepSensorModeSettingsProperties();
         _isLoadingDeepSensorModeSetting = false;
+        _networkPulseService.Start();
 
         RefreshAllCommand = new AsyncRelayCommand(RefreshAllAsync, () => !IsBusy);
         RefreshUsbTargetsCommand = new AsyncRelayCommand(RefreshUsbTargetsAsync, () => !IsBusy);
@@ -1014,6 +1032,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     }
 
     public string AppVersionText { get; } = AppReleaseInfo.DisplayVersion;
+
+    public NetworkPulseViewModel NetworkPulse => _networkPulseViewModel;
 
     public string PublicPreviewBannerText { get; } = AppReleaseInfo.PublicPreviewBannerLine;
 
@@ -4052,7 +4072,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             if (File.Exists(reportPath))
             {
                 using var document = JsonDocument.Parse(File.ReadAllText(reportPath));
-                summary = SystemIntelligenceQuickReadBuilder.Build(document.RootElement);
+                summary = SystemIntelligenceQuickReadBuilder.Build(document.RootElement, Path.GetDirectoryName(reportPath));
             }
             else
             {
@@ -4090,6 +4110,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         summary += Environment.NewLine +
                    "Review before sharing. Reports may include hardware, network adapter, USB device, and diagnostic details. Do not send passwords, product keys, API keys, tokens, private documents, or sensitive files.";
+
+        if (!string.IsNullOrWhiteSpace(NetworkPulse.ClipboardSummaryLine))
+        {
+            summary += Environment.NewLine + NetworkPulse.ClipboardSummaryLine;
+        }
 
         Clipboard.SetText(SensitiveDataRedactor.SanitizeForSupportShare(summary));
         AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Safe summary copied to clipboard (sanitized for sharing).", LogSeverity.Success));
@@ -13140,6 +13165,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         _toolkitLinkVerifyCts?.Dispose();
         _toolkitLinkVerifier.Dispose();
+        _networkPulseService.Dispose();
         _updateCheckService.Dispose();
         try
         {

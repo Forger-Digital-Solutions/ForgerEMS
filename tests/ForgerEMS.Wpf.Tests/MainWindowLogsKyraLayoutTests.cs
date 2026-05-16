@@ -78,7 +78,7 @@ public sealed class MainWindowLogsKyraLayoutTests
     {
         var root = FindRepoRootWithMainWindow();
         var mainXaml = File.ReadAllText(Path.Combine(root, "src", "ForgerEMS.Wpf", "MainWindow.xaml"));
-        var kyraStart = mainXaml.IndexOf("<TabItem Header=\"◇  Kyra\">", StringComparison.Ordinal);
+        var kyraStart = mainXaml.IndexOf("<TabItem Header=\"◇  Kyra (Beta)\">", StringComparison.Ordinal);
         var diagnosticsStart = mainXaml.IndexOf("<TabItem Header=\"⚙  Diagnostics\">", StringComparison.Ordinal);
         Assert.True(kyraStart >= 0 && diagnosticsStart > kyraStart);
         var kyra = mainXaml[kyraStart..diagnosticsStart];
@@ -168,7 +168,7 @@ public sealed class MainWindowLogsKyraLayoutTests
         var path = Path.Combine(root, "src", "ForgerEMS.Wpf", "KyraAdvancedSettingsWindow.xaml");
         Assert.True(File.Exists(path));
         var text = File.ReadAllText(path);
-        Assert.Contains("Title=\"Kyra AI Settings\"", text, StringComparison.Ordinal);
+        Assert.Contains("Title=\"Kyra AI Settings (Beta)\"", text, StringComparison.Ordinal);
         Assert.Contains("CopilotProviderSettings", text, StringComparison.Ordinal);
         Assert.Contains("Header=\"Overview\"", text, StringComparison.Ordinal);
         Assert.Contains("Header=\"Providers\"", text, StringComparison.Ordinal);

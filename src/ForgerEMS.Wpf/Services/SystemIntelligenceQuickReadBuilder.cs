@@ -5,12 +5,15 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using VentoyToolkitSetup.Wpf.Services.Intelligence;
+using VentoyToolkitSetup.Wpf.Services.NetworkPulse;
 
 namespace VentoyToolkitSetup.Wpf.Services;
 
 public static class SystemIntelligenceQuickReadBuilder
 {
-    public static string Build(JsonElement root)
+    public static string Build(JsonElement root) => Build(root, null);
+
+    public static string Build(JsonElement root, string? reportsDirectory)
     {
         var profile = SystemProfileMapper.FromJson(root);
         var health = SystemHealthEvaluator.Evaluate(profile);
@@ -41,12 +44,17 @@ public static class SystemIntelligenceQuickReadBuilder
             $"Next Action: {nextAction} | Tool recommendations: {JoinList(toolRecommendations, "System Intelligence + Toolkit Manager")}"
         };
 
+        var lineCountBeforePulse = lines.Count;
+        NetworkPulseReportWriter.TryAppendQuickReadLines(lines, reportsDirectory);
+        var pulseAppended = lines.Count > lineCountBeforePulse;
+
         if (needsSensorNote && lines.Count < 8)
         {
             lines.Add("Sensor Notes: Unknown lowers confidence; NotExposed/PermissionRequired means Windows limited optional detail, not failure.");
         }
 
-        return string.Join(Environment.NewLine, lines.Take(9));
+        var cap = pulseAppended ? Math.Min(lines.Count, 11) : 9;
+        return string.Join(Environment.NewLine, lines.Take(cap));
     }
 
     private static MachineClassResult? ReadMachineClass(JsonElement root)

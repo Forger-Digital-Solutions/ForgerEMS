@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>ForgerEMS.Kyra.HostAdapter</RootNamespace>
+    <AssemblyName>ForgerEMS.Kyra.HostAdapter</AssemblyName>
+    <Description>ForgerEMS Kyra.Sdk host façade (feature-flagged; not wired to shipping Kyra tab).</Description>
+    <KyraSdkPackageVersion>1.1.4</KyraSdkPackageVersion>
+    <KyraSdkProjectPath>$(MSBuildThisFileDirectory)..\..\..\..\Kyra_Assistant\repo\src\Kyra.Sdk\Kyra.Sdk.csproj</KyraSdkProjectPath>
+    <UseKyraSdkProjectReference Condition="'$(UseKyraSdkProjectReference)' == '' and Exists('$(KyraSdkProjectPath)')">true</UseKyraSdkProjectReference>
+    <UseKyraSdkProjectReference Condition="'$(UseKyraSdkProjectReference)' == ''">false</UseKyraSdkProjectReference>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(UseKyraSdkProjectReference)' == 'true'">
+    <ProjectReference Include="$(KyraSdkProjectPath)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseKyraSdkProjectReference)' != 'true'">
+    <PackageReference Include="Kyra.Sdk" Version="$(KyraSdkPackageVersion)" />
+  </ItemGroup>
+
+</Project>

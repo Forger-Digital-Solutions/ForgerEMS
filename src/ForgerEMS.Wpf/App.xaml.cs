@@ -55,6 +55,13 @@ public partial class App : Application
                 return;
             }
 
+            if (HasArgument(e.Args, KyraSdkDogfoodProcessLauncher.CliArgument))
+            {
+                var exitCode = await KyraSdkDogfoodProcessLauncher.RunAsync(e.Args);
+                Shutdown(exitCode);
+                return;
+            }
+
             var elevatedScanStartupRequest = ElevatedScanStartupRequest.Parse(e.Args);
 
             var mainViewModel = new MainViewModel(

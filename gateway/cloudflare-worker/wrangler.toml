@@ -8,9 +8,16 @@ workers_dev = true
 # Disable generated preview URLs to reduce extra public endpoints.
 preview_urls = false
 
+[ai]
+binding = "AI"
+
 [vars]
 RELEASE_CHANNEL = "preview"
-DEFAULT_MODEL = "gpt-4o-mini"
+DEFAULT_MODEL = "@cf/openai/gpt-oss-20b"
+HEAVY_REASONING_MODEL = "@cf/openai/gpt-oss-120b"
+CODING_MODEL = "@cf/qwen/qwen2.5-coder-32b-instruct"
+GENERAL_FALLBACK_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+REASONING_FALLBACK_MODEL = "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b"
 MAX_REQUEST_BYTES = "18000"
 PROVIDER_TIMEOUT_MS = "45000"
 RATE_LIMITS_ENABLED = "false"

@@ -1,7 +1,7 @@
 <Window x:Class="VentoyToolkitSetup.Wpf.KyraAdvancedSettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Kyra AI Settings"
+        Title="Kyra AI Settings (Beta)"
         Width="1040"
         Height="780"
         MinWidth="820"
@@ -145,7 +145,7 @@
             <DockPanel Grid.Row="0" Margin="0,0,0,12">
                 <Image DockPanel.Dock="Left" Width="48" Height="48" Margin="0,0,10,0" Source="Assets/Kyra.png" />
                 <StackPanel>
-                    <TextBlock FontSize="22" FontWeight="Bold" Foreground="{StaticResource KyraAdvancedHeaderBrush}" Text="Kyra AI Settings" />
+                    <TextBlock FontSize="22" FontWeight="Bold" Foreground="{StaticResource KyraAdvancedHeaderBrush}" Text="Kyra AI Settings (Beta)" />
                     <TextBlock FontSize="12" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Choose Gateway, BYOK, local AI, live tools, and privacy settings. Keys stay hidden." />
                 </StackPanel>
             </DockPanel>

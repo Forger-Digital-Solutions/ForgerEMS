@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
@@ -74,6 +74,32 @@
 
   <Target Name="CopyLibreHardwareMonitorProviderToPublish" AfterTargets="Publish" Condition="Exists('$(ForgerLibreHardwareMonitorDll)')">
     <Copy SourceFiles="$(ForgerLibreHardwareMonitorDll)" DestinationFiles="$(PublishDir)providers\sensors\LibreHardwareMonitorLib.dll" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyKyraSdkDogfoodTool" AfterTargets="Build">
+    <PropertyGroup>
+      <_KyraSdkDogfoodOut>$(MSBuildThisFileDirectory)..\ForgerEMS.Kyra.SdkDogfood\bin\$(Configuration)\net8.0\</_KyraSdkDogfoodOut>
+      <_KyraSdkDogfoodDest>$(OutputPath)tools\kyra-sdk-dogfood\</_KyraSdkDogfoodDest>
+    </PropertyGroup>
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\ForgerEMS.Kyra.SdkDogfood\ForgerEMS.Kyra.SdkDogfood.csproj" Properties="Configuration=$(Configuration)" Targets="Build" />
+    <ItemGroup>
+      <_KyraSdkDogfoodFiles Include="$(_KyraSdkDogfoodOut)**\*.*" />
+    </ItemGroup>
+    <MakeDir Directories="$(_KyraSdkDogfoodDest)" />
+    <Copy SourceFiles="@(_KyraSdkDogfoodFiles)" DestinationFolder="$(_KyraSdkDogfoodDest)%(RecursiveDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyKyraSdkDogfoodToolToPublish" AfterTargets="Publish">
+    <PropertyGroup>
+      <_KyraSdkDogfoodOut>$(MSBuildThisFileDirectory)..\ForgerEMS.Kyra.SdkDogfood\bin\$(Configuration)\net8.0\</_KyraSdkDogfoodOut>
+      <_KyraSdkDogfoodDest>$(PublishDir)tools\kyra-sdk-dogfood\</_KyraSdkDogfoodDest>
+    </PropertyGroup>
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\ForgerEMS.Kyra.SdkDogfood\ForgerEMS.Kyra.SdkDogfood.csproj" Properties="Configuration=$(Configuration)" Targets="Build" />
+    <ItemGroup>
+      <_KyraSdkDogfoodPublishFiles Include="$(_KyraSdkDogfoodOut)**\*.*" />
+    </ItemGroup>
+    <MakeDir Directories="$(_KyraSdkDogfoodDest)" />
+    <Copy SourceFiles="@(_KyraSdkDogfoodPublishFiles)" DestinationFolder="$(_KyraSdkDogfoodDest)%(RecursiveDir)" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

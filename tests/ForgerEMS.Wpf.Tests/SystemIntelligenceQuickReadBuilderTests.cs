@@ -60,9 +60,9 @@ public sealed class SystemIntelligenceQuickReadBuilderTests
         var summary = BuildQuickRead(PrecisionReportJson());
         var lines = summary.Split(Environment.NewLine);
 
-        Assert.InRange(lines.Length, 8, 9);
-        Assert.All(lines, line => Assert.True(line.Length <= 220, $"Line too long: {line}"));
-        Assert.True(summary.Length <= 1500);
+        Assert.InRange(lines.Length, 8, 11);
+        Assert.All(lines, line => Assert.True(line.Length <= 260, $"Line too long: {line}"));
+        Assert.True(summary.Length <= 1800);
     }
 
     [Fact]
@@ -73,6 +73,34 @@ public sealed class SystemIntelligenceQuickReadBuilderTests
         Assert.Contains("Flip Value: $340-$490", summary);
         Assert.Contains("offline/local heuristic", summary, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("live comps not configured", summary, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void QuickRead_AppendsNetworkPulseWhenLatestReportExists()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "si-np-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(dir, "network-pulse-latest.json"),
+                """{"summaryLine":"Network Pulse: Wi-Fi · Fair · ping 40 ms · measured 120↓ / 8↑"}""");
+
+            using var doc = JsonDocument.Parse(PrecisionReportJson());
+            var summary = SystemIntelligenceQuickReadBuilder.Build(doc.RootElement, dir);
+            Assert.Contains("Network Pulse:", summary, StringComparison.Ordinal);
+            Assert.Contains("Wi-Fi", summary, StringComparison.Ordinal);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+            catch
+            {
+            }
+        }
     }
 
     private static string BuildQuickRead(string json)

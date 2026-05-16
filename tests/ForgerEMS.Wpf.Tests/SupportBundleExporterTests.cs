@@ -52,6 +52,7 @@ public sealed class SupportBundleExporterTests
         fake.EnsureInitialized();
         File.WriteAllText(fake.SessionLogPath, @"C:\Users\SecretUser\Desktop\test");
         File.WriteAllText(Path.Combine(rt, "reports", "system-intelligence-latest.json"), "{\"path\":\"D:\\\\Private\\\\x\"}");
+        File.WriteAllText(Path.Combine(rt, "reports", "network-pulse-latest.json"), "{\"wifiContext\":\"C:\\\\Users\\\\Secret\\\\wifi.txt\"}");
         File.WriteAllText(Path.Combine(rt, "logs", "diagnostics.log"), "email: private@example.com ip: 8.8.8.8 mac: AA-BB-CC-DD-EE-FF");
 
         Assert.True(SupportBundleExporter.TryCreateSupportBundle(
@@ -81,5 +82,11 @@ public sealed class SupportBundleExporterTests
         Assert.DoesNotContain("private@example.com", diagnosticsBody, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("8.8.8.8", diagnosticsBody, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("AA-BB-CC-DD-EE-FF", diagnosticsBody, StringComparison.OrdinalIgnoreCase);
+
+        var np = archive.Entries.FirstOrDefault(e => e.FullName.Replace('\\', '/').EndsWith("reports/network-pulse-latest.json", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(np);
+        using var npReader = new StreamReader(np!.Open());
+        var npBody = npReader.ReadToEnd();
+        Assert.DoesNotContain("Secret", npBody, StringComparison.OrdinalIgnoreCase);
     }
 }

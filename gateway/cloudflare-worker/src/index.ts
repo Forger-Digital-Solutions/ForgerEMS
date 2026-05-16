@@ -1,21 +1,9 @@
-export interface Env {
-  BETA_GATEWAY_TOKEN: string;
-  OPENAI_API_KEY?: string;
-  OPENROUTER_API_KEY?: string;
-  GROQ_API_KEY?: string;
-  NEWS_API_KEY?: string;
-  FINNHUB_API_KEY?: string;
-  ALPHA_VANTAGE_API_KEY?: string;
-  FMP_API_KEY?: string;
-  RELEASE_CHANNEL?: string;
-  DEFAULT_MODEL?: string;
-  MAX_REQUEST_BYTES?: string;
-  PROVIDER_TIMEOUT_MS?: string;
-  BETA_DAILY_TOKEN_LIMIT?: string;
-  BETA_DAILY_IP_LIMIT?: string;
-  RATE_LIMITS_ENABLED?: string;
-  RATE_LIMIT_KV?: KVNamespace;
-}
+/// <reference types="@cloudflare/workers-types" />
+
+import type { GatewayEnv } from "./gateway-env";
+import { buildCfInferenceSequence, extractChatUserText, selectGatewayModel } from "./kyra-gateway-routing";
+
+export type { GatewayEnv as Env } from "./gateway-env";
 
 type KyraGatewayRequest = {
   appVersion?: string;
@@ -25,10 +13,14 @@ type KyraGatewayRequest = {
   conversationId?: string;
   messageId?: string;
   userMessage?: string;
+  /** Standalone-friendly aliases (same semantics as userMessage). */
+  message?: string;
+  prompt?: string;
+  input?: string;
   personality?: string;
   intent?: string;
   toolsRequested?: string[];
-  machineContext?: Record<string, string>;
+  machineContext?: Record<string, string> & { summary?: string };
   memorySummary?: string;
   maxTokens?: number;
   temperature?: number;
@@ -92,7 +84,7 @@ const jsonHeaders = {
 };
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: GatewayEnv): Promise<Response> {
     const url = new URL(request.url);
     const pathNorm = url.pathname.replace(/\/$/, "");
     const maxBytes = Number(env.MAX_REQUEST_BYTES ?? "18000");
@@ -134,7 +126,30 @@ async function readBodyTextCapped(request: Request, maxBytes: number): Promise<s
   return new TextDecoder("utf-8").decode(buf);
 }
 
-async function handleGatewayStatus(request: Request, env: Env): Promise<Response> {
+function workersAiAvailable(env: GatewayEnv): boolean {
+  return typeof env.AI?.run === "function";
+}
+
+function buildExternalProviders(env: GatewayEnv): Array<{ name: string; baseUrl: string; key: string; model: string }> {
+  const openAiModel = "gpt-4o-mini";
+  return [
+    env.OPENROUTER_API_KEY
+      ? { name: "openrouter", baseUrl: "https://openrouter.ai/api/v1", key: env.OPENROUTER_API_KEY, model: "openrouter/auto" }
+      : null,
+    env.GROQ_API_KEY
+      ? { name: "groq", baseUrl: "https://api.groq.com/openai/v1", key: env.GROQ_API_KEY, model: "llama-3.1-8b-instant" }
+      : null,
+    env.OPENAI_API_KEY
+      ? { name: "openai", baseUrl: "https://api.openai.com/v1", key: env.OPENAI_API_KEY, model: openAiModel }
+      : null,
+  ].filter(Boolean) as Array<{ name: string; baseUrl: string; key: string; model: string }>;
+}
+
+function anyLlmConfigured(env: GatewayEnv): boolean {
+  return workersAiAvailable(env) || buildExternalProviders(env).length > 0;
+}
+
+async function handleGatewayStatus(request: Request, env: GatewayEnv): Promise<Response> {
   const token = extractBetaToken(request, undefined);
   const expectedToken = normalizeToken(env.BETA_GATEWAY_TOKEN);
   if (!expectedToken || !token || token !== expectedToken) {
@@ -146,28 +161,38 @@ async function handleGatewayStatus(request: Request, env: Env): Promise<Response
 
   const rateLimit = await evaluateRateLimit(request, env, token);
   if (!rateLimit.ok) {
-    return new Response(
-      JSON.stringify({ ok: false, errorCode: "rate_limited", retryAfterSeconds: rateLimit.retryAfterSeconds }),
-      { status: 429, headers: jsonHeaders },
-    );
+    return new Response(JSON.stringify({ ok: false, errorCode: "rate_limited", retryAfterSeconds: rateLimit.retryAfterSeconds }), {
+      status: 429,
+      headers: jsonHeaders,
+    });
   }
 
-  const aiList = buildProviderList(env);
-  const aiChat = aiList.length > 0 ? "configured" : "unconfigured";
+  const cfAi = workersAiAvailable(env) ? "configured" : "unconfigured";
+  const ext = buildExternalProviders(env);
+  const aiChat = anyLlmConfigured(env) ? "configured" : "unconfigured";
   const financeConfigured = !!(env.FINNHUB_API_KEY || env.ALPHA_VANTAGE_API_KEY || env.FMP_API_KEY);
   const newsConfigured = !!env.NEWS_API_KEY;
+  const llmForWeb = anyLlmConfigured(env);
+
+  const providers = {
+    aiChat,
+    cloudflareWorkersAi: cfAi,
+    openrouter: env.OPENROUTER_API_KEY ? "configured" : "unconfigured",
+    groq: env.GROQ_API_KEY ? "configured" : "unconfigured",
+    openai: env.OPENAI_API_KEY ? "configured" : "unconfigured",
+    crypto: "configured",
+    weather: "unconfigured",
+    finance: financeConfigured ? "configured" : "unconfigured",
+    news: newsConfigured ? "configured" : "unconfigured",
+    webResearch: llmForWeb ? "configured" : "unconfigured",
+  };
 
   return new Response(
     JSON.stringify({
       ok: true,
-      providers: {
-        aiChat,
-        crypto: "configured",
-        weather: aiChat === "configured" ? "configured" : "unconfigured",
-        finance: financeConfigured ? "configured" : "unconfigured",
-        news: newsConfigured ? "configured" : "unconfigured",
-        webResearch: aiChat,
-      },
+      releaseChannel: env.RELEASE_CHANNEL ?? "unknown",
+      defaultModel: env.DEFAULT_MODEL ?? "",
+      providers,
     }),
     { status: 200, headers: jsonHeaders },
   );
@@ -186,7 +211,7 @@ function normalizeToken(value?: string): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-async function handleResearchBody(bodyText: string, request: Request, env: Env, maxBytes: number): Promise<Response> {
+async function handleResearchBody(bodyText: string, request: Request, env: GatewayEnv, maxBytes: number): Promise<Response> {
   let body: KyraResearchRequest;
   try {
     body = JSON.parse(bodyText) as KyraResearchRequest;
@@ -282,12 +307,15 @@ async function handleResearchBody(bodyText: string, request: Request, env: Env, 
         metadata: { liveResearch: true, sanitizedContext: true },
       });
     }
-    return jsonResearch({
-      ok: false,
-      errorCode: "provider_unavailable",
-      safeMessage:
-        "I couldn’t load live BTC pricing right now. The crypto live tool may be unavailable or rate-limited. Try again in a minute or check provider settings.",
-    }, 503);
+    return jsonResearch(
+      {
+        ok: false,
+        errorCode: "provider_unavailable",
+        safeMessage:
+          "I couldn’t load live BTC pricing right now. The crypto live tool may be unavailable or rate-limited. Try again in a minute or check provider settings.",
+      },
+      503,
+    );
   }
 
   if (intent === "software_version" || (prompt.toLowerCase().includes("ventoy") && prompt.toLowerCase().includes("version"))) {
@@ -307,17 +335,19 @@ async function handleResearchBody(bodyText: string, request: Request, env: Env, 
 
   if (intent === "finance") {
     const financeConfigured = !!(env.FINNHUB_API_KEY || env.ALPHA_VANTAGE_API_KEY || env.FMP_API_KEY);
-    return jsonResearch({
-      ok: false,
-      errorCode: financeConfigured ? "provider_unavailable" : "not_configured",
-      safeMessage: financeConfigured
-        ? "Live finance data is configured on the gateway, but the finance research tool could not verify this request right now. I will not invent market data."
-        : "Live finance data is not configured on the gateway yet. I will not invent current stock market changes.",
-    }, financeConfigured ? 503 : 501);
+    return jsonResearch(
+      {
+        ok: false,
+        errorCode: financeConfigured ? "provider_unavailable" : "not_configured",
+        safeMessage: financeConfigured
+          ? "Live finance data is configured on the gateway, but the finance research tool could not verify this request right now. I will not invent market data."
+          : "Live finance data is not configured on the gateway yet. I will not invent current stock market changes.",
+      },
+      financeConfigured ? 503 : 501,
+    );
   }
 
-  const providers = buildProviderList(env);
-  if (providers.length === 0) {
+  if (!anyLlmConfigured(env)) {
     return jsonResearch({
       ok: false,
       errorCode: "not_configured",
@@ -345,43 +375,40 @@ Rules:
 
 User question:
 ${prompt}`.slice(0, maxBytes);
+
+  const routingCtx = ctxLine;
   const pseudoBody: KyraGatewayRequest = {
     personality: "bubbly-tech",
     maxTokens: 900,
     temperature: 0.35,
   };
 
-  for (let i = 0; i < providers.length; i++) {
-    const provider = providers[i];
-    const result = await callOpenAiCompatible(
-      provider,
-      pseudoBody,
-      userContent,
-      Number(env.PROVIDER_TIMEOUT_MS ?? "45000"),
-      researchSystem,
-    );
-    if (result.ok) {
-      const text = result.message;
-      if (intent === "crypto" || intent === "finance") {
-        if (/\bknowledge cutoff\b|as of my last update|don't have real-time|do not have real-time/i.test(text)) {
-          return jsonResearch({
+  const llm = await runLlmInferenceChain(env, pseudoBody, userContent, researchSystem, intent, prompt, routingCtx);
+
+  if (llm.ok) {
+    const text = llm.message;
+    if (intent === "crypto" || intent === "finance") {
+      if (/\bknowledge cutoff\b|as of my last update|don't have real-time|do not have real-time/i.test(text)) {
+        return jsonResearch(
+          {
             ok: false,
             errorCode: "stale_wording_rejected",
             safeMessage:
               "I couldn’t return verified live market data from the gateway. Try again shortly or check operator configuration.",
-          }, 503);
-        }
+          },
+          503,
+        );
       }
-      return jsonResearch({
-        ok: true,
-        answer: text,
-        tool: "llm",
-        provider: provider.name,
-        freshnessUtc: nowIso,
-        confidence: "medium",
-        metadata: { liveResearch: true, sanitizedContext: true },
-      });
     }
+    return jsonResearch({
+      ok: true,
+      answer: text,
+      tool: "llm",
+      provider: llm.providerUsed,
+      freshnessUtc: nowIso,
+      confidence: "medium",
+      metadata: { liveResearch: true, sanitizedContext: true },
+    });
   }
 
   return jsonResearch(
@@ -467,21 +494,7 @@ async function fetchVentoyLatestVersion(): Promise<string | null> {
   }
 }
 
-function buildProviderList(env: Env): Array<{ name: string; baseUrl: string; key: string; model: string }> {
-  return [
-    env.OPENAI_API_KEY
-      ? { name: "openai", baseUrl: "https://api.openai.com/v1", key: env.OPENAI_API_KEY, model: env.DEFAULT_MODEL || "gpt-4o-mini" }
-      : null,
-    env.OPENROUTER_API_KEY
-      ? { name: "openrouter", baseUrl: "https://openrouter.ai/api/v1", key: env.OPENROUTER_API_KEY, model: "openrouter/auto" }
-      : null,
-    env.GROQ_API_KEY
-      ? { name: "groq", baseUrl: "https://api.groq.com/openai/v1", key: env.GROQ_API_KEY, model: "llama-3.1-8b-instant" }
-      : null,
-  ].filter(Boolean) as Array<{ name: string; baseUrl: string; key: string; model: string }>;
-}
-
-async function handleLegacyChatBody(bodyText: string, request: Request, env: Env, maxBytes: number): Promise<Response> {
+async function handleLegacyChatBody(bodyText: string, request: Request, env: GatewayEnv, maxBytes: number): Promise<Response> {
   let body: KyraGatewayRequest;
   try {
     body = JSON.parse(bodyText) as KyraGatewayRequest;
@@ -512,7 +525,7 @@ async function handleLegacyChatBody(bodyText: string, request: Request, env: Env
     );
   }
 
-  const prompt = sanitizeForProvider(body.userMessage ?? "");
+  const prompt = extractChatUserText(body, sanitizeForProvider);
   if (!prompt) {
     return jsonLegacy({ ok: false, errorCode: "EmptyPrompt", message: "Kyra needs a prompt to answer." }, 400);
   }
@@ -523,43 +536,180 @@ async function handleLegacyChatBody(bodyText: string, request: Request, env: Env
   const memory = body.memorySummary ? `\n\nSafe memory summary:\n${sanitizeForProvider(body.memorySummary)}` : "";
   const userContent = `${prompt}${context}${memory}`.slice(0, maxBytes);
 
-  const providers = buildProviderList(env);
-
-  if (providers.length === 0) {
+  if (!anyLlmConfigured(env)) {
     return jsonLegacy({ ok: false, errorCode: "NoProviderConfigured", message: "Kyra gateway has no server-side provider configured." }, 503);
   }
 
-  let lastError = "unknown";
-  for (let i = 0; i < providers.length; i++) {
-    const provider = providers[i];
-    const result = await callOpenAiCompatible(
-      provider,
-      body,
-      userContent,
-      Number(env.PROVIDER_TIMEOUT_MS ?? "45000"),
-      `You are Kyra, the ForgerEMS beta assistant. Be concise, useful, and do not ask for secrets. Personality: ${body.personality ?? "bubbly-tech"}.`,
-    );
-    if (result.ok) {
-      return jsonLegacy({
-        ok: true,
-        providerUsed: provider.name,
-        modelUsed: provider.model,
-        message: result.message,
-        toolResults: [],
-        fallbackUsed: i > 0,
-        diagnosticNote: "gateway response",
-      });
-    }
+  const systemPrompt = `You are Kyra, the ForgerEMS beta assistant. Be concise, useful, and do not ask for secrets. Personality: ${body.personality ?? "bubbly-tech"}.`;
+  const intent = (body.intent ?? "chat").toLowerCase();
+  const routingCtx = body.machineContext?.summary ? sanitizeForProvider(body.machineContext.summary).slice(0, 2000) : "";
 
-    lastError = result.errorCode;
+  const llm = await runLlmInferenceChain(env, body, userContent, systemPrompt, intent, prompt, routingCtx);
+
+  if (llm.ok) {
+    return jsonLegacy({
+      ok: true,
+      providerUsed: llm.providerUsed,
+      modelUsed: llm.modelUsed,
+      message: llm.message,
+      toolResults: [],
+      fallbackUsed: llm.fallbackUsed,
+      diagnosticNote: "gateway response",
+    });
   }
 
   return jsonLegacy({
     ok: false,
     errorCode: "GatewayProviderFailure",
     message: "Kyra gateway providers are unavailable. Local/offline mode is still available.",
-    diagnosticNote: lastError,
+    diagnosticNote: llm.errorCode,
   }, 503);
+}
+
+type LlmChainOk = {
+  ok: true;
+  message: string;
+  providerUsed: string;
+  modelUsed: string;
+  fallbackUsed: boolean;
+};
+
+type LlmChainFail = { ok: false; errorCode: string };
+
+export async function runLlmInferenceChain(
+  env: GatewayEnv,
+  body: KyraGatewayRequest,
+  userContent: string,
+  systemPrompt: string,
+  intent: string,
+  routingPrompt: string,
+  routingContext: string,
+): Promise<LlmChainOk | LlmChainFail> {
+  const timeoutMs = Number(env.PROVIDER_TIMEOUT_MS ?? "45000");
+  const { selectedModel, route } = selectGatewayModel(intent, routingPrompt, routingContext, env);
+  const cfModels = workersAiAvailable(env) ? buildCfInferenceSequence(selectedModel, route, env) : [];
+  const externals = buildExternalProviders(env);
+
+  let attempt = 0;
+  let firstRoute = true;
+
+  for (const modelId of cfModels) {
+    const result = await callCloudflareWorkersAi(env, modelId, systemPrompt, userContent, body, timeoutMs);
+    if (result.ok) {
+      return {
+        ok: true,
+        message: result.message,
+        providerUsed: "cloudflare-workers-ai",
+        modelUsed: modelId,
+        fallbackUsed: !firstRoute,
+      };
+    }
+    firstRoute = false;
+    attempt++;
+  }
+
+  for (let i = 0; i < externals.length; i++) {
+    const provider = externals[i];
+    const result = await callOpenAiCompatible(provider, body, userContent, timeoutMs, systemPrompt);
+    if (result.ok) {
+      return {
+        ok: true,
+        message: result.message,
+        providerUsed: provider.name,
+        modelUsed: provider.model,
+        fallbackUsed: attempt > 0 || i > 0,
+      };
+    }
+    attempt++;
+  }
+
+  return { ok: false, errorCode: "AllProvidersFailed" };
+}
+
+function extractWorkersAiText(result: unknown): string {
+  if (typeof result === "string") {
+    return result.trim();
+  }
+  if (!result || typeof result !== "object") {
+    return "";
+  }
+  const r = result as Record<string, unknown>;
+  if (typeof r.response === "string" && r.response.trim()) {
+    return r.response.trim();
+  }
+  const nested = r.result;
+  if (nested && typeof nested === "object") {
+    const nr = nested as Record<string, unknown>;
+    if (typeof nr.response === "string" && nr.response.trim()) {
+      return nr.response.trim();
+    }
+  }
+  if (typeof r.output_text === "string" && r.output_text.trim()) {
+    return r.output_text.trim();
+  }
+  return "";
+}
+
+async function callCloudflareWorkersAi(
+  env: GatewayEnv,
+  modelId: string,
+  systemPrompt: string,
+  userContent: string,
+  body: KyraGatewayRequest,
+  providerTimeoutMs: number,
+): Promise<{ ok: true; message: string } | { ok: false; errorCode: string }> {
+  if (!modelId.startsWith("@cf/")) {
+    return { ok: false, errorCode: "NotCloudflareModel" };
+  }
+  if (!workersAiAvailable(env)) {
+    return { ok: false, errorCode: "WorkersAiUnbound" };
+  }
+
+  const ai = env.AI;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), clamp(providerTimeoutMs, 1500, 90000));
+  const maxTok = Math.min(Math.max(body.maxTokens ?? 1000, 128), 2048);
+  const temp = Math.min(Math.max(body.temperature ?? 0.5, 0), 1);
+
+  try {
+    const messagesPayload: Record<string, unknown> = {
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userContent },
+      ],
+      max_tokens: maxTok,
+      temperature: temp,
+    };
+
+    let result: unknown;
+    try {
+      result = await ai.run(modelId, messagesPayload, { signal: controller.signal });
+    } catch {
+      result = null;
+    }
+
+    let text = extractWorkersAiText(result);
+    if (!text) {
+      const altPayload: Record<string, unknown> = {
+        instructions: systemPrompt,
+        input: userContent,
+        max_tokens: maxTok,
+        temperature: temp,
+      };
+      try {
+        result = await ai.run(modelId, altPayload, { signal: controller.signal });
+      } catch {
+        result = null;
+      }
+      text = extractWorkersAiText(result);
+    }
+
+    return text ? { ok: true, message: text } : { ok: false, errorCode: "EmptyWorkersAiResponse" };
+  } catch {
+    return { ok: false, errorCode: "WorkersAiFailure" };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function callOpenAiCompatible(
@@ -569,6 +719,9 @@ async function callOpenAiCompatible(
   providerTimeoutMs: number,
   systemPrompt: string,
 ): Promise<{ ok: true; message: string } | { ok: false; errorCode: string }> {
+  if (provider.model.startsWith("@cf/")) {
+    return { ok: false, errorCode: "InvalidOpenAiModel" };
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort("provider-timeout"), clamp(providerTimeoutMs, 1500, 90000));
   let response: Response;
@@ -642,7 +795,7 @@ function clamp(value: number, min: number, max: number): number {
 
 async function evaluateRateLimit(
   request: Request,
-  env: Env,
+  env: GatewayEnv,
   betaToken: string | undefined,
 ): Promise<{ ok: true } | { ok: false; retryAfterSeconds?: number; resetUtc?: string }> {
   const enabled = String(env.RATE_LIMITS_ENABLED ?? "false").toLowerCase() === "true";

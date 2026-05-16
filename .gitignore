@@ -85,5 +85,6 @@ backend/legacy/VentoyToolkitSetup/IfScriptFails(ManualSetup)/
 *.temp
 *.bak
 *.orig
+nuget.config.ci
 
 # Release folders are generated local/CI outputs.

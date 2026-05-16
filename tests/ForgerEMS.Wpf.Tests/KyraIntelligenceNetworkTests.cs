@@ -197,7 +197,7 @@ public sealed class KyraIntelligenceNetworkTests
     {
         var xaml = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "ForgerEMS.Wpf", "MainWindow.xaml"));
 
-        Assert.Contains("Header=\"Kyra Intelligence\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Header=\"Kyra Intelligence (Beta)\"", xaml, StringComparison.Ordinal);
         Assert.Contains("KyraLocalRepairMemoryEnabled", xaml, StringComparison.Ordinal);
         Assert.Contains("KyraCommunitySharingEnabled", xaml, StringComparison.Ordinal);
         Assert.Contains("ViewKyraCommunityPayloadPreviewCommand", xaml, StringComparison.Ordinal);

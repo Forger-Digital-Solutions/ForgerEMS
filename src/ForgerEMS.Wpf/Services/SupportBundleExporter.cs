@@ -64,6 +64,9 @@ public static class SupportBundleExporter
             var si = Path.Combine(runtime.RuntimeRoot, "reports", "system-intelligence-latest.json");
             AddRedactedFileIfExists(zip, "reports/system-intelligence-latest.json", si);
 
+            var networkPulse = Path.Combine(runtime.RuntimeRoot, "reports", "network-pulse-latest.json");
+            AddRedactedFileIfExists(zip, "reports/network-pulse-latest.json", networkPulse);
+
             var bench = Path.Combine(runtime.RuntimeRoot, "cache", "usb-benchmarks.json");
             AddRedactedFileIfExists(zip, "cache/usb-benchmarks.json", bench);
 
@@ -97,6 +100,7 @@ public static class SupportBundleExporter
             - Redacted runtime session log and recent runtime logs
             - Redacted shared logs under %LOCALAPPDATA%\ForgerEMS\logs (startup, diagnostics, intelligence)
             - Latest System Intelligence JSON (paths redacted)
+            - Latest Network Pulse JSON when present (redacted; lightweight probe summary only)
             - USB benchmark cache JSON (redacted)
             - Managed download result JSON from the selected USB root (if present)
             - Update-check diagnostics and configuration health summaries from the app
