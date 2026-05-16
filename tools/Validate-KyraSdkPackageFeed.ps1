@@ -30,7 +30,10 @@ $ErrorActionPreference = 'Stop'
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $SolutionPath = Join-Path $RepoRoot 'ForgerEMS.Kyra.Sdk.sln'
 $NuGetConfigCi = Join-Path $RepoRoot 'nuget.config.ci'
-$KyraSdkMsbuildProperties = 'UseKyraSdkProjectReference=false;IncludeKyraSdkDogfoodTool=true'
+$KyraSdkMsbuildProperties = @(
+    '-p:UseKyraSdkProjectReference=false'
+    '-p:IncludeKyraSdkDogfoodTool=true'
+)
 
 function Resolve-KyraSdkFeedDirectory {
     param([string] $Candidate)
@@ -120,23 +123,34 @@ Write-NuGetConfigCi -FeedDirectory $feedDirectory
 
 $restoreArgs = @(
     'restore', $SolutionPath,
-    '--configfile', $NuGetConfigCi,
-    "-p:$KyraSdkMsbuildProperties"
+    '--configfile', $NuGetConfigCi
 )
+$restoreArgs += $KyraSdkMsbuildProperties
 Write-Host "==> dotnet restore ForgerEMS.Kyra.Sdk.sln (package mode)"
 & dotnet @restoreArgs
 if ($LASTEXITCODE -ne 0) { throw 'Package-mode restore failed.' }
 
-$buildArgs = @(
-    'build', $SolutionPath,
-    '-c', $Configuration,
-    '--no-restore',
-    '--configfile', $NuGetConfigCi,
-    "-p:$KyraSdkMsbuildProperties"
+$buildProjects = @(
+    (Join-Path $RepoRoot 'src\ForgerEMS.Kyra.HostAdapter\ForgerEMS.Kyra.HostAdapter.csproj')
+    (Join-Path $RepoRoot 'src\ForgerEMS.Kyra.SdkDogfood\ForgerEMS.Kyra.SdkDogfood.csproj')
+    (Join-Path $RepoRoot 'src\ForgerEMS.Wpf\ForgerEMS.Wpf.csproj')
+    (Join-Path $RepoRoot 'tests\ForgerEMS.Kyra.HostAdapter.Tests\ForgerEMS.Kyra.HostAdapter.Tests.csproj')
+    (Join-Path $RepoRoot 'tests\ForgerEMS.Wpf.Tests\ForgerEMS.Wpf.Tests.csproj')
 )
-Write-Host "==> dotnet build ForgerEMS.Kyra.Sdk.sln (package mode)"
-& dotnet @buildArgs
-if ($LASTEXITCODE -ne 0) { throw 'Package-mode build failed.' }
+
+foreach ($project in $buildProjects) {
+    $buildArgs = @(
+        'build', $project,
+        '-c', $Configuration,
+        '--no-restore',
+        '--configfile', $NuGetConfigCi
+    )
+    $buildArgs += $KyraSdkMsbuildProperties
+
+    Write-Host "==> dotnet build $([IO.Path]::GetFileName($project)) (package mode)"
+    & dotnet @buildArgs
+    if ($LASTEXITCODE -ne 0) { throw "Package-mode build failed: $project" }
+}
 
 if ($SkipTests) {
     Write-Host 'Skipped tests (-SkipTests).'
