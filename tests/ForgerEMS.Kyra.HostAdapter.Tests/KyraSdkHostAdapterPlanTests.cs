@@ -73,11 +73,12 @@ public class KyraSdkHostAdapterPlanTests : IDisposable
     }
 
     [Fact]
-    public void Nuget_config_points_at_kyra_sdk_feed()
+    public void Nuget_config_default_is_nuget_org_only()
     {
         var config = File.ReadAllText(Path.Combine(FindRepoRoot(), "nuget.config"));
-        Assert.Contains("sdk-current/feed", config, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("kyra-sdk-local", config, StringComparison.Ordinal);
+        Assert.Contains("nuget.org", config, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("kyra-sdk-local", config, StringComparison.Ordinal);
+        Assert.DoesNotContain("sdk-current/feed", config, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
