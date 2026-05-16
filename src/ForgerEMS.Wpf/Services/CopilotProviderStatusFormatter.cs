@@ -148,6 +148,13 @@ public static class CopilotProviderStatusFormatter
 
         if (!resolved.IsReady)
         {
+            if (provider.IsOnlineProvider &&
+                resolved.CredentialState == KyraProviderCredentialState.Missing &&
+                !string.IsNullOrWhiteSpace(envVarName))
+            {
+                return $"{provider.DisplayName} key not found. Enter a session API key or set {envVarName} for process, user, or machine scope, then tap Refresh Provider Status.";
+            }
+
             return $"{provider.DisplayName} is not ready: {resolved.SafeSkipReason}.";
         }
 
