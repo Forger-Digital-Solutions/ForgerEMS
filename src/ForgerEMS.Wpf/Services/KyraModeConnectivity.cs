@@ -19,7 +19,7 @@ public static class KyraModeConnectivity
         return mode switch
         {
             CopilotMode.OnlineWhenAvailable or CopilotMode.OnlineAssisted or CopilotMode.FreeApiPool
-                or CopilotMode.ForgerEmsCloudFuture or CopilotMode.BringYourOwnKey => CopilotMode.HybridAuto,
+                or CopilotMode.ForgerEmsBetaGateway or CopilotMode.ForgerEmsCloudFuture or CopilotMode.BringYourOwnKey => CopilotMode.HybridAuto,
             _ => mode
         };
     }

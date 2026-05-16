@@ -178,14 +178,14 @@ public sealed class UpdateCheckUiPresenterTests
 
         var s = UpdateCheckUiPresenter.Map(result, isManualCheck: true, Installed);
 
-        Assert.Contains("timed out", s.StatusText, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Timed out after 15 seconds", s.StatusText, System.StringComparison.OrdinalIgnoreCase);
         Assert.Equal(Visibility.Visible, s.BannerVisibility);
         Assert.Equal("Update check failed", s.BannerTitle);
         Assert.Equal(Visibility.Visible, s.DiagnosticsHintVisibility);
         Assert.NotNull(s.SafeDiagnosticText);
         Assert.Contains("Timeout", s.SafeDiagnosticText, System.StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Overall deadline", s.SafeDiagnosticText);
-        Assert.Contains("could not refresh", s.LatestChannelSummary, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("unable to check right now", s.LatestChannelSummary, System.StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

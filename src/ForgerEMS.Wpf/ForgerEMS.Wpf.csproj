@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
@@ -11,19 +11,24 @@
     <AssemblyName>ForgerEMS</AssemblyName>
     <Product>ForgerEMS</Product>
     <Company>Forger Digital Solutions</Company>
-    <Title>ForgerEMS v1.2.0 Public Preview</Title>
+    <Title>ForgerEMS v1.2.1 Public Preview</Title>
     <Description>ForgerEMS Public Preview — Windows technician suite (USB toolkit, System Intelligence, Kyra offline-first).</Description>
     <Authors>Forger Digital Solutions</Authors>
     <ApplicationIcon>Assets\ForgerEMS.ico</ApplicationIcon>
-    <Version>1.2.0-preview.1</Version>
-    <AssemblyVersion>1.2.0.0</AssemblyVersion>
-    <FileVersion>1.2.0.0</FileVersion>
-    <InformationalVersion>1.2.0-preview.1</InformationalVersion>
+    <Version>1.2.1-preview.1</Version>
+    <AssemblyVersion>1.2.1.0</AssemblyVersion>
+    <FileVersion>1.2.1.0</FileVersion>
+    <InformationalVersion>1.2.1-preview.1</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <DebugType>embedded</DebugType>
     <PublishTrimmed>false</PublishTrimmed>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <DefaultItemExcludes>$(DefaultItemExcludes);bin\**;obj\**;.artifacts\**</DefaultItemExcludes>
+    <ForgerNuGetPackageRoot Condition="'$(NuGetPackageRoot)' != ''">$(NuGetPackageRoot)</ForgerNuGetPackageRoot>
+    <ForgerNuGetPackageRoot Condition="'$(ForgerNuGetPackageRoot)' == '' and '$(NUGET_PACKAGES)' != ''">$(NUGET_PACKAGES)\</ForgerNuGetPackageRoot>
+    <ForgerNuGetPackageRoot Condition="'$(ForgerNuGetPackageRoot)' == ''">$(UserProfile)\.nuget\packages\</ForgerNuGetPackageRoot>
+    <ForgerLibreHardwareMonitorDll>$(ForgerNuGetPackageRoot)librehardwaremonitorlib\0.9.6\runtimes\win-x64\lib\net8.0\LibreHardwareMonitorLib.dll</ForgerLibreHardwareMonitorDll>
+    <IncludeKyraSdkDogfoodTool Condition="'$(IncludeKyraSdkDogfoodTool)' == ''">false</IncludeKyraSdkDogfoodTool>
   </PropertyGroup>
 
   <ItemGroup>
@@ -31,7 +36,16 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="System.Management" Version="8.0.0" />
+    <ProjectReference Include="..\Kyra.Core\Kyra.Core.csproj" BuildReference="true" ReferenceOutputAssembly="true" SkipGetTargetFrameworkProperties="true" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Kyra.Core" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
+    <PackageReference Include="System.Management" Version="10.0.2" />
   </ItemGroup>
 
   <ItemGroup>
@@ -41,5 +55,52 @@
     <Resource Include="Assets\Kyra.png" />
     <Resource Include="Assets\KyraAdvancedBackground.png" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\providers\sensors\**\*">
+      <Link>providers\sensors\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="$(ForgerLibreHardwareMonitorDll)" Condition="Exists('$(ForgerLibreHardwareMonitorDll)')">
+      <Link>providers\sensors\LibreHardwareMonitorLib.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <Target Name="CopyLibreHardwareMonitorProviderToOutput" AfterTargets="Build" Condition="Exists('$(ForgerLibreHardwareMonitorDll)')">
+    <Copy SourceFiles="$(ForgerLibreHardwareMonitorDll)" DestinationFiles="$(OutputPath)providers\sensors\LibreHardwareMonitorLib.dll" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyLibreHardwareMonitorProviderToPublish" AfterTargets="Publish" Condition="Exists('$(ForgerLibreHardwareMonitorDll)')">
+    <Copy SourceFiles="$(ForgerLibreHardwareMonitorDll)" DestinationFiles="$(PublishDir)providers\sensors\LibreHardwareMonitorLib.dll" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyKyraSdkDogfoodTool" AfterTargets="Build" Condition="'$(IncludeKyraSdkDogfoodTool)' == 'true'">
+    <PropertyGroup>
+      <_KyraSdkDogfoodOut>$(MSBuildThisFileDirectory)..\ForgerEMS.Kyra.SdkDogfood\bin\$(Configuration)\net8.0\</_KyraSdkDogfoodOut>
+      <_KyraSdkDogfoodDest>$(OutputPath)tools\kyra-sdk-dogfood\</_KyraSdkDogfoodDest>
+    </PropertyGroup>
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\ForgerEMS.Kyra.SdkDogfood\ForgerEMS.Kyra.SdkDogfood.csproj" Properties="Configuration=$(Configuration);UseKyraSdkProjectReference=$(UseKyraSdkProjectReference)" Targets="Build" />
+    <ItemGroup>
+      <_KyraSdkDogfoodFiles Include="$(_KyraSdkDogfoodOut)**\*.*" />
+    </ItemGroup>
+    <MakeDir Directories="$(_KyraSdkDogfoodDest)" />
+    <Copy SourceFiles="@(_KyraSdkDogfoodFiles)" DestinationFolder="$(_KyraSdkDogfoodDest)%(RecursiveDir)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyKyraSdkDogfoodToolToPublish" AfterTargets="Publish" Condition="'$(IncludeKyraSdkDogfoodTool)' == 'true'">
+    <PropertyGroup>
+      <_KyraSdkDogfoodOut>$(MSBuildThisFileDirectory)..\ForgerEMS.Kyra.SdkDogfood\bin\$(Configuration)\net8.0\</_KyraSdkDogfoodOut>
+      <_KyraSdkDogfoodDest>$(PublishDir)tools\kyra-sdk-dogfood\</_KyraSdkDogfoodDest>
+    </PropertyGroup>
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\ForgerEMS.Kyra.SdkDogfood\ForgerEMS.Kyra.SdkDogfood.csproj" Properties="Configuration=$(Configuration);UseKyraSdkProjectReference=$(UseKyraSdkProjectReference)" Targets="Build" />
+    <ItemGroup>
+      <_KyraSdkDogfoodPublishFiles Include="$(_KyraSdkDogfoodOut)**\*.*" />
+    </ItemGroup>
+    <MakeDir Directories="$(_KyraSdkDogfoodDest)" />
+    <Copy SourceFiles="@(_KyraSdkDogfoodPublishFiles)" DestinationFolder="$(_KyraSdkDogfoodDest)%(RecursiveDir)" SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>

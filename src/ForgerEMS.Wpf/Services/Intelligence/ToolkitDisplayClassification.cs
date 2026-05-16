@@ -20,6 +20,11 @@ public static class ToolkitDisplayClassification
             return "Managed Missing";
         }
 
+        if (s.Contains("COVERED_BY_MANAGED", StringComparison.Ordinal))
+        {
+            return "Covered / Suppressed";
+        }
+
         if (s.Contains("MANUAL", StringComparison.Ordinal) || t.Contains("MANUAL", StringComparison.Ordinal))
         {
             return "Manual Required";
@@ -29,6 +34,12 @@ public static class ToolkitDisplayClassification
             s.Contains("VERIFY", StringComparison.Ordinal) && v.Contains("FAIL", StringComparison.Ordinal))
         {
             return "Verification Issues";
+        }
+
+        if (s.Contains("VERIFICATION_PENDING", StringComparison.Ordinal) ||
+            s.Contains("PENDING", StringComparison.Ordinal))
+        {
+            return "Verification Pending";
         }
 
         if (s.Contains("UPDATE", StringComparison.Ordinal))

@@ -1,3 +1,4 @@
+#pragma warning disable CA1822 // DI-injected service; methods called via instance reference
 using System;
 using System.IO;
 using System.Linq;
@@ -36,6 +37,7 @@ public sealed class UsbMachineProfileStore
                 var profile = JsonSerializer.Deserialize<UsbMachineProfile>(json, JsonOptions);
                 if (profile is not null && !string.IsNullOrWhiteSpace(profile.MachineFingerprintHash))
                 {
+                    UsbPortLabelNormalizer.NormalizeProfile(profile);
                     return profile;
                 }
             }
@@ -59,6 +61,7 @@ public sealed class UsbMachineProfileStore
 
     public void Save(UsbMachineProfile profile)
     {
+        UsbPortLabelNormalizer.NormalizeProfile(profile);
         profile.LastUpdatedUtc = DateTimeOffset.UtcNow;
         var dir = Path.GetDirectoryName(_profilePath);
         if (!string.IsNullOrEmpty(dir))
@@ -117,7 +120,31 @@ public sealed class UsbMachineProfileStore
             if (!string.IsNullOrEmpty(letter) &&
                 profile.PendingBenchmarkByDriveLetter.TryGetValue(letter, out var pendingBench))
             {
-                MergePendingBenchmark(profile, d.StablePortKey, pendingBench, now, d);
+                var labelStatus = UsbPortLabelResolver.Resolve(d, profile);
+                if (labelStatus.CanAttachBenchmarkToVerifiedPort && labelStatus.CurrentRecord is not null)
+                {
+                    var attached = UsbPortLabelResolver.WithPortAttachment(
+                        pendingBench,
+                        attachedToVerifiedPort: true,
+                        labelStatus.CurrentLabel,
+                        labelStatus.Validity);
+                    MergePendingBenchmark(labelStatus.CurrentRecord, attached, now, d);
+                }
+                else
+                {
+                    profile.UnverifiedBenchmarkByDriveLetter[letter] = UsbPortLabelResolver.WithPortAttachment(
+                        pendingBench,
+                        attachedToVerifiedPort: false,
+                        labelStatus.LastKnownLabel,
+                        labelStatus.Validity);
+                    profile.LastBenchmarkPlaceholder =
+                        "Benchmark measured on unverified current port; save/update a port label to attach it to a physical port.";
+                    if (!string.IsNullOrWhiteSpace(d.StablePortKey))
+                    {
+                        TouchKnownPort(profile, d.StablePortKey, now);
+                    }
+                }
+
                 profile.PendingBenchmarkByDriveLetter.Remove(letter);
             }
             else if (!string.IsNullOrWhiteSpace(d.StablePortKey))
@@ -154,26 +181,14 @@ public sealed class UsbMachineProfileStore
     }
 
     private static void MergePendingBenchmark(
-        UsbMachineProfile profile,
-        string stablePortKey,
+        UsbKnownPortRecord rec,
         UsbIntelligenceBenchmarkResult bench,
         DateTimeOffset when,
         UsbDeviceInfo device)
     {
-        if (string.IsNullOrWhiteSpace(stablePortKey))
-        {
-            return;
-        }
-
-        var rec = profile.KnownPorts.FirstOrDefault(p => p.StablePortKey == stablePortKey);
-        if (rec is null)
-        {
-            rec = new UsbKnownPortRecord { StablePortKey = stablePortKey };
-            profile.KnownPorts.Add(rec);
-        }
-
         rec.LastBenchmark = bench;
         rec.LastSeenUtc = when;
+        rec.UpdatedUtc = when;
         rec.Confidence = Math.Max(rec.Confidence, Math.Max(bench.ConfidenceScore, device.ConfidenceScore));
     }
 

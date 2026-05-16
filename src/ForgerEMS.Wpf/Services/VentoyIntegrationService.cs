@@ -1,8 +1,11 @@
+#pragma warning disable CA1001 // VentoyIntegrationService.SemaphoreSlim is long-lived; disposal handled by host
+#pragma warning disable CS0414 // _ownsHttpClient: reserved for future disposal path
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -27,15 +30,45 @@ public interface IVentoyIntegrationService
 
 public sealed class VentoyIntegrationService : IVentoyIntegrationService
 {
+    private static readonly TimeSpan LatestVentoyTtl = TimeSpan.FromMinutes(20);
+    private static readonly Regex VersionPattern = new(@"\d+\.\d+\.\d+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex VentoyWindowsAssetPattern = new(
+        @"^ventoy-(\d+\.\d+\.\d+)-windows\.zip$",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex ShaLinePattern = new(
+        @"(?<sha>[a-fA-F0-9]{64})\s+[* ]?(?<file>ventoy-\d+\.\d+\.\d+-windows\.zip)",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     private readonly IPowerShellRunnerService _powerShellRunnerService;
     private readonly IAppRuntimeService _appRuntimeService;
+    private readonly HttpClient _httpClient;
+    private readonly bool _ownsHttpClient;
+    private readonly SemaphoreSlim _resolutionLock = new(1, 1);
+    private VentoyPackageResolution? _cachedLatestResolution;
+    private DateTimeOffset _cachedLatestAtUtc;
 
     public VentoyIntegrationService(
         IPowerShellRunnerService powerShellRunnerService,
-        IAppRuntimeService appRuntimeService)
+        IAppRuntimeService appRuntimeService,
+        HttpClient? httpClient = null)
     {
         _powerShellRunnerService = powerShellRunnerService;
         _appRuntimeService = appRuntimeService;
+        if (httpClient is not null)
+        {
+            _httpClient = httpClient;
+            _ownsHttpClient = false;
+        }
+        else
+        {
+            _httpClient = new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(20)
+            };
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "ForgerEMS-Wpf/1.2");
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/vnd.github+json");
+            _ownsHttpClient = true;
+        }
     }
 
     public async Task<VentoyStatusInfo> GetStatusAsync(
@@ -43,10 +76,10 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
         UsbTargetInfo? target,
         CancellationToken cancellationToken = default)
     {
-        var package = await TryLoadPackageAsync(backendContext, cancellationToken).ConfigureAwait(false);
+        var package = await ResolvePackageAsync(backendContext, cancellationToken).ConfigureAwait(false);
         var packageText = package is null
             ? "Official Ventoy package source was not found in the backend manifest."
-            : $"{package.DisplayName} | SHA-256 pinned in manifest | Source: {package.Url}";
+            : $"{package.DisplayName} | SHA-256 verified | Source: {package.Url} ({package.SourceLabel})";
 
         if (target is null)
         {
@@ -57,7 +90,7 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
                 StatusText = "Select a USB target",
                 DetailText = "Choose a USB target to inspect whether Ventoy already appears to be installed on that device.",
                 PackageText = packageText,
-                PackageVersion = package?.Version ?? string.Empty,
+                PackageVersion = package?.Package.Version ?? string.Empty,
                 OfficialDownloadUrl = package?.Url ?? string.Empty,
                 ManualNotePath = package?.ManualNotePath ?? string.Empty
             };
@@ -74,7 +107,7 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
             StatusText = detection.IsInstalled ? "Ventoy detected" : "Ventoy not detected",
             DetailText = detection.DetailText,
             PackageText = packageText,
-            PackageVersion = package?.Version ?? string.Empty,
+            PackageVersion = package?.Package.Version ?? string.Empty,
             OfficialDownloadUrl = package?.Url ?? string.Empty,
             ManualNotePath = package?.ManualNotePath ?? string.Empty
         };
@@ -86,7 +119,7 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
         Action<LogLine>? onOutput = null,
         CancellationToken cancellationToken = default)
     {
-        var package = await TryLoadPackageAsync(backendContext, cancellationToken).ConfigureAwait(false);
+        var package = await ResolvePackageAsync(backendContext, cancellationToken).ConfigureAwait(false);
         if (package is null)
         {
             return new VentoyLaunchResult
@@ -106,7 +139,7 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
         {
             DisplayName = "Prepare official Ventoy package",
             WorkingDirectory = backendContext.WorkingDirectory,
-            InlineCommand = BuildPreparationCommand(package.Url, packagePath, extractRoot, package.Sha256),
+            InlineCommand = BuildPreparationCommand(package.Url, packagePath, extractRoot, package.Sha256, package.SourceLabel, package.ResolutionNote),
             ProgressItemName = "Ventoy package"
         };
 
@@ -163,7 +196,180 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
         };
     }
 
-    private static async Task<ManifestVentoyPackage?> TryLoadPackageAsync(BackendContext backendContext, CancellationToken cancellationToken)
+    private async Task<VentoyPackageResolution?> ResolvePackageAsync(BackendContext backendContext, CancellationToken cancellationToken)
+    {
+        if (_cachedLatestResolution is not null &&
+            DateTimeOffset.UtcNow - _cachedLatestAtUtc < LatestVentoyTtl)
+        {
+            return _cachedLatestResolution;
+        }
+
+        await _resolutionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (_cachedLatestResolution is not null &&
+                DateTimeOffset.UtcNow - _cachedLatestAtUtc < LatestVentoyTtl)
+            {
+                return _cachedLatestResolution;
+            }
+
+            var pinned = await TryLoadPinnedPackageAsync(backendContext, cancellationToken).ConfigureAwait(false);
+            var latest = await TryResolveLatestGitHubReleaseAsync(backendContext, pinned, cancellationToken).ConfigureAwait(false);
+            if (latest is not null)
+            {
+                _cachedLatestResolution = latest;
+                _cachedLatestAtUtc = DateTimeOffset.UtcNow;
+                return latest;
+            }
+
+            if (pinned is null)
+            {
+                return null;
+            }
+
+            var fallback = new VentoyPackageResolution(
+                pinned,
+                "Pinned fallback",
+                $"Latest lookup unavailable; using pinned verified Ventoy package {pinned.Version}.");
+            _cachedLatestResolution = fallback;
+            _cachedLatestAtUtc = DateTimeOffset.UtcNow;
+            return fallback;
+        }
+        finally
+        {
+            _resolutionLock.Release();
+        }
+    }
+
+    private async Task<VentoyPackageResolution?> TryResolveLatestGitHubReleaseAsync(
+        BackendContext backendContext,
+        ManifestVentoyPackage? pinned,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var releaseResponse = await _httpClient
+                .GetAsync("https://api.github.com/repos/ventoy/Ventoy/releases/latest", cancellationToken)
+                .ConfigureAwait(false);
+            if (!releaseResponse.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            await using var stream = await releaseResponse.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            using var releaseDoc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var root = releaseDoc.RootElement;
+            if (!root.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            string? zipUrl = null;
+            string? zipName = null;
+            string? releaseTag = GetString(root, "tag_name");
+            string? checksumUrl = null;
+            foreach (var asset in assets.EnumerateArray())
+            {
+                var name = GetString(asset, "name");
+                var url = GetString(asset, "browser_download_url");
+                if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(url))
+                {
+                    continue;
+                }
+
+                if (VentoyWindowsAssetPattern.IsMatch(name))
+                {
+                    zipName = name;
+                    zipUrl = url;
+                }
+                else if (name.Contains("sha256", StringComparison.OrdinalIgnoreCase) ||
+                         name.Contains("checksum", StringComparison.OrdinalIgnoreCase))
+                {
+                    checksumUrl ??= url;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(zipUrl) || string.IsNullOrWhiteSpace(zipName))
+            {
+                return null;
+            }
+
+            var version = ExtractVersion(releaseTag ?? string.Empty, zipName);
+            var sha = await TryReadReleaseSha256Async(zipName, checksumUrl, root, cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(sha))
+            {
+                return null;
+            }
+
+            var latest = new ManifestVentoyPackage
+            {
+                DisplayName = $"Ventoy {version} (Windows package)",
+                Version = version,
+                Url = zipUrl,
+                Sha256 = sha,
+                FileName = zipName,
+                ManualNotePath = FindManualNotePath(backendContext)
+            };
+
+            var source = pinned is not null &&
+                         string.Equals(pinned.Version, latest.Version, StringComparison.OrdinalIgnoreCase) &&
+                         string.Equals(pinned.Sha256, latest.Sha256, StringComparison.OrdinalIgnoreCase)
+                ? "Cached latest"
+                : "Latest official release";
+            return new VentoyPackageResolution(latest, source, string.Empty);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task<string?> TryReadReleaseSha256Async(
+        string zipName,
+        string? checksumUrl,
+        JsonElement releaseRoot,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(checksumUrl))
+        {
+            try
+            {
+                var checksumBody = await _httpClient.GetStringAsync(checksumUrl, cancellationToken).ConfigureAwait(false);
+                var parsedFromAsset = ParseSha256FromText(checksumBody, zipName);
+                if (!string.IsNullOrWhiteSpace(parsedFromAsset))
+                {
+                    return parsedFromAsset;
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        var body = GetString(releaseRoot, "body");
+        return ParseSha256FromText(body, zipName);
+    }
+
+    private static string? ParseSha256FromText(string? text, string zipName)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        foreach (Match match in ShaLinePattern.Matches(text))
+        {
+            var file = match.Groups["file"].Value;
+            if (string.Equals(file, zipName, StringComparison.OrdinalIgnoreCase))
+            {
+                return match.Groups["sha"].Value.ToLowerInvariant();
+            }
+        }
+
+        return null;
+    }
+
+    private static async Task<ManifestVentoyPackage?> TryLoadPinnedPackageAsync(BackendContext backendContext, CancellationToken cancellationToken)
     {
         if (!backendContext.IsAvailable)
         {
@@ -379,7 +585,13 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
         return string.Empty;
     }
 
-    private static string BuildPreparationCommand(string packageUrl, string packagePath, string extractRoot, string expectedSha256)
+    private static string BuildPreparationCommand(
+        string packageUrl,
+        string packagePath,
+        string extractRoot,
+        string expectedSha256,
+        string sourceLabel,
+        string resolutionNote)
     {
         return $$"""
             $ErrorActionPreference = 'Stop'
@@ -390,6 +602,62 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
             $packagePath = {{ToSingleQuotedPowerShellLiteral(packagePath)}}
             $extractRoot = {{ToSingleQuotedPowerShellLiteral(extractRoot)}}
             $expectedSha256 = {{ToSingleQuotedPowerShellLiteral(expectedSha256)}}
+            $sourceLabel = {{ToSingleQuotedPowerShellLiteral(sourceLabel)}}
+            $resolutionNote = {{ToSingleQuotedPowerShellLiteral(resolutionNote)}}
+
+            Write-Host ('[INFO] Ventoy package source: ' + $sourceLabel)
+            if (-not [string]::IsNullOrWhiteSpace($resolutionNote)) {
+                Write-Host ('[WARN] ' + $resolutionNote)
+            }
+
+            $runtimeCandidates = @(
+                (Join-Path (Get-Location).Path 'ForgerEMS.Runtime.ps1'),
+                (Join-Path (Get-Location).Path 'backend\ForgerEMS.Runtime.ps1')
+            ) | Select-Object -Unique
+
+            $runtimeLoaded = $false
+            foreach ($candidate in $runtimeCandidates) {
+                if (Test-Path -LiteralPath $candidate) {
+                    . $candidate
+                    $runtimeLoaded = $true
+                    break
+                }
+            }
+
+            if (-not $runtimeLoaded -or -not (Get-Command -Name Get-ForgerSha256 -ErrorAction SilentlyContinue)) {
+                throw 'Could not load the ForgerEMS SHA-256 helper needed to verify the Ventoy package.'
+            }
+
+            function Write-ForgerHashProviderLog {
+                param([Parameter(Mandatory = $true)][string]$Path)
+
+                $provider = Get-ForgerLastHashProvider
+                if ([string]::IsNullOrWhiteSpace($provider)) {
+                    $provider = 'Unknown'
+                }
+
+                $friendlyProvider = switch ($provider) {
+                    'DotNetFallback' { 'Built-in .NET (large-file safe)' }
+                    'Get-FileHash' { 'Windows Get-FileHash' }
+                    default { $provider }
+                }
+
+                $safePath = Get-ForgerSafePathForLog -Path $Path
+                Write-Host ('[INFO] SHA256 hash provider: ' + $friendlyProvider + ' file=' + $safePath)
+            }
+
+            function Get-VerifiedVentoyPackageHash {
+                param([Parameter(Mandatory = $true)][string]$Path)
+
+                try {
+                    $hash = Get-ForgerSha256 -LiteralPath $Path
+                    Write-ForgerHashProviderLog -Path $Path
+                    return $hash
+                }
+                catch {
+                    throw ('Could not verify Ventoy package checksum. ' + $_.Exception.Message)
+                }
+            }
 
             $packageDirectory = Split-Path -Parent $packagePath
             New-Item -ItemType Directory -Path $packageDirectory -Force | Out-Null
@@ -397,7 +665,7 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
 
             $needsDownload = $true
             if (Test-Path -LiteralPath $packagePath) {
-                $existingHash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+                $existingHash = Get-VerifiedVentoyPackageHash -Path $packagePath
                 if ($existingHash -eq $expectedSha256) {
                     Write-Host '[OK] Reusing cached official Ventoy package.'
                     $needsDownload = $false
@@ -417,7 +685,7 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
                     Invoke-WebRequest -Uri $packageUrl -OutFile $packagePath -UseBasicParsing -Headers @{ 'User-Agent' = 'ForgerEMS-Wpf/1.0' }
                 }
 
-                $actualHash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+                $actualHash = Get-VerifiedVentoyPackageHash -Path $packagePath
                 if ($actualHash -ne $expectedSha256) {
                     throw ('SHA-256 mismatch for Ventoy package. Expected ' + $expectedSha256 + ' but received ' + $actualHash + '.')
                 }
@@ -449,7 +717,7 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
     {
         foreach (var candidate in new[] { displayName, fileName })
         {
-            var match = Regex.Match(candidate, @"\d+\.\d+\.\d+");
+            var match = VersionPattern.Match(candidate);
             if (match.Success)
             {
                 return match.Value;
@@ -486,6 +754,34 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
         public string FileName { get; init; } = string.Empty;
 
         public string ManualNotePath { get; init; } = string.Empty;
+    }
+
+    private sealed class VentoyPackageResolution
+    {
+        public VentoyPackageResolution(ManifestVentoyPackage package, string sourceLabel, string resolutionNote)
+        {
+            Package = package;
+            SourceLabel = sourceLabel;
+            ResolutionNote = resolutionNote;
+        }
+
+        public ManifestVentoyPackage Package { get; }
+
+        public string SourceLabel { get; }
+
+        public string ResolutionNote { get; }
+
+        public string DisplayName => Package.DisplayName;
+
+        public string Version => Package.Version;
+
+        public string Url => Package.Url;
+
+        public string Sha256 => Package.Sha256;
+
+        public string FileName => Package.FileName;
+
+        public string ManualNotePath => Package.ManualNotePath;
     }
 
     private sealed class VentoyDetectionResult

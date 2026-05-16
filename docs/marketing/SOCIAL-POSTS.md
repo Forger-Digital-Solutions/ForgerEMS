@@ -1,8 +1,8 @@
-# Social posts — ForgerEMS v1.2.0 Public Preview
+# Social posts — ForgerEMS v1.2.1 Public Preview
 
 ## X / Twitter
 
-Shipped: **ForgerEMS v1.2.0 Public Preview** — Windows bench tool for **safer Ventoy USB work**, toolkit health, local system scans, and **Kyra** (offline-first repair guidance). Free preview build — USB safety first. `ForgerDigitalSolutions@outlook.com`
+Shipped: **ForgerEMS v1.2.1 Public Preview** — Windows bench tool for **safer Ventoy USB work**, toolkit health, local system scans, and **Kyra** (offline-first repair guidance). Free preview build — USB safety first. `ForgerDigitalSolutions@outlook.com`
 
 ## Facebook
 
@@ -10,7 +10,7 @@ We’re opening **ForgerEMS Public Preview** — a technician-focused Windows ap
 
 ## Reddit (r/sysadmin / r/techsupport style)
 
-**ForgerEMS 1.2.0-preview.1 [Public Preview] — Windows USB repair bench + System Intelligence + Kyra**
+**ForgerEMS 1.2.1-preview.1 [Public Preview] — Windows USB repair bench + System Intelligence + Kyra**
 
 - WPF / .NET 8, offline-first Kyra, GitHub Releases update checker.
 - USB Builder blocks internal/OS targets — still treat USB work like USB work.
@@ -29,5 +29,5 @@ CTA: “ZIP download on GitHub — link in bio.”
 
 ## YouTube Shorts (~45s)
 
-Show: safe USB selected → System Intelligence headline → Kyra offline answer snippet → Diagnostics “Export Support Bundle.”  
+Show: safe USB selected → System Intelligence headline → Kyra offline answer snippet → Diagnostics “Create Support Bundle.”  
 Say: “Public Preview — telemetry defaults off — read the safety card before any write.”

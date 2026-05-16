@@ -1,4 +1,5 @@
 using System.IO;
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Xunit;
 
@@ -55,6 +56,8 @@ public sealed class MechanicalRcReleaseVerificationTests
         Assert.Contains("DOWNLOAD THE ZIP", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("NOT THE EXE", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ForgerEMS-Beta-v", text, StringComparison.Ordinal);
+        Assert.Contains("Kyra Beta Gateway", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("No direct AI provider API keys are included", text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -67,9 +70,226 @@ public sealed class MechanicalRcReleaseVerificationTests
     }
 
     [Fact]
+    public void BackendHashHelper_NormalAndFallbackPathsMatchKnownSha256()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "fe-hash-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRoot);
+        try
+        {
+            var payloadPath = Path.Combine(tempRoot, "payload.bin");
+            File.WriteAllBytes(payloadPath, [0x61, 0x62, 0x63]);
+
+            var normal = RunPowerShell(
+                $". '{PsQuote(Path.Combine(RepoRoot, "backend", "ForgerEMS.Runtime.ps1"))}'; " +
+                $"$h = Get-ForgerSha256 -LiteralPath '{PsQuote(payloadPath)}'; " +
+                "Write-Output ($h + '|' + (Get-ForgerLastHashProvider))");
+            var fallback = RunPowerShell(
+                $". '{PsQuote(Path.Combine(RepoRoot, "backend", "ForgerEMS.Runtime.ps1"))}'; " +
+                $"$h = Get-ForgerSha256 -LiteralPath '{PsQuote(payloadPath)}' -ForceDotNetFallback; " +
+                "Write-Output ($h + '|' + (Get-ForgerLastHashProvider))");
+
+            Assert.StartsWith("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad|", normal, StringComparison.Ordinal);
+            Assert.Matches(@"^ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\|(Get-FileHash|DotNetFallback)$", normal.Trim());
+            Assert.Equal("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad|DotNetFallback", fallback.Trim());
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public void BackendHashHelper_MissingFileFailsClearly()
+    {
+        var missingPath = Path.Combine(Path.GetTempPath(), "fe-missing-" + Guid.NewGuid().ToString("N") + ".bin");
+
+        var result = RunPowerShellRaw(
+            $". '{PsQuote(Path.Combine(RepoRoot, "backend", "ForgerEMS.Runtime.ps1"))}'; " +
+            $"Get-ForgerSha256 -LiteralPath '{PsQuote(missingPath)}'",
+            expectSuccess: false);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Cannot calculate SHA256 for missing file", result.Error + result.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BackendHashHelper_DotNetFallbackStreamsLargeFile()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), "fe-hash-large-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempRoot);
+        try
+        {
+            var payloadPath = Path.Combine(tempRoot, "large.bin");
+            var bytes = new byte[1024 * 1024];
+            for (var i = 0; i < bytes.Length; i++)
+            {
+                bytes[i] = (byte)(i % 251);
+            }
+
+            File.WriteAllBytes(payloadPath, bytes);
+
+            var output = RunPowerShell(
+                $". '{PsQuote(Path.Combine(RepoRoot, "backend", "ForgerEMS.Runtime.ps1"))}'; " +
+                $"$h = Get-ForgerSha256 -LiteralPath '{PsQuote(payloadPath)}' -ForceDotNetFallback; " +
+                "Write-Output ($h + '|' + (Get-ForgerLastHashProvider))");
+
+            Assert.Matches("^[a-f0-9]{64}\\|DotNetFallback$", output.Trim());
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public void BackendVerificationScripts_UseCentralHashHelperForExecutableHashing()
+    {
+        var verify = File.ReadAllText(Path.Combine(RepoRoot, "backend", "Verify-VentoyCore.ps1"));
+        var update = File.ReadAllText(Path.Combine(RepoRoot, "backend", "Update-ForgerEMS.ps1"));
+        var health = File.ReadAllText(Path.Combine(RepoRoot, "backend", "ToolkitManager", "Get-ForgerEMSToolkitHealth.ps1"));
+        var buildBackend = File.ReadAllText(Path.Combine(RepoRoot, "tools", "build-backend-release.ps1"));
+        var ventoyIntegration = File.ReadAllText(Path.Combine(RepoRoot, "src", "ForgerEMS.Wpf", "Services", "VentoyIntegrationService.cs"));
+
+        Assert.DoesNotContain("(Get-FileHash", verify, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("(Get-FileHash", update, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("(Get-FileHash", health, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("(Get-FileHash", buildBackend, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("(Get-FileHash", ventoyIntegration, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Get-ForgerSha256", verify, StringComparison.Ordinal);
+        Assert.Contains("Get-ForgerSha256", update, StringComparison.Ordinal);
+        Assert.Contains("Get-ForgerSha256", health, StringComparison.Ordinal);
+        Assert.Contains("Get-ForgerSha256", buildBackend, StringComparison.Ordinal);
+        Assert.Contains("Get-ForgerSha256", ventoyIntegration, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void VentoyInstallPreparation_UsesRuntimeHashHelperAndFriendlyFallbackLogs()
+    {
+        var text = File.ReadAllText(Path.Combine(RepoRoot, "src", "ForgerEMS.Wpf", "Services", "VentoyIntegrationService.cs"));
+
+        Assert.Contains("ForgerEMS.Runtime.ps1", text, StringComparison.Ordinal);
+        Assert.Contains("Get-VerifiedVentoyPackageHash", text, StringComparison.Ordinal);
+        Assert.Contains("Get-ForgerSha256", text, StringComparison.Ordinal);
+        Assert.Contains("Built-in .NET (large-file safe)", text, StringComparison.Ordinal);
+        Assert.Contains("Could not verify Ventoy package checksum", text, StringComparison.Ordinal);
+        Assert.Contains("SHA-256 mismatch for Ventoy package", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Gitignore_Ignores_release_outputs()
     {
         var text = File.ReadAllText(Path.Combine(RepoRoot, ".gitignore"));
         Assert.Contains("release/", text, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void SensorProviderPackaging_CopiesLibreHardwareMonitorProviderAndNotices()
+    {
+        var project = File.ReadAllText(Path.Combine(RepoRoot, "src", "ForgerEMS.Wpf", "ForgerEMS.Wpf.csproj"));
+        var settingsXaml = File.ReadAllText(Path.Combine(RepoRoot, "src", "ForgerEMS.Wpf", "MainWindow.xaml"));
+        var installer = File.ReadAllText(Path.Combine(RepoRoot, "installer", "ForgerEMS.iss"));
+        var policy = File.ReadAllText(Path.Combine(RepoRoot, "docs", "THIRD-PARTY-SENSOR-NOTICES.md"));
+
+        Assert.Contains("LibreHardwareMonitorLib", project, StringComparison.Ordinal);
+        Assert.Contains("providers\\sensors", project, StringComparison.Ordinal);
+        Assert.Contains("CopyToPublishDirectory", project, StringComparison.Ordinal);
+        Assert.Contains(@"{#PublishDir}\providers\*", installer, StringComparison.Ordinal);
+        Assert.Contains("Enable Deep Sensor Mode by default (read-only local hardware sensors", installer, StringComparison.Ordinal);
+        Assert.Contains("Windows UAC approval", installer, StringComparison.Ordinal);
+        Assert.Contains(@"HKLM", installer, StringComparison.Ordinal);
+        Assert.Contains(@"Software\ForgerEMS", installer, StringComparison.Ordinal);
+        Assert.Contains("DeepSensorMode", installer, StringComparison.Ordinal);
+        Assert.Contains("ReadOnly", installer, StringComparison.Ordinal);
+        Assert.Contains("DeepSensorDisclosure", installer, StringComparison.Ordinal);
+        Assert.DoesNotContain("service", installer, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Read-only local sensors", settingsXaml, StringComparison.Ordinal);
+        Assert.Contains("DeepSensorModeSelectedIndex", settingsXaml, StringComparison.Ordinal);
+        Assert.Contains("DeepSensorModeConsentNotice", settingsXaml, StringComparison.Ordinal);
+        Assert.Contains("MPL-2.0", policy, StringComparison.Ordinal);
+        Assert.Contains("Modified MPL-covered files: none", policy, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CloudflareWorkerStarter_DocumentsNoSecretsAndRateLimitScaffold()
+    {
+        var workerReadme = File.ReadAllText(Path.Combine(RepoRoot, "gateway", "cloudflare-worker", "README.md"));
+        var workerGitIgnore = File.ReadAllText(Path.Combine(RepoRoot, "gateway", "cloudflare-worker", ".gitignore"));
+        var workerPackage = File.ReadAllText(Path.Combine(RepoRoot, "gateway", "cloudflare-worker", "package.json"));
+
+        Assert.Contains("Current beta gateway has token validation and request-size limits", workerReadme, StringComparison.Ordinal);
+        Assert.Contains("durable per-token/per-IP rate limiting should be enabled before broad public beta", workerReadme, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("npx wrangler@latest secret put BETA_GATEWAY_TOKEN", workerReadme, StringComparison.Ordinal);
+        Assert.Contains("401/403", workerReadme, StringComparison.Ordinal);
+        Assert.Contains("429", workerReadme, StringComparison.Ordinal);
+        Assert.Contains("500/503", workerReadme, StringComparison.Ordinal);
+        Assert.Contains("wrangler.toml", workerGitIgnore, StringComparison.Ordinal);
+        Assert.Contains(".dev.vars", workerGitIgnore, StringComparison.Ordinal);
+        Assert.Contains("wrangler@latest deploy", workerPackage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string RunPowerShell(string command) =>
+        RunPowerShellRaw(command, expectSuccess: true).Output.Trim();
+
+    private static (int ExitCode, string Output, string Error) RunPowerShellRaw(string command, bool expectSuccess)
+    {
+        var exe = ResolvePowerShellExe();
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = exe,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+
+        startInfo.ArgumentList.Add("-NoProfile");
+        if (Path.GetFileName(exe).Equals("powershell.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            startInfo.ArgumentList.Add("-ExecutionPolicy");
+            startInfo.ArgumentList.Add("Bypass");
+        }
+
+        startInfo.ArgumentList.Add("-Command");
+        startInfo.ArgumentList.Add(command);
+
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Could not start PowerShell.");
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        process.WaitForExit(30000);
+
+        if (expectSuccess && process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"PowerShell failed with exit {process.ExitCode}: {error}{output}");
+        }
+
+        return (process.ExitCode, output, error);
+    }
+
+    private static string ResolvePowerShellExe()
+    {
+        var psHome = Environment.GetEnvironmentVariable("PSHOME");
+        if (!string.IsNullOrWhiteSpace(psHome))
+        {
+            var candidate = Path.Combine(psHome, "powershell.exe");
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return "powershell.exe";
+    }
+
+    private static string PsQuote(string value) => value.Replace("'", "''", StringComparison.Ordinal);
 }

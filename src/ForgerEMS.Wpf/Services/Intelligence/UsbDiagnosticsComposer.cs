@@ -73,7 +73,16 @@ public static class UsbDiagnosticsComposer
         var bench = snapshot.SelectedTargetBenchmark;
         if (bench is { Succeeded: true })
         {
-            if (bench.Classification == UsbSpeedMeasurementClass.Bottleneck)
+            if (bench.ReadLikelyCached || bench.ReadIsEstimate)
+            {
+                confidence = "medium";
+                issues.Add(new UsbDiagnosticIssue
+                {
+                    Severity = DiagnosticSeverityLevel.Warning,
+                    Message = "Benchmark read speed may be cached; trust the measured write speed more than the read number."
+                });
+            }
+            else if (bench.Classification == UsbSpeedMeasurementClass.Bottleneck)
             {
                 issues.Add(new UsbDiagnosticIssue
                 {
@@ -105,18 +114,28 @@ public static class UsbDiagnosticsComposer
             ? profile.KnownPorts.Count
             : profile?.KnownStablePortKeys?.Count ?? 0;
 
-        var portRec = !string.IsNullOrWhiteSpace(snapshot.SelectedTargetStablePortKey) && profile is not null
+        var portRec = !string.IsNullOrWhiteSpace(snapshot.SelectedTargetStablePortKey) &&
+                      !string.IsNullOrWhiteSpace(snapshot.SelectedTargetPortUserLabel) &&
+                      profile is not null
             ? profile.KnownPorts.FirstOrDefault(p => p.StablePortKey == snapshot.SelectedTargetStablePortKey)
             : null;
 
-        var mapSummary = portRec is null || string.IsNullOrWhiteSpace(portRec.UserLabel)
-            ? string.Empty
-            : $"Mapped port label: {portRec.UserLabel} (mapping confidence {portRec.MappingConfidenceScore}).";
+        var mapSummary = !string.IsNullOrWhiteSpace(snapshot.SelectedTargetPortLabelStatusLine)
+            ? snapshot.SelectedTargetPortLabelStatusLine
+            : string.Empty;
 
         var recommendWithBench = recommendLine;
         if (bench is { Succeeded: true } && !string.IsNullOrWhiteSpace(bench.SummaryLine))
         {
-            recommendWithBench = $"{recommendWithBench} Measured: {bench.WriteSpeedMBps:0.0}/{bench.ReadSpeedMBps:0.0} MB/s ({bench.Classification}).".Trim();
+            var readNote = bench.ReadLikelyCached || bench.ReadIsEstimate
+                ? " read unverified/cache suspected"
+                : $" read {bench.ReadSpeedMBps:0.0} MB/s verified";
+            var portNote = bench.AttachedToVerifiedPort == false
+                ? " Benchmark measured on unverified current port; save/update a port label to attach it to a physical port."
+                : string.Empty;
+            recommendWithBench = bench.ReadLikelyCached || bench.ReadIsEstimate
+                ? $"{recommendWithBench} Measured: write {bench.WriteSpeedMBps:0.0} MB/s verified; read unverified (cache suspected). Raw cached read sample {bench.ReadSpeedMBps:0.0} MB/s.{portNote}".Trim()
+                : $"{recommendWithBench} Measured: write {bench.WriteSpeedMBps:0.0} MB/s, {readNote} ({bench.Classification}).{portNote}".Trim();
         }
 
         var riskSummary = rec is null
@@ -135,7 +154,9 @@ public static class UsbDiagnosticsComposer
             UsbProfileKnownPortsCount = portCount,
             UsbOverallSeverity = overall,
             LastBenchmark = bench,
-            MappingConfidenceScore = portRec?.MappingConfidenceScore ?? 0,
+            MappingConfidenceScore = !string.IsNullOrWhiteSpace(snapshot.SelectedTargetPortUserLabel)
+                ? portRec?.MappingConfidenceScore ?? 0
+                : 0,
             MappingConfidenceSummary = mapSummary,
             CombinedConfidenceScore = snapshot.CombinedConfidenceScore,
             CombinedConfidenceSummary = string.IsNullOrWhiteSpace(snapshot.CombinedConfidenceReason)
@@ -154,20 +175,41 @@ public static class UsbDiagnosticsComposer
         }
 
         var ranked = profile.KnownPorts
-            .Where(p => p.LastBenchmark?.Succeeded == true && p.LastBenchmark.WriteSpeedMBps > 0)
+            .Where(p => p.LastBenchmark?.Succeeded == true &&
+                        p.LastBenchmark.WriteSpeedMBps > 0 &&
+                        !p.LastBenchmark.ReadLikelyCached &&
+                        !p.LastBenchmark.ReadIsEstimate &&
+                        p.LastBenchmark.AttachedToVerifiedPort != false)
             .OrderByDescending(p => p.LastBenchmark!.WriteSpeedMBps)
             .FirstOrDefault();
 
         if (ranked is null)
         {
+            var unverified = profile.UnverifiedBenchmarkByDriveLetter.Values
+                .Where(b => b.Succeeded &&
+                            b.WriteSpeedMBps > 0 &&
+                            !b.ReadLikelyCached &&
+                            !b.ReadIsEstimate)
+                .OrderByDescending(b => b.WriteSpeedMBps)
+                .FirstOrDefault();
+            if (unverified is not null)
+            {
+                return $"Best measured port: Unverified current port (~{unverified.WriteSpeedMBps:0.0} MB/s write; label needed).";
+            }
+
             var labeled = profile.KnownPorts.Count(p => !string.IsNullOrWhiteSpace(p.UserLabel));
             return labeled > 0
                 ? $"{labeled} mapped port(s); benchmark a port to rank them by speed."
                 : string.Empty;
         }
 
-        var label = string.IsNullOrWhiteSpace(ranked.UserLabel) ? "labeled port" : ranked.UserLabel.Trim();
-        return $"Best measured port: {label} (~{ranked.LastBenchmark!.WriteSpeedMBps:0.0} MB/s write).";
+        var bestBenchmark = ranked.LastBenchmark!;
+        var label = !string.IsNullOrWhiteSpace(ranked.UserLabel)
+            ? ranked.UserLabel.Trim()
+            : !string.IsNullOrWhiteSpace(bestBenchmark.AttachedPortLabel)
+                ? bestBenchmark.AttachedPortLabel.Trim()
+                : "Unverified current port";
+        return $"Best measured port: {label} (~{bestBenchmark.WriteSpeedMBps:0.0} MB/s write).";
     }
 
     private static DiagnosticSeverityLevel MapOverall(List<UsbDiagnosticIssue> issues)

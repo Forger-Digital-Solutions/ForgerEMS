@@ -1,3 +1,4 @@
+#pragma warning disable CA1305 // Locale-sensitive calls; text is diagnostic/UI output
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -129,14 +130,14 @@ internal sealed class WeatherKyraTool(HttpClient http, KyraLiveToolCache cache) 
         if (geoTo)
         {
             return KyraToolResult.Fail("Weather", KyraLiveToolErrorKind.Timeout,
-                "Weather lookup timed out. Try again.",
+                "Live weather is unavailable right now because the lookup timed out. Try again in a minute.",
                 "[Kyra weather] Timeout; do not invent conditions.");
         }
 
         if (!geoOk)
         {
             return KyraToolResult.Fail("Weather", KyraLiveToolErrorKind.HttpError,
-                "Could not reach the weather geocoding service. Check your network and try again.",
+                "Live weather is unavailable right now because the location lookup failed. Check your network or try again in a minute.",
                 "[Kyra weather] Geocoding request failed.");
         }
 
@@ -145,7 +146,7 @@ internal sealed class WeatherKyraTool(HttpClient http, KyraLiveToolCache cache) 
             results.ValueKind != JsonValueKind.Array || results.GetArrayLength() == 0)
         {
             return KyraToolResult.Fail("Weather", KyraLiveToolErrorKind.ParseError,
-                $"No match found for “{location}”. Try a ZIP or larger city name.",
+                $"I need a city, ZIP, or larger place name to load live weather. I could not match “{location}”.",
                 "[Kyra weather] Geocoding returned no results.");
         }
 
@@ -166,14 +167,14 @@ internal sealed class WeatherKyraTool(HttpClient http, KyraLiveToolCache cache) 
         if (fcTo)
         {
             return KyraToolResult.Fail("Weather", KyraLiveToolErrorKind.Timeout,
-                "Weather forecast timed out. Try again.",
+                "Live weather is unavailable right now because the forecast timed out. Try again in a minute.",
                 "[Kyra weather] Timeout.");
         }
 
         if (!fcOk)
         {
             return KyraToolResult.Fail("Weather", KyraLiveToolErrorKind.HttpError,
-                "Could not load the forecast. Try again in a moment.",
+                "Live weather is unavailable right now because the forecast provider failed. Try again in a minute.",
                 "[Kyra weather] Forecast request failed.");
         }
 
@@ -181,7 +182,7 @@ internal sealed class WeatherKyraTool(HttpClient http, KyraLiveToolCache cache) 
         if (fc is null || !fc.RootElement.TryGetProperty("current", out var cur))
         {
             return KyraToolResult.Fail("Weather", KyraLiveToolErrorKind.ParseError,
-                "Weather data was unreadable. The provider may have changed format.",
+                "Live weather is unavailable right now because the provider response was unreadable.",
                 "[Kyra weather] Parse error.");
         }
 
@@ -241,14 +242,14 @@ internal sealed class WeatherKyraTool(HttpClient http, KyraLiveToolCache cache) 
         if (timedOut)
         {
             return KyraToolResult.Fail("Weather", KyraLiveToolErrorKind.Timeout,
-                "Weather request timed out. Try again later.",
+                "Live weather is unavailable right now because the request timed out. Try again in a minute.",
                 "[Kyra weather] Timeout; do not invent readings.");
         }
 
         if (!ok)
         {
             return KyraToolResult.Fail("Weather", KyraLiveToolErrorKind.HttpError,
-                "Weather request failed. Try again later.",
+                "Live weather is unavailable right now because the provider request failed. Try again in a minute.",
                 "[Kyra weather] HTTP failure; do not invent readings.");
         }
 
@@ -256,7 +257,7 @@ internal sealed class WeatherKyraTool(HttpClient http, KyraLiveToolCache cache) 
         if (doc is null)
         {
             return KyraToolResult.Fail("Weather", KyraLiveToolErrorKind.ParseError,
-                "Could not read weather response.",
+                "Live weather is unavailable right now because the provider response was unreadable.",
                 "[Kyra weather] Parse error.");
         }
 
@@ -573,7 +574,7 @@ internal sealed class StockPriceKyraTool(HttpClient http, KyraLiveToolCache cach
 {
     public string Name => "Stocks";
 
-    public string Description => "Stock quotes via Finnhub (API key).";
+    public string Description => "Stock quotes via Finnhub, Alpha Vantage, or FMP when configured.";
 
     public KyraToolSurfaceCategory SurfaceCategory => KyraToolSurfaceCategory.LiveData;
 
@@ -587,12 +588,14 @@ internal sealed class StockPriceKyraTool(HttpClient http, KyraLiveToolCache cach
             return KyraToolOperationalStatus.Disabled;
         }
 
-        if (string.IsNullOrWhiteSpace(lt.StocksApiKey) || !(lt.StocksProvider ?? "finnhub").Trim().Equals("finnhub", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(lt.StocksApiKey))
         {
             return KyraToolOperationalStatus.NotConfigured;
         }
 
-        return KyraToolOperationalStatus.Ready;
+        return NormalizeProvider(lt.StocksProvider) is "finnhub" or "alphavantage" or "fmp"
+            ? KyraToolOperationalStatus.Ready
+            : KyraToolOperationalStatus.NotConfigured;
     }
 
     public async Task<KyraToolResult> ExecuteAsync(KyraToolExecutionRequest request, CancellationToken cancellationToken)
@@ -610,26 +613,44 @@ internal sealed class StockPriceKyraTool(HttpClient http, KyraLiveToolCache cach
         if (!lt.StocksEnabled)
         {
             return KyraToolResult.Fail(Name, KyraLiveToolErrorKind.Disabled,
-                "Stock live data is turned off in Kyra Advanced → Live APIs.",
+                "Stock live data is turned off in Kyra Advanced → Live APIs. Enable a finance provider and Kyra gateway/live stock tools if your operator configured live market access — Kyra will not invent market summaries while this is off.",
                 "[Kyra stocks] Disabled.");
         }
 
+        var provider = NormalizeProvider(lt.StocksProvider);
         if (string.IsNullOrWhiteSpace(lt.StocksApiKey))
         {
             return KyraToolResult.Fail(Name, KyraLiveToolErrorKind.NotConfigured,
-                "Stock live data is not configured yet.\nAdd a **Finnhub** API key in **Kyra Advanced → Live APIs**, then try:\n`/stocks " + sym + "`\n\nInformational only, not financial advice.",
+                "Stock live data is not configured yet.\nSet **FORGEREMS_FINANCE_PROVIDER** to `finnhub`, `alphavantage`, or `fmp` and add **FORGEREMS_FINANCE_API_KEY** (or enter the key in Kyra Advanced → Live APIs), then try:\n`/stocks " + sym + "`\n\nInformational only, not financial advice.",
                 "[Kyra stocks] Not configured.");
+        }
+
+        if (provider is not ("finnhub" or "alphavantage" or "fmp"))
+        {
+            return KyraToolResult.Fail(Name, KyraLiveToolErrorKind.NotConfigured,
+                $"Stock live data provider `{lt.StocksProvider}` is not supported yet. Use `finnhub`, `alphavantage`, or `fmp`.",
+                "[Kyra stocks] Unsupported provider.");
         }
 
         var timeout = KyraLiveToolHttp.EffectiveTimeoutSeconds(settings);
         var ttl = KyraLiveToolHttp.CacheTtl(settings);
-        var cacheKey = KyraLiveToolCache.MakeKey("stock", "finnhub", sym);
+        var cacheKey = KyraLiveToolCache.MakeKey("stock", provider, sym);
         if (cache.TryGet(cacheKey, ttl, out var cached))
         {
-            KyraLiveToolTelemetry.Record(Name, KyraToolOperationalStatus.Ready, "Finnhub", true);
+            KyraLiveToolTelemetry.Record(Name, KyraToolOperationalStatus.Ready, provider, true);
             return cached;
         }
 
+        return provider switch
+        {
+            "alphavantage" => await QueryAlphaVantageAsync(lt, sym, timeout, cacheKey, cancellationToken).ConfigureAwait(false),
+            "fmp" => await QueryFmpAsync(lt, sym, timeout, cacheKey, cancellationToken).ConfigureAwait(false),
+            _ => await QueryFinnhubAsync(lt, sym, timeout, cacheKey, cancellationToken).ConfigureAwait(false)
+        };
+    }
+
+    private async Task<KyraToolResult> QueryFinnhubAsync(KyraLiveToolsSettings lt, string sym, int timeout, string cacheKey, CancellationToken cancellationToken)
+    {
         var baseUrl = string.IsNullOrWhiteSpace(lt.StocksBaseUrl) ? "https://finnhub.io/api/v1/quote" : lt.StocksBaseUrl.TrimEnd('/');
         var url = $"{baseUrl}?symbol={Uri.EscapeDataString(sym)}&token={Uri.EscapeDataString(lt.StocksApiKey.Trim())}";
         var (ok, to, body, _) = await KyraLiveToolHttp.GetStringAsync(http, url, timeout, cancellationToken).ConfigureAwait(false);
@@ -694,6 +715,103 @@ internal sealed class StockPriceKyraTool(HttpClient http, KyraLiveToolCache cach
         return result;
     }
 
+    private async Task<KyraToolResult> QueryAlphaVantageAsync(KyraLiveToolsSettings lt, string sym, int timeout, string cacheKey, CancellationToken cancellationToken)
+    {
+        var baseUrl = string.IsNullOrWhiteSpace(lt.StocksBaseUrl) ? "https://www.alphavantage.co/query" : lt.StocksBaseUrl.TrimEnd('/');
+        var url = $"{baseUrl}?function=GLOBAL_QUOTE&symbol={Uri.EscapeDataString(sym)}&apikey={Uri.EscapeDataString(lt.StocksApiKey.Trim())}";
+        var (ok, to, body, _) = await KyraLiveToolHttp.GetStringAsync(http, url, timeout, cancellationToken).ConfigureAwait(false);
+        if (to)
+        {
+            KyraLiveToolTelemetry.Record(Name, KyraToolOperationalStatus.TimedOut, "Alpha Vantage", false);
+            return KyraToolResult.Fail(Name, KyraLiveToolErrorKind.Timeout, "Stock quote timed out. Try again.", "[Kyra stocks] Timeout; do not invent prices.");
+        }
+
+        if (!ok)
+        {
+            KyraLiveToolTelemetry.Record(Name, KyraToolOperationalStatus.Failed, "Alpha Vantage", false);
+            return KyraToolResult.Fail(Name, KyraLiveToolErrorKind.HttpError, "Could not load stock quote. Check the API key or symbol.", "[Kyra stocks] HTTP error.");
+        }
+
+        using var doc = KyraLiveToolHttp.TryParseJson(body);
+        if (doc is null ||
+            !doc.RootElement.TryGetProperty("Global Quote", out var quote) ||
+            !quote.TryGetProperty("05. price", out var priceEl) ||
+            !double.TryParse(priceEl.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var price))
+        {
+            return KyraToolResult.Fail(Name, KyraLiveToolErrorKind.ParseError, "Stock data was unreadable.", "[Kyra stocks] Parse error.");
+        }
+
+        var changePct = quote.TryGetProperty("10. change percent", out var pctEl)
+            ? (pctEl.GetString() ?? string.Empty).Replace("%", "", StringComparison.Ordinal)
+            : string.Empty;
+        var updated = quote.TryGetProperty("07. latest trading day", out var dateEl)
+            ? dateEl.GetString() ?? DateTimeOffset.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            : DateTimeOffset.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+        var sb = new StringBuilder();
+        sb.AppendLine(sym.ToUpperInvariant());
+        sb.AppendLine();
+        sb.AppendLine($"Price: {price:0.##} USD");
+        if (!string.IsNullOrWhiteSpace(changePct))
+        {
+            sb.AppendLine($"Change (day %): {changePct}%");
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("Provider: Alpha Vantage");
+        sb.AppendLine($"Updated: {updated}");
+        sb.AppendLine();
+        sb.AppendLine("Informational only, not financial advice.");
+        var result = KyraToolResult.Ok(Name, "Alpha Vantage", sb.ToString().TrimEnd(),
+            $"[Kyra stocks | Alpha Vantage] {sym.ToUpperInvariant()} last {price:0.##} USD. Informational only.",
+            disclaimer: "Informational only, not financial advice.");
+        cache.Set(cacheKey, result);
+        KyraLiveToolTelemetry.Record(Name, KyraToolOperationalStatus.Ready, "Alpha Vantage", false);
+        return result;
+    }
+
+    private async Task<KyraToolResult> QueryFmpAsync(KyraLiveToolsSettings lt, string sym, int timeout, string cacheKey, CancellationToken cancellationToken)
+    {
+        var baseUrl = string.IsNullOrWhiteSpace(lt.StocksBaseUrl) ? "https://financialmodelingprep.com/api/v3/quote-short" : lt.StocksBaseUrl.TrimEnd('/');
+        var url = $"{baseUrl}/{Uri.EscapeDataString(sym)}?apikey={Uri.EscapeDataString(lt.StocksApiKey.Trim())}";
+        var (ok, to, body, _) = await KyraLiveToolHttp.GetStringAsync(http, url, timeout, cancellationToken).ConfigureAwait(false);
+        if (to)
+        {
+            KyraLiveToolTelemetry.Record(Name, KyraToolOperationalStatus.TimedOut, "FMP", false);
+            return KyraToolResult.Fail(Name, KyraLiveToolErrorKind.Timeout, "Stock quote timed out. Try again.", "[Kyra stocks] Timeout; do not invent prices.");
+        }
+
+        if (!ok)
+        {
+            KyraLiveToolTelemetry.Record(Name, KyraToolOperationalStatus.Failed, "FMP", false);
+            return KyraToolResult.Fail(Name, KyraLiveToolErrorKind.HttpError, "Could not load stock quote. Check the API key or symbol.", "[Kyra stocks] HTTP error.");
+        }
+
+        using var doc = KyraLiveToolHttp.TryParseJson(body);
+        if (doc is null || doc.RootElement.ValueKind != JsonValueKind.Array || doc.RootElement.GetArrayLength() == 0 ||
+            !doc.RootElement[0].TryGetProperty("price", out var priceEl))
+        {
+            return KyraToolResult.Fail(Name, KyraLiveToolErrorKind.ParseError, "Stock data was unreadable.", "[Kyra stocks] Parse error.");
+        }
+
+        var price = priceEl.GetDouble();
+        var sb = new StringBuilder();
+        sb.AppendLine(sym.ToUpperInvariant());
+        sb.AppendLine();
+        sb.AppendLine($"Price: {price:0.##} USD");
+        sb.AppendLine();
+        sb.AppendLine("Provider: FMP");
+        sb.AppendLine($"Updated: {DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm} UTC");
+        sb.AppendLine();
+        sb.AppendLine("Informational only, not financial advice.");
+        var result = KyraToolResult.Ok(Name, "FMP", sb.ToString().TrimEnd(),
+            $"[Kyra stocks | FMP] {sym.ToUpperInvariant()} last {price:0.##} USD. Informational only.",
+            disclaimer: "Informational only, not financial advice.");
+        cache.Set(cacheKey, result);
+        KyraLiveToolTelemetry.Record(Name, KyraToolOperationalStatus.Ready, "FMP", false);
+        return result;
+    }
+
     private static string? FirstSym(KyraToolExecutionRequest request)
     {
         if (!string.IsNullOrWhiteSpace(request.ArgumentsLine))
@@ -725,6 +843,18 @@ internal sealed class StockPriceKyraTool(HttpClient http, KyraLiveToolCache cach
         }
 
         return s.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
+    }
+
+    private static string NormalizeProvider(string? provider)
+    {
+        var p = (provider ?? "finnhub").Trim().ToLowerInvariant().Replace("-", "", StringComparison.Ordinal).Replace("_", "", StringComparison.Ordinal);
+        return p switch
+        {
+            "alpha" or "alphavantage" => "alphavantage",
+            "financialmodelingprep" => "fmp",
+            "" => "finnhub",
+            _ => p
+        };
     }
 }
 
@@ -810,7 +940,7 @@ internal sealed class CryptoPriceKyraTool(HttpClient http, KyraLiveToolCache cac
         {
             KyraLiveToolTelemetry.Record(Name, KyraToolOperationalStatus.Failed, "CoinGecko", false);
             return KyraToolResult.Fail(Name, KyraLiveToolErrorKind.HttpError,
-                "Could not load crypto price. Try again later.",
+                $"I couldn’t load live {raw.Trim().ToUpperInvariant()} pricing right now. The crypto live tool may be unavailable or rate-limited. Try again in a minute or check the provider settings.",
                 "[Kyra crypto] HTTP error.");
         }
 

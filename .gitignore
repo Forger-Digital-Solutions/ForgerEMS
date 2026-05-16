@@ -46,10 +46,31 @@ portable/
 !.verify/README.md
 .tmp/
 .cache/
+artifacts/
 _archive/
 _downloads/
 _logs/
 _reports/
+
+# Local secrets and operator-only configuration
+.env
+.env.*
+!.env.example
+secrets.json
+tokens.json
+local.settings.json
+appsettings.Production.json
+appsettings.*.local.json
+*.pfx
+*.p12
+*.pem
+*.key
+*.keystore
+*.jks
+*.ppk
+*.mobileprovision
+*.cer.private
+*.crt.private
 
 # Local-only operator notes and shortcuts
 docs/ForgerEMS-Bootstrap-Notes.txt
@@ -64,5 +85,6 @@ backend/legacy/VentoyToolkitSetup/IfScriptFails(ManualSetup)/
 *.temp
 *.bak
 *.orig
+nuget.config.ci
 
 # Release folders are generated local/CI outputs.

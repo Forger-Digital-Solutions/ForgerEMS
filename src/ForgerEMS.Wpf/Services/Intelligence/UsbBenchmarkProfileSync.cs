@@ -26,19 +26,40 @@ public static class UsbBenchmarkProfileSync
                 cls = refinedCls;
             }
 
+            var baseConfidence = result.IntelligenceConfidenceScore > 0
+                ? result.IntelligenceConfidenceScore
+                : conf;
+
             return new UsbIntelligenceBenchmarkResult
             {
                 Succeeded = true,
                 EndKind = UsbNativeBenchmarkEndKind.Success,
                 WriteSpeedMBps = result.WriteSpeedMBps,
                 ReadSpeedMBps = result.ReadSpeedMBps,
+                VerifiedWriteMbps = result.VerifiedWriteMbps > 0 ? result.VerifiedWriteMbps : result.WriteSpeedMBps,
+                VerifiedReadMbps = result.VerifiedReadMbps,
+                RawReadMbps = result.RawReadMbps,
+                IsReadCacheSuspected = result.IsReadCacheSuspected || result.ReadLikelyCached || result.ReadIsEstimate,
+                ReadVerificationStatus = string.IsNullOrWhiteSpace(result.ReadVerificationStatus)
+                    ? ((result.ReadLikelyCached || result.ReadIsEstimate) ? "Unverified / cache suspected" : "Verified")
+                    : result.ReadVerificationStatus,
                 DurationMs = result.BenchmarkDurationMs,
                 TestSizeMb = result.TestSizeMb,
                 Classification = cls,
-                ConfidenceScore = Math.Max(result.IntelligenceConfidenceScore, conf),
+                ConfidenceScore = Math.Clamp(baseConfidence, 20, 95),
                 Timestamp = result.LastTestedAt ?? DateTimeOffset.UtcNow,
                 SummaryLine = result.Summary,
-                DetailReason = string.IsNullOrWhiteSpace(reason) ? result.Details : reason
+                DetailReason = string.IsNullOrWhiteSpace(result.AccuracyWarning)
+                    ? (string.IsNullOrWhiteSpace(reason) ? result.Details : reason)
+                    : $"{reason} {result.AccuracyWarning}".Trim(),
+                ActualBytesWritten = result.ActualBytesWritten,
+                ActualBytesRead = result.ActualBytesRead,
+                WriteElapsedMs = result.WriteElapsedMs,
+                ReadElapsedMs = result.ReadElapsedMs,
+                ReadLikelyCached = result.ReadLikelyCached,
+                ReadIsEstimate = result.ReadIsEstimate,
+                BenchmarkConfidence = result.BenchmarkConfidence,
+                AccuracyWarning = result.AccuracyWarning
             };
         }
 

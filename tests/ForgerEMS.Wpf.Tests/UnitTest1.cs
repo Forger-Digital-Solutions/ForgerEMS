@@ -29,9 +29,8 @@ public sealed class ScriptStatusParserTests
         var parser = new ScriptStatusParser();
         var runResult = CreateRunResult(
             exitCode: 0,
-            new LogLine(DateTimeOffset.UtcNow, "USB readiness: PARTIALLY STAGED", LogSeverity.Warning),
-            new LogLine(DateTimeOffset.UtcNow, "Downloaded successfully: 3", LogSeverity.Info),
-            new LogLine(DateTimeOffset.UtcNow, "Verified successfully: 2", LogSeverity.Info));
+            new LogLine(DateTimeOffset.UtcNow, "Items downloaded: 3", LogSeverity.Success),
+            new LogLine(DateTimeOffset.UtcNow, "USB readiness: PARTIALLY STAGED", LogSeverity.Warning));
 
         var result = parser.Parse(ScriptActionType.SetupUsb, "Setup USB", runResult);
 

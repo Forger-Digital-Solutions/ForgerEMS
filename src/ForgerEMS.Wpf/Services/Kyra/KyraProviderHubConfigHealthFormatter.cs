@@ -1,3 +1,4 @@
+#pragma warning disable CA1305 // Locale-sensitive calls; text is diagnostic/UI output
 using System.Text;
 using VentoyToolkitSetup.Wpf.Configuration;
 
@@ -13,16 +14,22 @@ public static class KyraProviderHubConfigHealthFormatter
         sb.AppendLine($"FORGEREMS_KYRA_MODE: {ForgerEmsEnvironmentConfiguration.KyraMode}");
         sb.AppendLine($"FORGEREMS_KYRA_PROVIDER: {ForgerEmsEnvironmentConfiguration.KyraProvider}");
         sb.AppendLine($"Online enabled (env): {ForgerEmsEnvironmentConfiguration.KyraOnlineEnabled}");
+        sb.AppendLine($"API-first: {ForgerEmsEnvironmentConfiguration.KyraApiFirst}");
+        sb.AppendLine($"Provider priority: {ForgerEmsEnvironmentConfiguration.KyraProviderPriority}");
+        sb.AppendLine($"Memory: {ForgerEmsEnvironmentConfiguration.KyraMaxContextTurns} turns / {ForgerEmsEnvironmentConfiguration.KyraMemoryMode}");
+        sb.AppendLine($"Context budget: {ForgerEmsEnvironmentConfiguration.KyraContextMaxChars} chars");
+        sb.AppendLine($"Personality: {ForgerEmsEnvironmentConfiguration.KyraPersonality}");
         sb.AppendLine($"Offline/local rules: always available");
+        sb.AppendLine("Placeholder values: ignored");
         sb.AppendLine();
         AppendOpenAiCompatible(sb);
         AppendLmStudio(sb);
         AppendOllama(sb);
-        sb.AppendLine("Anthropic (stub env): " + (ForgerEmsEnvironmentConfiguration.AnthropicApiKeyPresent ? "API key present (hidden)" : "Missing API key") +
+        sb.AppendLine("Anthropic (shell): " + (ForgerEmsEnvironmentConfiguration.AnthropicApiKeyPresent ? "API key present (hidden)" : "Missing API key") +
                       (string.IsNullOrWhiteSpace(ForgerEmsEnvironmentConfiguration.AnthropicModel)
                           ? ""
                           : $" | Model: {ForgerEmsEnvironmentConfiguration.AnthropicModel}"));
-        sb.AppendLine("Gemini (stub env): " + (ForgerEmsEnvironmentConfiguration.GeminiApiKeyPresent ? "API key present (hidden)" : "Missing API key") +
+        sb.AppendLine("Gemini: " + (ForgerEmsEnvironmentConfiguration.GeminiApiKeyPresent ? "API key present (hidden)" : "Missing API key") +
                       (string.IsNullOrWhiteSpace(ForgerEmsEnvironmentConfiguration.GeminiModel)
                           ? ""
                           : $" | Model: {ForgerEmsEnvironmentConfiguration.GeminiModel}"));

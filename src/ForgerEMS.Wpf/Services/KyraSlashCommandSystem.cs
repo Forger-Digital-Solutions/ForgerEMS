@@ -1,3 +1,4 @@
+#pragma warning disable CA1305 // Locale-sensitive calls; text is diagnostic/UI output
 using System.Text;
 using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services.KyraTools;
@@ -112,18 +113,24 @@ public sealed class KyraSlashHandleResult
 
     public string SourceLabel { get; init; } = "Kyra · slash command";
 
+    public bool UsedOnlineData { get; init; }
+
+    public IReadOnlyList<string> ProviderNotes { get; init; } = Array.Empty<string>();
+
     public CopilotResponse? ToCopilotResponse() =>
         !HandledWithoutLlm || string.IsNullOrEmpty(ResponseText)
             ? null
             : new CopilotResponse
             {
                 Text = ResponseText!,
-                UsedOnlineData = false,
+                UsedOnlineData = UsedOnlineData,
                 ProviderType = CopilotProviderType.LocalOffline,
                 OnlineStatus = "Local command",
                 SourceLabel = SourceLabel,
                 ActionSuggestions = Actions,
-                ProviderNotes = []
+                ProviderNotes = ProviderNotes,
+                ResponseSource = UsedOnlineData ? KyraResponseSource.LocalKyra : KyraResponseSource.LocalKyra,
+                OnlineEnhancementApplied = UsedOnlineData
             };
 }
 

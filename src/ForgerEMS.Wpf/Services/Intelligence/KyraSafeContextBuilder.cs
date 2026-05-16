@@ -1,3 +1,6 @@
+﻿#pragma warning disable CA1305 // Locale-sensitive calls; text is diagnostic/UI output
+// FORGEREMS_KYRA_ADAPTER: ForgerEMS-specific coupling; stays in ForgerEMS.KyraAdapter.
+// Reads ForgerEMS-specific JSON report paths; replace with an IContextPathProvider interface.
 using System;
 using System.IO;
 using System.Text;

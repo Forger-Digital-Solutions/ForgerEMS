@@ -20,7 +20,7 @@ public static class UsbFileBenchmarkEngine
             return UsbIntelligenceBenchmarkResult.Failed(blockReason, UsbNativeBenchmarkEndKind.ValidationBlocked);
         }
 
-        var testSizeMb = target.FreeBytes >= 512L * 1024 * 1024 ? 128 : 64;
+        var testSizeMb = UsbBenchmarkAccuracy.SelectTestSizeMb(target.FreeBytes);
         var marginMb = 128L;
         if (target.FreeBytes < (testSizeMb + marginMb) * 1024L * 1024)
         {
@@ -40,6 +40,7 @@ public static class UsbFileBenchmarkEngine
         double readMbps;
         long writeMs;
         long readMs;
+        long actualReadBytes;
 
         try
         {
@@ -52,7 +53,7 @@ public static class UsbFileBenchmarkEngine
                              FileAccess.Write,
                              FileShare.None,
                              buffer.Length,
-                             FileOptions.Asynchronous | FileOptions.SequentialScan))
+                             FileOptions.Asynchronous | FileOptions.SequentialScan | FileOptions.WriteThrough))
             {
                 var written = 0L;
                 while (written < targetBytes)
@@ -72,6 +73,8 @@ public static class UsbFileBenchmarkEngine
 
             cancellationToken.ThrowIfCancellationRequested();
 
+            var offsets = BuildRandomReadOffsets(targetBytes, buffer.Length);
+            var readBytes = 0L;
             var readWatch = Stopwatch.StartNew();
             await using (var stream = new FileStream(
                              path,
@@ -79,19 +82,33 @@ public static class UsbFileBenchmarkEngine
                              FileAccess.Read,
                              FileShare.Read,
                              buffer.Length,
-                             FileOptions.Asynchronous | FileOptions.SequentialScan))
+                             FileOptions.Asynchronous | FileOptions.RandomAccess))
             {
-                int read;
-                while ((read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken)
-                            .ConfigureAwait(false)) > 0)
+                foreach (var offset in offsets)
                 {
+                    stream.Seek(offset, SeekOrigin.Begin);
+                    var remaining = Math.Min(buffer.Length, targetBytes - offset);
+                    while (remaining > 0)
+                    {
+                        var read = await stream.ReadAsync(
+                                      buffer.AsMemory(0, (int)Math.Min(buffer.Length, remaining)),
+                                      cancellationToken)
+                                  .ConfigureAwait(false);
+                        if (read <= 0)
+                        {
+                            break;
+                        }
+
+                        readBytes += read;
+                        remaining -= read;
+                    }
                 }
             }
 
             readWatch.Stop();
             readMs = readWatch.ElapsedMilliseconds;
+            actualReadBytes = readBytes;
             var readSec = Math.Max(readWatch.Elapsed.TotalSeconds, 0.001);
-            var readBytes = targetBytes;
             readMbps = Math.Round((readBytes / (1024.0 * 1024.0)) / readSec, 1);
         }
         catch (OperationCanceledException)
@@ -111,8 +128,15 @@ public static class UsbFileBenchmarkEngine
         TryDelete(path);
 
         var durationMs = (int)Math.Min(int.MaxValue, writeMs + readMs);
+        var accuracy = UsbBenchmarkAccuracy.Assess(writeMbps, readMbps, wmiHeuristic, target);
         var (cls, conf, reason) = UsbMeasurementClassifier.Classify(writeMbps, readMbps, wmiHeuristic);
-        var benchConf = Math.Min(95, conf + 12);
+        var benchConf = Math.Clamp(Math.Min(95, conf + 12) - accuracy.ConfidencePenalty, 20, 95);
+        var detailReason = string.IsNullOrWhiteSpace(accuracy.Reason)
+            ? reason
+            : $"{reason} {accuracy.Reason}".Trim();
+        var summarySuffix = accuracy.ReadLikelyCached || accuracy.ReadIsEstimate
+            ? " Read may be cached; treat read speed as an estimate."
+            : string.Empty;
 
         return new UsbIntelligenceBenchmarkResult
         {
@@ -120,19 +144,47 @@ public static class UsbFileBenchmarkEngine
             EndKind = UsbNativeBenchmarkEndKind.Success,
             WriteSpeedMBps = writeMbps,
             ReadSpeedMBps = readMbps,
+            VerifiedWriteMbps = writeMbps,
+            VerifiedReadMbps = accuracy.ReadLikelyCached || accuracy.ReadIsEstimate ? null : readMbps,
+            RawReadMbps = accuracy.ReadLikelyCached || accuracy.ReadIsEstimate ? readMbps : null,
+            IsReadCacheSuspected = accuracy.ReadLikelyCached || accuracy.ReadIsEstimate,
+            ReadVerificationStatus = accuracy.ReadLikelyCached || accuracy.ReadIsEstimate ? "Unverified / cache suspected" : "Verified",
             DurationMs = durationMs,
             TestSizeMb = testSizeMb,
             Classification = cls,
             ConfidenceScore = benchConf,
             Timestamp = DateTimeOffset.UtcNow,
             SummaryLine =
-                $"Measured {writeMbps:0.0} MB/s write, {readMbps:0.0} MB/s read ({testSizeMb} MB sample). {cls}.",
-            DetailReason = reason,
+                $"Measured {writeMbps:0.0} MB/s write, {readMbps:0.0} MB/s read ({testSizeMb} MB sample). {cls}. Confidence: {accuracy.ConfidenceLabel}.{summarySuffix}",
+            DetailReason = detailReason,
             ActualBytesWritten = targetBytes,
-            ActualBytesRead = targetBytes,
+            ActualBytesRead = actualReadBytes,
             WriteElapsedMs = writeMs,
-            ReadElapsedMs = readMs
+            ReadElapsedMs = readMs,
+            ReadLikelyCached = accuracy.ReadLikelyCached,
+            ReadIsEstimate = accuracy.ReadIsEstimate,
+            BenchmarkConfidence = accuracy.ConfidenceLabel,
+            AccuracyWarning = accuracy.Reason
         };
+    }
+
+    private static long[] BuildRandomReadOffsets(long targetBytes, int blockSize)
+    {
+        var blockCount = Math.Max(1, (int)(targetBytes / blockSize));
+        var offsets = new long[blockCount];
+        for (var i = 0; i < offsets.Length; i++)
+        {
+            offsets[i] = (long)i * blockSize;
+        }
+
+        var rng = new Random(unchecked((int)targetBytes ^ 0x5f3759df));
+        for (var i = offsets.Length - 1; i > 0; i--)
+        {
+            var j = rng.Next(i + 1);
+            (offsets[i], offsets[j]) = (offsets[j], offsets[i]);
+        }
+
+        return offsets;
     }
 
     private static void TryDelete(string path)

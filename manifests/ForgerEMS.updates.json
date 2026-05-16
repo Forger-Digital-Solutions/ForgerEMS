@@ -74,7 +74,7 @@
     },
 
     {
-      "name": "Ventoy 1.1.11 (Windows package)",
+      "name": "Ventoy pinned fallback 1.1.11 (Windows package)",
       "type": "file",
       "dest": "Tools\\Portable\\USB\\ventoy-1.1.11-windows.zip",
       "url": "https://sourceforge.net/projects/ventoy/files/v1.1.11/ventoy-1.1.11-windows.zip/download",
@@ -86,7 +86,7 @@
       "maintenanceRank": 3,
       "enabled": true,
       "archive": true,
-      "notes": "Active managed autodownload: official Ventoy Windows package. Ventoy2Disk installation is still a manual step."
+      "notes": "Pinned verified fallback only. USB Builder first attempts latest official Ventoy release resolution, then falls back to this package when latest metadata/checksum lookup is unavailable."
     },
     {
       "name": "MediCat Download Page",
@@ -258,9 +258,33 @@
       "name": "Fedora Workstation Download Page",
       "type": "page",
       "dest": "ISO\\Linux\\DOWNLOAD - Fedora Workstation.url",
-      "url": "https://fedoraproject.org/en/workstation/download/",
+      "url": "https://www.fedoraproject.org/workstation/download/",
       "enabled": true,
       "notes": "Manual only: official Fedora workstation download page."
+    },
+    {
+      "name": "Debian Live Images Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Debian Live.url",
+      "url": "https://www.debian.org/CD/live/",
+      "enabled": true,
+      "notes": "Manual only: official Debian live image page. Pick the current stable live flavor and verify with Debian-published checksums/signatures."
+    },
+    {
+      "name": "Arch Linux Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Arch Linux.url",
+      "url": "https://archlinux.org/download/",
+      "enabled": true,
+      "notes": "Manual only: rolling monthly ISO with official SHA256/BLAKE2b and PGP verification on the Arch download page."
+    },
+    {
+      "name": "FreeDOS Download Page",
+      "type": "page",
+      "dest": "ISO\\Tools\\DOWNLOAD - FreeDOS.url",
+      "url": "https://www.freedos.org/download/",
+      "enabled": true,
+      "notes": "Manual only: useful for legacy BIOS/firmware workflows; FreeDOS notes BIOS or UEFI legacy-mode requirements."
     },
     {
       "name": "Endless OS Download Page",
@@ -439,6 +463,54 @@
       "url": "https://learn.microsoft.com/sysinternals/downloads/sysinternals-suite",
       "enabled": true,
       "notes": "Review first: Sysinternals shortcut only."
+    },
+    {
+      "name": "7-Zip Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\System\\DOWNLOAD - 7-Zip.url",
+      "url": "https://7-zip.org/",
+      "enabled": true,
+      "notes": "Manual only: use the official 7-zip.org domain. Do not use lookalike domains."
+    },
+    {
+      "name": "Nmap Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Network\\DOWNLOAD - Nmap.url",
+      "url": "https://nmap.org/download.html",
+      "enabled": true,
+      "notes": "Manual only: official Nmap installer page with signature/hash verification guidance and Npcap considerations."
+    },
+    {
+      "name": "Microsoft Visual C++ Redistributable Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Runtime\\DOWNLOAD - Microsoft VC++ Redistributable.url",
+      "url": "https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist",
+      "enabled": true,
+      "notes": "Manual only: Microsoft documents licensing and architecture selection; keep as official guidance rather than bundled redistribution."
+    },
+    {
+      "name": ".NET 8 Desktop Runtime Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Runtime\\DOWNLOAD - .NET 8 Desktop Runtime.url",
+      "url": "https://dotnet.microsoft.com/download/dotnet/8.0",
+      "enabled": true,
+      "notes": "Manual only: official Microsoft page for the latest .NET 8 Desktop Runtime installers across x64/x86/Arm64."
+    },
+    {
+      "name": "Firefox All Languages Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Browser\\DOWNLOAD - Firefox.url",
+      "url": "https://www.firefox.com/en-US/download/all/",
+      "enabled": true,
+      "notes": "Manual only: official Mozilla/Firefox language and platform selector."
+    },
+    {
+      "name": "Chrome Enterprise Browser Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Browser\\DOWNLOAD - Chrome Enterprise.url",
+      "url": "https://chromeenterprise.google/browser/download/",
+      "enabled": true,
+      "notes": "Manual only: official Google Chrome Enterprise bundle/MSI selector; user must accept Google terms."
     },
     {
       "name": "BlueScreenView 1.55 (x64 zip)",

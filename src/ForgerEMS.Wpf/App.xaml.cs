@@ -11,6 +11,7 @@ using VentoyToolkitSetup.Wpf.Configuration;
 using VentoyToolkitSetup.Wpf.Infrastructure;
 using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services;
+using VentoyToolkitSetup.Wpf.Services.Intelligence;
 using VentoyToolkitSetup.Wpf.ViewModels;
 
 namespace VentoyToolkitSetup.Wpf;
@@ -54,6 +55,15 @@ public partial class App : Application
                 return;
             }
 
+            if (HasArgument(e.Args, KyraSdkDogfoodProcessLauncher.CliArgument))
+            {
+                var exitCode = await KyraSdkDogfoodProcessLauncher.RunAsync(e.Args);
+                Shutdown(exitCode);
+                return;
+            }
+
+            var elevatedScanStartupRequest = ElevatedScanStartupRequest.Parse(e.Args);
+
             var mainViewModel = new MainViewModel(
                 backendDiscoveryService,
                 powerShellRunnerService,
@@ -66,6 +76,7 @@ public partial class App : Application
                 usbBenchmarkService,
                 copilotService,
                 copilotProviderRegistry);
+            mainViewModel.ElevatedScanStartupRequest = elevatedScanStartupRequest;
 
             var mainWindow = new MainWindow(mainViewModel);
             AppendStartupLog("MainWindow constructed");
@@ -136,6 +147,12 @@ public partial class App : Application
     {
         var startedUtc = DateTimeOffset.UtcNow;
         var executableBase = GetExecutableBaseDirectory();
+        var deepSensorMode = ForgerEmsEnvironmentConfiguration.DeepSensorModeResolution;
+        var libreHardwareMonitorDll = Path.Combine(executableBase, "providers", "sensors", "LibreHardwareMonitorLib.dll");
+        var libreHardwareMonitorDllPresent = File.Exists(libreHardwareMonitorDll) || SensorProviderRegistry.IsBundledDeepProviderPackaged();
+        var libreHardwareMonitorStatus = deepSensorMode.IsEnabled
+            ? libreHardwareMonitorDllPresent ? "Active read-only or available for scan" : "Not packaged / unavailable"
+            : libreHardwareMonitorDllPresent ? "Bundled but disabled" : "Not packaged";
         var lines = new List<string>
         {
             "ForgerEMS self-test",
@@ -152,6 +169,14 @@ public partial class App : Application
             $"UpdateUserAgent: {ForgerEmsEnvironmentConfiguration.UpdateUserAgent}",
             $"TelemetryEnabled(env): {ForgerEmsEnvironmentConfiguration.TelemetryEnabled}",
             $"CrashReportingEnabled(env): {ForgerEmsEnvironmentConfiguration.CrashReportingEnabled}",
+            $"DeepSensorMode: {deepSensorMode.Mode}",
+            $"DeepSensorModeSource: {deepSensorMode.Source}",
+            $"DeepSensorModeEnabled: {deepSensorMode.IsEnabled}",
+            $"LibreHardwareMonitorDllPresent: {libreHardwareMonitorDllPresent}",
+            $"LibreHardwareMonitorProviderStatus: {libreHardwareMonitorStatus}",
+            $"DeepSensorReadOnlyCapability: True",
+            $"DeepSensorUnsafeCapabilities: False",
+            $"DeepSensorSafety: local read-only hardware sensors only; no fan, voltage, clock, BIOS, firmware, cloud, telemetry, or background service.",
             $"ExpectedInstalledBackendRoot: {RedactSelfTestFilesystemPath(Path.Combine(executableBase, "backend"))}",
             $"ExpectedInstalledManifestRoot: {RedactSelfTestFilesystemPath(Path.Combine(executableBase, "manifests"))}"
         };

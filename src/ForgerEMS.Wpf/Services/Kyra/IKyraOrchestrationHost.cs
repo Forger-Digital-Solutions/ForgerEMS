@@ -7,6 +7,9 @@ public interface IKyraOrchestrationHost
 {
     KyraConversationMemory Memory { get; }
 
+    /// <summary>Per-provider failure/cooldown state (routing skips hot providers without spamming calls).</summary>
+    KyraProviderUsageTracker ProviderUsage { get; }
+
     void SetLastSystemContext(SystemContext context);
 
     CopilotProviderConfiguration ResolveProviderConfig(CopilotSettings settings, ICopilotProvider provider);

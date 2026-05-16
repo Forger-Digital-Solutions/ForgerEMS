@@ -19,7 +19,7 @@ ForgerEMS **does not** implement a background “phone home” telemetry product
 - The app **does not** harvest or upload **API keys** or **passwords** you might use elsewhere on your PC.  
 - **Session-only** credentials used inside the app for optional online Kyra paths are described in [PRIVACY.md](PRIVACY.md) and operator documentation; they are **not** written to ordinary settings files as a default design goal for those paths.
 
-**Expected network use (not hidden “analytics”):** HTTPS calls to **GitHub** when you use **in-app update checks**, and calls to **third-party AI endpoints** only when an operator has enabled those Kyra providers. See [UPDATE_SYSTEM.md](UPDATE_SYSTEM.md) and [KYRA_PROVIDER_ENVIRONMENT_SETUP.md](KYRA_PROVIDER_ENVIRONMENT_SETUP.md).
+**Expected network use (not hidden “analytics”):** HTTPS calls to **GitHub** when you use **in-app update checks**, calls to the **ForgerEMS Gateway** (including **`/v1/kyra/research`** and **`/v1/kyra/status`** when enabled) when beta Gateway mode is configured, and calls to **third-party AI endpoints** only when an operator has enabled those Kyra providers. See [UPDATE_SYSTEM.md](UPDATE_SYSTEM.md) and [KYRA_PROVIDER_ENVIRONMENT_SETUP.md](KYRA_PROVIDER_ENVIRONMENT_SETUP.md).
 
 Normal workflows store **logs and reports on your machine** under `%LOCALAPPDATA%\ForgerEMS\`. **You** choose what to email for support.
 
@@ -37,6 +37,23 @@ You are responsible for verifying **integrity** (checksums when published) and *
 
 ---
 
+## LibreHardwareMonitor and sensor provider notices
+
+ForgerEMS may include **LibreHardwareMonitorLib** as a bundled local read-only sensor provider for **Hardware X-Ray** when **Deep Sensor Mode** is enabled.
+
+- License: **MPL-2.0**
+- License path: `providers/sensors/LICENSES/LibreHardwareMonitor-MPL-2.0.txt`
+- Third-party notice path: `providers/sensors/THIRD-PARTY-NOTICES.txt`
+- Sensor notice documentation: [THIRD-PARTY-SENSOR-NOTICES.md](THIRD-PARTY-SENSOR-NOTICES.md)
+
+ForgerEMS proprietary code remains separate from MPL-covered LibreHardwareMonitor code. If ForgerEMS modifies MPL-covered LibreHardwareMonitor files and distributes them, those modified files must be made available as required by MPL-2.0.
+
+ForgerEMS does **not** redistribute HWiNFO, AIDA64, CPU-Z, or other proprietary sensor tools unless a license explicitly allows it.
+
+Sensor providers are read-only. ForgerEMS does **not** control fans, voltage, clocks, overclocking, undervolting, BIOS, or firmware. There is no warranty that every sensor is exposed; firmware/vendor/admin limitations may prevent some readings. Unavailable readings are coverage limits, not hardware failures.
+
+---
+
 ## Pro / licensing
 
 **Pro** or preview features may appear during beta for feedback. **Licensing is not enforced** in this beta line unless separately announced. Commercial terms are not final from preview labels alone.
@@ -51,7 +68,30 @@ Do not use ForgerEMS for unauthorized access, bypassing security on devices you 
 
 ## System Intelligence and estimates
 
-Hardware, diagnostics, and resale-oriented summaries are **informational** and may be incomplete or inaccurate. Confirm critical decisions with additional testing.
+Hardware, diagnostics, Hardware X-Ray sensor coverage, and resale-oriented summaries are **informational** and may be incomplete or inaccurate. Confirm critical decisions with additional testing.
+
+---
+
+## Optional online providers
+
+Kyra can use offline/local answers by default. If an operator enables ForgerEMS Gateway or online AI/API providers, prompts and optional sanitized context may be sent to the configured gateway/provider under that service's terms. Provider API keys must not be embedded in the desktop app, installer, release ZIP, appsettings, `.env.example`, docs, source code, or registry defaults. Do not paste API keys, tokens, passwords, product keys, private documents, or sensitive customer data into Kyra or support messages.
+
+ForgerEMS Beta Gateway tokens are revocable access tokens, not provider API keys. They should be limited, rotatable, and replaceable during beta without shipping provider keys to testers.
+
+Current prices, availability, latest versions, weather, news, stocks, crypto, and similar realtime facts require a configured live provider/tool. Offline/local Kyra may provide local observations and verification steps, but must not present invented realtime data as fact.
+
+---
+
+## Kyra Intelligence Network
+
+Kyra Intelligence Network is a beta foundation for **Local-first repair memory + optional anonymous community learning**.
+
+- Local Kyra Memory stores sanitized machine-scoped repair notes on the user's PC.
+- Anonymous community intelligence sharing is optional, off by default, and requires explicit opt-in.
+- Community sharing is not active in this release. The setting is visible for preview only; no community data leaves the device in this build.
+- Users can keep Kyra local-only, opt out in Settings, export Kyra memory, and delete Kyra memory.
+
+ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the user explicitly enables a future sharing option. Realtime Kyra Gateway sends only sanitized request context needed to answer current-data questions. Provider API keys are stored server-side and are not included in the desktop app. Anonymous Community Intelligence sharing is optional and off by default.
 
 ---
 

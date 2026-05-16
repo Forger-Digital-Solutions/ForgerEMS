@@ -23,4 +23,18 @@ public sealed class ForgerEmsEnvironmentConfigurationTests
         Assert.False(ForgerEmsFeatureFlags.TelemetryEnabled);
         Assert.False(ForgerEmsFeatureFlags.CrashReportingEnabled);
     }
+
+    [Fact]
+    public void DeepSensorModeDefaultsOff()
+    {
+        var resolution = DeepSensorModeResolver.Resolve(new DeepSensorModeResolverOptions
+        {
+            EnvironmentReader = _ => null,
+            LocalAppDataRoot = Path.Combine(Path.GetTempPath(), "forgerems-empty-deep-sensor-" + Guid.NewGuid().ToString("N")),
+            InstallDefaultReader = () => null
+        });
+
+        Assert.Equal("Off", resolution.Mode);
+        Assert.False(resolution.IsEnabled);
+    }
 }

@@ -27,6 +27,11 @@ public sealed class PowerShellRunRequest
     public string? ProgressItemName { get; init; }
 
     public PowerShellHeartbeatKind HeartbeatKind { get; init; } = PowerShellHeartbeatKind.Download;
+
+    public TimeSpan? Timeout { get; init; }
+
+    /// <summary>When set (with <see cref="ProgressItemName"/>), replaces the default download heartbeat text. Idle span is time since last script output.</summary>
+    public Func<TimeSpan, string?>? BuildDownloadHeartbeatMessage { get; init; }
 }
 
 public sealed class PowerShellRunResult
@@ -44,6 +49,8 @@ public sealed class PowerShellRunResult
     public string StandardErrorText { get; init; } = string.Empty;
 
     public IReadOnlyList<LogLine> OutputLines { get; init; } = Array.Empty<LogLine>();
+
+    public bool TimedOut { get; init; }
 
     public bool Succeeded => ExitCode == 0;
 }

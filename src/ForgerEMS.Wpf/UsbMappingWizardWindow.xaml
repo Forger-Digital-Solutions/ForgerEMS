@@ -33,6 +33,23 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
+        <Style x:Key="WizardPrimaryBtn" TargetType="Button" BasedOn="{StaticResource WizardBtn}">
+            <Setter Property="Background" Value="#FF1F5E4B" />
+            <Setter Property="BorderBrush" Value="#FF3AD49A" />
+            <Setter Property="Foreground" Value="#FFFFFFFF" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#FF28765F" />
+                    <Setter Property="BorderBrush" Value="#FF63E6B6" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#FF174637" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.45" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
     <Border Padding="20" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10" Margin="16">
         <DockPanel>
@@ -81,15 +98,13 @@
 
                     <!-- Move USB -->
                     <StackPanel Visibility="{Binding IsMoveUsbStep, Converter={StaticResource BoolToVis}}">
-                        <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource HeroTextBrush}" Text="Move USB" />
+                        <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource HeroTextBrush}" Text="Start Detection" />
                         <TextBlock Margin="0,10,0,12" Foreground="{DynamicResource PanelTextBrush}" TextWrapping="Wrap"
-                                   Text="Now move the SAME USB device to the physical port you want to test or label." />
-                        <CheckBox Foreground="{DynamicResource PanelTextBrush}" IsChecked="{Binding UserConfirmedUsbMoved, Mode=TwoWay}"
-                                  Content="I moved the USB device." />
-                        <StackPanel Margin="0,16,0,0" Orientation="Horizontal">
-                            <Button Style="{StaticResource WizardBtn}" Content="Detect Port Change" Command="{Binding DetectPortChangeCommand}" />
+                                   Text="Keep the selected USB plugged in. Start detection first; ForgerEMS will tell you when to unplug it." />
+                        <WrapPanel Margin="0,16,0,0">
+                            <Button Style="{StaticResource WizardPrimaryBtn}" Content="Start Detection" Command="{Binding DetectPortChangeCommand}" />
                             <Button Style="{StaticResource WizardBtn}" Content="Cancel" Command="{Binding CancelCommand}" />
-                        </StackPanel>
+                        </WrapPanel>
                     </StackPanel>
 
                     <!-- Detect -->
@@ -102,9 +117,9 @@
                                      IsIndeterminate="{Binding ShowDetectSpinner}"
                                      Visibility="{Binding ShowDetectSpinner, Converter={StaticResource BoolToVis}}" />
                         <TextBlock Margin="0,10,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" TextWrapping="Wrap"
-                                   Text="Unplug the selected USB drive, plug it into the physical port you want to map, wait for Windows to recognize it, then use Detect Port Change on the previous step when you are ready." />
+                                   Text="Click Try Again to repeat removal/reinsert detection, or save a manual label if Windows does not expose the port path." />
                         <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowDetectChangeDebugDetails, Converter={StaticResource BoolToVis}}">
-                            <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Debug (development build)" />
+                            <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Diagnostics" />
                             <TextBlock Margin="0,4,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" FontFamily="Consolas" FontSize="11" Text="{Binding DetectChangeDebugSummary}" TextWrapping="Wrap" />
                         </StackPanel>
                         <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowDetectSuccessDetails, Converter={StaticResource BoolToVis}}">
@@ -123,13 +138,69 @@
                         <StackPanel Margin="0,12,0,0" Visibility="{Binding ShowDetectFailureDetails, Converter={StaticResource BoolToVis}}">
                             <TextBlock Margin="0,8,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" Text="{Binding DetectionDetail}" TextWrapping="Wrap" />
                             <TextBlock Margin="0,8,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" Text="{Binding RecommendationDisplay}" TextWrapping="Wrap" />
-                            <StackPanel Margin="0,16,0,0" Orientation="Horizontal">
-                                <Button Style="{StaticResource WizardBtn}" Content="Try Again" Command="{Binding TryAgainCommand}" />
-                                <Button Style="{StaticResource WizardBtn}" Content="Use Current Port Anyway" Command="{Binding UseCurrentPortAnywayCommand}" />
+                            <StackPanel Margin="0,14,0,0" Visibility="{Binding HasSavedPortLabels, Converter={StaticResource BoolToVis}}">
+                                <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelTextBrush}" Text="Confirm Current Port" />
+                                <TextBlock Margin="0,4,0,8" Foreground="{DynamicResource PanelMutedTextBrush}" TextWrapping="Wrap"
+                                           Text="Active connection needs confirmation. Saved labels are history until you confirm one for this USB connection." />
+                                <TextBox Margin="0,4,0,8" MinHeight="30" Text="{Binding PortLabelDraft, UpdateSourceTrigger=PropertyChanged}" />
+                                <ScrollViewer MaxHeight="230" VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding SavedPortLabels}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Margin="0,0,0,6"
+                                                        Padding="8"
+                                                        Background="#B80A101A"
+                                                        BorderBrush="#3357C7E8"
+                                                        BorderThickness="1"
+                                                        CornerRadius="5">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                                            <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding Label}" TextWrapping="Wrap" />
+                                                            <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" FontSize="11" Text="{Binding LastSeenDisplay}" TextWrapping="Wrap" />
+                                                            <TextBlock Foreground="{DynamicResource PanelMutedTextBrush}" FontSize="11" Text="{Binding LastBenchmarkDisplay}" TextWrapping="Wrap" />
+                                                            <TextBlock Foreground="{DynamicResource PanelMutedTextBrush}" FontSize="11" Text="{Binding VerificationDisplay}" TextWrapping="Wrap" />
+                                                        </StackPanel>
+                                                        <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                            <Button MinWidth="70"
+                                                                    Style="{StaticResource WizardPrimaryBtn}"
+                                                                    Content="{Binding ConfirmButtonText}"
+                                                                    Command="{Binding DataContext.ConfirmSavedPortLabelCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                    CommandParameter="{Binding MappingId}" />
+                                                            <Button MinWidth="58"
+                                                                    Style="{StaticResource WizardBtn}"
+                                                                    Content="Rename"
+                                                                    Command="{Binding DataContext.RenameSavedPortLabelCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                    CommandParameter="{Binding MappingId}" />
+                                                            <Button MinWidth="54"
+                                                                    Style="{StaticResource WizardBtn}"
+                                                                    Content="Delete"
+                                                                    Command="{Binding DataContext.DeleteSavedPortLabelCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                    CommandParameter="{Binding MappingId}" />
+                                                        </WrapPanel>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </StackPanel>
+                            <WrapPanel Margin="0,16,0,0" Visibility="{Binding ShowRemovalNotObservedActions, Converter={StaticResource BoolToVis}}">
+                                <Button Style="{StaticResource WizardPrimaryBtn}" Content="Try Again" Command="{Binding TryAgainCommand}" />
                                 <Button Style="{StaticResource WizardBtn}" Content="Save Manual Label" Command="{Binding SaveManualLabelPathCommand}" />
                                 <Button Style="{StaticResource WizardBtn}" Content="Back" Command="{Binding BackFromDetectCommand}" />
-                            </StackPanel>
-                            <Button Margin="0,8,0,0" HorizontalAlignment="Left" Style="{StaticResource WizardBtn}" Content="Cancel" Command="{Binding CancelCommand}" />
+                                <Button Style="{StaticResource WizardBtn}" Content="Cancel" Command="{Binding CancelCommand}" />
+                            </WrapPanel>
+                            <WrapPanel Margin="0,16,0,0" Visibility="{Binding ShowManualLabelRecommendedActions, Converter={StaticResource BoolToVis}}">
+                                <Button Style="{StaticResource WizardPrimaryBtn}" Content="Save Manual Label" Command="{Binding SaveManualLabelPathCommand}" />
+                                <Button Style="{StaticResource WizardBtn}" Content="Try Again" Command="{Binding TryAgainCommand}" />
+                                <Button Style="{StaticResource WizardBtn}" Content="Use Current Port Anyway" Command="{Binding UseCurrentPortAnywayCommand}" />
+                                <Button Style="{StaticResource WizardBtn}" Content="Back" Command="{Binding BackFromDetectCommand}" />
+                                <Button Style="{StaticResource WizardBtn}" Content="Cancel" Command="{Binding CancelCommand}" />
+                            </WrapPanel>
                         </StackPanel>
                     </StackPanel>
 

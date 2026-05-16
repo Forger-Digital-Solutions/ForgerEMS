@@ -64,6 +64,19 @@ public sealed class KyraIntentRouterTests
         Assert.Equal(KyraIntent.CodeAssist, KyraIntentRouter.DetectIntent(p));
     }
 
+    [Fact]
+    public void SmallCSharpMethodSnippet_TriggersCodeAssist()
+    {
+        const string p = """
+            Fix this small code snippet:
+            public int Add(int a, int b)
+            {
+                return a - b;
+            }
+            """;
+        Assert.Equal(KyraIntent.CodeAssist, KyraIntentRouter.DetectIntent(p));
+    }
+
     [Theory]
     [InlineData("What's missing before beta testing?")]
     [InlineData("Beta readiness checklist")]
@@ -89,4 +102,10 @@ public sealed class KyraIntentRouterTests
     [Fact]
     public void LatestThirdPartySoftwareRelease_RoutesToLiveOnlineQuestion() =>
         Assert.Equal(KyraIntent.LiveOnlineQuestion, KyraIntentRouter.DetectIntent("What is the newest Chrome release?"));
+
+    [Theory]
+    [InlineData("Are my toolkit links good?")]
+    [InlineData("Which toolkit links are broken?")]
+    public void ToolkitLinkQuestions_RouteToToolkitManagerHelp(string prompt) =>
+        Assert.Equal(KyraIntent.ToolkitManagerHelp, KyraIntentRouter.DetectIntent(prompt));
 }

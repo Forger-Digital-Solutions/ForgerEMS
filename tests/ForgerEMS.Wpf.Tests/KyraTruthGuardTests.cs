@@ -19,7 +19,7 @@ public sealed class KyraTruthGuardTests
             }
         };
 
-        var ledger = KyraFactsLedger.FromCopilotContext(ctx);
+        var ledger = KyraFactsLedgerFactory.FromCopilotContext(ctx);
         var online = "I do not have access to your device specifications, so I cannot tell what CPU you have.";
         Assert.True(KyraSafetyPolicy.ShouldDiscardOnlineAnswer(online, "local", ledger));
     }
@@ -28,7 +28,7 @@ public sealed class KyraTruthGuardTests
     public void SafetyPolicy_AllowsOnlineWhenNoLocalFacts()
     {
         var ctx = new CopilotContext { SystemProfile = null };
-        var ledger = KyraFactsLedger.FromCopilotContext(ctx);
+        var ledger = KyraFactsLedgerFactory.FromCopilotContext(ctx);
         Assert.False(ledger.HasTrustedLocalHardwareFacts);
         Assert.False(KyraSafetyPolicy.ShouldDiscardOnlineAnswer("I can help with general Windows tips.", "x", ledger));
     }
@@ -41,7 +41,7 @@ public sealed class KyraTruthGuardTests
             SystemProfile = new SystemProfile { Manufacturer = "Lenovo", Model = "T14", Cpu = "AMD Ryzen 7 PRO" }
         };
 
-        var ledger = KyraFactsLedger.FromCopilotContext(ctx);
+        var ledger = KyraFactsLedgerFactory.FromCopilotContext(ctx);
         Assert.Contains("Lenovo", ledger.DeviceSummary, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("AMD Ryzen", ledger.CpuSummary, StringComparison.OrdinalIgnoreCase);
     }

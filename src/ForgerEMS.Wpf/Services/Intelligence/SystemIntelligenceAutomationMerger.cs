@@ -31,14 +31,21 @@ public static class SystemIntelligenceAutomationMerger
             var profile = SystemProfileMapper.FromJson(doc.RootElement);
             var health = SystemHealthEvaluator.Evaluate(profile);
             var recs = RecommendationEngine.Generate(profile, health);
+            var machineClass = MachineClassifier.Classify(profile);
+            var sensorMatrix = SensorMatrixBuilder.Build(profile);
+            sensorMatrix = ApplyUsbIntelligenceCoverage(reportPath, sensorMatrix);
+            var deviceFit = new DeviceFitEngine().Evaluate(profile);
 
-            var automation = BuildAutomationNode(doc.RootElement, profile, health, recs);
+            var automation = BuildAutomationNode(doc.RootElement, profile, health, recs, deviceFit, machineClass, sensorMatrix);
             var root = JsonNode.Parse(text)?.AsObject();
             if (root is null)
             {
                 return false;
             }
 
+            root["deviceFit"] = JsonSerializer.SerializeToNode(deviceFit, SerializerOptions);
+            root["machineClass"] = JsonSerializer.SerializeToNode(machineClass, SerializerOptions);
+            root["sensorMatrix"] = JsonSerializer.SerializeToNode(sensorMatrix, SerializerOptions);
             root["forgerAutomation"] = JsonSerializer.SerializeToNode(automation, SerializerOptions);
             File.WriteAllText(reportPath, root.ToJsonString(new JsonSerializerOptions
             {
@@ -59,7 +66,10 @@ public static class SystemIntelligenceAutomationMerger
         JsonElement root,
         SystemProfile profile,
         SystemHealthEvaluation health,
-        IReadOnlyList<string> recs)
+        IReadOnlyList<string> recs,
+        DeviceFitResult deviceFit,
+        MachineClassResult machineClass,
+        SensorMatrixResult sensorMatrix)
     {
         var issues = new List<object>();
         foreach (var issue in health.DetectedIssues.Where(i =>
@@ -77,16 +87,19 @@ public static class SystemIntelligenceAutomationMerger
             });
         }
 
-        var breakdown = BuildHealthBreakdown(health.HealthScore, profile, issues.Count);
+        var breakdown = BuildHealthBreakdown(health, profile, issues.Count);
 
         var norm = BuildNormalizedHardware(root, profile);
 
         var summary =
             $"Health {health.HealthScore}/100. " +
+            $"Scan Confidence {health.ConfidenceScore}/100. " +
             $"{norm.CpuTier}. " +
             $"GPUs: {string.Join(", ", norm.GpuClasses)}. " +
             $"Boot volume: {norm.BootVolume}. " +
-            $"Network: {norm.NetworkAdapterSummary}.";
+            $"Network: {norm.NetworkAdapterSummary}. " +
+            $"Machine class: {machineClass.PrimaryClass}. " +
+            $"Best use: {deviceFit.PrimaryFit}.";
 
         return new
         {
@@ -95,16 +108,74 @@ public static class SystemIntelligenceAutomationMerger
             summaryLine = summary,
             healthScore = health.HealthScore,
             healthScoreBreakdown = breakdown,
+            deviceFitSummary = new
+            {
+                primaryFit = deviceFit.PrimaryFit,
+                machineClass = deviceFit.MachineClass,
+                confidence = deviceFit.Confidence,
+                strongFits = deviceFit.StrongFits.Take(5).ToArray(),
+                weakFits = deviceFit.WeakFits.Take(4).ToArray(),
+                listingPositioning = deviceFit.ListingPositioning
+            },
+            machineClassSummary = new
+            {
+                primaryClass = machineClass.PrimaryClass,
+                confidence = machineClass.Confidence,
+                secondaryClasses = machineClass.SecondaryClasses.Take(3).ToArray(),
+                note = machineClass.TechnicianNote
+            },
+            sensorCoverageSummary = new
+            {
+                confidence = sensorMatrix.Confidence,
+                coverage = sensorMatrix.CoverageSummary,
+                groups = sensorMatrix.Groups.Select(group => new
+                {
+                    group.Category,
+                    group.KnownFields,
+                    group.TotalFields,
+                    group.Summary
+                }).ToArray(),
+                providers = sensorMatrix.SensorProviders.Select(provider => new
+                {
+                    provider.ProviderName,
+                    provider.ProviderVersion,
+                    provider.ProviderKind,
+                    provider.IsEnabled,
+                    provider.IsBundled,
+                    provider.RequiresAdmin,
+                    provider.IsReadOnly,
+                    provider.TrustLevel,
+                    provider.RuntimeMode,
+                    provider.FailureReason
+                }).ToArray(),
+                deepSensorMode = sensorMatrix.DeepSensorMode,
+                note = sensorMatrix.DeepSensorModeNote
+            },
+            deepSensorMode = new
+            {
+                value = sensorMatrix.DeepSensorMode.Mode,
+                source = sensorMatrix.DeepSensorMode.Source,
+                enabled = sensorMatrix.DeepSensorMode.IsEnabled,
+                providerActive = sensorMatrix.SensorProviders.Any(provider =>
+                    provider.ProviderName.Contains("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase) &&
+                    provider.IsEnabled),
+                providerBundled = sensorMatrix.SensorProviders.Any(provider =>
+                    provider.ProviderName.Contains("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase) &&
+                    provider.IsBundled),
+                readOnly = true,
+                noControlCapabilities = true,
+                noticeText = "Deep Sensor Mode reads local hardware sensor data only while ForgerEMS is running or scanning. No sensor control or cloud service is used."
+            },
             issues,
             recommendedActions = recs.ToArray(),
             normalizedHardware = norm
         };
     }
 
-    private static object[] BuildHealthBreakdown(int score, SystemProfile profile, int issueCount)
+    private static object[] BuildHealthBreakdown(SystemHealthEvaluation health, SystemProfile profile, int issueCount)
     {
-        return
-        [
+        var rows = new List<object>
+        {
             new
             {
                 factor = "Overall scan status",
@@ -118,14 +189,24 @@ public static class SystemIntelligenceAutomationMerger
                 rationale = issueCount == 0
                     ? "No issues were promoted from the evaluator."
                     : $"{issueCount} issue row(s) were generated for Kyra and diagnostics."
-            },
-            new
-            {
-                factor = "Final health score",
-                points = score,
-                rationale = "Composite 0-100 score from SystemHealthEvaluator (higher is healthier)."
             }
-        ];
+        };
+
+        rows.AddRange(health.Categories.Select(category => new
+        {
+            factor = category.Category,
+            points = category.Score,
+            rationale = $"{category.Status}, confidence {category.Confidence}: {string.Join("; ", category.Reasons.Take(2))}"
+        }));
+
+        rows.Add(new
+        {
+            factor = "Final health score",
+            points = health.HealthScore,
+            rationale = "Composite 0-100 score from SystemHealthEvaluator. Unknown/not exposed data reduces confidence more than health."
+        });
+
+        return rows.ToArray();
     }
 
     private static ForgerNormalizedHardwareSummary BuildNormalizedHardware(JsonElement root, SystemProfile profile)
@@ -190,11 +271,25 @@ public static class SystemIntelligenceAutomationMerger
 
     private static (int physical, int virtualAdapters) CountAdapterRoles(JsonElement root)
     {
-        if (!root.TryGetProperty("network", out var net) ||
-            !net.TryGetProperty("adapters", out var adapters) ||
-            adapters.ValueKind != JsonValueKind.Array)
+        if (!root.TryGetProperty("network", out var net))
         {
             return (0, 0);
+        }
+
+        var explicitPhys = net.TryGetProperty("physicalAdapters", out var physicalAdapters) && physicalAdapters.ValueKind == JsonValueKind.Array
+            ? physicalAdapters.GetArrayLength()
+            : (int?)null;
+        var explicitVirt = net.TryGetProperty("virtualAdapters", out var virtualAdapters) && virtualAdapters.ValueKind == JsonValueKind.Array
+            ? virtualAdapters.GetArrayLength()
+            : (int?)null;
+        if (explicitPhys.HasValue && explicitVirt.HasValue)
+        {
+            return (explicitPhys.Value, explicitVirt.Value);
+        }
+
+        if (!net.TryGetProperty("adapters", out var adapters) || adapters.ValueKind != JsonValueKind.Array)
+        {
+            return (explicitPhys ?? 0, explicitVirt ?? 0);
         }
 
         var phys = 0;
@@ -202,12 +297,22 @@ public static class SystemIntelligenceAutomationMerger
         foreach (var a in adapters.EnumerateArray())
         {
             var role = GetJsonString(a, "adapterRole");
-            if (role.Contains("Virtual", StringComparison.OrdinalIgnoreCase))
+            var name = GetJsonString(a, "name");
+            var description = GetJsonString(a, "description");
+            if (role.Contains("Virtual", StringComparison.OrdinalIgnoreCase) ||
+                role.Contains("VPN", StringComparison.OrdinalIgnoreCase) ||
+                role.Contains("Host-Only", StringComparison.OrdinalIgnoreCase) ||
+                SystemIntelligenceFormatter.ShouldIgnoreAdapterForWarnings(name, description))
             {
                 virt++;
             }
             else if (role.Contains("Physical", StringComparison.OrdinalIgnoreCase) ||
-                     role.Contains("Wi-Fi", StringComparison.OrdinalIgnoreCase))
+                     role.Contains("Wi-Fi", StringComparison.OrdinalIgnoreCase) ||
+                     role.Contains("ActivePhysical", StringComparison.OrdinalIgnoreCase))
+            {
+                phys++;
+            }
+            else
             {
                 phys++;
             }
@@ -223,20 +328,160 @@ public static class SystemIntelligenceAutomationMerger
         {
             return profile.Gpus.Count == 0
                 ? ["Unknown"]
-                : profile.Gpus.Select(_ => "Unknown").ToArray();
+                : profile.Gpus.Select(gpu => ClassifyGpuForSummary(gpu.Name, gpu.GpuKind)).ToArray();
         }
 
         var list = new List<string>();
         foreach (var g in gpus.EnumerateArray())
         {
             var t = GetJsonString(g, "type");
+            var name = GetJsonString(g, "name");
             if (!string.IsNullOrWhiteSpace(t) && !string.Equals(t, "unknown", StringComparison.OrdinalIgnoreCase))
             {
-                list.Add(t);
+                list.Add($"{t}: {name}");
+            }
+            else if (!string.IsNullOrWhiteSpace(name) && !string.Equals(name, "unknown", StringComparison.OrdinalIgnoreCase))
+            {
+                list.Add(ClassifyGpuForSummary(name, t));
             }
         }
 
         return list.Count > 0 ? list.ToArray() : ["Unknown"];
+    }
+
+    private static SensorMatrixResult ApplyUsbIntelligenceCoverage(string reportPath, SensorMatrixResult sensorMatrix)
+    {
+        var usbPath = Path.Combine(Path.GetDirectoryName(reportPath) ?? string.Empty, "usb-intelligence-latest.json");
+        if (!File.Exists(usbPath))
+        {
+            return sensorMatrix;
+        }
+
+        try
+        {
+            using var usbDoc = JsonDocument.Parse(File.ReadAllText(usbPath));
+            var usb = usbDoc.RootElement;
+            var readings = BuildUsbReadings(usb);
+            if (readings.Length == 0)
+            {
+                return sensorMatrix;
+            }
+
+            var known = readings.Count(r => !r.IsUnavailable);
+            var group = new SensorGroup
+            {
+                Category = "USB",
+                KnownFields = known,
+                TotalFields = readings.Length,
+                Summary = $"{known}/{readings.Length} fields known",
+                Readings = readings
+            };
+            var groups = sensorMatrix.Groups
+                .Where(g => !g.Category.Equals("USB", StringComparison.OrdinalIgnoreCase))
+                .Concat([group])
+                .ToArray();
+            var totalKnown = groups.Sum(g => g.KnownFields);
+            var total = groups.Sum(g => g.TotalFields);
+            var confidenceRatio = total == 0 ? 0 : totalKnown / (double)total;
+            return new SensorMatrixResult
+            {
+                Groups = groups,
+                SensorProviders = sensorMatrix.SensorProviders,
+                DeepSensorMode = sensorMatrix.DeepSensorMode,
+                Confidence = confidenceRatio >= 0.7 ? "High" : confidenceRatio >= 0.45 ? "Medium" : "Low",
+                DeepSensorModeNote = sensorMatrix.DeepSensorModeNote
+            };
+        }
+        catch (Exception ex)
+        {
+            IntelligenceLogWriter.Append("system-intelligence.log", $"USB sensor coverage merge skipped: {ex.Message}");
+            return sensorMatrix;
+        }
+    }
+
+    private static SensorReading[] BuildUsbReadings(JsonElement usb)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var readings = new List<SensorReading>();
+        if (usb.TryGetProperty("usbDiagnostics", out var diag) && diag.ValueKind == JsonValueKind.Object)
+        {
+            var mapped = GetJsonString(diag, "usbProfileKnownPortsCount");
+            if (int.TryParse(mapped, out var mappedCount) && mappedCount > 0)
+            {
+                readings.Add(KnownUsb("USB mapped ports", mapped, "USB Intelligence profile", now, "Saved mapped port labels/profiles are available."));
+            }
+
+            var risk = GetJsonString(diag, "usbCurrentTargetRiskSummary");
+            if (!string.IsNullOrWhiteSpace(risk) && !risk.Equals("unknown", StringComparison.OrdinalIgnoreCase))
+            {
+                readings.Add(KnownUsb("USB target risk", risk.TrimEnd('.'), "USB Intelligence diagnostics", now, "Current safe target risk is summarized by USB Builder."));
+            }
+
+            var best = GetJsonString(diag, "usbBestKnownPortSummary");
+            if (!string.IsNullOrWhiteSpace(best) && !best.Equals("unknown", StringComparison.OrdinalIgnoreCase))
+            {
+                readings.Add(KnownUsb("Best measured port", best, "USB Builder benchmark/profile", now, "Best known write speed is based on ForgerEMS benchmark/profile data."));
+            }
+
+            if (diag.TryGetProperty("lastBenchmark", out var benchmark) &&
+                benchmark.ValueKind == JsonValueKind.Object &&
+                benchmark.TryGetProperty("succeeded", out var succeeded) &&
+                succeeded.ValueKind == JsonValueKind.True)
+            {
+                readings.Add(KnownUsb("USB benchmark", GetJsonString(benchmark, "summaryLine"), "USB Builder benchmark", now, GetJsonString(benchmark, "benchmarkConfidence")));
+            }
+        }
+
+        var topology = usb.TryGetProperty("topologyDiff", out var diff)
+            ? GetJsonString(diff, "summaryLine")
+            : string.Empty;
+        if (!string.IsNullOrWhiteSpace(topology) && !topology.Equals("unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            readings.Add(KnownUsb("USB topology", topology, "USB Intelligence topology diff", now, "Topology status was available from the USB Intelligence report."));
+        }
+
+        return readings
+            .GroupBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .ToArray();
+    }
+
+    private static SensorReading KnownUsb(string name, string value, string source, DateTimeOffset now, string note) => new()
+    {
+        Name = name,
+        Category = "USB",
+        Value = string.IsNullOrWhiteSpace(value) ? "Known" : value,
+        Status = "Ready",
+        Confidence = "Medium",
+        Source = source,
+        LastUpdatedUtc = now,
+        TechnicianNote = note
+    };
+
+    private static string ClassifyGpuForSummary(string name, string type)
+    {
+        if (!string.IsNullOrWhiteSpace(type) && !type.Equals("unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"{type}: {name}";
+        }
+
+        if (name.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("Quadro", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("RTX", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("GTX", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("Radeon", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Dedicated: {name}";
+        }
+
+        if (name.Contains("Intel", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("UHD", StringComparison.OrdinalIgnoreCase) ||
+            name.Contains("Iris", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Integrated: {name}";
+        }
+
+        return name;
     }
 
     private static string InferCpuTier(string cpu)

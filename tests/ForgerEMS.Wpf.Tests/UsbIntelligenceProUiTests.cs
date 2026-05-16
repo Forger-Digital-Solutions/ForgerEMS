@@ -124,6 +124,29 @@ public sealed class UsbIntelligenceProUiTests
     }
 
     [Fact]
+    public void UsbIntelligenceLatestPanelReader_UnverifiedBenchmarkShowsPortWarning()
+    {
+        const string json = """
+            {
+              "selectedTargetBenchmark": {
+                "succeeded": true,
+                "writeSpeedMBps": 61.0,
+                "readSpeedMBps": 450.0,
+                "classification": "usb3",
+                "attachedToVerifiedPort": false
+              },
+              "selectedTargetPortLabelStatusLine": "Current port: Unverified after reconnect",
+              "selectedTargetPortLabelReasonLine": "Last known label: LT USB C. Save/update a manual label."
+            }
+            """;
+
+        var state = UsbIntelligenceLatestPanelReader.Parse(json);
+        Assert.Contains("unverified current port", state.BenchmarkReadWriteDisplay, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Unverified after reconnect", state.MappingLabelDisplay, StringComparison.Ordinal);
+        Assert.Contains("LT USB C", state.MappingLabelDisplay, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void UsbIntelligencePanelUiCopy_Finalize_DropsBestPortWhenBenchmarkDidNotSucceed()
     {
         var raw = new UsbIntelligencePanelUiState { BestKnownPortSummary = "Front (~60 MB/s)" };
@@ -241,5 +264,57 @@ public sealed class UsbIntelligenceProUiTests
         Assert.Contains("142", diag.UsbBestKnownPortSummary);
         Assert.Contains("Current target risk", diag.UsbCurrentTargetRiskSummary);
         Assert.Equal(2, diag.UsbProfileKnownPortsCount);
+    }
+
+    [Fact]
+    public void UsbDiagnosticsComposer_BestKnownPort_IgnoresCacheSuspectedRead()
+    {
+        var profile = new UsbMachineProfile();
+        profile.KnownPorts.Add(new UsbKnownPortRecord
+        {
+            StablePortKey = "p1",
+            UserLabel = "Front",
+            LastBenchmark = new UsbIntelligenceBenchmarkResult
+            {
+                Succeeded = true,
+                WriteSpeedMBps = 59.7,
+                ReadSpeedMBps = 4121.6,
+                ReadLikelyCached = true,
+                ReadIsEstimate = true,
+                Classification = UsbSpeedMeasurementClass.Usb3,
+                Timestamp = DateTimeOffset.UtcNow
+            }
+        });
+        profile.KnownPorts.Add(new UsbKnownPortRecord
+        {
+            StablePortKey = "p2",
+            UserLabel = "Rear Blue USB 3",
+            LastBenchmark = new UsbIntelligenceBenchmarkResult
+            {
+                Succeeded = true,
+                WriteSpeedMBps = 58.8,
+                ReadSpeedMBps = 265.4,
+                Classification = UsbSpeedMeasurementClass.Usb3,
+                Timestamp = DateTimeOffset.UtcNow
+            }
+        });
+
+        var snapshot = new UsbTopologySnapshot
+        {
+            GeneratedUtc = DateTimeOffset.UtcNow,
+            SummaryLine = "ok",
+            SelectedTargetRecommendation = new UsbBuilderRecommendation
+            {
+                Summary = "ok",
+                Detail = "ok",
+                Risk = UsbPortRiskLevel.Low,
+                Speed = UsbSpeedClassification.Usb3,
+                Quality = UsbBuilderQuality.Good
+            }
+        };
+
+        var diag = UsbDiagnosticsComposer.Build(snapshot, profile);
+        Assert.Contains("Rear Blue USB 3", diag.UsbBestKnownPortSummary, StringComparison.Ordinal);
+        Assert.DoesNotContain("Front", diag.UsbBestKnownPortSummary, StringComparison.Ordinal);
     }
 }

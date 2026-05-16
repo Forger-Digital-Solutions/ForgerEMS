@@ -118,13 +118,19 @@ public sealed class UsbTargetIdentitySnapshot
 
 public static class UsbBenchmarkUiMessages
 {
-    public static string BuildUiSummary(UsbBenchmarkResultKind kind, double readMbps, double writeMbps, string? safeDetail = null)
+    public static string BuildUiSummary(
+        UsbBenchmarkResultKind kind,
+        double readMbps,
+        double writeMbps,
+        string? safeDetail = null,
+        bool readMayBeCached = false)
     {
         return kind switch
         {
             UsbBenchmarkResultKind.Completed =>
-                FormattableString.Invariant(
-                    $"Benchmark completed: Read {readMbps:0.0} MB/s, Write {writeMbps:0.0} MB/s."),
+                readMayBeCached
+                    ? FormattableString.Invariant($"Benchmark completed: Write {writeMbps:0.0} MB/s verified. Read speed not verified — cache suspected. Confidence: Read verification needed.")
+                    : FormattableString.Invariant($"Benchmark completed: Read {readMbps:0.0} MB/s, Write {writeMbps:0.0} MB/s. Confidence: {NormalizeConfidenceLabel(safeDetail)}."),
             UsbBenchmarkResultKind.CancelledByUser => "Benchmark cancelled by user.",
             UsbBenchmarkResultKind.TargetChanged => "Benchmark stopped because the selected USB target changed.",
             UsbBenchmarkResultKind.DeviceRemoved => "Benchmark stopped because the USB drive was removed.",
@@ -149,6 +155,9 @@ public static class UsbBenchmarkUiMessages
         };
     }
 
+    private static string NormalizeConfidenceLabel(string? label) =>
+        string.IsNullOrWhiteSpace(label) ? "Measured" : label.Trim();
+
     public static UsbBenchmarkResultKind MapNativeEndKind(UsbNativeBenchmarkEndKind endKind, bool succeeded)
     {
         if (succeeded)
@@ -159,7 +168,7 @@ public static class UsbBenchmarkUiMessages
         return endKind switch
         {
             UsbNativeBenchmarkEndKind.ValidationBlocked => UsbBenchmarkResultKind.BlockedBySafety,
-            UsbNativeBenchmarkEndKind.OperationCanceled => UsbBenchmarkResultKind.CancelledByUser,
+            UsbNativeBenchmarkEndKind.OperationCanceled => UsbBenchmarkResultKind.UnknownFailed,
             UsbNativeBenchmarkEndKind.IoOrSystemError => UsbBenchmarkResultKind.IoFailed,
             _ => UsbBenchmarkResultKind.UnknownFailed
         };

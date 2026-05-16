@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Management;
@@ -60,8 +61,9 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
         };
 
         var diff = UsbTopologyDiffService.Compare(options.PreviousSnapshot, shell);
-        var benchmarkRaw = ResolveBenchmark(match, options.MachineProfile);
-        var portRec = ResolvePortRecord(match, options.MachineProfile);
+        var portLabelStatus = UsbPortLabelResolver.Resolve(match, options.MachineProfile);
+        var benchmarkRaw = ResolveBenchmark(match, options.MachineProfile, portLabelStatus);
+        var portRec = portLabelStatus.CanAttachBenchmarkToVerifiedPort ? portLabelStatus.CurrentRecord : null;
         var recommendation = UsbBuilderRecommendationEngine.Build(
             selectedTarget,
             match,
@@ -94,8 +96,12 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
             MachineProfileFingerprint = fingerprint,
             SelectedTargetBenchmark = refinedBench,
             SelectedTargetStablePortKey = match?.StablePortKey,
-            SelectedTargetPortUserLabel = portRec?.UserLabel,
-            SelectedTargetMappingConfidence = portRec?.MappingConfidenceScore ?? 0,
+            SelectedTargetPortUserLabel = portLabelStatus.CurrentLabel,
+            SelectedTargetPortLabelValidity = portLabelStatus.Validity,
+            SelectedTargetLastKnownPortUserLabel = portLabelStatus.LastKnownLabel,
+            SelectedTargetPortLabelStatusLine = portLabelStatus.StatusLine,
+            SelectedTargetPortLabelReasonLine = portLabelStatus.ReasonLine,
+            SelectedTargetMappingConfidence = portLabelStatus.CanUseCurrentLabel ? portRec?.MappingConfidenceScore ?? 0 : 0,
             CombinedConfidenceScore = combinedScore,
             CombinedConfidenceReason = combinedReason
         };
@@ -104,6 +110,22 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
         var narrative = UsbKyraNarrativeBuilder.Build(withRec);
 
         IntelligenceLogWriter.Append("usb-intelligence.log", $"Topology snapshot: {summary}");
+        if (match is not null)
+        {
+            IntelligenceLogWriter.Append(
+                "usb-intelligence.log",
+                "usbPortProfileStatus " +
+                $"drive={NormalizeDriveLetterForProfile(match.DriveLetter)} " +
+                $"status={portLabelStatus.Validity} " +
+                $"currentLabel={(string.IsNullOrWhiteSpace(portLabelStatus.CurrentLabel) ? "none" : "present")} " +
+                $"lastKnownLabel={(string.IsNullOrWhiteSpace(portLabelStatus.LastKnownLabel) ? "none" : "present")} " +
+                $"currentConnectionEpoch={UsbPortLabelResolver.GetCurrentConnectionEpoch(match.DriveLetter)} " +
+                $"benchmarkAttachedToVerifiedPort={portLabelStatus.CanAttachBenchmarkToVerifiedPort} " +
+                $"savedMappedPortCount={options.MachineProfile?.KnownPorts?.Count(p => !string.IsNullOrWhiteSpace(p.UserLabel)) ?? 0} " +
+                $"candidateLabels={string.Join(",", portLabelStatus.CandidateLabels)} " +
+                $"matchScoreByLabel={string.Join(",", portLabelStatus.CandidateScoreSummaries)} " +
+                $"reasonCodes={string.Join(",", portLabelStatus.ReasonCodes)}");
+        }
 
         return new UsbTopologySnapshot
         {
@@ -119,14 +141,21 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
             MachineProfileFingerprint = fingerprint,
             SelectedTargetBenchmark = refinedBench,
             SelectedTargetStablePortKey = match?.StablePortKey,
-            SelectedTargetPortUserLabel = portRec?.UserLabel,
-            SelectedTargetMappingConfidence = portRec?.MappingConfidenceScore ?? 0,
+            SelectedTargetPortUserLabel = portLabelStatus.CurrentLabel,
+            SelectedTargetPortLabelValidity = portLabelStatus.Validity,
+            SelectedTargetLastKnownPortUserLabel = portLabelStatus.LastKnownLabel,
+            SelectedTargetPortLabelStatusLine = portLabelStatus.StatusLine,
+            SelectedTargetPortLabelReasonLine = portLabelStatus.ReasonLine,
+            SelectedTargetMappingConfidence = portLabelStatus.CanUseCurrentLabel ? portRec?.MappingConfidenceScore ?? 0 : 0,
             CombinedConfidenceScore = combinedScore,
             CombinedConfidenceReason = combinedReason
         };
     }
 
-    private static UsbIntelligenceBenchmarkResult? ResolveBenchmark(UsbDeviceInfo? match, UsbMachineProfile? profile)
+    private static UsbIntelligenceBenchmarkResult? ResolveBenchmark(
+        UsbDeviceInfo? match,
+        UsbMachineProfile? profile,
+        UsbPortLabelStatus portLabelStatus)
     {
         if (match is null || profile is null)
         {
@@ -140,22 +169,21 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
             return pending;
         }
 
+        if (!portLabelStatus.CanAttachBenchmarkToVerifiedPort &&
+            !string.IsNullOrEmpty(letter) &&
+            profile.UnverifiedBenchmarkByDriveLetter.TryGetValue(letter, out var unverified))
+        {
+            return unverified;
+        }
+
         if (string.IsNullOrWhiteSpace(match.StablePortKey))
         {
             return null;
         }
 
-        return profile.KnownPorts.FirstOrDefault(p => p.StablePortKey == match.StablePortKey)?.LastBenchmark;
-    }
-
-    private static UsbKnownPortRecord? ResolvePortRecord(UsbDeviceInfo? match, UsbMachineProfile? profile)
-    {
-        if (match is null || profile is null || string.IsNullOrWhiteSpace(match.StablePortKey))
-        {
-            return null;
-        }
-
-        return profile.KnownPorts.FirstOrDefault(p => p.StablePortKey == match.StablePortKey);
+        return portLabelStatus.CanAttachBenchmarkToVerifiedPort
+            ? portLabelStatus.CurrentRecord?.LastBenchmark
+            : null;
     }
 
     private static string NormalizeDriveLetterForProfile(string? driveLetter)
@@ -354,7 +382,7 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
         try
         {
             using var searcher = new ManagementObjectSearcher(
-                "SELECT DeviceID,Model,PNPDeviceID,InterfaceType,MediaType FROM Win32_DiskDrive");
+                "SELECT DeviceID,Index,Model,PNPDeviceID,InterfaceType,MediaType FROM Win32_DiskDrive");
             foreach (ManagementObject o in searcher.Get())
             {
                 using (o)
@@ -376,7 +404,8 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
                         IsRemovableMassStorage = true,
                         InferredSpeed = speed,
                         PnpDeviceId = pnp,
-                        WmiDeviceId = devId
+                        WmiDeviceId = devId,
+                        DiskNumber = TryReadInt(o, "Index")
                     });
                 }
             }
@@ -400,10 +429,11 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
                     continue;
                 }
 
-                var letter = ResolveDriveLetterForDisk(device.WmiDeviceId);
-                if (!string.IsNullOrWhiteSpace(letter))
+                var volume = ResolveVolumeForDisk(device.WmiDeviceId);
+                if (!string.IsNullOrWhiteSpace(volume.DriveLetter))
                 {
-                    device.DriveLetter = letter;
+                    device.DriveLetter = volume.DriveLetter;
+                    device.PartitionNumber = volume.PartitionNumber;
                 }
             }
         }
@@ -428,7 +458,20 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
                 letter += ":";
             }
 
-            var serial = TryGetVolumeSerialNumber(letter);
+            var volume = TryGetLogicalDiskInfo(letter);
+            if (!string.IsNullOrWhiteSpace(volume.VolumeName))
+            {
+                d.VolumeLabel = volume.VolumeName;
+            }
+
+            if (!string.IsNullOrWhiteSpace(volume.FileSystem))
+            {
+                d.FileSystem = volume.FileSystem;
+            }
+
+            var serial = string.IsNullOrWhiteSpace(volume.VolumeSerialNumber)
+                ? TryGetVolumeSerialNumber(letter)
+                : volume.VolumeSerialNumber;
             if (!string.IsNullOrWhiteSpace(serial))
             {
                 d.VolumeIdentityHash = UsbIdentityHasher.Sha256Hex(serial);
@@ -469,12 +512,26 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
         {
             var pnp = d.PnpDeviceId ?? string.Empty;
             d.DeviceInstanceIdHash = UsbIdentityHasher.Sha256Hex(pnp);
+            d.PnpDeviceIdHash = d.DeviceInstanceIdHash;
+            d.WmiDeviceIdHash = string.IsNullOrWhiteSpace(d.WmiDeviceId)
+                ? string.Empty
+                : UsbIdentityHasher.Sha256Hex(d.WmiDeviceId);
             var parent = ParentPnpPath(pnp);
             d.ParentDeviceIdHash = string.IsNullOrEmpty(parent) ? string.Empty : UsbIdentityHasher.Sha256Hex(parent);
             d.HubKey = ExtractHubKey(pnp);
-            d.LocationPathHash = TryQueryLocationHash(pnp);
+            d.SerialHash = HashUsbSerialCandidate(pnp);
+            d.ParentIdPrefixHash = HashParentIdPrefix(pnp);
+            var pnpTopology = TryQueryPnpTopologyHashes(pnp);
+            d.LocationPathHash = pnpTopology.LocationHash;
+            d.LocationInformationHash = pnpTopology.LocationInformationHash;
+            d.LocationPathsHash = pnpTopology.LocationPathsHash;
+            d.ContainerIdHash = pnpTopology.ContainerIdHash;
+            var controllerTopology = TryQueryUsbControllerEvidenceHashes(pnp);
+            d.UsbControllerAssociationHash = controllerTopology.ControllerAssociationHash;
+            d.UsbHubNameHash = controllerTopology.HubNameHash;
+            d.UsbHubPathHash = controllerTopology.HubPathHash;
             d.StableDeviceKey = UsbIdentityHasher.Sha256Hex(
-                $"{d.VolumeIdentityHash}|{d.FriendlyName}|{d.DeviceInstanceIdHash}");
+                $"{d.VolumeIdentityHash}|{d.SerialHash}|{d.FriendlyName}|{d.DeviceInstanceIdHash}");
             d.FriendlyLocation = string.IsNullOrWhiteSpace(d.DriveLetter)
                 ? "Removable USB (no drive letter yet)"
                 : $"Removable disk {d.DriveLetter.TrimEnd('\\')}";
@@ -517,7 +574,7 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
         foreach (var d in devices)
         {
             d.StablePortKey = UsbIdentityHasher.Sha256Hex(
-                $"{d.ControllerKey}|{d.DeviceInstanceIdHash}|{d.LocationPathHash}");
+                $"{d.ControllerKey}|{d.DeviceInstanceIdHash}|{d.LocationPathHash}|{d.LocationPathsHash}|{d.UsbHubPathHash}|{d.UsbControllerAssociationHash}");
         }
     }
 
@@ -610,27 +667,27 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
         return string.Empty;
     }
 
-    private static string TryQueryLocationHash(string pnp)
+    private static (string LocationHash, string LocationInformationHash, string LocationPathsHash, string ContainerIdHash) TryQueryPnpTopologyHashes(string pnp)
     {
         if (string.IsNullOrWhiteSpace(pnp))
         {
-            return string.Empty;
+            return (string.Empty, string.Empty, string.Empty, string.Empty);
         }
 
         try
         {
             var esc = pnp.Replace("\\", "\\\\").Replace("'", "''");
             using var searcher =
-                new ManagementObjectSearcher($"SELECT Location FROM Win32_PnPEntity WHERE PNPDeviceID='{esc}'");
+                new ManagementObjectSearcher($"SELECT * FROM Win32_PnPEntity WHERE PNPDeviceID='{esc}'");
             foreach (ManagementObject o in searcher.Get())
             {
                 using (o)
                 {
-                    var loc = $"{o["Location"]}";
-                    if (!string.IsNullOrWhiteSpace(loc))
-                    {
-                        return UsbIdentityHasher.Sha256Hex(loc);
-                    }
+                    return (
+                        HashProperty(o, "Location"),
+                        HashProperty(o, "LocationInformation"),
+                        HashProperty(o, "LocationPaths"),
+                        HashProperty(o, "ContainerID"));
                 }
             }
         }
@@ -639,10 +696,96 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
             // ignore
         }
 
-        return string.Empty;
+        return (string.Empty, string.Empty, string.Empty, string.Empty);
     }
 
-    private static string? ResolveDriveLetterForDisk(string diskDeviceId)
+    private static (string ControllerAssociationHash, string HubNameHash, string HubPathHash) TryQueryUsbControllerEvidenceHashes(string pnp)
+    {
+        if (string.IsNullOrWhiteSpace(pnp))
+        {
+            return (string.Empty, string.Empty, string.Empty);
+        }
+
+        try
+        {
+            var escapedNeedle = pnp.Replace("\\", "\\\\", StringComparison.OrdinalIgnoreCase);
+            using var searcher = new ManagementObjectSearcher("SELECT Antecedent,Dependent FROM Win32_USBControllerDevice");
+            foreach (ManagementObject o in searcher.Get())
+            {
+                using (o)
+                {
+                    var dependent = Convert.ToString(o["Dependent"], CultureInfo.InvariantCulture) ?? string.Empty;
+                    if (dependent.IndexOf(escapedNeedle, StringComparison.OrdinalIgnoreCase) < 0 &&
+                        dependent.IndexOf(pnp, StringComparison.OrdinalIgnoreCase) < 0)
+                    {
+                        continue;
+                    }
+
+                    var antecedent = Convert.ToString(o["Antecedent"], CultureInfo.InvariantCulture) ?? string.Empty;
+                    return (
+                        string.IsNullOrWhiteSpace(antecedent) ? string.Empty : UsbIdentityHasher.Sha256Hex(antecedent),
+                        string.Empty,
+                        string.IsNullOrWhiteSpace(dependent) ? string.Empty : UsbIdentityHasher.Sha256Hex(dependent));
+                }
+            }
+        }
+        catch
+        {
+            // best effort
+        }
+
+        try
+        {
+            var parent = ParentPnpPath(pnp);
+            if (string.IsNullOrWhiteSpace(parent))
+            {
+                return (string.Empty, string.Empty, string.Empty);
+            }
+
+            var esc = parent.Replace("\\", "\\\\").Replace("'", "''");
+            using var searcher =
+                new ManagementObjectSearcher($"SELECT Name,DeviceID,PNPDeviceID FROM Win32_PnPEntity WHERE PNPDeviceID='{esc}'");
+            foreach (ManagementObject o in searcher.Get())
+            {
+                using (o)
+                {
+                    return (
+                        string.Empty,
+                        HashProperty(o, "Name"),
+                        HashProperty(o, "PNPDeviceID"));
+                }
+            }
+        }
+        catch
+        {
+            // best effort
+        }
+
+        return (string.Empty, string.Empty, string.Empty);
+    }
+
+    private static string HashProperty(ManagementObject obj, string propertyName)
+    {
+        try
+        {
+            if (obj.Properties[propertyName]?.Value is null)
+            {
+                return string.Empty;
+            }
+
+            var value = obj.Properties[propertyName].Value;
+            var text = value is Array values
+                ? string.Join("|", values.Cast<object>().Select(item => Convert.ToString(item, CultureInfo.InvariantCulture)))
+                : Convert.ToString(value, CultureInfo.InvariantCulture);
+            return string.IsNullOrWhiteSpace(text) ? string.Empty : UsbIdentityHasher.Sha256Hex(text);
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private static (string? DriveLetter, int? PartitionNumber) ResolveVolumeForDisk(string diskDeviceId)
     {
         try
         {
@@ -653,6 +796,7 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
             {
                 using (partition)
                 {
+                    var partitionNumber = TryReadInt(partition, "Index");
                     foreach (ManagementObject logical in partition.GetRelated("Win32_LogicalDisk"))
                     {
                         using (logical)
@@ -660,7 +804,7 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
                             var id = $"{logical["DeviceID"]}";
                             if (!string.IsNullOrWhiteSpace(id))
                             {
-                                return id;
+                                return (id, partitionNumber);
                             }
                         }
                     }
@@ -672,7 +816,87 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
             // Best effort.
         }
 
-        return null;
+        return (null, null);
+    }
+
+    private static (string VolumeName, string FileSystem, string VolumeSerialNumber) TryGetLogicalDiskInfo(string driveLetter)
+    {
+        try
+        {
+            var esc = driveLetter.Replace("'", "''");
+            using var searcher =
+                new ManagementObjectSearcher($"SELECT VolumeName,FileSystem,VolumeSerialNumber FROM Win32_LogicalDisk WHERE DeviceID='{esc}'");
+            foreach (ManagementObject o in searcher.Get())
+            {
+                using (o)
+                {
+                    return (
+                        $"{o["VolumeName"]}".Trim(),
+                        $"{o["FileSystem"]}".Trim(),
+                        $"{o["VolumeSerialNumber"]}".Trim());
+                }
+            }
+        }
+        catch
+        {
+            // best effort
+        }
+
+        return (string.Empty, string.Empty, string.Empty);
+    }
+
+    private static string HashUsbSerialCandidate(string? pnp)
+    {
+        if (string.IsNullOrWhiteSpace(pnp))
+        {
+            return string.Empty;
+        }
+
+        var parts = pnp.Split('\\', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var serial = parts[^1];
+        return string.IsNullOrWhiteSpace(serial) ? string.Empty : UsbIdentityHasher.Sha256Hex(serial);
+    }
+
+    private static string HashParentIdPrefix(string? pnp)
+    {
+        if (string.IsNullOrWhiteSpace(pnp))
+        {
+            return string.Empty;
+        }
+
+        var parts = pnp.Split('\\', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var last = parts[^1];
+        var amp = last.IndexOf('&', StringComparison.Ordinal);
+        var prefix = amp > 0 ? last[..amp] : last;
+        return string.IsNullOrWhiteSpace(prefix) ? string.Empty : UsbIdentityHasher.Sha256Hex(prefix);
+    }
+
+    private static int? TryReadInt(ManagementBaseObject obj, string propertyName)
+    {
+        try
+        {
+            var value = obj[propertyName];
+            if (value is null)
+            {
+                return null;
+            }
+
+            return Convert.ToInt32(value, CultureInfo.InvariantCulture);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static UsbSpeedClassification ClassifySpeed(string blob)

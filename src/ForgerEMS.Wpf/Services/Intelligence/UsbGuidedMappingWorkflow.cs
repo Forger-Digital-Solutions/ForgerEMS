@@ -1,3 +1,4 @@
+#pragma warning disable CA1822 // DI-injected service; methods called via instance reference
 using System;
 using System.Linq;
 using VentoyToolkitSetup.Wpf.Models;
@@ -188,25 +189,45 @@ public sealed class UsbGuidedMappingWorkflow
         int mapConf,
         DateTimeOffset afterGeneratedUtc)
     {
-        var rec = profile.KnownPorts.FirstOrDefault(p => p.StablePortKey == afterMatch.StablePortKey);
+        var canonicalLabel = UsbPortLabelNormalizer.CanonicalizeDisplay(trimmedLabel);
+        var normalizedKey = UsbPortLabelNormalizer.NormalizeKey(canonicalLabel);
+        UsbPortLabelNormalizer.NormalizeProfile(profile);
+        var rec = profile.KnownPorts.FirstOrDefault(p =>
+            string.Equals(p.NormalizedLabelKey, normalizedKey, StringComparison.Ordinal));
         if (rec is null)
         {
-            rec = new UsbKnownPortRecord { StablePortKey = afterMatch.StablePortKey };
+            rec = new UsbKnownPortRecord
+            {
+                MappingId = Guid.NewGuid().ToString("N"),
+                StablePortKey = afterMatch.StablePortKey,
+                NormalizedLabelKey = normalizedKey
+            };
             profile.KnownPorts.Add(rec);
         }
 
-        rec.UserLabel = trimmedLabel;
         rec.LastSeenUtc = afterGeneratedUtc;
         rec.LastMappingSuggestion = lastMappingSuggestionLine;
-        rec.MappingConfidenceScore = mapConf;
         rec.Confidence = Math.Max(rec.Confidence, Math.Min(95, mapConf));
+        UsbPortLabelResolver.StampManualLabel(rec, afterMatch, canonicalLabel, mapConf, afterGeneratedUtc);
+
+        var letter = UsbPortLabelResolver.NormalizeDriveLetter(afterMatch.DriveLetter);
+        if (!string.IsNullOrWhiteSpace(letter) &&
+            profile.UnverifiedBenchmarkByDriveLetter.TryGetValue(letter, out var unverifiedBenchmark))
+        {
+            rec.LastBenchmark = UsbPortLabelResolver.WithPortAttachment(
+                unverifiedBenchmark,
+                attachedToVerifiedPort: true,
+                canonicalLabel,
+                UsbPortLabelValidity.CurrentSessionManual);
+            profile.UnverifiedBenchmarkByDriveLetter.Remove(letter);
+        }
 
         if (!profile.KnownStablePortKeys.Contains(afterMatch.StablePortKey))
         {
             profile.KnownStablePortKeys.Add(afterMatch.StablePortKey);
         }
 
-        profile.UserLabelsPlaceholder = trimmedLabel;
+        profile.UserLabelsPlaceholder = canonicalLabel;
         store.Save(profile);
     }
 }

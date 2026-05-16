@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services;
+using VentoyToolkitSetup.Wpf.Services.Intelligence;
 
 namespace ForgerEMS.Wpf.Tests;
 
@@ -341,7 +342,8 @@ public sealed class CopilotServiceTests
         });
 
         Assert.False(response.UsedOnlineData);
-        Assert.Contains("live data tools", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("couldn’t load verified live data", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("not capable", response.Text, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Health score", response.Text, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -355,8 +357,9 @@ public sealed class CopilotServiceTests
             Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
         });
 
-        Assert.Contains("live data tools", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("couldn’t load verified live data", response.Text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Kyra Advanced", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("knowledge cutoff", response.Text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -418,18 +421,161 @@ public sealed class CopilotServiceTests
     public async Task ToolkitMissingDownloadsResponseCoversManualAndLogs()
     {
         var reportPath = WriteTempSystemReport();
+        var toolkitPath = WriteTempToolkitReport();
         var service = new CopilotService(new CopilotProviderRegistry());
 
         var response = await service.GenerateReplyAsync(new CopilotRequest
         {
             Prompt = "Why are my toolkit downloads missing?",
             SystemIntelligenceReportPath = reportPath,
+            ToolkitHealthReportPath = toolkitPath,
             Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
         });
 
         Assert.Contains("licensing", response.Text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("checksum mismatch", response.Text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("%LOCALAPPDATA%\\ForgerEMS\\Runtime\\logs", response.Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ToolkitReadinessPromptIncludesScoreAndBlockers()
+    {
+        var service = new CopilotService(new CopilotProviderRegistry());
+        var response = await service.GenerateReplyAsync(new CopilotRequest
+        {
+            Prompt = "Is my toolkit ready?",
+            ToolkitHealthReportPath = WriteTempToolkitReport(),
+            Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
+        });
+
+        Assert.Contains("Toolkit readiness", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Toolkit blockers", response.Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ToolkitReadinessHealthyReport_ContextReflectsReadyNotLimitedByMissingUsb()
+    {
+        var service = new CopilotService(new CopilotProviderRegistry());
+        var response = await service.GenerateReplyAsync(new CopilotRequest
+        {
+            Prompt = "Is my toolkit ready?",
+            ToolkitHealthReportPath = WriteTempHealthyToolkitReport(),
+            Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
+        });
+
+        Assert.Contains("Toolkit readiness:", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Toolkit readiness: Ready", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Unknown / Limited Data", response.Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task KyraToolkitLinksGood_IncludesVerificationSummaryWhenAligned()
+    {
+        var toolkitPath = WriteTempToolkitHealthWithTarget(@"E:\");
+        SaveToolkitLinkVerification(
+            toolkitPath,
+            @"E:\",
+            [
+                new ToolkitLinkVerificationEntryDto { ToolName = "T1", Status = ToolkitLinkVerificationStatus.VerifiedMetadata },
+                new ToolkitLinkVerificationEntryDto { ToolName = "T2", Status = ToolkitLinkVerificationStatus.Reachable }
+            ]);
+
+        var service = new CopilotService(new CopilotProviderRegistry());
+        var response = await service.GenerateReplyAsync(new CopilotRequest
+        {
+            Prompt = "Are my toolkit links good?",
+            ToolkitHealthReportPath = toolkitPath,
+            SelectedUsbTarget = new UsbTargetInfo { RootPath = @"E:\" },
+            Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
+        });
+
+        Assert.Contains("Toolkit link verification:", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("verified metadata 1", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("reachable 1", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("HEAD/ranged GET metadata only", response.Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task KyraToolkitLinksBroken_ReflectsVerifierCounts()
+    {
+        var toolkitPath = WriteTempToolkitHealthWithTarget(@"E:\");
+        SaveToolkitLinkVerification(
+            toolkitPath,
+            @"E:\",
+            [
+                new ToolkitLinkVerificationEntryDto { ToolName = "Bad", Status = ToolkitLinkVerificationStatus.Broken },
+                new ToolkitLinkVerificationEntryDto { ToolName = "Bad2", Status = ToolkitLinkVerificationStatus.Broken },
+                new ToolkitLinkVerificationEntryDto { ToolName = "Ok", Status = ToolkitLinkVerificationStatus.VerifiedMetadata }
+            ]);
+
+        var service = new CopilotService(new CopilotProviderRegistry());
+        var response = await service.GenerateReplyAsync(new CopilotRequest
+        {
+            Prompt = "Which toolkit links are broken?",
+            ToolkitHealthReportPath = toolkitPath,
+            SelectedUsbTarget = new UsbTargetInfo { RootPath = @"E:\" },
+            Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
+        });
+
+        Assert.Contains("broken 2", response.Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task KyraToolkitLinksNotVerified_PointsToVerifyLinks()
+    {
+        var toolkitPath = WriteTempToolkitHealthWithTarget(@"E:\");
+        var service = new CopilotService(new CopilotProviderRegistry());
+        var response = await service.GenerateReplyAsync(new CopilotRequest
+        {
+            Prompt = "Are my toolkit links good?",
+            ToolkitHealthReportPath = toolkitPath,
+            Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
+        });
+
+        Assert.Contains("Verify Links", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not been captured", response.Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task KyraChecksumCoverage_UsesToolkitReportColumns()
+    {
+        var toolkitPath = WriteTempToolkitHealthWithTarget(@"E:\");
+        var service = new CopilotService(new CopilotProviderRegistry());
+        var response = await service.GenerateReplyAsync(new CopilotRequest
+        {
+            Prompt = "Do I have checksum coverage for my toolkit?",
+            ToolkitHealthReportPath = toolkitPath,
+            Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
+        });
+
+        Assert.Contains("Toolkit checksum coverage", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("2/2", response.Text, StringComparison.Ordinal);
+        Assert.Contains("link metadata", response.Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task MachineProfileQuestionsUseLocalHistoryWhenAvailable()
+    {
+        var service = new CopilotService(new CopilotProviderRegistry());
+        var reportPath = WriteTempSystemReport();
+        var profilesPath = WriteTempMachineProfiles(reportPath);
+        var scannedBefore = await service.GenerateReplyAsync(new CopilotRequest
+        {
+            Prompt = "Have we scanned this machine before?",
+            SystemIntelligenceReportPath = reportPath,
+            MachineProfilesPath = profilesPath,
+            Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
+        });
+        var changed = await service.GenerateReplyAsync(new CopilotRequest
+        {
+            Prompt = "What changed since last scan?",
+            SystemIntelligenceReportPath = reportPath,
+            MachineProfilesPath = profilesPath,
+            Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
+        });
+
+        Assert.Contains("previous scan available", scannedBefore.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("health", changed.Text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -634,7 +780,30 @@ public sealed class CopilotServiceTests
 
         Assert.True(response.UsedOnlineData);
         Assert.Equal(1, online.CallCount);
-        Assert.Contains("normal chat ->", string.Join('|', response.ProviderNotes), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("casual chat ->", string.Join('|', response.ProviderNotes), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ApiModeWithApiFirstOffStillUsesOneProviderPath()
+    {
+        var local = new FakeCountingLocalProvider();
+        var online = new FakeSuccessProvider();
+        var registry = new FakeProviderRegistry(local, online);
+        var service = new CopilotService(registry);
+        var settings = new CopilotSettings
+        {
+            Mode = CopilotMode.FreeApiPool,
+            EnableFreeProviderPool = true,
+            ApiFirstRouting = false
+        };
+        settings.Providers["fake-free"] = new CopilotProviderConfiguration { IsEnabled = true, ApiKeyEnvironmentVariable = "FAKE_FREE_KEY" };
+        Environment.SetEnvironmentVariable("FAKE_FREE_KEY", "fake-key");
+
+        var response = await service.GenerateReplyAsync(new CopilotRequest { Prompt = "Hi Kyra", Settings = settings });
+
+        Assert.True(response.UsedOnlineData);
+        Assert.Equal(1, online.CallCount);
+        Assert.Equal(0, local.CallCount);
     }
 
     [Fact]
@@ -1123,6 +1292,50 @@ public sealed class CopilotServiceTests
     }
 
     [Fact]
+    public async Task InlineCSharpAddSnippet_StaysLocalCodeAssistOnly()
+    {
+        var online = new FakeSuccessProvider();
+        var registry = new FakeProviderRegistry(new LocalOfflineCopilotProvider(), online);
+        var service = new CopilotService(registry);
+        var settings = new CopilotSettings
+        {
+            Mode = CopilotMode.FreeApiPool,
+            EnableFreeProviderPool = true,
+            OfflineFallbackEnabled = true
+        };
+        settings.Providers["fake-free"] = new CopilotProviderConfiguration { IsEnabled = true, ApiKeyEnvironmentVariable = "FAKE_FREE_KEY" };
+        var oldKey = Environment.GetEnvironmentVariable("FAKE_FREE_KEY");
+        Environment.SetEnvironmentVariable("FAKE_FREE_KEY", "fake-key");
+        try
+        {
+            var response = await service.GenerateReplyAsync(new CopilotRequest
+            {
+                Prompt = "public int Add(int a, int b) { return a - b; }",
+                Settings = settings,
+                VerboseDiagnosticNotes = true
+            });
+
+            Assert.Equal(0, online.CallCount);
+            Assert.Contains("subtracts instead of adding", response.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("return a + b;", response.Text, StringComparison.Ordinal);
+            Assert.DoesNotContain("System Intelligence", response.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("scan", response.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("device", response.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("TPM", response.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("battery", response.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("USB", response.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("gateway", response.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("previous conversation", response.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("planning on running this code", response.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(response.ProviderNotes, note => note.Contains("Intent detected: CodeAssist", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FAKE_FREE_KEY", oldKey);
+        }
+    }
+
+    [Fact]
     public async Task CancelledRequestReturnsStoppedMessage()
     {
         using var cancellation = new CancellationTokenSource();
@@ -1253,6 +1466,151 @@ public sealed class CopilotServiceTests
         return path;
     }
 
+    private static string WriteTempToolkitReport()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "ForgerEMS-CopilotTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        var path = Path.Combine(folder, "toolkit-health-latest.json");
+        File.WriteAllText(path, """
+            {
+              "healthVerdict": "NEEDS_ATTENTION",
+              "summary": {
+                "installed": 14,
+                "missingRequired": 2,
+                "failed": 1,
+                "updates": 1,
+                "manual": 3,
+                "verificationPending": 1
+              },
+              "items": [
+                { "tool":"Clonezilla", "status":"INSTALLED", "type":"MANAGED", "downloadStatus":"Downloaded", "checksumStatus":"Verified", "officialUrl":"https://clonezilla.org" },
+                { "tool":"MemTest", "status":"MISSING_REQUIRED", "type":"MANAGED", "downloadStatus":"Unknown", "checksumStatus":"Unknown", "officialUrl":"https://www.memtest.org" },
+                { "tool":"Ventoy", "status":"HASH_FAILED", "type":"MANAGED", "downloadStatus":"Downloaded", "checksumStatus":"Checksum mismatch", "officialUrl":"https://www.ventoy.net" }
+              ]
+            }
+            """);
+        return path;
+    }
+
+    private static string WriteTempHealthyToolkitReport()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "ForgerEMS-CopilotTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        var path = Path.Combine(folder, "toolkit-health-latest.json");
+        File.WriteAllText(path, """
+            {
+              "healthVerdict": "READY",
+              "summary": {
+                "installed": 6,
+                "missingRequired": 0,
+                "failed": 0,
+                "updates": 0,
+                "manual": 1,
+                "verificationPending": 0
+              },
+              "items": [
+                { "tool":"ExampleTool", "status":"INSTALLED", "type":"MANAGED", "downloadStatus":"Downloaded", "checksumStatus":"Verified", "officialUrl":"https://example.com" },
+                { "tool":"ExampleTool2", "status":"INSTALLED", "type":"MANAGED", "downloadStatus":"Downloaded", "checksumStatus":"Verified", "officialUrl":"https://example.org" }
+              ]
+            }
+            """);
+        return path;
+    }
+
+    private static string WriteTempToolkitHealthWithTarget(string targetRoot)
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "ForgerEMS-CopilotTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        var path = Path.Combine(folder, "toolkit-health-latest.json");
+        var escapedRoot = targetRoot.Replace("\\", "\\\\");
+        File.WriteAllText(path, $$"""
+            {
+              "healthVerdict": "READY",
+              "targetRoot": "{{escapedRoot}}",
+              "summary": {
+                "installed": 2,
+                "missingRequired": "0",
+                "failed": "0",
+                "updates": "0",
+                "manual": "0",
+                "verificationPending": "0"
+              },
+              "items": [
+                { "tool":"ExampleTool", "status":"INSTALLED", "type":"MANAGED", "downloadStatus":"Downloaded", "checksumStatus":"Verified", "officialUrl":"https://example.com/a" },
+                { "tool":"ExampleTool2", "status":"INSTALLED", "type":"MANAGED", "downloadStatus":"Downloaded", "checksumStatus":"Verified", "officialUrl":"https://example.org/b" }
+              ]
+            }
+            """);
+        return path;
+    }
+
+    private static void SaveToolkitLinkVerification(
+        string toolkitHealthPath,
+        string targetRoot,
+        IEnumerable<ToolkitLinkVerificationEntryDto> entries)
+    {
+        var snapshot = new ToolkitLinkVerificationSnapshot
+        {
+            GeneratedUtc = DateTimeOffset.UtcNow,
+            TargetRoot = targetRoot,
+            CompletedSuccessfully = true,
+            Cancelled = false,
+            SummaryNote = "unit test",
+            Entries = entries.ToList()
+        };
+        ToolkitLinkVerificationPersistence.Save(
+            ToolkitLinkVerificationPersistence.VerificationPathForToolkitHealthReport(toolkitHealthPath),
+            snapshot);
+    }
+
+    private static string WriteTempMachineProfiles(string reportPath)
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(reportPath));
+        var summary = doc.RootElement.GetProperty("summary");
+        var computerName = summary.TryGetProperty("computerName", out var c) ? c.GetString() : Environment.MachineName;
+        var hash = VentoyToolkitSetup.Wpf.Services.Intelligence.MachineProfileStore.ComputeMachineIdentityHash(
+            computerName ?? Environment.MachineName,
+            summary.GetProperty("manufacturer").GetString() ?? "Unknown",
+            summary.GetProperty("model").GetString() ?? "Unknown",
+            summary.GetProperty("os").GetString() ?? Environment.OSVersion.VersionString);
+        var folder = Path.Combine(Path.GetTempPath(), "ForgerEMS-CopilotTests", Guid.NewGuid().ToString("N"), "profiles");
+        Directory.CreateDirectory(folder);
+        var path = Path.Combine(folder, "machine-profiles.json");
+        File.WriteAllText(path, $$"""
+            [
+              {
+                "machineIdentityHash":"{{hash}}",
+                "friendlyMachineLabel":"Dell Latitude 5400",
+                "lastScanUtc":"2026-05-01T15:00:00Z",
+                "healthScore":70,
+                "toolkitReadinessScore":64,
+                "toolkitReadinessLabel":"Needs Attention",
+                "bestUse":"Office",
+                "flipValueBand":"$120-$180",
+                "machineClass":"Business Laptop",
+                "usbBenchmarkSummary":"Best port ~55 MB/s",
+                "reportPath":"Runtime\\reports\\system-intelligence-latest.json",
+                "notesPlaceholder":"Notes placeholder (UI pending)."
+              },
+              {
+                "machineIdentityHash":"{{hash}}",
+                "friendlyMachineLabel":"Dell Latitude 5400",
+                "lastScanUtc":"2026-04-25T15:00:00Z",
+                "healthScore":62,
+                "toolkitReadinessScore":50,
+                "toolkitReadinessLabel":"Needs Attention",
+                "bestUse":"Office",
+                "flipValueBand":"$110-$170",
+                "machineClass":"Business Laptop",
+                "usbBenchmarkSummary":"Best port ~40 MB/s",
+                "reportPath":"Runtime\\reports\\system-intelligence-latest.json",
+                "notesPlaceholder":"Notes placeholder (UI pending)."
+              }
+            ]
+            """);
+        return path;
+    }
+
     [Fact]
     public async Task BetaReadinessAnswerReferences_v1_1_10_Checklist()
     {
@@ -1266,6 +1624,76 @@ public sealed class CopilotServiceTests
 
         Assert.Contains("BETA_TESTER_QUICKSTART", response.Text, StringComparison.Ordinal);
         Assert.Contains("BETA_HUMAN_TESTING_CHECKLIST", response.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task WorkflowPresetPromptReturnsDryRunChecklist()
+    {
+        var registry = new CopilotProviderRegistry();
+        var service = new CopilotService(registry);
+        var response = await service.GenerateReplyAsync(new CopilotRequest
+        {
+            Prompt = "Show the Windows Boot Triage workflow preset",
+            Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
+        });
+
+        Assert.Contains("Workflow preset: Windows Boot Triage", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Safety warnings", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Scope note: guidance/checklist only", response.Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CodeFixSnippet_IsolatedFromPriorDiagnosticConversation()
+    {
+        var registry = new CopilotProviderRegistry();
+        var service = new CopilotService(registry);
+        var reportPath = WriteTempSystemReport();
+
+        _ = await service.GenerateReplyAsync(new CopilotRequest
+        {
+            Prompt = "Why is this laptop lagging?",
+            SystemIntelligenceReportPath = reportPath,
+            Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
+        });
+
+        var response = await service.GenerateReplyAsync(new CopilotRequest
+        {
+            Prompt = """
+                Fix this small code snippet:
+                public int Add(int a, int b)
+                {
+                    return a - b;
+                }
+                """,
+            SystemIntelligenceReportPath = reportPath,
+            Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
+        });
+
+        Assert.Contains("return a + b;", response.Text, StringComparison.Ordinal);
+        Assert.Contains("subtracts instead of adding", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("lag", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("battery", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("TPM", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Secure Boot", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("previous", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.False(response.GroundedInSystemIntelligence);
+    }
+
+    [Fact]
+    public async Task UsbNoLikelyTargetsWarning_UsesSingleUsbWarningAnswer()
+    {
+        var registry = new CopilotProviderRegistry();
+        var service = new CopilotService(registry);
+        var response = await service.GenerateReplyAsync(new CopilotRequest
+        {
+            Prompt = "Explain this warning: No likely USB targets were detected.",
+            Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
+        });
+
+        Assert.Contains("safe removable USB target", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("benchmark rank", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("resale", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("battery", response.Text, StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class FakeProviderRegistry(params ICopilotProvider[] providers) : ICopilotProviderRegistry
@@ -1309,6 +1737,35 @@ public sealed class CopilotServiceTests
         {
             CallCount++;
             return Task.FromResult(new CopilotProviderResult { Succeeded = true, UsedOnlineData = true, UserMessage = "online result" });
+        }
+    }
+
+    private sealed class FakeCountingLocalProvider : ICopilotProvider
+    {
+        public int CallCount { get; private set; }
+        public string Id => "local-offline";
+        public string DisplayName => "Local Offline Rules";
+        public CopilotProviderType ProviderType => CopilotProviderType.LocalOffline;
+        public string Category => "Offline fallback";
+        public bool IsOnlineProvider => false;
+        public bool IsPaidProvider => true;
+        public bool EnabledByDefault => true;
+        public string DefaultBaseUrl => string.Empty;
+        public string DefaultModelName => "local-rules";
+        public string DefaultApiKeyEnvironmentVariable => string.Empty;
+        public string StatusText => "fake local";
+        public bool IsConfigured(CopilotProviderConfiguration configuration) => true;
+        public bool CanHandle(CopilotProviderRequest request) => true;
+
+        public Task<CopilotProviderResult> GenerateAsync(CopilotProviderRequest request, CancellationToken cancellationToken)
+        {
+            CallCount++;
+            return Task.FromResult(new CopilotProviderResult
+            {
+                Succeeded = true,
+                UsedOnlineData = false,
+                UserMessage = "local result"
+            });
         }
     }
 

@@ -1,9 +1,11 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using VentoyToolkitSetup.Wpf.Configuration;
 using VentoyToolkitSetup.Wpf.Infrastructure;
 using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services;
@@ -11,12 +13,28 @@ using VentoyToolkitSetup.Wpf.Services.Intelligence;
 
 namespace VentoyToolkitSetup.Wpf.ViewModels;
 
+public enum UsbMappingWizardDetectionPhase
+{
+    ReadyToCaptureCurrentPort = 0,
+    CurrentPortCaptured = 1,
+    WaitingForRemoval = 2,
+    RemovalObserved = 3,
+    WaitingForReinsert = 4,
+    ReinsertObserved = 5,
+    CheckingTopology = 6,
+    Mapped = 7,
+    ManualLabelRecommended = 8
+}
+
 public sealed class UsbMappingWizardViewModel : ObservableObject
 {
+    private static readonly TimeSpan DetectionPollInterval = TimeSpan.FromMilliseconds(650);
+
     private readonly IUsbIntelligenceService _intelligence;
     private readonly UsbMachineProfileStore _profileStore;
     private readonly Func<IReadOnlyList<UsbTargetInfo>> _getUsbTargets;
     private readonly Func<UsbTargetInfo, Task>? _runBenchmarkForTargetAsync;
+    private readonly Func<string?, bool> _isDriveRootMounted;
     private readonly TimeSpan _detectOperationTimeout;
     private readonly UsbGuidedMappingWorkflow _workflow = new();
     private UsbMappingWizardStep _step = UsbMappingWizardStep.Welcome;
@@ -40,6 +58,7 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
     private UsbTopologySnapshot? _afterSnap;
     private UsbPortMappingResolution? _lastResolution;
     private bool _isAnalyzingPortChange;
+    private UsbMappingWizardDetectionPhase _detectionPhase = UsbMappingWizardDetectionPhase.ReadyToCaptureCurrentPort;
     private string _detectChangePrimaryStatus = string.Empty;
     private string _detectChangeSubStatus = string.Empty;
     private string _detectChangeDebugSummary = string.Empty;
@@ -49,12 +68,14 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         UsbMachineProfileStore profileStore,
         Func<IReadOnlyList<UsbTargetInfo>> getUsbTargets,
         Func<UsbTargetInfo, Task>? runBenchmarkForTargetAsync = null,
-        TimeSpan? detectOperationTimeoutOverride = null)
+        TimeSpan? detectOperationTimeoutOverride = null,
+        Func<string?, bool>? isDriveRootMounted = null)
     {
         _intelligence = intelligence;
         _profileStore = profileStore;
         _getUsbTargets = getUsbTargets;
         _runBenchmarkForTargetAsync = runBenchmarkForTargetAsync;
+        _isDriveRootMounted = isDriveRootMounted ?? DefaultDriveRootMounted;
         _detectOperationTimeout = detectOperationTimeoutOverride ?? TimeSpan.FromSeconds(28);
 
         StartMappingCommand = new RelayCommand(StartMapping, () => Step == UsbMappingWizardStep.Welcome);
@@ -62,11 +83,14 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         ContinueSelectDeviceCommand = new RelayCommand(GoConfirmPort, () => SelectedDevice is not null);
         CaptureCurrentPortCommand = new RelayCommand(CaptureCurrentPort, () => SelectedDevice is not null);
         NextAfterCaptureCommand = new RelayCommand(() => Step = UsbMappingWizardStep.MoveUsb, () => _beforeCaptured);
-        DetectPortChangeCommand = new AsyncRelayCommand(DetectPortChangeAsync, () => _userConfirmedUsbMoved && SelectedDevice is not null && !_isAnalyzingPortChange);
+        DetectPortChangeCommand = new AsyncRelayCommand(DetectPortChangeAsync, () => _beforeCaptured && SelectedDevice is not null && !_isAnalyzingPortChange);
         NextToLabelCommand = new RelayCommand(() => Step = UsbMappingWizardStep.LabelPort, () => _detectionSuccess);
-        TryAgainCommand = new RelayCommand(TryDetectionAgain, () => CanRetry);
+        TryAgainCommand = new AsyncRelayCommand(TryDetectionAgainAsync, () => CanRetry);
         UseCurrentPortAnywayCommand = new RelayCommand(UseCurrentPortAnyway, () => !_detectionSuccess && SelectedDevice is not null && !IsAnalyzingPortChange);
         SaveManualLabelPathCommand = new RelayCommand(UseCurrentPortAnyway, () => !_detectionSuccess && SelectedDevice is not null && !IsAnalyzingPortChange);
+        ConfirmSavedPortLabelCommand = new RelayCommand<string>(ConfirmSavedPortLabel, mappingId => !string.IsNullOrWhiteSpace(mappingId) && SelectedDevice is not null && !IsAnalyzingPortChange);
+        RenameSavedPortLabelCommand = new RelayCommand<string>(RenameSavedPortLabel, mappingId => !string.IsNullOrWhiteSpace(mappingId) && !string.IsNullOrWhiteSpace(PortLabelDraft) && !IsAnalyzingPortChange);
+        DeleteSavedPortLabelCommand = new RelayCommand<string>(DeleteSavedPortLabel, mappingId => !string.IsNullOrWhiteSpace(mappingId) && !IsAnalyzingPortChange);
         BackFromDetectCommand = new RelayCommand(BackFromDetect, () => IsDetectStep && !IsAnalyzingPortChange);
         SavePortLabelCommand = new RelayCommand(SavePortLabel, () => !string.IsNullOrWhiteSpace(PortLabelDraft));
         CloseCommand = new RelayCommand(() => CloseRequested?.Invoke(this, true));
@@ -83,9 +107,12 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
     public RelayCommand NextAfterCaptureCommand { get; }
     public AsyncRelayCommand DetectPortChangeCommand { get; }
     public RelayCommand NextToLabelCommand { get; }
-    public RelayCommand TryAgainCommand { get; }
+    public AsyncRelayCommand TryAgainCommand { get; }
     public RelayCommand UseCurrentPortAnywayCommand { get; }
     public RelayCommand SaveManualLabelPathCommand { get; }
+    public RelayCommand<string> ConfirmSavedPortLabelCommand { get; }
+    public RelayCommand<string> RenameSavedPortLabelCommand { get; }
+    public RelayCommand<string> DeleteSavedPortLabelCommand { get; }
     public RelayCommand BackFromDetectCommand { get; }
     public RelayCommand SavePortLabelCommand { get; }
     public RelayCommand CloseCommand { get; }
@@ -93,6 +120,10 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
     public AsyncRelayCommand RunBenchmarkOnThisPortCommand { get; }
 
     public ObservableCollection<UsbMappingWizardDeviceOption> DeviceOptions { get; } = new();
+
+    public ObservableCollection<UsbSavedPortLabelOption> SavedPortLabels { get; } = new();
+
+    public bool HasSavedPortLabels => SavedPortLabels.Count > 0;
 
     public UsbMappingWizardStep Step
     {
@@ -193,6 +224,12 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
 
     public bool ShowDetectSuccessDetails => IsDetectStep && !IsAnalyzingPortChange && DetectionSuccess;
 
+    public bool ShowRemovalNotObservedActions =>
+        ShowDetectFailureDetails && DetectionPhase == UsbMappingWizardDetectionPhase.WaitingForRemoval;
+
+    public bool ShowManualLabelRecommendedActions =>
+        ShowDetectFailureDetails && !ShowRemovalNotObservedActions;
+
     public bool IsAnalyzingPortChange
     {
         get => _isAnalyzingPortChange;
@@ -209,11 +246,21 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
 
     public bool ShowDetectSpinner => IsDetectStep && IsAnalyzingPortChange;
 
-#if DEBUG
-    public bool ShowDetectChangeDebugDetails => IsDetectStep && !IsAnalyzingPortChange;
-#else
-    public bool ShowDetectChangeDebugDetails => false;
-#endif
+    public bool ShowDetectChangeDebugDetails => IsDetectStep && !IsAnalyzingPortChange && IsUsbMappingDebugUiEnabled();
+
+    public UsbMappingWizardDetectionPhase DetectionPhase
+    {
+        get => _detectionPhase;
+        private set
+        {
+            if (SetProperty(ref _detectionPhase, value))
+            {
+                OnPropertyChanged(nameof(ShowRemovalNotObservedActions));
+                OnPropertyChanged(nameof(ShowManualLabelRecommendedActions));
+                OnPropertyChanged(nameof(BuildStateSnapshot));
+            }
+        }
+    }
 
     public string DetectChangeDebugSummary
     {
@@ -289,6 +336,7 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
             if (SetProperty(ref _portLabelDraft, value))
             {
                 SavePortLabelCommand.RaiseCanExecuteChanged();
+                RenameSavedPortLabelCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -323,7 +371,7 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
             {
                 UsbMappingWizardStep.SelectDevice => SelectedDevice is not null,
                 UsbMappingWizardStep.ConfirmCurrentPort => _beforeCaptured,
-                UsbMappingWizardStep.MoveUsb => UserConfirmedUsbMoved,
+                UsbMappingWizardStep.MoveUsb => _beforeCaptured,
                 UsbMappingWizardStep.DetectChange => DetectionSuccess,
                 UsbMappingWizardStep.LabelPort => !string.IsNullOrWhiteSpace(PortLabelDraft),
                 _ => true
@@ -342,12 +390,21 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowDetectFailureDetails));
         OnPropertyChanged(nameof(ShowDetectSuccessDetails));
         OnPropertyChanged(nameof(ShowDetectionFailureChrome));
+        OnPropertyChanged(nameof(ShowRemovalNotObservedActions));
+        OnPropertyChanged(nameof(ShowManualLabelRecommendedActions));
         OnPropertyChanged(nameof(ShowDetectChangeDebugDetails));
+    }
+
+    private void SetDetectChangeStatus(string primary, string subStatus)
+    {
+        DetectChangePrimaryStatus = primary;
+        DetectChangeSubStatus = subStatus;
     }
 
     private void StartMapping()
     {
         _workflow.StartMappingSession();
+        DetectionPhase = UsbMappingWizardDetectionPhase.ReadyToCaptureCurrentPort;
         ReloadDeviceOptions();
         Step = UsbMappingWizardStep.SelectDevice;
     }
@@ -355,9 +412,13 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
     private void ReloadDeviceOptions()
     {
         DeviceOptions.Clear();
+        ReloadSavedPortLabels();
         foreach (var t in _getUsbTargets().Where(UsbMappingWizardDeviceFilter.IsEligibleMappingUsb))
         {
-            var snap = _intelligence.BuildTopologySnapshot(t);
+            var profile = _profileStore.LoadOrCreate();
+            var snap = _intelligence.BuildTopologySnapshot(
+                t,
+                new UsbTopologyBuildOptions { MachineProfile = profile });
             var rec = snap.SelectedTargetRecommendation;
             var bench = snap.SelectedTargetBenchmark;
             var benchLine = bench?.Succeeded == true
@@ -383,6 +444,7 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
     private void GoConfirmPort()
     {
         Step = UsbMappingWizardStep.ConfirmCurrentPort;
+        DetectionPhase = UsbMappingWizardDetectionPhase.ReadyToCaptureCurrentPort;
         _beforeCaptured = false;
         CaptureSummary = string.Empty;
         ConfidenceAfterCapture = string.Empty;
@@ -403,7 +465,100 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
             $"{SelectedUsbTarget.LabelDisplay} · {SelectedUsbTarget.DisplayTotalBytes} · {SelectedUsbTarget.FileSystem}";
         ConfidenceAfterCapture =
             $"Score {_beforeSnap.CombinedConfidenceScore} — {_beforeSnap.CombinedConfidenceReason}";
+        DetectionPhase = UsbMappingWizardDetectionPhase.CurrentPortCaptured;
         NextAfterCaptureCommand.RaiseCanExecuteChanged();
+    }
+
+    private UsbTargetInfo? FindSelectedLiveTarget()
+    {
+        var selected = SelectedUsbTarget;
+        if (selected is null)
+        {
+            return null;
+        }
+
+        var selectedRoot = NormalizeRootPath(selected.RootPath);
+        var selectedLetter = NormalizeDriveLetter(selected.DriveLetter);
+        var match = _getUsbTargets()
+            .Where(UsbMappingWizardDeviceFilter.IsEligibleMappingUsb)
+            .FirstOrDefault(candidate =>
+                string.Equals(NormalizeRootPath(candidate.RootPath), selectedRoot, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrWhiteSpace(selectedLetter) &&
+                 string.Equals(NormalizeDriveLetter(candidate.DriveLetter), selectedLetter, StringComparison.OrdinalIgnoreCase) &&
+                 candidate.TotalBytes == selected.TotalBytes));
+
+        if (match is not null)
+        {
+            return IsTargetMounted(match) ? match : null;
+        }
+
+        return IsTargetMounted(selected) ? selected : null;
+    }
+
+    private static string NormalizeRootPath(string? rootPath) =>
+        string.IsNullOrWhiteSpace(rootPath) ? string.Empty : rootPath.TrimEnd('\\');
+
+    private static string NormalizeDriveLetter(string? driveLetter) =>
+        string.IsNullOrWhiteSpace(driveLetter) ? string.Empty : driveLetter.TrimEnd('\\').TrimEnd(':');
+
+    private bool IsTargetMounted(UsbTargetInfo target)
+    {
+        if (!string.IsNullOrWhiteSpace(target.RootPath) && _isDriveRootMounted(target.RootPath))
+        {
+            return true;
+        }
+
+        var letter = NormalizeDriveLetter(target.DriveLetter);
+        return !string.IsNullOrWhiteSpace(letter) && _isDriveRootMounted(letter + ":\\");
+    }
+
+    private static bool DefaultDriveRootMounted(string? rootPath)
+    {
+        if (string.IsNullOrWhiteSpace(rootPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            return System.IO.Directory.Exists(rootPath);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void ReloadSavedPortLabels()
+    {
+        SavedPortLabels.Clear();
+        var profile = _profileStore.LoadOrCreate();
+        foreach (var rec in profile.KnownPorts
+                     .Where(p => !string.IsNullOrWhiteSpace(p.UserLabel))
+                     .OrderBy(p => p.UserLabel, StringComparer.OrdinalIgnoreCase))
+        {
+            var lastSeen = rec.LastSeenUtc?.ToLocalTime().ToString("g", CultureInfo.CurrentCulture) ?? "—";
+            var benchmark = rec.LastBenchmark?.Succeeded == true
+                ? $"{rec.LastBenchmark.WriteSpeedMBps:0.0} MB/s write"
+                : "—";
+            var verification = rec.HasStrongPortTopologyEvidence
+                ? "topology evidence saved"
+                : "weak topology; confirm when connected";
+            SavedPortLabels.Add(new UsbSavedPortLabelOption
+            {
+                MappingId = rec.MappingId,
+                Label = UsbPortLabelNormalizer.CanonicalizeDisplay(rec.UserLabel),
+                NormalizedLabelKey = rec.NormalizedLabelKey,
+                LastSeenDisplay = "Last seen: " + lastSeen,
+                LastBenchmarkDisplay = "Benchmark: " + benchmark,
+                VerificationDisplay = verification
+            });
+        }
+
+        OnPropertyChanged(nameof(HasSavedPortLabels));
+        ConfirmSavedPortLabelCommand.RaiseCanExecuteChanged();
+        RenameSavedPortLabelCommand.RaiseCanExecuteChanged();
+        DeleteSavedPortLabelCommand.RaiseCanExecuteChanged();
     }
 
     private async Task DetectPortChangeCoreAsync()
@@ -425,153 +580,119 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         IsAnalyzingPortChange = true;
         DetectionSuccess = false;
         FailureMessage = string.Empty;
-        DetectChangePrimaryStatus = "Checking Windows USB topology…";
-        DetectChangeSubStatus = "Waiting for stable enumeration (this may take a few seconds after moving the drive).";
+        DetectionDetail = string.Empty;
+        RecommendationDisplay = string.Empty;
+        DetectChangePrimaryStatus = "Waiting for USB Removal";
+        DetectChangeSubStatus = "Unplug the selected USB now. ForgerEMS is waiting for Windows to report removal.";
         DetectChangeDebugSummary = string.Empty;
+        DetectionPhase = UsbMappingWizardDetectionPhase.WaitingForRemoval;
         Step = UsbMappingWizardStep.DetectChange;
-        StartupDiagnosticLog.AppendLine("[UsbMappingWizard] Detection started (async).");
+        var mappingRunId = Guid.NewGuid().ToString("N");
+        StartupDiagnosticLog.AppendLine($"[UsbMappingWizard] Detection started. mappingRunId={mappingRunId}");
 
         var beforeCount = _beforeSnap.Devices.Count;
 
-        Task SlowHintAsync(Task work)
-        {
-            return Task.Run(async () =>
-            {
-                try
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(6), CancellationToken.None).ConfigureAwait(false);
-                    if (work.IsCompleted)
-                    {
-                        return;
-                    }
-
-                    var dispatcher = Application.Current?.Dispatcher;
-                    if (dispatcher is null)
-                    {
-                        return;
-                    }
-
-                    await dispatcher.InvokeAsync(() =>
-                    {
-                        if (IsAnalyzingPortChange && Step == UsbMappingWizardStep.DetectChange)
-                        {
-                            DetectChangeSubStatus = "Still analyzing... this may take a few seconds.";
-                        }
-                    });
-                }
-                catch
-                {
-                    // ignore
-                }
-            }, CancellationToken.None);
-        }
-
         try
         {
-            var work = Task.Run(() =>
+            using var timeout = new CancellationTokenSource(_detectOperationTimeout);
+            var token = timeout.Token;
+
+            var removalObserved = await WaitForSelectedUsbRemovalAsync(mappingRunId, token).ConfigureAwait(true);
+            if (!removalObserved)
             {
-                UsbTopologySnapshot? lastAfter = null;
-                UsbPortMappingResolution? lastRes = null;
-                for (var attempt = 1; attempt <= 12; attempt++)
-                {
-                    var after = _intelligence.BuildTopologySnapshot(SelectedUsbTarget);
-                    var resolution = UsbMappingPortResolution.Resolve(_beforeSnap, after, SelectedUsbTarget);
-                    lastAfter = after;
-                    lastRes = resolution;
-                    if (resolution.Success)
-                    {
-                        return (after, resolution);
-                    }
-
-                    if (attempt < 12)
-                    {
-                        Thread.Sleep(800);
-                    }
-                }
-
-                return (lastAfter!, lastRes!);
-            });
-
-            _ = SlowHintAsync(work);
-
-            (UsbTopologySnapshot after, UsbPortMappingResolution resolution) result;
-            try
-            {
-                result = await work.WaitAsync(_detectOperationTimeout).ConfigureAwait(true);
-            }
-            catch (TimeoutException)
-            {
-                StartupDiagnosticLog.AppendLine("[UsbMappingWizard] Detection timeout triggered.");
-                DetectionSuccess = false;
-                FailureMessage = "Detection is taking longer than expected. You can retry or save manually.";
-                DetectionDetail =
-                    "The USB topology scan did not finish in time. Try again after moving the device, or save a manual label for the current port.";
-                DetectChangePrimaryStatus = FailureMessage;
-                DetectChangeSubStatus = string.Empty;
-#if DEBUG
-                DetectChangeDebugSummary = FormattableString.Invariant(
-                    $"Before devices: {beforeCount} · After: (timeout) · Match: —");
-                OnPropertyChanged(nameof(ShowDetectChangeDebugDetails));
-#endif
-                RefreshDetectChangeChrome();
+                await ShowRemovalNotObservedAsync(mappingRunId, beforeCount).ConfigureAwait(true);
                 return;
             }
 
-            _afterSnap = result.after;
+            DetectionPhase = UsbMappingWizardDetectionPhase.RemovalObserved;
+            StartupDiagnosticLog.AppendLine($"[UsbMappingWizard] Removal observed. mappingRunId={mappingRunId}");
+            SetDetectChangeStatus(
+                "USB removed. Plug it into the port you want to map.",
+                "Waiting for Windows to mount the selected USB again.");
+            DetectionPhase = UsbMappingWizardDetectionPhase.WaitingForReinsert;
+
+            var liveTarget = await WaitForSelectedUsbReinsertAsync(mappingRunId, token).ConfigureAwait(true);
+            if (liveTarget is null)
+            {
+                ShowReinsertNotObserved(mappingRunId, beforeCount);
+                return;
+            }
+
+            DetectionPhase = UsbMappingWizardDetectionPhase.ReinsertObserved;
+            StartupDiagnosticLog.AppendLine($"[UsbMappingWizard] Reinsert observed. mappingRunId={mappingRunId}");
+            SetDetectChangeStatus(
+                "Checking port identity...",
+                "Comparing available Windows topology fields for the selected drive.");
+            DetectionPhase = UsbMappingWizardDetectionPhase.CheckingTopology;
+
+            _afterSnap = await Task.Run(() => _intelligence.BuildTopologySnapshot(liveTarget), token).ConfigureAwait(true);
             _workflow.CaptureAfterSnapshot(_afterSnap);
-            _lastResolution = result.resolution;
+            _lastResolution = UsbMappingPortResolution.Resolve(_beforeSnap, _afterSnap, SelectedUsbTarget);
 
             var afterCount = _afterSnap.Devices.Count;
-#if DEBUG
             var matchLine = _lastResolution is null
                 ? "—"
                 : $"{(_lastResolution.Success ? "matched" : "no match")} · kind={_lastResolution.MatchKind} · conf={_lastResolution.ConfidenceTier}";
             DetectChangeDebugSummary = FormattableString.Invariant(
                 $"Before devices: {beforeCount} · After devices: {afterCount} · {matchLine}");
             OnPropertyChanged(nameof(ShowDetectChangeDebugDetails));
-#endif
+            LogMappingAttempt(mappingRunId, beforeCount, afterCount, _lastResolution, removalObserved: true, reinsertObserved: true);
 
-            if (_lastResolution.Success)
+            if (_lastResolution is { Success: true } resolution)
             {
+                DetectionPhase = UsbMappingWizardDetectionPhase.Mapped;
                 DetectionSuccess = true;
                 FailureMessage = string.Empty;
-                OldPortKeyShort = _lastResolution.OldPortKeyShort;
-                NewPortKeyShort = _lastResolution.NewPortKeyShort;
-                SpeedClassDisplay = _lastResolution.AfterDevice?.InferredSpeed.ToString() ?? "Unknown";
-                ConfidenceTierDisplay = _lastResolution.ConfidenceTier;
+                OldPortKeyShort = resolution.OldPortKeyShort;
+                NewPortKeyShort = resolution.NewPortKeyShort;
+                SpeedClassDisplay = resolution.AfterDevice?.InferredSpeed.ToString() ?? "Unknown";
+                ConfidenceTierDisplay = resolution.ConfidenceTier;
                 RecommendationDisplay = _afterSnap.SelectedTargetRecommendation?.Summary ?? string.Empty;
                 DetectionDetail = "Port change detected.";
                 _pendingSaveMode = UsbPortMappingSaveMode.TopologyInference;
-                DetectChangePrimaryStatus = "Port change detected.";
-                DetectChangeSubStatus = string.Empty;
-                StartupDiagnosticLog.AppendLine("[UsbMappingWizard] Detection completed successfully.");
+                DetectChangePrimaryStatus = $"Port mapped with {resolution.ConfidenceTier.ToLowerInvariant()} confidence.";
+                DetectChangeSubStatus = resolution.UserHint;
+                StartupDiagnosticLog.AppendLine($"[UsbMappingWizard] Detection completed successfully. mappingRunId={mappingRunId}");
             }
             else
             {
+                DetectionPhase = UsbMappingWizardDetectionPhase.ManualLabelRecommended;
                 DetectionSuccess = false;
-                FailureMessage =
-                    "ForgerEMS could not confidently detect a physical port change. Windows may not expose detailed port topology on this device, especially through hubs, docks, or some USB-C controllers.";
-                DetectionDetail = string.IsNullOrWhiteSpace(_lastResolution?.UserHint)
-                    ? "You can try again, use the current detected port, or save a manual label."
-                    : _lastResolution?.UserHint ?? string.Empty;
+                FailureMessage = "Manual Label Recommended";
+                DetectionDetail =
+                    "ForgerEMS saw the USB return, but Windows did not expose a reliable physical port path.";
                 OldPortKeyShort = string.Empty;
                 NewPortKeyShort = string.Empty;
                 SpeedClassDisplay = string.Empty;
-                ConfidenceTierDisplay = "Low";
+                ConfidenceTierDisplay = _lastResolution?.ConfidenceTier ?? "Manual";
                 RecommendationDisplay =
-                    "Try Again waits for another topology pass; Use Current Port Anyway keeps the detected path; Save Manual Label records a friendly port name (recommended when topology is low confidence).";
+                    "Save a manual label like Left USB-A, Right USB-C, Rear USB-A, or Dock Port 1.";
                 DetectChangePrimaryStatus = FailureMessage;
-                DetectChangeSubStatus = string.Empty;
-                StartupDiagnosticLog.AppendLine("[UsbMappingWizard] Detection completed without a confident port change.");
+                DetectChangeSubStatus = "Save Manual Label is recommended for beta-safe port tracking.";
+                StartupDiagnosticLog.AppendLine($"[UsbMappingWizard] Detection completed without a confident port change. mappingRunId={mappingRunId}");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            if (DetectionPhase == UsbMappingWizardDetectionPhase.WaitingForRemoval)
+            {
+                await ShowRemovalNotObservedAsync(mappingRunId, beforeCount).ConfigureAwait(true);
+            }
+            else
+            {
+                ShowReinsertNotObserved(mappingRunId, beforeCount);
             }
         }
         catch (Exception ex)
         {
             StartupDiagnosticLog.AppendException("UsbMappingWizard.DetectPortChange", ex);
+            DetectionPhase = UsbMappingWizardDetectionPhase.ManualLabelRecommended;
             DetectionSuccess = false;
-            FailureMessage =
-                "ForgerEMS could not confidently detect a physical port change. Windows may not expose detailed port topology on this device, especially through hubs, docks, or some USB-C controllers.";
-            DetectionDetail = ex.Message;
+            FailureMessage = "Manual Label Recommended";
+            DetectionDetail =
+                "ForgerEMS could not complete the topology check. Save a manual label or try the removal/reinsert flow again.";
+            RecommendationDisplay =
+                "Save a manual label like Left USB-A, Right USB-C, Rear USB-A, or Dock Port 1.";
             DetectChangePrimaryStatus = FailureMessage;
             DetectChangeSubStatus = string.Empty;
         }
@@ -580,7 +701,9 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
             IsAnalyzingPortChange = false;
             if (DetectionSuccess)
             {
-                DetectChangePrimaryStatus = "Port change detected.";
+                DetectChangePrimaryStatus = string.IsNullOrWhiteSpace(ConfidenceTierDisplay)
+                    ? "Port change detected."
+                    : $"Port mapped with {ConfidenceTierDisplay.ToLowerInvariant()} confidence.";
             }
             else if (string.IsNullOrWhiteSpace(DetectChangePrimaryStatus))
             {
@@ -598,31 +721,137 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         }
     }
 
-    private void TryDetectionAgain()
+    private async Task<bool> WaitForSelectedUsbRemovalAsync(string mappingRunId, CancellationToken token)
+    {
+        var poll = 0;
+        while (!token.IsCancellationRequested)
+        {
+            poll++;
+            if (FindSelectedLiveTarget() is null)
+            {
+                StartupDiagnosticLog.AppendLine($"[UsbMappingWizard] Removal poll observed selected USB missing. mappingRunId={mappingRunId} poll={poll}");
+                var epoch = UsbPortLabelResolver.MarkDriveRemoved(SelectedUsbTarget?.RootPath ?? SelectedUsbTarget?.DriveLetter);
+                StartupDiagnosticLog.AppendLine($"[UsbMappingWizard] Resolver connection epoch advanced after wizard removal. mappingRunId={mappingRunId} epoch={epoch}");
+                return true;
+            }
+
+            SetDetectChangeStatus(
+                "Waiting for USB Removal",
+                "Unplug the selected USB drive. When Windows reports it was removed, plug it into the port you want to map.");
+            await Task.Delay(DetectionPollInterval, token).ConfigureAwait(true);
+        }
+
+        return false;
+    }
+
+    private async Task<UsbTargetInfo?> WaitForSelectedUsbReinsertAsync(string mappingRunId, CancellationToken token)
+    {
+        var poll = 0;
+        while (!token.IsCancellationRequested)
+        {
+            poll++;
+            var liveTarget = FindSelectedLiveTarget();
+            if (liveTarget is not null)
+            {
+                StartupDiagnosticLog.AppendLine($"[UsbMappingWizard] Reinsert poll observed selected USB present. mappingRunId={mappingRunId} poll={poll}");
+                return liveTarget;
+            }
+
+            SetDetectChangeStatus(
+                "USB removed. Plug it into the port you want to map.",
+                "Waiting for Windows to mount the selected USB again.");
+            await Task.Delay(DetectionPollInterval, token).ConfigureAwait(true);
+        }
+
+        return null;
+    }
+
+    private async Task ShowRemovalNotObservedAsync(string mappingRunId, int beforeCount)
+    {
+        DetectionPhase = UsbMappingWizardDetectionPhase.WaitingForRemoval;
+        DetectionSuccess = false;
+        FailureMessage = "Waiting for USB Removal";
+        DetectionDetail =
+            "Unplug the selected USB drive. When Windows reports it was removed, plug it into the port you want to map.";
+        RecommendationDisplay =
+            "Removal was not detected. Try unplugging the USB fully, avoid hubs/docks, or save a manual label.";
+        DetectChangePrimaryStatus = FailureMessage;
+        DetectChangeSubStatus = RecommendationDisplay;
+        ConfidenceTierDisplay = string.Empty;
+        OldPortKeyShort = string.Empty;
+        NewPortKeyShort = string.Empty;
+        SpeedClassDisplay = string.Empty;
+        var liveTarget = FindSelectedLiveTarget();
+        if (liveTarget is not null)
+        {
+            _afterSnap = await Task.Run(() => _intelligence.BuildTopologySnapshot(liveTarget)).ConfigureAwait(true);
+            _workflow.CaptureAfterSnapshot(_afterSnap);
+        }
+
+        DetectChangeDebugSummary = FormattableString.Invariant(
+            $"Before devices: {beforeCount} · After: {(liveTarget is null ? "(not mounted)" : "current")} · removal-not-observed");
+        LogMappingAttempt(
+            mappingRunId,
+            beforeCount,
+            _afterSnap?.Devices.Count ?? 0,
+            new UsbPortMappingResolution
+            {
+                Success = false,
+                MatchKind = UsbPortMappingMatchKind.None,
+                ReasonCodes = ["target-not-removed-before-reinsert"],
+                UserHint = "Removal was not detected before topology comparison."
+            },
+            removalObserved: false,
+            reinsertObserved: liveTarget is not null);
+        StartupDiagnosticLog.AppendLine($"[UsbMappingWizard] Removal timeout. mappingRunId={mappingRunId}");
+    }
+
+    private void ShowReinsertNotObserved(string mappingRunId, int beforeCount)
+    {
+        DetectionPhase = UsbMappingWizardDetectionPhase.WaitingForReinsert;
+        DetectionSuccess = false;
+        FailureMessage = "Waiting for USB Reinsert";
+        DetectionDetail =
+            "USB removal was detected. Plug the selected USB into the port you want to map and wait for Windows to mount it.";
+        RecommendationDisplay =
+            "If Windows does not remount the drive, unplug it fully, avoid hubs/docks, or save a manual label after it appears.";
+        DetectChangePrimaryStatus = FailureMessage;
+        DetectChangeSubStatus = RecommendationDisplay;
+        ConfidenceTierDisplay = string.Empty;
+        DetectChangeDebugSummary = FormattableString.Invariant(
+            $"Before devices: {beforeCount} · After: (not remounted) · reinsert-not-observed");
+        LogMappingAttempt(
+            mappingRunId,
+            beforeCount,
+            0,
+            new UsbPortMappingResolution
+            {
+                Success = false,
+                MatchKind = UsbPortMappingMatchKind.None,
+                ReasonCodes = ["selected-usb-not-detected-again"],
+                UserHint = "Reinsert was not detected before timeout."
+            },
+            removalObserved: true,
+            reinsertObserved: false);
+        StartupDiagnosticLog.AppendLine($"[UsbMappingWizard] Reinsert timeout. mappingRunId={mappingRunId}");
+    }
+
+    internal Task TryDetectionAgainAsync()
     {
         _workflow.ClearAfterSnapshotForRetry();
-        UserConfirmedUsbMoved = false;
-        _afterSnap = null;
-        DetectionSuccess = false;
-        FailureMessage = string.Empty;
-        DetectionDetail = string.Empty;
-        DetectChangePrimaryStatus = string.Empty;
-        DetectChangeSubStatus = string.Empty;
-        DetectChangeDebugSummary = string.Empty;
-        Step = UsbMappingWizardStep.MoveUsb;
+        ClearDetectionStateForRetry();
+        UserConfirmedUsbMoved = true;
+        DetectChangePrimaryStatus = "Waiting for USB Removal";
+        DetectChangeSubStatus = "Unplug the selected USB now. ForgerEMS is waiting for Windows to report removal.";
+        DetectionPhase = UsbMappingWizardDetectionPhase.WaitingForRemoval;
         TryAgainCommand.RaiseCanExecuteChanged();
+        return DetectPortChangeCoreAsync();
     }
 
     private void BackFromDetect()
     {
         _workflow.ClearAfterSnapshotForRetry();
-        _afterSnap = null;
-        DetectionSuccess = false;
-        FailureMessage = string.Empty;
-        DetectionDetail = string.Empty;
-        DetectChangePrimaryStatus = string.Empty;
-        DetectChangeSubStatus = string.Empty;
-        DetectChangeDebugSummary = string.Empty;
+        ClearDetectionStateForRetry();
         Step = UsbMappingWizardStep.MoveUsb;
         TryAgainCommand.RaiseCanExecuteChanged();
     }
@@ -633,14 +862,174 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         ConfidenceTierDisplay = "Manual";
         DetectionSuccess = true;
         FailureMessage = string.Empty;
+        DetectionDetail = "Manual label mode. Confidence is low because Windows did not confirm a physical port path.";
+        RecommendationDisplay = "Save a friendly label for this observed port, then use benchmark results to compare ports during beta testing.";
         Step = UsbMappingWizardStep.LabelPort;
         NextToLabelCommand.RaiseCanExecuteChanged();
+    }
+
+    private void ConfirmSavedPortLabel(string? mappingId)
+    {
+        var option = SavedPortLabels.FirstOrDefault(p => string.Equals(p.MappingId, mappingId, StringComparison.Ordinal));
+        if (option is null)
+        {
+            return;
+        }
+
+        PortLabelDraft = option.Label;
+        _pendingSaveMode = UsbPortMappingSaveMode.CurrentPortForSelectedTarget;
+        ConfidenceTierDisplay = "Manual";
+        DetectionSuccess = true;
+        FailureMessage = string.Empty;
+        DetectionDetail = "Manual confirmation mode. Windows could not distinguish the physical port, so this label is user-confirmed for the current connection.";
+        RecommendationDisplay = "Benchmark results can now attach to this confirmed label for the active USB connection.";
+        SavePortLabel();
+    }
+
+    private void RenameSavedPortLabel(string? mappingId)
+    {
+        if (string.IsNullOrWhiteSpace(mappingId) || string.IsNullOrWhiteSpace(PortLabelDraft))
+        {
+            return;
+        }
+
+        var profile = _profileStore.LoadOrCreate();
+        var rec = profile.KnownPorts.FirstOrDefault(p => string.Equals(p.MappingId, mappingId, StringComparison.Ordinal));
+        if (rec is null)
+        {
+            FailureMessage = "Saved label was not found. Refresh the wizard and try again.";
+            return;
+        }
+
+        var display = UsbPortLabelNormalizer.CanonicalizeDisplay(PortLabelDraft);
+        var key = UsbPortLabelNormalizer.NormalizeKey(display);
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            FailureMessage = "Enter a new label first.";
+            return;
+        }
+
+        var collision = profile.KnownPorts.FirstOrDefault(p =>
+            !string.Equals(p.MappingId, rec.MappingId, StringComparison.Ordinal) &&
+            string.Equals(p.NormalizedLabelKey, key, StringComparison.Ordinal));
+        if (collision is not null)
+        {
+            FailureMessage = $"A saved label already uses {display}. The duplicate will be merged safely.";
+        }
+
+        rec.UserLabel = display;
+        rec.NormalizedLabelKey = key;
+        rec.UpdatedUtc = DateTimeOffset.UtcNow;
+        _profileStore.Save(profile);
+        ReloadSavedPortLabels();
+        StartupDiagnosticLog.AppendLine(
+            $"[UsbMappingWizard] savedPortLabelRenamed mappingId={rec.MappingId} normalizedKeyHash={SafeHash(key)}");
+    }
+
+    private void DeleteSavedPortLabel(string? mappingId)
+    {
+        if (string.IsNullOrWhiteSpace(mappingId))
+        {
+            return;
+        }
+
+        var profile = _profileStore.LoadOrCreate();
+        var rec = profile.KnownPorts.FirstOrDefault(p => string.Equals(p.MappingId, mappingId, StringComparison.Ordinal));
+        if (rec is null)
+        {
+            return;
+        }
+
+        var deletedLabel = rec.UserLabel?.Trim() ?? "(unlabeled)";
+        profile.KnownPorts.Remove(rec);
+        _profileStore.Save(profile);
+        ReloadSavedPortLabels();
+        StartupDiagnosticLog.AppendLine(
+            $"[UsbMappingWizard] savedPortLabelDeleted mappingId={mappingId} labelHash={SafeHash(deletedLabel)}");
+    }
+
+    private void ClearDetectionStateForRetry()
+    {
+        _afterSnap = null;
+        _lastResolution = null;
+        _pendingSaveMode = UsbPortMappingSaveMode.TopologyInference;
+        DetectionSuccess = false;
+        FailureMessage = string.Empty;
+        DetectionDetail = string.Empty;
+        OldPortKeyShort = string.Empty;
+        NewPortKeyShort = string.Empty;
+        SpeedClassDisplay = string.Empty;
+        ConfidenceTierDisplay = string.Empty;
+        RecommendationDisplay = string.Empty;
+        DetectChangePrimaryStatus = string.Empty;
+        DetectChangeSubStatus = string.Empty;
+        DetectChangeDebugSummary = string.Empty;
+        DetectionPhase = UsbMappingWizardDetectionPhase.CurrentPortCaptured;
+        RefreshDetectChangeChrome();
+    }
+
+    private void LogMappingAttempt(
+        string mappingRunId,
+        int beforeCount,
+        int afterCount,
+        UsbPortMappingResolution? resolution,
+        bool removalObserved,
+        bool reinsertObserved)
+    {
+        var target = SelectedUsbTarget;
+        var selectedSummary =
+            $"drive={NormalizeDriveLetter(target?.DriveLetter)} labelHash={SafeHash(target?.LabelDisplay)} sizeBytes={target?.TotalBytes ?? 0}";
+        var reasonCodes = resolution is null
+            ? "none"
+            : string.Join(",", AppendFlowReasons(resolution.ReasonCodes, removalObserved, reinsertObserved));
+        var present = resolution is null || resolution.PresentTopologyFields.Count == 0
+            ? "none"
+            : string.Join(",", resolution.PresentTopologyFields);
+        var missing = resolution is null || resolution.MissingTopologyFields.Count == 0
+            ? "none"
+            : string.Join(",", resolution.MissingTopologyFields);
+        StartupDiagnosticLog.AppendLine(
+            $"[UsbMappingWizard] mappingAttempt mappingRunId={mappingRunId} beforeCount={beforeCount} afterCount={afterCount} selected={selectedSummary} " +
+            $"matchedCandidateCount={resolution?.MatchedCandidateCount ?? 0} confidence={resolution?.ConfidenceTier ?? ""} kind={resolution?.MatchKind.ToString() ?? "None"} " +
+            $"reasonCodes={reasonCodes} topologyPresent={present} topologyMissing={missing} removalObserved={removalObserved} reinsertObserved={reinsertObserved}");
+    }
+
+    private static string[] AppendFlowReasons(
+        IReadOnlyList<string> reasonCodes,
+        bool removalObserved,
+        bool reinsertObserved)
+    {
+        var combined = reasonCodes.ToList();
+        if (!removalObserved)
+        {
+            combined.Add("target-not-removed-before-reinsert");
+        }
+
+        if (!reinsertObserved)
+        {
+            combined.Add("selected-usb-not-detected-again");
+        }
+
+        return combined.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+    }
+
+    private static string SafeHash(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? "none"
+            : UsbIdentityHasher.ShortKey(UsbIdentityHasher.Sha256Hex(value));
+
+    private static bool IsUsbMappingDebugUiEnabled()
+    {
+        var optIn = Environment.GetEnvironmentVariable("FORGEREMS_USB_MAPPING_DEBUG_UI");
+        return string.Equals(optIn, "1", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(optIn, "true", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(ForgerEmsEnvironmentConfiguration.ForgerEmsEnv, "Development", StringComparison.OrdinalIgnoreCase);
     }
 
     private void SavePortLabel()
     {
         var profile = _profileStore.LoadOrCreate();
-        var label = PortLabelDraft.Trim();
+        var label = UsbPortLabelNormalizer.CanonicalizeDisplay(PortLabelDraft);
         if (!_workflow.TrySaveMappingLabel(
                 profile,
                 _profileStore,
@@ -654,6 +1043,7 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
             return;
         }
 
+        ReloadSavedPortLabels();
         var target = SelectedUsbTarget;
         DoneResult = new UsbMappingWizardResult
         {
@@ -684,15 +1074,22 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         _beforeCaptured = false;
         _beforeSnap = null;
         _afterSnap = null;
+        _lastResolution = null;
         DetectionSuccess = false;
         FailureMessage = string.Empty;
+        DetectionDetail = string.Empty;
+        OldPortKeyShort = string.Empty;
+        NewPortKeyShort = string.Empty;
+        SpeedClassDisplay = string.Empty;
         ConfidenceTierDisplay = string.Empty;
+        RecommendationDisplay = string.Empty;
         DoneResult = null;
         _pendingSaveMode = UsbPortMappingSaveMode.TopologyInference;
         IsAnalyzingPortChange = false;
         DetectChangePrimaryStatus = string.Empty;
         DetectChangeSubStatus = string.Empty;
         DetectChangeDebugSummary = string.Empty;
+        DetectionPhase = UsbMappingWizardDetectionPhase.ReadyToCaptureCurrentPort;
         _workflow.StartMappingSession();
         ReloadDeviceOptions();
         Step = UsbMappingWizardStep.Welcome;
@@ -710,6 +1107,9 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         TryAgainCommand.RaiseCanExecuteChanged();
         UseCurrentPortAnywayCommand.RaiseCanExecuteChanged();
         SaveManualLabelPathCommand.RaiseCanExecuteChanged();
+        ConfirmSavedPortLabelCommand.RaiseCanExecuteChanged();
+        RenameSavedPortLabelCommand.RaiseCanExecuteChanged();
+        DeleteSavedPortLabelCommand.RaiseCanExecuteChanged();
         BackFromDetectCommand.RaiseCanExecuteChanged();
         SavePortLabelCommand.RaiseCanExecuteChanged();
         MapAnotherPortCommand.RaiseCanExecuteChanged();

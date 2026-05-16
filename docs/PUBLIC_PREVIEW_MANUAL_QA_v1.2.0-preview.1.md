@@ -14,12 +14,12 @@ Use this checklist on a **VM or spare PC** before uploading GitHub Release asset
 
 ## 3. Settings — App updates
 
-- [ ] **Check for updates now** completes (or fails soft offline with clear copy).
+- [ ] **Check Now** completes (or fails soft offline with clear copy).
 - [ ] **Copy update diagnostics** produces clipboard text without raw secrets.
 
 ## 4. Diagnostics — support bundle
 
-- [ ] **Export Support Bundle** saves a `.zip`.
+- [ ] **Create Support Bundle** saves a `.zip`.
 - [ ] ZIP contains `README.txt`, `bundle-metadata.txt`, redacted logs where paths appeared.
 - [ ] Optional: run `.\tools\Export-ForgerEMSDiagnostics.ps1` and confirm README + redacted logs.
 
@@ -47,11 +47,21 @@ Use this checklist on a **VM or spare PC** before uploading GitHub Release asset
 
 - [ ] Benchmark on a **safe removable** target runs or refuses with clear reason.
 - [ ] Unsafe `C:\` benchmark path is refused (self-test covers engine; UI spot-check).
+- [ ] Read/write results look plausible. If read speed is wildly higher than the device class or write speed, the UI/log should say the read may be cached/estimated while write remains measured.
+- [ ] Cancel Benchmark stops only the active benchmark and the next run starts normally.
+
+## 9a. USB port mapping
+
+- [ ] Direct motherboard USB-A: capture current port, unplug, reinsert into another USB-A, then map or save manual label.
+- [ ] USB-C: repeat and confirm weak topology recommends manual label when Windows hides port paths.
+- [ ] Hub/dock: repeat and confirm the wizard explains low confidence rather than failing generically.
+- [ ] Manual label persists after app restart if a label was saved.
 
 ## 10. Managed downloads — partial staging
 
 - [ ] If backend reports **PARTIALLY STAGED**, UI uses **partially staged** wording (not “failed” for manual items).
 - [ ] **Retry Failed Downloads** visible when applicable.
+- [ ] Manual/info-only catalog shortcuts open official vendor/project pages, not third-party mirrors.
 
 ## 11. Toolkit Manager
 

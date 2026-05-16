@@ -15,10 +15,13 @@ public static class KyraContextBuilder
         var redact = settings.RedactContextEnabled;
         var sys = KyraRedactionService.RedactForProviders(context.ContextText, redact);
         var ledgerBlock = KyraRedactionService.RedactForProviders(ledger.ToPromptSummaryBlock(), redact);
-        var lastKyra = memory.GetState().LastKyraSummary;
-        var convo = string.Join(
-            " ",
-            memory.ToChatMessages().TakeLast(6).Select(m => $"{m.Role}:{KyraRedactionService.RedactForProviders(m.Text, redact)}"));
+        var isolate = KyraPromptIsolation.ShouldIsolateFromConversationMemory(context.UserQuestion, context.Intent);
+        var lastKyra = isolate ? string.Empty : memory.GetState().LastKyraSummary;
+        var convo = isolate
+            ? string.Empty
+            : string.Join(
+                " ",
+                memory.ToChatMessages().TakeLast(6).Select(m => $"{m.Role}:{KyraRedactionService.RedactForProviders(m.Text, redact)}"));
 
         var requiresLocalTruth = plan.ShouldUseLocalToolAnswer ||
                                  KyraMachineContextRouter.IsMachineAnchoredIntent(context.Intent, context.UserQuestion);

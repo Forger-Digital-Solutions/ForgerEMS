@@ -12,6 +12,8 @@ public sealed class KyraProviderDecision
 
     public IReadOnlyList<ICopilotProvider> OrderedProviders { get; init; } = Array.Empty<ICopilotProvider>();
 
+    public IReadOnlyList<string> SkippedProviders { get; init; } = Array.Empty<string>();
+
     public KyraProviderCapabilities EffectiveCapabilities { get; init; }
 
     public static KyraProviderDecision Build(
@@ -22,7 +24,8 @@ public sealed class KyraProviderDecision
         Func<ICopilotProvider, CopilotProviderConfiguration> configResolver,
         KyraConversationState memoryState,
         KyraToolRegistry toolRegistry,
-        KyraToolHostFacts hostFacts)
+        KyraToolHostFacts hostFacts,
+        KyraProviderUsageTracker? providerUsage = null)
     {
         var (plan, ordered) = KyraOrchestrator.BuildExecutionPlan(
             request,
@@ -32,16 +35,19 @@ public sealed class KyraProviderDecision
             configResolver,
             memoryState,
             toolRegistry,
-            hostFacts);
+            hostFacts,
+            providerUsage);
 
+        var machineAnchored = KyraMachineContextRouter.IsMachineAnchoredIntent(context.Intent, request.Prompt);
         var apiFirst = settings.ApiFirstRouting &&
                        !plan.ShouldPolishWithProvider &&
-                       !KyraMachineContextRouter.IsMachineAnchoredIntent(context.Intent, request.Prompt);
+                       (!machineAnchored || settings.AllowOnlineSystemContextSharing);
 
         return new KyraProviderDecision
         {
             ToolPlan = plan,
             OrderedProviders = ordered,
+            SkippedProviders = KyraProviderRouter.ExplainSkippedProviders(providers, request, settings, context, configResolver, providerUsage),
             ApiFirst = apiFirst,
             EffectiveCapabilities = KyraProviderCapabilityCatalog.AggregateForProviders(ordered)
         };

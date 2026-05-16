@@ -37,10 +37,6 @@ public static class KyraProviderCapabilityCatalog
         {
             caps |= KyraProviderCapabilities.RequiresSecret;
         }
-        else
-        {
-            caps |= KyraProviderCapabilities.RequiresSecret;
-        }
 
         caps |= KyraProviderCapabilities.SupportsSystemEnhancement;
         return caps;
@@ -89,12 +85,19 @@ public static class KyraProviderRouter
         CopilotRequest request,
         CopilotSettings settings,
         CopilotContext context,
-        Func<ICopilotProvider, CopilotProviderConfiguration> configResolver)
+        Func<ICopilotProvider, CopilotProviderConfiguration> configResolver,
+        KyraProviderUsageTracker? usageTracker = null)
     {
         var scores = new List<KyraProviderScore>();
         foreach (var provider in providers)
         {
             if (provider.ProviderType == CopilotProviderType.LocalOffline)
+            {
+                continue;
+            }
+
+            if (usageTracker is not null &&
+                IsInCooldown(usageTracker, provider.Id, out _))
             {
                 continue;
             }
@@ -105,12 +108,23 @@ public static class KyraProviderRouter
                 continue;
             }
 
+            var resolved = KyraProviderConfigResolver.ResolveProvider(provider, config);
+            if (!resolved.IsReady)
+            {
+                continue;
+            }
+
             if (!settings.EnableByokProviders && provider.IsPaidProvider)
             {
                 continue;
             }
 
             if (!settings.EnableFreeProviderPool && !provider.IsPaidProvider)
+            {
+                continue;
+            }
+
+            if (!provider.IsConfigured(config))
             {
                 continue;
             }
@@ -137,11 +151,128 @@ public static class KyraProviderRouter
             scores.Add(new KyraProviderScore { Provider = provider, Score = score });
         }
 
+        var priority = BuildPriority(settings.ProviderPriorityCsv);
         return scores
-            .OrderByDescending(item => item.Score)
+            .OrderBy(item => priority.TryGetValue(ProviderAlias(item.Provider), out var rank) ? rank : int.MaxValue)
+            .ThenByDescending(item => item.Score)
             .Take(Math.Max(1, settings.MaxProviderFallbacksPerMessage))
             .ToArray();
     }
+
+    public static IReadOnlyList<string> ExplainSkippedProviders(
+        IReadOnlyList<ICopilotProvider> providers,
+        CopilotRequest request,
+        CopilotSettings settings,
+        CopilotContext context,
+        Func<ICopilotProvider, CopilotProviderConfiguration> configResolver,
+        KyraProviderUsageTracker? usageTracker = null)
+    {
+        var skipped = new List<string>();
+        foreach (var provider in providers)
+        {
+            if (provider.ProviderType == CopilotProviderType.LocalOffline)
+            {
+                continue;
+            }
+
+            if (usageTracker is not null && IsInCooldown(usageTracker, provider.Id, out var until))
+            {
+                var sec = Math.Max(1, (int)Math.Ceiling((until - DateTimeOffset.UtcNow).TotalSeconds));
+                skipped.Add($"{provider.DisplayName}: cooling down (~{sec}s)");
+                continue;
+            }
+
+            var config = configResolver(provider);
+            if (!config.IsEnabled)
+            {
+                skipped.Add($"{provider.DisplayName}: disabled");
+                continue;
+            }
+
+            var resolved = KyraProviderConfigResolver.ResolveProvider(provider, config);
+            if (!resolved.IsReady)
+            {
+                skipped.Add($"{provider.DisplayName}: {resolved.SafeSkipReason}");
+                continue;
+            }
+
+            if (!settings.EnableByokProviders && provider.IsPaidProvider)
+            {
+                skipped.Add($"{provider.DisplayName}: BYOK providers disabled");
+                continue;
+            }
+
+            if (!settings.EnableFreeProviderPool && !provider.IsPaidProvider)
+            {
+                skipped.Add($"{provider.DisplayName}: free provider pool disabled");
+                continue;
+            }
+
+            if (!provider.CanHandle(new CopilotProviderRequest
+                {
+                    AppVersion = request.AppVersion,
+                    Prompt = request.Prompt,
+                    Context = context,
+                    Settings = settings,
+                    ProviderConfiguration = config
+                }))
+            {
+                skipped.Add($"{provider.DisplayName}: not implemented for this request");
+            }
+        }
+
+        return skipped;
+    }
+
+    public static bool IsInCooldown(KyraProviderUsageTracker tracker, string providerId, out DateTimeOffset cooldownUntilUtc)
+    {
+        var state = tracker.GetOrCreate(providerId);
+        if (state.CooldownUntilUtc is { } u && u > DateTimeOffset.UtcNow)
+        {
+            cooldownUntilUtc = u;
+            return true;
+        }
+
+        cooldownUntilUtc = default;
+        return false;
+    }
+
+    private static Dictionary<string, int> BuildPriority(string? csv)
+    {
+        var source = string.IsNullOrWhiteSpace(csv)
+            ? "forgerems-gateway,openai-compatible,custom,openrouter,groq,gemini,anthropic,mistral,cerebras,github-models,cloudflare,lmstudio,ollama,offline"
+            : csv;
+        var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var parts = source.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        for (var i = 0; i < parts.Length; i++)
+        {
+            if (!map.ContainsKey(parts[i]))
+            {
+                map[parts[i]] = i;
+            }
+        }
+
+        return map;
+    }
+
+    private static string ProviderAlias(ICopilotProvider provider) =>
+        provider.Id switch
+        {
+            "forgerems-gateway" => "forgerems-gateway",
+            "custom-openai-compatible" => "custom",
+            "openrouter-free" => "openrouter",
+            "groq-free" => "groq",
+            "gemini-free" => "gemini",
+            "anthropic-claude" => "anthropic",
+            "mistral-free" => "mistral",
+            "cerebras-free" => "cerebras",
+            "github-models" => "github-models",
+            "cloudflare-workers-ai" => "cloudflare",
+            "lm-studio-local" => "lmstudio",
+            "ollama-local" => "ollama",
+            "local-offline" => "offline",
+            _ => provider.Id
+        };
 
     private static int ScoreProvider(ICopilotProvider provider, KyraIntent intent, bool deprioritizeLocalAi)
     {
@@ -157,6 +288,7 @@ public static class KyraProviderRouter
 
         var bonus = provider.Id switch
         {
+            "forgerems-gateway" => 10,
             "gemini-free" => 7,
             "openrouter-free" => 6,
             "github-models" => 5,
@@ -184,7 +316,7 @@ public static class KyraProviderRouter
             return provider.Id switch
             {
                 "gemini-free" or "groq-free" or "cerebras-free" or "openrouter-free" => KyraModelCapability.FastChat,
-                "github-models" or "mistral-free" => KyraModelCapability.DeepReasoning,
+                "github-models" or "mistral-free" or "forgerems-gateway" => KyraModelCapability.DeepReasoning,
                 _ => KyraModelCapability.FastChat
             };
         }

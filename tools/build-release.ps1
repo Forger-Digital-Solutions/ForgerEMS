@@ -47,6 +47,13 @@ $stageBackendScript = Join-Path $repoRoot "tools\stage-bundled-backend.ps1"
 $installerScript = Join-Path $repoRoot "installer\ForgerEMS.iss"
 $manifestRoot = Join-Path $repoRoot "manifests"
 $distRoot = Join-Path $repoRoot "dist"
+$runtimeHelperPath = Join-Path $repoRoot "backend\ForgerEMS.Runtime.ps1"
+if (Test-Path -LiteralPath $runtimeHelperPath) {
+    . $runtimeHelperPath
+}
+else {
+    throw "ForgerEMS runtime helper was not found. Checked: $runtimeHelperPath"
+}
 
 function Write-Step {
     param([Parameter(Mandatory)][string]$Message)
@@ -135,7 +142,7 @@ function Write-Checksums {
         Sort-Object FullName |
         ForEach-Object {
             $relative = $_.FullName.Substring($rootFull.Length + 1).Replace('\', '/')
-            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
+            $hash = Get-ForgerSha256 -LiteralPath $_.FullName
             "{0} *{1}" -f $hash, $relative
         }
 
@@ -154,10 +161,10 @@ function Get-DistributionChecksumText {
         [string]$ZipBetaRelativeName = ""
     )
 
-    $installerHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $InstallerPath).Hash.ToLowerInvariant()
-    $zipHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $ZipPath).Hash.ToLowerInvariant()
-    $jsonHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $ReleaseJsonPath).Hash.ToLowerInvariant()
-    $downloadBetaHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $DownloadBetaPath).Hash.ToLowerInvariant()
+    $installerHash = Get-ForgerSha256 -LiteralPath $InstallerPath
+    $zipHash = Get-ForgerSha256 -LiteralPath $ZipPath
+    $jsonHash = Get-ForgerSha256 -LiteralPath $ReleaseJsonPath
+    $downloadBetaHash = Get-ForgerSha256 -LiteralPath $DownloadBetaPath
     # Parenthesize each -f expression: comma binds tighter than -f inside @( ), which otherwise splits the array wrong.
     $lines = [System.Collections.Generic.List[string]]::new()
     $lines.Add(("{0} *{1}" -f $installerHash, ($InstallerRelativeName -replace '\\', '/')))
@@ -166,7 +173,7 @@ function Get-DistributionChecksumText {
         if (-not (Test-Path -LiteralPath $ZipBetaPath)) {
             throw "Beta alias ZIP was not found: $ZipBetaPath"
         }
-        $zipBetaHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $ZipBetaPath).Hash.ToLowerInvariant()
+        $zipBetaHash = Get-ForgerSha256 -LiteralPath $ZipBetaPath
         if ($zipBetaHash -ne $zipHash) {
             throw "Beta alias ZIP SHA256 does not match primary ZIP (copy step failed)."
         }
@@ -200,7 +207,7 @@ function Get-PackageLooseFilesChecksumText {
         if (-not (Test-Path -LiteralPath $p.Path)) {
             throw "Package file missing for checksums: $($p.Path)"
         }
-        $h = (Get-FileHash -Algorithm SHA256 -LiteralPath $p.Path).Hash.ToLowerInvariant()
+        $h = Get-ForgerSha256 -LiteralPath $p.Path
         ("{0} *{1}" -f $h, $p.Rel)
     }
     return ($lines -join "`n") + "`n"
@@ -236,6 +243,25 @@ AFTER YOU HAVE A REAL .ZIP
 3. Double-click START_HERE.bat
 4. If Windows SmartScreen appears, only choose More info -> Run anyway if this ZIP came from the official GitHub release and you verified hashes.
 
+DEEP SENSOR MODE
+- The installer or Settings may enable ForgerEMS Deep Sensor Mode.
+- No separate LibreHardwareMonitor download is needed; approved local providers ship with the app where packaged.
+- Deep Sensor Mode uses local read-only hardware sensors for Hardware X-Ray coverage.
+- It does not control fans, voltage, clocks, BIOS, firmware, overclocking, or undervolting.
+- To test manually in PowerShell: `$env:FORGEREMS_DEEP_SENSOR_MODE='ReadOnly'
+- To turn off the testing override: remove FORGEREMS_DEEP_SENSOR_MODE or set it to Off.
+
+SUPPORT PRIVACY
+- Send logs/screenshots only if comfortable.
+- Do not send product keys, API keys, tokens, passwords, private documents, or sensitive files.
+
+KYRA BETA GATEWAY
+- ForgerEMS v1.2.0 preview/public beta includes Kyra Beta Gateway support.
+- Cloud beta access uses FORGEREMS_KYRA_GATEWAY_URL + FORGEREMS_KYRA_GATEWAY_BETA_TOKEN when configured.
+- No direct AI provider API keys are included in this release.
+- Local/offline Kyra fallback remains available.
+- For operator verification run tools/show-forgerems-env-status.ps1 and tools/audit-config-and-secrets.ps1.
+
 VERIFY INTEGRITY
 Use CHECKSUMS.sha256 from the same release page. Full steps: GitHub repo -> docs/DOWNLOAD_TROUBLESHOOTING.md
 "@
@@ -252,6 +278,9 @@ echo Starting ForgerEMS Installer...
 echo.
 echo If Windows shows SmartScreen, choose More info -^> Run anyway ONLY if this
 echo folder came from the official ForgerEMS GitHub release and you verified CHECKSUMS.sha256.
+echo.
+echo Deep Sensor Mode uses bundled local read-only hardware sensors when enabled.
+echo No separate LibreHardwareMonitor download is needed.
 echo.
 start "" "%~dp0ForgerEMS Installer.exe"
 "@
@@ -367,6 +396,22 @@ ForgerDigitalSolutions@outlook.com
 
 Security notice:
 Never send API keys, passwords, serial numbers, private documents, or sensitive personal files.
+
+Kyra beta gateway:
+- Cloud beta access uses ForgerEMS Gateway when configured.
+- This release does not include direct provider API keys.
+- Local/offline fallback remains available.
+
+Deep Sensor Mode:
+- May be enabled by the installer or Settings.
+- Uses bundled local read-only hardware sensors where packaged.
+- No separate LibreHardwareMonitor download is needed.
+- No fan, voltage, clock, BIOS, or firmware control.
+- Some readings depend on firmware, drivers, permissions, and hardware support.
+- Unavailable readings are coverage limits, not failures.
+
+Review before sharing:
+Reports may include hardware details, network adapter data, USB device details, and diagnostic notes. Do not send product keys, API keys, tokens, passwords, private documents, or sensitive files.
 "@
     Set-Content -LiteralPath $Path -Value $content -Encoding utf8
 }
@@ -391,7 +436,8 @@ $checksumsPath = Join-Path $releaseRoot "CHECKSUMS.sha256"
 $installerOutputDir = Join-Path $distRoot "installer"
 $installerReleaseName = "ForgerEMS-Setup-v{0}.exe" -f $Version
 $installerReleasePath = Join-Path $releaseRoot $installerReleaseName
-$releaseIdentifierLabel = "ForgerEMS v1.2.0 Public Preview - package $Version (ZIP-first technician bundle)"
+$displayVersionLabel = "ForgerEMS v1.2.1 Public Preview"
+$releaseIdentifierLabel = "ForgerEMS v1.2.1 Public Preview - package $Version (ZIP-first technician bundle)"
 
 Write-Step "Release version: $Version"
 Write-Step "Restoring solution"
@@ -444,6 +490,7 @@ else {
     & $isccPath `
         "/DAppVersion=$Version" `
         "/DAppVersionInfo=$appVersionInfo" `
+        ("/DDisplayVersion=$displayVersionLabel") `
         ("/DReleaseIdentifier=$releaseIdentifierLabel") `
         "/DPublishDir=$publishDir" `
         "/DBackendBundleDir=$backendStageRoot" `

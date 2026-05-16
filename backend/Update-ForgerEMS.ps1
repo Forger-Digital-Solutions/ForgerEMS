@@ -107,6 +107,8 @@ $script:Summary = [ordered]@{
     Disabled                 = 0
     FallbackShortcutsCreated = 0
     FallbackShortcutsReused  = 0
+    UpToDateSkipped          = 0
+    WarnEvents               = 0
 }
 
 $script:ManagedFailureLines = [System.Collections.Generic.List[string]]::new()
@@ -127,7 +129,10 @@ function Write-Log {
     switch ($Level) {
         "INFO"  { Write-Host $line -ForegroundColor Cyan }
         "OK"    { Write-Host $line -ForegroundColor Green }
-        "WARN"  { Write-Host $line -ForegroundColor Yellow }
+        "WARN"  {
+            $script:Summary.WarnEvents++
+            Write-Host $line -ForegroundColor Yellow
+        }
         "ERROR" { Write-Host $line -ForegroundColor Red }
         "ACTION" { Write-Host $line -ForegroundColor Yellow }
         "INIT" { Write-Host $line -ForegroundColor Cyan }
@@ -246,36 +251,13 @@ function Ensure-Dir {
 function Get-Sha256 {
     param([Parameter(Mandatory)][string]$Path)
 
-    if (-not (Test-Path -LiteralPath $Path)) { return $null }
-
-    $getFileHashCommand = Get-Command -Name Get-FileHash -ErrorAction SilentlyContinue
-    if ($getFileHashCommand -and -not $WhatIfPreference) {
-        try {
-            $fileHash = Get-FileHash -LiteralPath $Path -Algorithm SHA256 -ErrorAction Stop
-            if ($fileHash -and $fileHash.Hash) {
-                return $fileHash.Hash.ToLowerInvariant()
-            }
-        }
-        catch {
-            # Fall back to the .NET hasher below so host/cmdlet quirks do not leave the hash null.
-        }
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $null
     }
 
-    $stream = [IO.File]::OpenRead($Path)
-    try {
-        $sha256 = [Security.Cryptography.SHA256]::Create()
-        try {
-            $hashBytes = $sha256.ComputeHash($stream)
-        }
-        finally {
-            $sha256.Dispose()
-        }
-
-        return (([BitConverter]::ToString($hashBytes)) -replace '-', '').ToLowerInvariant()
-    }
-    finally {
-        $stream.Dispose()
-    }
+    $hash = Get-ForgerSha256 -LiteralPath $Path
+    Write-Log ("SHA256 hash provider: {0} file={1}" -f (Get-ForgerLastHashProvider), (Get-ForgerSafePathForLog -Path $Path)) "INFO"
+    return $hash
 }
 
 function Safe-FileName {
@@ -1940,6 +1922,7 @@ foreach ($item in $orderedItems) {
                 Write-Log "Checksum verified: $cur" "OK"
                 Write-Log "Destination state after verify: $(Get-FileStateDescription -Path $dest)" "INFO"
                 $script:Summary.Verified++
+                $script:Summary.UpToDateSkipped++
             }
             else {
                 Write-Log "Verify failed: sha256 mismatch. Expected=$sha Got=$cur" "ERROR"
@@ -1973,6 +1956,7 @@ foreach ($item in $orderedItems) {
             [void](Remove-ManagedSuccessPlaceholders -Root $root -ManagedDestination $destRel -ManagedPlaceholderPlan $activeManagedPlaceholderPlan)
             $script:Summary.Verified++
             $script:Summary.Skipped++
+            $script:Summary.UpToDateSkipped++
             continue
         }
     }
@@ -2118,6 +2102,32 @@ Write-Log "Fallback shortcuts reused: $($script:Summary.FallbackShortcutsReused)
 Write-Log "Archived prior files: $($script:Summary.Archived)" "INFO"
 Write-Log "Disabled manifest items: $($script:Summary.Disabled)" "INFO"
 Write-Log "Total failed managed items: $($script:Summary.Failed)" "INFO"
+
+Write-Log "--- ACTION SUMMARY ---" "OK"
+Write-Log ("Items downloaded: $($script:Summary.Downloaded)") "OK"
+Write-Log ("Items already up to date: $($script:Summary.UpToDateSkipped)") "OK"
+Write-Log ("Shortcuts updated: $($script:Summary.Shortcut)") "OK"
+Write-Log ("Failures: $($script:Summary.Failed)") $(if ($script:Summary.Failed -gt 0) { "WARN" } else { "OK" })
+Write-Log ("Warnings: $($script:Summary.WarnEvents)") $(if ($script:Summary.WarnEvents -gt 0) { "WARN" } else { "OK" })
+$actionUsbReadiness = if ($script:Summary.Failed -eq 0) {
+    "READY"
+}
+elseif ($StrictManagedDownloads) {
+    "FAILED"
+}
+else {
+    "PARTIALLY STAGED"
+}
+$actionReadinessLevel = if ($actionUsbReadiness -eq "READY") {
+    "OK"
+}
+elseif ($actionUsbReadiness -eq "FAILED") {
+    "ERROR"
+}
+else {
+    "WARN"
+}
+Write-Log ("USB readiness: $actionUsbReadiness") $actionReadinessLevel
 
 if ($script:Summary.Failed -gt 0) {
     Write-Log "USB readiness: PARTIALLY STAGED - USB layout is present; one or more managed downloads need attention. Manual/info shortcuts above are normal and are not failed downloads." "WARN"

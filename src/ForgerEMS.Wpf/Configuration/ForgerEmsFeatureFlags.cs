@@ -10,4 +10,6 @@ public static class ForgerEmsFeatureFlags
     public static bool MarketplaceEnabled => ForgerEmsEnvironmentConfiguration.MarketplaceEnabled;
 
     public static bool EbayIntegrationEnabled => ForgerEmsEnvironmentConfiguration.EbayEnabled;
+
+    public static bool DeepSensorModeRequested => ForgerEmsEnvironmentConfiguration.DeepSensorModeResolution.IsEnabled;
 }

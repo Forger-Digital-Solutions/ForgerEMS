@@ -39,11 +39,19 @@ src\ForgerEMS.Wpf\bin\Release\net8.0-windows\win-x64\publish\
 Expected portable artifact set:
 
 - `ForgerEMS.exe`
+- `providers\sensors\LibreHardwareMonitorLib.dll` when the reviewed deep sensor provider is packaged
+- `providers\sensors\THIRD-PARTY-NOTICES.txt`
+- `providers\sensors\LICENSES\LibreHardwareMonitor-MPL-2.0.txt`
+- `providers\sensors\LICENSES\LibreHardwareMonitor-THIRD-PARTY-LICENSES.txt`
 
 Optional extra files:
 
-- none are required for normal portable distribution when the publish succeeds
 - a separate `.pdb` should not be required because debug symbols are embedded
+
+The sensor-provider files are copied from the WPF project content items into
+the publish folder. `tools/build-release.ps1` copies the publish folder into
+`release\current\app`, so portable bundles include the reviewed local provider
+and notices without a user download step.
 
 ## Runtime Layout
 

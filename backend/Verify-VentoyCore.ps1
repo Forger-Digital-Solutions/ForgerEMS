@@ -865,7 +865,8 @@ function Assert-ChecksumsFileValid {
             throw "Checksum file references a missing bundle file: $relativePath"
         }
 
-        $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $fullPath).Hash.ToLowerInvariant()
+        $actualHash = Get-ForgerSha256 -LiteralPath $fullPath
+        Write-Status ("SHA256 hash provider: {0} file={1}" -f (Get-ForgerLastHashProvider), (Get-ForgerSafePathForLog -Path $fullPath)) "INFO"
         if ($actualHash -ne $expectedHash) {
             throw "Checksum mismatch for bundle file: $relativePath"
         }
@@ -947,12 +948,14 @@ function Assert-ReleaseSignatureFileValid {
 
     $manifestPath = Resolve-BundleChildPath -Root $BundleRoot -RelativePath ([string]$fields["ManifestFile"])
 
-    $actualChecksumsHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $signedFilePath).Hash.ToLowerInvariant()
+    $actualChecksumsHash = Get-ForgerSha256 -LiteralPath $signedFilePath
+    Write-Status ("SHA256 hash provider: {0} file={1}" -f (Get-ForgerLastHashProvider), (Get-ForgerSafePathForLog -Path $signedFilePath)) "INFO"
     if ($actualChecksumsHash -ne ([string]$fields["SignedFileSha256"]).ToLowerInvariant()) {
         throw "Signature does not match CHECKSUMS.sha256."
     }
 
-    $actualManifestHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $manifestPath).Hash.ToLowerInvariant()
+    $actualManifestHash = Get-ForgerSha256 -LiteralPath $manifestPath
+    Write-Status ("SHA256 hash provider: {0} file={1}" -f (Get-ForgerLastHashProvider), (Get-ForgerSafePathForLog -Path $manifestPath)) "INFO"
     if ($actualManifestHash -ne ([string]$fields["ManifestSha256"]).ToLowerInvariant()) {
         throw "Signature does not match ForgerEMS.updates.json."
     }
@@ -1538,7 +1541,8 @@ if (-not $RevalidateManagedDownloads) {
 
         $payloadPath = Join-Path $linuxRoot "ubuntu-verified.iso"
         [IO.File]::WriteAllBytes($payloadPath, [Text.Encoding]::ASCII.GetBytes("verified managed payload"))
-        $payloadHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $payloadPath).Hash.ToLowerInvariant()
+        $payloadHash = Get-ForgerSha256 -LiteralPath $payloadPath
+        Write-Status ("SHA256 hash provider: {0} file={1}" -f (Get-ForgerLastHashProvider), (Get-ForgerSafePathForLog -Path $payloadPath)) "INFO"
 
         $placeholderPath = Join-Path $linuxRoot "DOWNLOAD - Ubuntu.url"
         Set-Content -LiteralPath $placeholderPath -Value "[InternetShortcut]`r`nURL=https://example.com/ubuntu" -Encoding ASCII
@@ -1833,6 +1837,13 @@ if ($script:ManagedRevalidationLatestRoot) {
 }
 
 $failedCount = @($results | Where-Object { $_.Status -eq "FAIL" }).Count
+$passedCount = @($results | Where-Object { $_.Status -eq "PASS" }).Count
+
+Write-Status "--- ACTION SUMMARY ---" "OK"
+Write-Status ("Checks passed: $passedCount | failed: $failedCount") "OK"
+Write-Status ("Warnings: " + $script:WarningCount) "INFO"
+$backendReadiness = if ($failedCount -eq 0) { "READY" } else { "FAILED" }
+Write-Status ("Backend readiness: " + $backendReadiness) $(if ($failedCount -eq 0) { "OK" } else { "ERROR" })
 
 if ($script:VerificationSubstDrive) {
     & subst.exe $script:VerificationSubstDrive /D 2>$null

@@ -1,0 +1,22 @@
+LibreHardwareMonitor Third-Party License Notes
+==============================================
+
+ForgerEMS bundles LibreHardwareMonitorLib through NuGet package reference.
+LibreHardwareMonitor itself is licensed under MPL-2.0.
+
+ForgerEMS does not modify LibreHardwareMonitor source files. If a future release
+modifies MPL-covered source files, those modifications must be made available
+under MPL-2.0 as required by the license.
+
+LibreHardwareMonitorLib 0.9.6 NuGet dependency metadata observed during restore:
+- DiskInfoToolkit 1.1.2
+- HidSharp 2.6.4
+- Mono.Posix.NETStandard 1.0.0
+- RAMSPDToolkit-NDD 1.4.2
+- System.IO.Ports 10.0.3
+- System.Management 10.0.2
+- System.Threading.AccessControl 10.0.3
+
+Release maintainers should re-check dependency notices whenever the pinned
+LibreHardwareMonitorLib package version changes.
+

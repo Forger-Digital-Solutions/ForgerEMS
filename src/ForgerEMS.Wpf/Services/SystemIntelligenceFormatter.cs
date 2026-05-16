@@ -70,3 +70,57 @@ public static class SystemIntelligenceFormatter
             : "TPM status unavailable";
     }
 }
+
+public enum IntelligenceFieldStatus
+{
+    Ready,
+    Watch,
+    Warning,
+    Critical,
+    Unknown,
+    NotExposed,
+    Inferred
+}
+
+public enum IntelligenceConfidence
+{
+    High,
+    Medium,
+    Low
+}
+
+public sealed class IntelligenceEvidenceField
+{
+    public string Value { get; init; } = "Unknown";
+
+    public IntelligenceFieldStatus Status { get; init; } = IntelligenceFieldStatus.Unknown;
+
+    public IntelligenceConfidence Confidence { get; init; } = IntelligenceConfidence.Low;
+
+    public string Evidence { get; init; } = string.Empty;
+
+    public string TechnicianNote { get; init; } = string.Empty;
+
+    public bool IsConfirmedFailure =>
+        Status is IntelligenceFieldStatus.Warning or IntelligenceFieldStatus.Critical;
+
+    public bool IsUnavailable =>
+        Status is IntelligenceFieldStatus.Unknown or IntelligenceFieldStatus.NotExposed;
+}
+
+public static class SystemIntelligenceReportRedactor
+{
+    public static string RedactSupportReport(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        var redacted = HardwarePrivacyRedactor.Redact(value);
+        redacted = Regex.Replace(redacted, "(?i)(product\\s*key|digital\\s*license\\s*key)\\s*[:=]\\s*[^\\r\\n;]+", "$1=[redacted]");
+        redacted = Regex.Replace(redacted, "(?i)(service\\s*tag|serial\\s*number|serial)\\s*[:=]\\s*[^\\r\\n;]+", "$1=[redacted]");
+        redacted = Regex.Replace(redacted, "(?i)(\\[REDACTED_(?:SERIAL|LICENSE)\\])\\s*[:=]\\s*[^\\r\\n;]+", "$1=[redacted]");
+        return redacted;
+    }
+}

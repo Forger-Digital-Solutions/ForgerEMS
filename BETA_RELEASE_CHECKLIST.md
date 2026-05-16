@@ -1,8 +1,8 @@
 # ForgerEMS Beta Release Checklist
 
-## v1.2.0 Public Preview (current line)
+## v1.2.1 Public Preview (current line)
 
-Target: **1.2.0-preview.1** — *ForgerEMS v1.2.0 Public Preview*
+Target: **1.2.1-preview.1** — *ForgerEMS v1.2.1 Public Preview*
 
 - [ ] `docs/PUBLIC_PREVIEW_CHECKLIST_v1.2.0.md` completed for the shipping tag
 - [ ] `dotnet test` green; `tools/Validate-ForgerEMSRelease.ps1` green

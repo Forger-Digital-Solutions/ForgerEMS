@@ -1,8 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <IsPackable>false</IsPackable>
+    <BuildInParallel>false</BuildInParallel>
     <NoWarn>$(NoWarn);CA1707</NoWarn>
   </PropertyGroup>
 
@@ -15,24 +16,12 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="Kyra.Core" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\ForgerEMS.Wpf\ForgerEMS.Wpf.csproj" />
+    <ProjectReference Include="..\..\src\Kyra.Core\Kyra.Core.csproj" BuildReference="true" ReferenceOutputAssembly="true" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="..\..\src\ForgerEMS.Wpf\ForgerEMS.Wpf.csproj" BuildReference="true" ReferenceOutputAssembly="true" SkipGetTargetFrameworkProperties="true" />
   </ItemGroup>
-
-  <ItemGroup Condition="'$(BuildingSolutionFile)' == 'true'">
-    <Reference Include="ForgerEMS">
-      <HintPath>..\..\src\ForgerEMS.Wpf\bin\$(Configuration)\net8.0-windows\win-x64\ForgerEMS.dll</HintPath>
-      <Private>true</Private>
-    </Reference>
-  </ItemGroup>
-
-  <Target Name="BuildWpfReferenceForSolution" BeforeTargets="ResolveAssemblyReferences" Condition="'$(BuildingSolutionFile)' == 'true'">
-    <MSBuild
-      Projects="..\..\src\ForgerEMS.Wpf\ForgerEMS.Wpf.csproj"
-      Targets="Rebuild"
-      Properties="Configuration=$(Configuration);Platform=AnyCPU;RuntimeIdentifier=win-x64" />
-  </Target>
 
 </Project>

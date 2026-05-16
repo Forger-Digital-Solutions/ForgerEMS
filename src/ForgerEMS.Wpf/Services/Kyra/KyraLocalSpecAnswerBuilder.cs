@@ -1,3 +1,4 @@
+#pragma warning disable CA1305 // Locale-sensitive calls; text is diagnostic/UI output
 using System;
 using System.Linq;
 using System.Text;
@@ -28,10 +29,7 @@ public static class KyraLocalSpecAnswerBuilder
 
         var grounded = profile is not null;
         var body = grounded ? BuildAnswerFromProfile(prompt.Trim(), profile!) : NoScanBody;
-        var footer = grounded
-            ? "_Kyra · grounded in latest System Intelligence scan_"
-            : "_Kyra · no current scan available_";
-        var text = body.TrimEnd() + Environment.NewLine + Environment.NewLine + footer;
+        var text = body.TrimEnd();
 
         response = new CopilotResponse
         {
@@ -39,7 +37,7 @@ public static class KyraLocalSpecAnswerBuilder
             UsedOnlineData = false,
             OnlineStatus = "Kyra Mode: Local hardware facts (System Intelligence scan).",
             ProviderType = CopilotProviderType.LocalOffline,
-            ProviderNotes = ["Kyra routing: local-first deterministic hardware spec answer."],
+            ProviderNotes = ["Kyra routing: hardware facts -> local System Intelligence"],
             ResponseSource = KyraResponseSource.LocalKyra,
             SourceLabel = KyraResponseComposer.KyraIdentityLabel,
             GroundedInSystemIntelligence = grounded,
@@ -64,10 +62,25 @@ public static class KyraLocalSpecAnswerBuilder
                ContainsLoose(t, "what gpu") ||
                ContainsLoose(t, "which gpu") ||
                ContainsLoose(t, "what graphics") ||
+               ContainsLoose(t, "what kind of machine") ||
+               ContainsLoose(t, "machine class") ||
+               ContainsLoose(t, "business class") ||
+               ContainsLoose(t, "consumer") ||
+               ContainsLoose(t, "what sensors") ||
+               ContainsLoose(t, "sensors missing") ||
+               ContainsLoose(t, "fan speed") ||
+               ContainsLoose(t, "overheating") ||
                ContainsLoose(t, "how much ram") ||
                ContainsLoose(t, "what storage") ||
                ContainsLoose(t, "storage is in this") ||
-               ContainsLoose(t, "drives in this");
+               ContainsLoose(t, "drives in this") ||
+               ContainsLoose(t, "best for") ||
+               ContainsLoose(t, "best use") ||
+               ContainsLoose(t, "device fit") ||
+               ContainsLoose(t, "good for coding") ||
+               ContainsLoose(t, "run games") ||
+               ContainsLoose(t, "gaming laptop") ||
+               ContainsLoose(t, "sell this as");
     }
 
     private static bool ContainsLoose(string haystack, string needle) =>
@@ -96,6 +109,21 @@ public static class KyraLocalSpecAnswerBuilder
             return FormatStorage(p);
         }
 
+        if (IsDeviceFitQuestion(t))
+        {
+            return FormatDeviceFit(p);
+        }
+
+        if (IsMachineClassQuestion(t))
+        {
+            return FormatMachineClass(p);
+        }
+
+        if (IsSensorQuestion(t))
+        {
+            return FormatSensorMatrix(p, t);
+        }
+
         if (IsPcQuestion(t))
         {
             return FormatPc(p);
@@ -117,6 +145,29 @@ public static class KyraLocalSpecAnswerBuilder
 
     private static bool IsPcQuestion(string t) =>
         ContainsLoose(t, "what pc") || ContainsLoose(t, "computer") || ContainsLoose(t, "laptop");
+
+    private static bool IsMachineClassQuestion(string t) =>
+        ContainsLoose(t, "what kind of machine") ||
+        ContainsLoose(t, "machine class") ||
+        ContainsLoose(t, "business class") ||
+        ContainsLoose(t, "consumer") ||
+        ContainsLoose(t, "gaming laptop");
+
+    private static bool IsSensorQuestion(string t) =>
+        ContainsLoose(t, "what sensors") ||
+        ContainsLoose(t, "sensors missing") ||
+        ContainsLoose(t, "fan speed") ||
+        ContainsLoose(t, "overheating") ||
+        ContainsLoose(t, "temperature");
+
+    private static bool IsDeviceFitQuestion(string t) =>
+        ContainsLoose(t, "best for") ||
+        ContainsLoose(t, "best use") ||
+        ContainsLoose(t, "device fit") ||
+        ContainsLoose(t, "good for coding") ||
+        ContainsLoose(t, "run games") ||
+        ContainsLoose(t, "gaming laptop") ||
+        ContainsLoose(t, "sell this as");
 
     private static string FormatCpu(SystemProfile p)
     {
@@ -141,7 +192,8 @@ public static class KyraLocalSpecAnswerBuilder
         var gb = p.RamTotalGb is { } g
             ? FormattableString.Invariant($"{g:0.#} GB")
             : p.RamTotal;
-        return $"RAM (from System Intelligence): {gb} total. Reported speed summary: {p.RamSpeed}.";
+        var mem = string.IsNullOrWhiteSpace(p.MemoryTypeSummary) ? string.Empty : $" ({p.MemoryTypeSummary})";
+        return $"RAM (from System Intelligence): {gb} total{mem}. Reported speed summary: {p.RamSpeed}.";
     }
 
     private static string FormatStorage(SystemProfile p)
@@ -152,13 +204,62 @@ public static class KyraLocalSpecAnswerBuilder
         }
 
         var lines = p.Disks.Select(d =>
-                $"• {d.Name}: {d.Size}, {d.MediaType}, health {d.Health} ({d.Status})")
+            {
+                var bus = string.IsNullOrWhiteSpace(d.InterfaceType) ? string.Empty : $"{d.InterfaceType} ";
+                return $"• {d.Name}: {bus}{d.Size}, {d.MediaType}, health {d.Health} ({d.Status})";
+            })
             .ToArray();
         return "Storage (from System Intelligence):" + Environment.NewLine + string.Join(Environment.NewLine, lines);
     }
 
     private static string FormatPc(SystemProfile p)
-        => $"This PC (from System Intelligence): {p.Manufacturer} {p.Model}, running {p.OperatingSystem}.";
+    {
+        var machineClass = MachineClassifier.Classify(p);
+        return $"This PC (from System Intelligence): {p.Manufacturer} {p.Model}, running {p.OperatingSystem}. Machine class: {machineClass.PrimaryClass} ({machineClass.Confidence} confidence).";
+    }
+
+    private static string FormatDeviceFit(SystemProfile p)
+    {
+        var fit = new DeviceFitEngine().Evaluate(p);
+        return "Best use / device fit (from System Intelligence):" + Environment.NewLine +
+               DeviceFitEngine.FormatCard(fit) + Environment.NewLine +
+               "Inference note: this fit is inferred from scanned CPU/RAM/GPU/storage/battery signals. Gaming, thermals, and runtime are confidence-limited unless benchmarked.";
+    }
+
+    private static string FormatMachineClass(SystemProfile p)
+    {
+        var machineClass = MachineClassifier.Classify(p);
+        var signals = machineClass.Signals.Take(4).Select(signal => $"- {signal.Name}: {signal.Value}");
+        return
+            $"Machine class (from System Intelligence): {machineClass.PrimaryClass} ({machineClass.Confidence} confidence)." + Environment.NewLine +
+            $"Secondary: {string.Join("; ", machineClass.SecondaryClasses.DefaultIfEmpty("none"))}" + Environment.NewLine +
+            machineClass.TechnicianNote + Environment.NewLine +
+            string.Join(Environment.NewLine, signals);
+    }
+
+    private static string FormatSensorMatrix(SystemProfile p, string prompt)
+    {
+        var sensors = SensorMatrixBuilder.Build(p);
+        var missingQuery = sensors.Groups
+            .SelectMany(group => group.Readings)
+            .Where(reading => reading.IsUnavailable);
+        if (ContainsLoose(prompt, "fan"))
+        {
+            missingQuery = missingQuery
+                .OrderByDescending(reading => reading.Name.Contains("fan", StringComparison.OrdinalIgnoreCase));
+        }
+
+        var missing = missingQuery
+            .Take(6)
+            .Select(reading => $"- {reading.Name}: {reading.UnavailableReason}. {reading.TechnicianNote}");
+        return
+            "Sensor / Hardware X-Ray coverage (from System Intelligence):" + Environment.NewLine +
+            sensors.CoverageSummary + Environment.NewLine +
+            $"Confidence: {sensors.Confidence}" + Environment.NewLine +
+            "Unavailable sensors are usually permission-limited or not exposed by firmware/driver, not hardware failures." + Environment.NewLine +
+            "Status guide: Unknown = lower confidence; NotExposed = firmware/driver/permission limit; Inferred = derived from another signal; Failure = only with explicit warning/critical evidence." + Environment.NewLine +
+            string.Join(Environment.NewLine, missing);
+    }
 
     private static string FormatSpecs(SystemProfile p)
     {

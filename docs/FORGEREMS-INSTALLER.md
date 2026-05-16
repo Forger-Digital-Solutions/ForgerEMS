@@ -142,6 +142,20 @@ dist\installer\ForgerEMS-Setup-v1.1.1.exe
 Release staging output from `build-release.ps1` is generated under `release\current\`.
 Treat this folder as local/CI output, not a versioned repo snapshot.
 
+## Sensor Provider Payload
+
+The installer includes `providers\sensors\` from the WPF publish output when
+present. This folder carries the reviewed local LibreHardwareMonitor provider
+DLL plus required notices/licenses:
+
+- `LibreHardwareMonitorLib.dll`
+- `THIRD-PARTY-NOTICES.txt`
+- `LICENSES\LibreHardwareMonitor-MPL-2.0.txt`
+- `LICENSES\LibreHardwareMonitor-THIRD-PARTY-LICENSES.txt`
+
+Deep Sensor Mode remains off by default. Users do not download sensor
+providers manually, and the provider is local/read-only.
+
 ## Updating The Version Later
 
 When you move to a new version:

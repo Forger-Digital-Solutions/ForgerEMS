@@ -67,7 +67,7 @@ public sealed class BetaDocumentationTests
     public void Readme_MentionsCurrentBetaAndFaq()
     {
         var text = File.ReadAllText(Path.Combine(RepoRoot, "README.md"));
-        Assert.Contains("1.2.0-preview.1", text, StringComparison.Ordinal);
+        Assert.Contains("1.2.1-preview.1", text, StringComparison.Ordinal);
         Assert.Contains("docs/DOWNLOAD_TROUBLESHOOTING.md", text, StringComparison.Ordinal);
         Assert.Contains("docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md", text, StringComparison.Ordinal);
         Assert.Contains("docs/FAQ.md", text, StringComparison.Ordinal);

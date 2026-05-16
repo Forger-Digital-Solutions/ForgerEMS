@@ -11,14 +11,14 @@
   Repository root (folder containing ForgerEMS.sln).
 
 .PARAMETER Version
-  Expected semantic package version (e.g. 1.2.0-preview.1).
+  Expected semantic package version (e.g. 1.2.1-preview.1).
 
 .PARAMETER ReleaseRoot
   Optional. If set (e.g. ...\release\current), validates release.json + CHECKSUMS + installer/ZIP when present.
 #>
 param(
     [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot),
-    [string]$Version = "1.2.0-preview.1",
+    [string]$Version = "1.2.1-preview.1",
     [string]$ReleaseRoot = ""
 )
 
@@ -72,10 +72,20 @@ Test-FileExists "tools\build-release.ps1" "build-release"
 Test-FileExists "installer\ForgerEMS.iss" "installer-iss"
 Test-FileExists "docs\ENVIRONMENT.md" "doc-environment"
 Test-FileExists ".env.example" "env-example"
-Test-FileExists "docs\ARCHITECTURE-INTEGRATION-v1.2.0.md" "doc-architecture"
-Test-FileExists "docs\UPDATE-SYSTEM-v1.2.0.md" "doc-update-v12"
-Test-FileExists "docs\PUBLIC_PREVIEW_CHECKLIST_v1.2.0.md" "doc-preview-checklist"
-Test-FileExists "docs\PUBLIC_PREVIEW_MANUAL_QA_v1.2.0-preview.1.md" "doc-manual-qa"
+# Historical v1.2.0 docs remain in repo as release-record snapshots; downgraded to WARN since
+# they are reference archives, not required release deliverables for v1.2.1.
+$archiveDocs = @(
+    "docs\ARCHITECTURE-INTEGRATION-v1.2.0.md",
+    "docs\PUBLIC_PREVIEW_CHECKLIST_v1.2.0.md",
+    "docs\PUBLIC_PREVIEW_MANUAL_QA_v1.2.0-preview.1.md"
+)
+foreach ($ad in $archiveDocs) {
+    $ap = Join-Path $RepoRoot $ad
+    if (Test-Path -LiteralPath $ap) { Add-Row -Level "PASS" -Id ("archive-" + [System.IO.Path]::GetFileNameWithoutExtension($ad)) -Message "Historical archive present: $ad" }
+    else { Add-Row -Level "WARN" -Id ("archive-" + [System.IO.Path]::GetFileNameWithoutExtension($ad)) -Message "Historical archive not found (not required for release): $ad" }
+}
+# Living update-system doc (no version suffix — stays current across releases)
+Test-FileExists "docs\UPDATE_SYSTEM.md" "doc-update-system"
 Test-FileExists "docs\marketing\KICKSTARTER-DRAFT.md" "marketing-kickstarter"
 Test-FileExists "docs\marketing\SOCIAL-POSTS.md" "marketing-social"
 Test-FileExists "docs\marketing\PUBLIC-FAQ.md" "marketing-faq"
@@ -101,14 +111,14 @@ foreach ($g in $pg) {
 if ($csVer -eq $Version) { Add-Row -Level "PASS" -Id "csproj-Version" -Message "<Version> is $Version" }
 else { Add-Row -Level "FAIL" -Id "csproj-Version" -Message "Expected <Version>$Version</Version>, got '$csVer'" }
 
-if ($asmVer -eq "1.2.0.0") { Add-Row -Level "PASS" -Id "csproj-AssemblyVersion" -Message "AssemblyVersion 1.2.0.0" }
-else { Add-Row -Level "FAIL" -Id "csproj-AssemblyVersion" -Message "Expected 1.2.0.0, got '$asmVer'" }
+if ($asmVer -eq "1.2.1.0") { Add-Row -Level "PASS" -Id "csproj-AssemblyVersion" -Message "AssemblyVersion 1.2.1.0" }
+else { Add-Row -Level "FAIL" -Id "csproj-AssemblyVersion" -Message "Expected 1.2.1.0, got '$asmVer'" }
 
 if ($infoVer -eq $Version) { Add-Row -Level "PASS" -Id "csproj-InformationalVersion" -Message "InformationalVersion matches" }
 else { Add-Row -Level "FAIL" -Id "csproj-InformationalVersion" -Message "Expected $Version, got '$infoVer'" }
 
 # --- README / CHANGELOG copy ---
-Test-FileContains -Rel "README.md" -Pattern "ForgerEMS v1\.2\.0 Public Preview" -Id "readme-display"
+Test-FileContains -Rel "README.md" -Pattern "ForgerEMS v1\.2\.1 Public Preview" -Id "readme-display"
 Test-FileContains -Rel "README.md" -Pattern ([regex]::Escape($Version)) -Id "readme-semver"
 Test-FileContains -Rel "CHANGELOG.md" -Pattern ([regex]::Escape($Version)) -Id "changelog-version"
 
@@ -118,7 +128,7 @@ if (Test-Path -LiteralPath $appRel) {
     $src = Get-Content -LiteralPath $appRel -Raw
     if ($src -match 'Version\s*=\s*"' + [regex]::Escape($Version) + '"') { Add-Row -Level "PASS" -Id "AppReleaseInfo-Version" -Message "AppReleaseInfo.Version" }
     else { Add-Row -Level "FAIL" -Id "AppReleaseInfo-Version" -Message "AppReleaseInfo.Version not $Version" }
-    if ($src -match 'ForgerEMS v1\.2\.0 Public Preview') { Add-Row -Level "PASS" -Id "AppReleaseInfo-Display" -Message "DisplayVersion string" }
+    if ($src -match 'ForgerEMS v1\.2\.1 Public Preview') { Add-Row -Level "PASS" -Id "AppReleaseInfo-Display" -Message "DisplayVersion string" }
     else { Add-Row -Level "FAIL" -Id "AppReleaseInfo-Display" -Message "DisplayVersion missing Public Preview wording" }
 }
 else { Add-Row -Level "FAIL" -Id "AppReleaseInfo-file" -Message "AppReleaseInfo.cs missing" }

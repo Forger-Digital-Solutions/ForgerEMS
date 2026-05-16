@@ -6,6 +6,7 @@ namespace VentoyToolkitSetup.Wpf.Services.Intelligence;
 public enum DiagnosticSeverityLevel
 {
     Ok,
+    Info,
     Warning,
     Blocked,
     Unknown

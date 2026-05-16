@@ -52,6 +52,13 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
             StartInfo = BuildStartInfo(request),
             EnableRaisingEvents = true
         };
+        using var timeoutCts = request.Timeout is { } timeout
+            ? new CancellationTokenSource(timeout)
+            : null;
+        using var effectiveCts = timeoutCts is null
+            ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+            : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+        var effectiveToken = effectiveCts.Token;
 
         process.OutputDataReceived += (_, eventArgs) =>
         {
@@ -85,7 +92,7 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
-        using var registration = cancellationToken.Register(() =>
+        using var registration = effectiveToken.Register(() =>
         {
             try
             {
@@ -110,11 +117,11 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
 
         var heartbeatTask = Task.Run(async () =>
         {
-            while (!process.HasExited && !cancellationToken.IsCancellationRequested)
+            while (!process.HasExited && !effectiveToken.IsCancellationRequested)
             {
-                await Task.Delay(heartbeatInterval, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(heartbeatInterval, effectiveToken).ConfigureAwait(false);
 
-                if (process.HasExited || cancellationToken.IsCancellationRequested)
+                if (process.HasExited || effectiveToken.IsCancellationRequested)
                 {
                     break;
                 }
@@ -129,9 +136,24 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
                     continue;
                 }
 
-                var heartbeatText = request.HeartbeatKind == PowerShellHeartbeatKind.LongRunningScan
-                    ? $"[INFO] Toolkit health scan still running (no new log lines for {idleBeforeHeartbeat.TotalSeconds:0}s) — scanning toolkit items…"
-                    : $"[INFO] Downloading {request.ProgressItemName}... still in progress (no byte progress reported yet).";
+                string heartbeatText;
+                if (request.HeartbeatKind == PowerShellHeartbeatKind.LongRunningScan)
+                {
+                    heartbeatText =
+                        $"[INFO] Toolkit health scan still running (no new log lines for {idleBeforeHeartbeat.TotalSeconds:0}s) — scanning toolkit items…";
+                }
+                else if (request.BuildDownloadHeartbeatMessage is not null &&
+                         !string.IsNullOrWhiteSpace(request.ProgressItemName))
+                {
+                    var idleSinceOutput = DateTimeOffset.UtcNow - lastOutputUtc;
+                    heartbeatText = request.BuildDownloadHeartbeatMessage.Invoke(idleSinceOutput)
+                                    ?? $"[INFO] {request.ProgressItemName}: still working (no script output for {Math.Max(1, (int)idleSinceOutput.TotalSeconds)}s).";
+                }
+                else
+                {
+                    heartbeatText =
+                        $"[INFO] {request.ProgressItemName}: still working (no script output for {idleBeforeHeartbeat.TotalSeconds:0}s) — may be downloading, hashing a large ISO, or verifying checksums.";
+                }
 
                 var skipDuplicate = false;
                 lock (sync)
@@ -150,9 +172,21 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
 
                 PublishLine(heartbeatText, isErrorStream: false);
             }
-        }, cancellationToken);
+        }, effectiveToken);
 
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        var timedOut = false;
+        try
+        {
+            await process.WaitForExitAsync(effectiveToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (timeoutCts?.IsCancellationRequested == true && !cancellationToken.IsCancellationRequested)
+        {
+            timedOut = true;
+            process.WaitForExit();
+            PublishLine(
+                $"[FAIL] {request.DisplayName} timed out after {request.Timeout!.Value.TotalMinutes:0.#} minutes.",
+                isErrorStream: false);
+        }
         process.WaitForExit();
         try
         {
@@ -167,12 +201,13 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
         return new PowerShellRunResult
         {
             DisplayName = request.DisplayName,
-            ExitCode = process.ExitCode,
+            ExitCode = timedOut ? 1460 : process.ExitCode,
             StartedAtUtc = startedAtUtc,
             FinishedAtUtc = DateTimeOffset.UtcNow,
             StandardOutputText = stdoutBuilder.ToString(),
             StandardErrorText = stderrBuilder.ToString(),
-            OutputLines = outputLines.ToArray()
+            OutputLines = outputLines.ToArray(),
+            TimedOut = timedOut
         };
 
         void PublishLine(string text, bool isErrorStream)
@@ -202,7 +237,13 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
             return true;
         }
 
-        return trimmed.StartsWith("[INFO] Downloading", StringComparison.OrdinalIgnoreCase) &&
+        if (trimmed.StartsWith("[INFO]", StringComparison.OrdinalIgnoreCase) &&
+            trimmed.Contains("still working", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return trimmed.StartsWith("[INFO]", StringComparison.OrdinalIgnoreCase) &&
                trimmed.Contains("still in progress (no byte progress reported yet)", StringComparison.OrdinalIgnoreCase);
     }
 

@@ -349,6 +349,274 @@ public sealed class ListingPriceEstimate
     public IReadOnlyList<string> SuggestedUpgrades { get; init; } = Array.Empty<string>();
 }
 
+public enum FlipValueCondition
+{
+    Poor,
+    Fair,
+    Good,
+    Excellent
+}
+
+public enum FlipValueSaleMode
+{
+    QuickSale,
+    NormalLocal,
+    ShippedOnline,
+    PartsOnly
+}
+
+public sealed class LocationProfile
+{
+    public string PostalCode { get; init; } = string.Empty;
+    public string City { get; init; } = string.Empty;
+    public string StateOrRegion { get; init; } = string.Empty;
+    public string Country { get; init; } = "US";
+    public int Radius { get; init; } = 50;
+    public string Currency { get; init; } = "USD";
+
+    public bool IsConfigured =>
+        !string.IsNullOrWhiteSpace(PostalCode) ||
+        !string.IsNullOrWhiteSpace(City);
+}
+
+public sealed class FlipValueRequest
+{
+    public SystemProfile SystemProfile { get; init; } = new();
+    public FlipValueCondition Condition { get; init; } = FlipValueCondition.Good;
+    public bool? ChargerIncluded { get; init; }
+    public LocationProfile Location { get; init; } = new();
+    public FlipValueSaleMode SaleMode { get; init; } = FlipValueSaleMode.NormalLocal;
+}
+
+public sealed class FlipValueComparable
+{
+    public string Provider { get; init; } = "Manual";
+    public string Title { get; init; } = string.Empty;
+    public decimal Price { get; init; }
+    public bool IsSoldComp { get; init; }
+    public bool IsLocal { get; init; }
+    public DateTimeOffset? ObservedUtc { get; init; }
+}
+
+public sealed class FlipValueResult
+{
+    public decimal Low { get; init; }
+    public decimal Expected { get; init; }
+    public decimal High { get; init; }
+    public decimal QuickSale { get; init; }
+    public decimal PartsOnly { get; init; }
+    public ResaleConfidenceLevel Confidence { get; init; } = ResaleConfidenceLevel.Low;
+    public string ProviderStatus { get; init; } = string.Empty;
+    public string LocationBasis { get; init; } = string.Empty;
+    public int CompsUsed { get; init; }
+    public int OutliersRemoved { get; init; }
+    public IReadOnlyList<string> Assumptions { get; init; } = Array.Empty<string>();
+    public string SuggestedListingTitle { get; init; } = string.Empty;
+    public decimal RecommendedListingPrice { get; init; }
+    public decimal RecommendedMinimumAcceptPrice { get; init; }
+    public IReadOnlyList<string> Reasons { get; init; } = Array.Empty<string>();
+}
+
+public interface IFlipValueProvider
+{
+    string Name { get; }
+    bool IsConfigured { get; }
+    bool UsesSoldComps { get; }
+    IReadOnlyList<FlipValueComparable> GetComparables(FlipValueRequest request);
+}
+
+public sealed class LocalHeuristicFlipValueProvider : IFlipValueProvider
+{
+    public string Name => "Local heuristic";
+    public bool IsConfigured => true;
+    public bool UsesSoldComps => false;
+
+    public IReadOnlyList<FlipValueComparable> GetComparables(FlipValueRequest request)
+    {
+        var profile = new DeviceResaleProfile
+        {
+            RawSystemProfile = request.SystemProfile,
+            Identity = DeviceIdentityProfile.FromSystemProfile(request.SystemProfile, new List<HardwareProbeWarning>()),
+            Condition = new ResaleConditionProfile
+            {
+                CosmeticCondition = request.Condition.ToString(),
+                ChargerIncluded = request.ChargerIncluded == true
+            }
+        };
+        var estimate = new OfflineResaleEstimator().Estimate(profile);
+        return
+        [
+            new FlipValueComparable
+            {
+                Provider = Name,
+                Title = "Offline heuristic estimate",
+                Price = estimate.FairListingPrice,
+                IsSoldComp = false,
+                IsLocal = false,
+                ObservedUtc = DateTimeOffset.UtcNow
+            }
+        ];
+    }
+}
+
+public sealed class EbayActiveListingFlipValueProvider : IFlipValueProvider
+{
+    public string Name => "eBay active listings";
+    public bool IsConfigured { get; init; }
+    public bool UsesSoldComps => false;
+
+    public IReadOnlyList<FlipValueComparable> GetComparables(FlipValueRequest request) => Array.Empty<FlipValueComparable>();
+}
+
+public sealed class ManualCompImportFlipValueProvider : IFlipValueProvider
+{
+    private readonly IReadOnlyList<FlipValueComparable> _comparables;
+
+    public ManualCompImportFlipValueProvider(IReadOnlyList<FlipValueComparable> comparables)
+    {
+        _comparables = comparables;
+    }
+
+    public string Name => "Manual comparable import";
+    public bool IsConfigured => _comparables.Count > 0;
+    public bool UsesSoldComps => _comparables.Any(comp => comp.IsSoldComp);
+
+    public IReadOnlyList<FlipValueComparable> GetComparables(FlipValueRequest request) => _comparables;
+}
+
+public sealed class FlipValueEngine
+{
+    private readonly IReadOnlyList<IFlipValueProvider> _providers;
+
+    public FlipValueEngine()
+        : this([new LocalHeuristicFlipValueProvider(), new EbayActiveListingFlipValueProvider()])
+    {
+    }
+
+    public FlipValueEngine(IReadOnlyList<IFlipValueProvider> providers)
+    {
+        _providers = providers;
+    }
+
+    public FlipValueResult Estimate(FlipValueRequest request)
+    {
+        var assumptions = new List<string>();
+        var providerStatuses = new List<string>();
+        var comps = new List<FlipValueComparable>();
+        foreach (var provider in _providers)
+        {
+            if (!provider.IsConfigured)
+            {
+                providerStatuses.Add($"{provider.Name}: not configured");
+                continue;
+            }
+
+            var providerComps = provider.GetComparables(request);
+            if (provider is EbayActiveListingFlipValueProvider ||
+                provider.Name.Contains("active", StringComparison.OrdinalIgnoreCase))
+            {
+                assumptions.Add("eBay active listings are asking prices, not sold comps; they are weaker evidence.");
+            }
+
+            providerStatuses.Add(providerComps.Count > 0
+                ? $"{provider.Name}: {providerComps.Count} comp(s)"
+                : $"{provider.Name}: configured, no comps returned");
+            comps.AddRange(providerComps);
+        }
+
+        if (!request.Location.IsConfigured)
+        {
+            assumptions.Add("Location not configured; using national/offline estimate basis.");
+        }
+        else
+        {
+            assumptions.Add($"Location basis: {request.Location.City} {request.Location.StateOrRegion} {request.Location.PostalCode}, radius {request.Location.Radius}.");
+        }
+
+        var deduped = comps
+            .Where(comp => comp.Price > 0)
+            .GroupBy(comp => $"{comp.Provider}|{comp.Title}|{comp.Price}")
+            .Select(group => group.First())
+            .OrderBy(comp => comp.Price)
+            .ToArray();
+        var filtered = RemoveOutliers(deduped, out var removed);
+        var expected = filtered.Length == 0 ? 120m : Median(filtered.Select(comp => comp.Price).ToArray());
+        var soldCount = filtered.Count(comp => comp.IsSoldComp);
+        var activeCount = filtered.Length - soldCount;
+        var confidence = soldCount >= 4 && request.Location.IsConfigured
+            ? ResaleConfidenceLevel.High
+            : filtered.Length >= 3
+                ? ResaleConfidenceLevel.Medium
+                : request.Location.IsConfigured
+                    ? ResaleConfidenceLevel.Low
+                    : ResaleConfidenceLevel.VeryLow;
+
+        var profile = request.SystemProfile;
+        var title = HardwarePrivacyRedactor.Redact($"{profile.Manufacturer} {profile.Model} {profile.Cpu} {profile.RamTotal}".Trim());
+        return new FlipValueResult
+        {
+            Low = Round5(expected * 0.82m),
+            Expected = Round5(expected),
+            High = Round5(expected * 1.18m),
+            QuickSale = Round5(expected * 0.72m),
+            PartsOnly = Round5(Math.Max(20m, expected * 0.38m)),
+            Confidence = confidence,
+            ProviderStatus = string.Join("; ", providerStatuses),
+            LocationBasis = request.Location.IsConfigured
+                ? $"{request.Location.City} {request.Location.StateOrRegion} {request.Location.PostalCode}".Trim()
+                : "Location not configured; national/offline basis",
+            CompsUsed = filtered.Length,
+            OutliersRemoved = removed,
+            Assumptions = assumptions,
+            SuggestedListingTitle = string.IsNullOrWhiteSpace(title) ? "Windows laptop - tested by ForgerEMS" : title,
+            RecommendedListingPrice = Round5(expected * 1.08m),
+            RecommendedMinimumAcceptPrice = Round5(expected * 0.75m),
+            Reasons =
+            [
+                $"{soldCount} sold comp(s), {activeCount} active/asking comp(s).",
+                request.Location.IsConfigured ? "Location profile configured." : "Location missing lowers confidence."
+            ]
+        };
+    }
+
+    private static FlipValueComparable[] RemoveOutliers(FlipValueComparable[] comps, out int removed)
+    {
+        removed = 0;
+        if (comps.Length < 5)
+        {
+            return comps;
+        }
+
+        var prices = comps.Select(comp => comp.Price).OrderBy(price => price).ToArray();
+        var median = Median(prices);
+        var deviations = prices.Select(price => Math.Abs(price - median)).OrderBy(value => value).ToArray();
+        var mad = Median(deviations);
+        if (mad <= 0)
+        {
+            return comps;
+        }
+
+        var filtered = comps.Where(comp => Math.Abs(comp.Price - median) / mad <= 3.5m).ToArray();
+        removed = comps.Length - filtered.Length;
+        return filtered;
+    }
+
+    private static decimal Median(decimal[] values)
+    {
+        if (values.Length == 0)
+        {
+            return 0;
+        }
+
+        var sorted = values.OrderBy(value => value).ToArray();
+        return sorted.Length % 2 == 1
+            ? sorted[sorted.Length / 2]
+            : (sorted[(sorted.Length / 2) - 1] + sorted[sorted.Length / 2]) / 2m;
+    }
+
+    private static decimal Round5(decimal value) => Math.Round(value / 5m, MidpointRounding.AwayFromZero) * 5m;
+}
+
 public sealed class RepairRoiEstimate
 {
     public bool RecommendRepairBeforeSale { get; init; }

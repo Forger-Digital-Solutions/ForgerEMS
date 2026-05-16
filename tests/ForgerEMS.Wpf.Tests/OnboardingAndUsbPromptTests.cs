@@ -1,6 +1,7 @@
 using System.IO;
 using VentoyToolkitSetup.Wpf.Infrastructure;
 using VentoyToolkitSetup.Wpf.Models;
+using VentoyToolkitSetup.Wpf.Services;
 using VentoyToolkitSetup.Wpf.Services.Intelligence;
 using Xunit;
 
@@ -35,7 +36,37 @@ public sealed class OnboardingAndUsbPromptTests
         Assert.Contains("System Intelligence", KyraOnboardingCopy.InitialWelcomeMessage, System.StringComparison.Ordinal);
         Assert.Contains("map USB ports", KyraOnboardingCopy.InitialWelcomeMessage, System.StringComparison.OrdinalIgnoreCase);
         Assert.Contains("/help", KyraOnboardingCopy.InitialWelcomeMessage, System.StringComparison.Ordinal);
-        Assert.Contains("KYRA_PROVIDER_ENVIRONMENT_SETUP.md", KyraOnboardingCopy.InitialWelcomeMessage, System.StringComparison.Ordinal);
+        Assert.Contains("Kyra Advanced settings", KyraOnboardingCopy.InitialWelcomeMessage, System.StringComparison.Ordinal);
+        Assert.DoesNotContain("KYRA_PROVIDER_ENVIRONMENT_SETUP.md", KyraOnboardingCopy.InitialWelcomeMessage, System.StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void KyraOnboardingCopy_MentionsGatewayWhenRealtimeEnabled()
+    {
+        var text = KyraOnboardingCopy.BuildInitialWelcomeMessage(new CopilotSettings
+        {
+            KyraRealtimeGatewayEnabled = true,
+            KyraRealtimeGatewayResearchEnabled = true,
+            KyraRealtimeGatewayResearchConsent = true
+        });
+
+        Assert.Contains("Realtime Gateway is enabled", text, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Live tools may be used", text, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("double-check USB targets", text, System.StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("docs/", text, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void KyraOnboardingCopy_MentionsOnlineOffWhenGatewayDisabled()
+    {
+        var text = KyraOnboardingCopy.BuildInitialWelcomeMessage(new CopilotSettings
+        {
+            KyraRealtimeGatewayEnabled = false,
+            KyraRealtimeGatewayResearchEnabled = false
+        });
+
+        Assert.Contains("Optional online paths stay off until enabled", text, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("double-check USB targets", text, System.StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -86,7 +117,7 @@ public sealed class OnboardingAndUsbPromptTests
         var path = Path.Combine(RepoRoot, "src", "ForgerEMS.Wpf", "MainWindow.xaml");
         var xaml = File.ReadAllText(path);
         Assert.Contains("Welcome to ForgerEMS", xaml, System.StringComparison.Ordinal);
-        Assert.Contains("Run System Scan", xaml, System.StringComparison.Ordinal);
+        Assert.Contains("Run Standard Scan", xaml, System.StringComparison.Ordinal);
         Assert.Contains("Run USB Benchmark", xaml, System.StringComparison.Ordinal);
         Assert.Contains("Open USB Builder", xaml, System.StringComparison.Ordinal);
     }

@@ -6,6 +6,7 @@ public enum KyraCredentialSource
 {
     None,
     Session,
+    EncryptedLocal,
     ProcessEnvironment,
     UserEnvironment,
     MachineEnvironment
@@ -30,6 +31,7 @@ public readonly struct KyraCredentialResolution
         return Source switch
         {
             KyraCredentialSource.Session => "Configured via session key",
+            KyraCredentialSource.EncryptedLocal => "Configured via protected local key",
             KyraCredentialSource.ProcessEnvironment => "Configured via process env",
             KyraCredentialSource.UserEnvironment => "Configured via user env",
             KyraCredentialSource.MachineEnvironment => "Configured via machine env",
@@ -40,7 +42,7 @@ public readonly struct KyraCredentialResolution
 }
 
 /// <summary>
-/// Resolves provider secrets from session (highest priority) then process, user, and machine environment blocks.
+/// Resolves provider secrets from session (highest priority), protected local storage, then process, user, and machine environment blocks.
 /// Never logs or persists raw values.
 /// </summary>
 public static class ProviderEnvironmentResolver
@@ -48,9 +50,15 @@ public static class ProviderEnvironmentResolver
     public static KyraCredentialResolution ResolveApiCredential(string providerId, string? apiKeyEnvironmentVariable)
     {
         var session = KyraApiKeyStore.GetSessionKey(providerId);
-        if (!string.IsNullOrWhiteSpace(session))
+        if (!KyraProviderConfigResolver.IsMissingOrPlaceholder(session))
         {
             return new KyraCredentialResolution(session, KyraCredentialSource.Session);
+        }
+
+        var encrypted = KyraProviderCredentialStore.Default.TryGetSecret(providerId);
+        if (!KyraProviderConfigResolver.IsMissingOrPlaceholder(encrypted))
+        {
+            return new KyraCredentialResolution(encrypted, KyraCredentialSource.EncryptedLocal);
         }
 
         if (string.IsNullOrWhiteSpace(apiKeyEnvironmentVariable))
@@ -68,20 +76,20 @@ public static class ProviderEnvironmentResolver
             return KyraCredentialResolution.Empty;
         }
 
-        var process = Environment.GetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.Process);
-        if (!string.IsNullOrWhiteSpace(process))
+        var process = SafeGetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.Process);
+        if (!KyraProviderConfigResolver.IsMissingOrPlaceholder(process))
         {
             return new KyraCredentialResolution(process, KyraCredentialSource.ProcessEnvironment);
         }
 
-        var user = Environment.GetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.User);
-        if (!string.IsNullOrWhiteSpace(user))
+        var user = SafeGetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.User);
+        if (!KyraProviderConfigResolver.IsMissingOrPlaceholder(user))
         {
             return new KyraCredentialResolution(user, KyraCredentialSource.UserEnvironment);
         }
 
-        var machine = Environment.GetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.Machine);
-        if (!string.IsNullOrWhiteSpace(machine))
+        var machine = SafeGetEnvironmentVariable(environmentVariableName, EnvironmentVariableTarget.Machine);
+        if (!KyraProviderConfigResolver.IsMissingOrPlaceholder(machine))
         {
             return new KyraCredentialResolution(machine, KyraCredentialSource.MachineEnvironment);
         }
@@ -91,4 +99,16 @@ public static class ProviderEnvironmentResolver
 
     public static KyraCredentialResolution ResolveCloudflareAccountId()
         => ResolveFromEnvironmentVariable(CopilotProviderEnvironmentVariableNames.CloudflareAccountId);
+
+    private static string? SafeGetEnvironmentVariable(string name, EnvironmentVariableTarget target)
+    {
+        try
+        {
+            return Environment.GetEnvironmentVariable(name, target);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
 }

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>ForgerEMS.Kyra.SdkDogfood</RootNamespace>
+    <AssemblyName>ForgerEMS.Kyra.SdkDogfood</AssemblyName>
+    <Description>Hidden headless Kyra.Sdk dogfood tool for ForgerEMS (not linked into shipping Kyra tab).</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ForgerEMS.Kyra.HostAdapter\ForgerEMS.Kyra.HostAdapter.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,185 @@
+name: kyra-sdk-package-mode
+
+on:
+  repository_dispatch:
+    types:
+      - kyra-sdk-feed-published
+
+  workflow_dispatch:
+    inputs:
+      kyra_sdk_feed_path:
+        description: 'Local path to feed/ or sdk-current/ (skips artifact download when set)'
+        required: false
+        type: string
+      kyra_sdk_version:
+        description: 'SDK feed version for artifact name (default 1.1.4)'
+        required: false
+        type: string
+        default: '1.1.4'
+      kyra_repository:
+        description: 'Kyra repo owner/name (e.g. MyOrg/Kyra_Assistant)'
+        required: false
+        type: string
+      kyra_run_id:
+        description: 'Kyra kyra-sdk-feed workflow run ID (from Actions UI)'
+        required: false
+        type: string
+      skip_artifact_download:
+        description: 'Skip cross-repo download (use kyra_sdk_feed_path only)'
+        type: boolean
+        default: false
+
+  workflow_call:
+    inputs:
+      kyra_sdk_feed_path:
+        description: 'Path to Kyra SDK feed directory'
+        required: false
+        type: string
+      kyra_sdk_version:
+        description: 'Artifact name version segment'
+        required: false
+        type: string
+        default: '1.1.4'
+      kyra_repository:
+        description: 'Kyra repository owner/name'
+        required: false
+        type: string
+      kyra_run_id:
+        description: 'Kyra workflow run ID'
+        required: false
+        type: string
+      skip_artifact_download:
+        description: 'Skip cross-repo download'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate-package-mode:
+    name: ForgerEMS package-mode (Kyra.Sdk feed)
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout ForgerEMS
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Resolve handoff metadata
+        id: meta
+        run: |
+          $payloadJson = '${{ toJson(github.event.client_payload) }}'
+
+          $version = '${{ inputs.kyra_sdk_version }}'
+          $repo = '${{ inputs.kyra_repository }}'
+          $runId = '${{ inputs.kyra_run_id }}'
+          $explicitPath = '${{ inputs.kyra_sdk_feed_path }}'
+          $skipDownload = '${{ inputs.skip_artifact_download }}'
+
+          if ($payloadJson -and $payloadJson -ne '{}' -and $payloadJson -ne 'null') {
+            $payload = $payloadJson | ConvertFrom-Json
+
+            if ($payload.version) {
+              $version = [string]$payload.version
+            }
+
+            if ($payload.kyra_repository) {
+              $repo = [string]$payload.kyra_repository
+            }
+
+            if ($payload.kyra_run_id) {
+              $runId = [string]$payload.kyra_run_id
+            }
+
+            if ($payload.artifact_name) {
+              "artifact_name=$($payload.artifact_name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            }
+          }
+
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            $version = '1.1.4'
+          }
+
+          if ([string]::IsNullOrWhiteSpace($repo)) {
+            $repo = '${{ vars.KYRA_REPOSITORY }}'
+          }
+
+          if ([string]::IsNullOrWhiteSpace($skipDownload)) {
+            $skipDownload = 'false'
+          }
+
+          if (-not (Test-Path Env:GITHUB_OUTPUT -PathType Leaf)) {
+            throw 'GITHUB_OUTPUT not set.'
+          }
+
+          if (-not (Select-String -Path $env:GITHUB_OUTPUT -Pattern '^artifact_name=' -Quiet)) {
+            "artifact_name=kyra-sdk-feed-$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          }
+
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "kyra_repository=$repo" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "kyra_run_id=$runId" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "explicit_path=$explicitPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "skip_download=$skipDownload" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Download Kyra SDK feed artifact (cross-repo)
+        if: ${{ steps.meta.outputs.skip_download != 'true' && steps.meta.outputs.explicit_path == '' && steps.meta.outputs.kyra_repository != '' && steps.meta.outputs.kyra_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.artifact_name }}
+          repository: ${{ steps.meta.outputs.kyra_repository }}
+          run-id: ${{ steps.meta.outputs.kyra_run_id }}
+          github-token: ${{ secrets.KYRA_SDK_ARTIFACT_TOKEN }}
+          path: .ci/kyra-sdk
+        continue-on-error: true
+
+      - name: Resolve feed path for validation
+        id: feed
+        run: |
+          $explicit = '${{ steps.meta.outputs.explicit_path }}'
+
+          if (-not [string]::IsNullOrWhiteSpace($explicit)) {
+            "path=$explicit" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            Write-Host "Using explicit feed path: $explicit"
+            exit 0
+          }
+
+          $candidates = @(
+            (Join-Path $env:GITHUB_WORKSPACE '.ci/kyra-sdk/feed'),
+            (Join-Path $env:GITHUB_WORKSPACE '.ci/kyra-sdk')
+          )
+
+          foreach ($candidate in $candidates) {
+            if (Test-Path $candidate) {
+              "path=$candidate" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              Write-Host "Using downloaded artifact path: $candidate"
+              exit 0
+            }
+          }
+
+          $message = @(
+            'Kyra SDK feed not available. Provide one of:'
+            '  - repository_dispatch from Kyra kyra-sdk-feed (configure FORGEREMS_REPO + FORGEREMS_DISPATCH_TOKEN on Kyra, KYRA_SDK_ARTIFACT_TOKEN on ForgerEMS)'
+            '  - workflow_dispatch kyra_sdk_feed_path'
+            '  - workflow_dispatch kyra_repository + kyra_run_id + kyra_sdk_version'
+            '  - Local dev sibling feed after Kyra-Sdk-Release.ps1'
+          ) -join "`n"
+
+          Write-Error $message
+
+      - name: Validate package-mode restore/build/test
+        env:
+          KYRA_SDK_FEED_PATH: ${{ steps.feed.outputs.path }}
+        run: |
+          .\tools\Validate-KyraSdkPackageFeed.ps1 -Configuration Release -KyraSdkFeedPath '${{ steps.feed.outputs.path }}'

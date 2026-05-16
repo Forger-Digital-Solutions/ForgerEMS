@@ -18,9 +18,10 @@ public partial class MainWindow : Window
     private bool _initialized;
     private bool _logScrollPending;
     private bool _backgroundFlowBoost;
-    private bool _animatedBackgroundEnabled = true;
+    private bool _animatedBackgroundEnabled;
     private bool _suppressBackgroundSettingsEvents;
-    private BackgroundDetailLevel _backgroundDetail = BackgroundDetailLevel.Medium;
+    private VisualEffectsMode _visualEffectsMode = VisualEffectsMode.Static;
+    private BackgroundDetailLevel _backgroundDetail = BackgroundDetailLevel.Low;
     private DateTime _backgroundAnimationStartedAtUtc = DateTime.UtcNow;
     private DateTime _targetPulseUntilUtc = DateTime.MinValue;
     private Border? _activeToolNode;
@@ -82,6 +83,8 @@ public partial class MainWindow : Window
 
         Loaded += OnLoaded;
         Closed += OnClosed;
+        StateChanged += OnWindowStateChanged;
+        IsVisibleChanged += OnWindowIsVisibleChanged;
         DataContextChanged += OnDataContextChanged;
         AttachToViewModel(viewModel);
     }
@@ -144,8 +147,19 @@ public partial class MainWindow : Window
 
     private void OnClosed(object? sender, EventArgs e)
     {
+        StopBackgroundAnimationTimer();
         DetachFromViewModel(_currentViewModel);
         _currentViewModel?.Dispose();
+    }
+
+    private void OnWindowStateChanged(object? sender, EventArgs e)
+    {
+        ApplyAnimationPreference();
+    }
+
+    private void OnWindowIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        ApplyAnimationPreference();
     }
 
     private void AttachToViewModel(MainViewModel? viewModel)
@@ -207,7 +221,12 @@ public partial class MainWindow : Window
 
     private void OnCopilotMessagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        Dispatcher.BeginInvoke(() => CopilotChatScrollViewer?.ScrollToEnd(), DispatcherPriority.Background);
+        ScrollKyraChatToLatest();
+    }
+
+    private void ScrollKyraChatToLatest()
+    {
+        Dispatcher.BeginInvoke(() => KyraChatScrollViewer?.ScrollToEnd(), DispatcherPriority.Background);
     }
 
     private void NavigateMainTab(string key)
@@ -222,6 +241,7 @@ public partial class MainWindow : Window
             if (item is TabItem { Header: string h } && h.Contains(key, StringComparison.OrdinalIgnoreCase))
             {
                 MainTabControl.SelectedItem = item;
+                UpdateSidebarSelection();
                 return;
             }
         }
@@ -424,6 +444,8 @@ public partial class MainWindow : Window
             selectedIndex < MainTabControl.Items.Count)
         {
             MainTabControl.SelectedIndex = selectedIndex;
+            UpdateSidebarSelection();
+            Dispatcher.BeginInvoke(UpdateSidebarSelection, DispatcherPriority.Background);
         }
     }
 
@@ -432,6 +454,7 @@ public partial class MainWindow : Window
         if (ReferenceEquals(sender, MainTabControl))
         {
             UpdateSidebarSelection();
+            Dispatcher.BeginInvoke(UpdateSidebarSelection, DispatcherPriority.Background);
         }
     }
 
@@ -458,6 +481,7 @@ public partial class MainWindow : Window
             navButtons[index].Background = new SolidColorBrush(selected ? Color.FromRgb(255, 224, 178) : Color.FromArgb(204, 10, 16, 26));
             navButtons[index].BorderBrush = new SolidColorBrush(selected ? Color.FromRgb(255, 159, 67) : Color.FromArgb(102, 87, 199, 232));
             navButtons[index].Foreground = new SolidColorBrush(selected ? Color.FromRgb(8, 8, 12) : Color.FromRgb(232, 240, 255));
+            navButtons[index].FontWeight = selected ? FontWeights.Bold : FontWeights.SemiBold;
         }
     }
 
@@ -592,18 +616,6 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnAnimatedBackgroundSettingChanged(object sender, RoutedEventArgs e)
-    {
-        if (_suppressBackgroundSettingsEvents)
-        {
-            return;
-        }
-
-        _animatedBackgroundEnabled = AnimatedBackgroundCheckBox.IsChecked == true;
-        ApplyBackgroundSettings(updateControls: true);
-        SaveBackgroundSettings();
-    }
-
     private void OnBackgroundDetailSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_suppressBackgroundSettingsEvents)
@@ -611,12 +623,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        _backgroundDetail = BackgroundDetailComboBox.SelectedIndex switch
+        _visualEffectsMode = BackgroundDetailComboBox.SelectedIndex switch
         {
-            0 => BackgroundDetailLevel.Low,
-            2 => BackgroundDetailLevel.High,
-            _ => BackgroundDetailLevel.Medium
+            0 => VisualEffectsMode.Off,
+            2 => VisualEffectsMode.Animated,
+            _ => VisualEffectsMode.Static
         };
+        SyncVisualEffectsMode();
         ApplyBackgroundSettings(updateControls: true);
         SaveBackgroundSettings();
     }
@@ -628,12 +641,10 @@ public partial class MainWindow : Window
             _suppressBackgroundSettingsEvents = true;
             try
             {
-                AnimatedBackgroundCheckBox.IsChecked = _animatedBackgroundEnabled;
-                AnimatedBackgroundCheckBox.Content = _animatedBackgroundEnabled ? "On" : "Off";
-                BackgroundDetailComboBox.SelectedIndex = _backgroundDetail switch
+                BackgroundDetailComboBox.SelectedIndex = _visualEffectsMode switch
                 {
-                    BackgroundDetailLevel.Low => 0,
-                    BackgroundDetailLevel.High => 2,
+                    VisualEffectsMode.Off => 0,
+                    VisualEffectsMode.Animated => 2,
                     _ => 1
                 };
             }
@@ -649,13 +660,33 @@ public partial class MainWindow : Window
 
     private void ApplyAnimationPreference()
     {
+        SyncVisualEffectsMode();
         ConfigureTraceParticles();
 
-        if (_animatedBackgroundEnabled)
+        if (_visualEffectsMode == VisualEffectsMode.Off)
+        {
+            _backgroundFlowBoost = false;
+            StopBackgroundAnimationTimer();
+            HideTraceParticles();
+            CommandCenterBackgroundImage.Opacity = 0;
+            BackgroundReadabilityVeil.Opacity = 0.86;
+            CircuitBackgroundLayer.Opacity = 0;
+            TraceLightCanvas.Opacity = 0;
+            TargetUsbGlow.Opacity = 0;
+            TargetPulseRing.Opacity = 0;
+            SetPulsePathVisibility(Visibility.Collapsed);
+            ClearActiveToolFlow();
+            ResetToolNodePulse();
+            ResetPackageGroupGlow(GetPackageGroups().ToList());
+            return;
+        }
+
+        if (CanRunBackgroundAnimation())
         {
             CommandCenterBackgroundImage.Opacity = 1;
             BackgroundReadabilityVeil.Opacity = GetBackgroundVeilOpacity(animated: true);
             CircuitBackgroundLayer.Opacity = GetBackgroundLayerOpacity(animated: true);
+            TraceLightCanvas.Opacity = 1;
             TargetUsbGlow.Opacity = GetTargetGlowOpacity();
             TargetPulseRing.Opacity = GetTargetRingOpacity();
             SetPulsePathVisibility(Visibility.Collapsed);
@@ -674,6 +705,7 @@ public partial class MainWindow : Window
         CommandCenterBackgroundImage.Opacity = 1;
         BackgroundReadabilityVeil.Opacity = GetBackgroundVeilOpacity(animated: false);
         CircuitBackgroundLayer.Opacity = GetBackgroundLayerOpacity(animated: false);
+        TraceLightCanvas.Opacity = 0;
         TargetUsbGlow.Opacity = GetTargetGlowOpacity() * 0.55;
         TargetPulseRing.Opacity = 0;
         SetPulsePathVisibility(Visibility.Collapsed);
@@ -931,7 +963,7 @@ public partial class MainWindow : Window
 
     private void OnPackageGroupMouseEnter(object sender, MouseEventArgs e)
     {
-        if (!_animatedBackgroundEnabled || sender is not Panel activeGroup)
+        if (!CanRunBackgroundAnimation() || sender is not Panel activeGroup)
         {
             return;
         }
@@ -946,7 +978,7 @@ public partial class MainWindow : Window
 
     private void OnPackageGroupMouseLeave(object sender, MouseEventArgs e)
     {
-        if (!_animatedBackgroundEnabled)
+        if (!CanRunBackgroundAnimation())
         {
             return;
         }
@@ -959,6 +991,7 @@ public partial class MainWindow : Window
         var settingsPath = GetBackgroundSettingsPath();
         if (!File.Exists(settingsPath))
         {
+            SyncVisualEffectsMode();
             return;
         }
 
@@ -972,10 +1005,15 @@ public partial class MainWindow : Window
                     continue;
                 }
 
-                if (parts[0].Equals("AnimatedBackground", StringComparison.OrdinalIgnoreCase) &&
+                if (parts[0].Equals("VisualEffectsMode", StringComparison.OrdinalIgnoreCase) &&
+                    Enum.TryParse<VisualEffectsMode>(parts[1], ignoreCase: true, out var visualEffectsMode))
+                {
+                    _visualEffectsMode = visualEffectsMode;
+                }
+                else if (parts[0].Equals("AnimatedBackground", StringComparison.OrdinalIgnoreCase) &&
                     bool.TryParse(parts[1], out var animatedBackground))
                 {
-                    _animatedBackgroundEnabled = animatedBackground;
+                    _visualEffectsMode = animatedBackground ? VisualEffectsMode.Animated : VisualEffectsMode.Static;
                 }
                 else if (parts[0].Equals("BackgroundDetail", StringComparison.OrdinalIgnoreCase) &&
                          Enum.TryParse<BackgroundDetailLevel>(parts[1], ignoreCase: true, out var backgroundDetail))
@@ -983,11 +1021,19 @@ public partial class MainWindow : Window
                     _backgroundDetail = backgroundDetail;
                 }
             }
+
+            if (_visualEffectsMode == VisualEffectsMode.Static)
+            {
+                _backgroundDetail = BackgroundDetailLevel.Low;
+            }
+
+            SyncVisualEffectsMode();
         }
         catch
         {
-            _animatedBackgroundEnabled = true;
-            _backgroundDetail = BackgroundDetailLevel.Medium;
+            _visualEffectsMode = VisualEffectsMode.Static;
+            _backgroundDetail = BackgroundDetailLevel.Low;
+            SyncVisualEffectsMode();
         }
     }
 
@@ -1005,6 +1051,7 @@ public partial class MainWindow : Window
             File.WriteAllLines(
                 settingsPath,
                 [
+                    $"VisualEffectsMode={_visualEffectsMode}",
                     $"AnimatedBackground={_animatedBackgroundEnabled}",
                     $"BackgroundDetail={_backgroundDetail}"
                 ]);
@@ -1049,6 +1096,32 @@ public partial class MainWindow : Window
             BackgroundDetailLevel.Medium => 0.68,
             _ => 0.58
         };
+    }
+
+    private bool CanRunBackgroundAnimation() =>
+        _animatedBackgroundEnabled &&
+        _visualEffectsMode == VisualEffectsMode.Animated &&
+        WindowState != WindowState.Minimized &&
+        IsVisible;
+
+    private void SyncVisualEffectsMode()
+    {
+        switch (_visualEffectsMode)
+        {
+            case VisualEffectsMode.Off:
+                _animatedBackgroundEnabled = false;
+                _backgroundDetail = BackgroundDetailLevel.Low;
+                break;
+            case VisualEffectsMode.Animated:
+                _animatedBackgroundEnabled = true;
+                _backgroundDetail = BackgroundDetailLevel.Medium;
+                break;
+            default:
+                _visualEffectsMode = VisualEffectsMode.Static;
+                _animatedBackgroundEnabled = false;
+                _backgroundDetail = BackgroundDetailLevel.Low;
+                break;
+        }
     }
 
     private void ClearActiveToolFlow()
@@ -1232,8 +1305,9 @@ public partial class MainWindow : Window
 
     private void EnsureBackgroundAnimationTimer()
     {
-        if (!_animatedBackgroundEnabled)
+        if (!CanRunBackgroundAnimation())
         {
+            StopBackgroundAnimationTimer();
             return;
         }
 
@@ -1264,7 +1338,7 @@ public partial class MainWindow : Window
 
     private void OnBackgroundAnimationTimerTick(object? sender, EventArgs e)
     {
-        if (!_animatedBackgroundEnabled)
+        if (!CanRunBackgroundAnimation())
         {
             StopBackgroundAnimationTimer();
             return;
@@ -1388,6 +1462,13 @@ public partial class MainWindow : Window
         Low,
         Medium,
         High
+    }
+
+    private enum VisualEffectsMode
+    {
+        Off,
+        Static,
+        Animated
     }
 
     private sealed record PackageGroupVisual(

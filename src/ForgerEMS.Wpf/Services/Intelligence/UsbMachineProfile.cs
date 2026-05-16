@@ -35,6 +35,10 @@ public sealed class UsbMachineProfile
     public Dictionary<string, UsbIntelligenceBenchmarkResult> PendingBenchmarkByDriveLetter { get; set; } =
         new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Latest benchmark samples that were measured before the current physical port label could be verified.</summary>
+    public Dictionary<string, UsbIntelligenceBenchmarkResult> UnverifiedBenchmarkByDriveLetter { get; set; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
     public Dictionary<string, UsbKnownDeviceRecord> KnownDevicesByStableKey { get; set; } = new(StringComparer.Ordinal);
 
     public string? UserLabelsPlaceholder { get; set; }

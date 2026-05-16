@@ -89,6 +89,94 @@ public sealed class KyraLiveToolsTests
     }
 
     [Fact]
+    public async Task WeatherPrompt_WithDefaultLocation_RoutesToLiveWeatherTool()
+    {
+        var handler = new RoutingHandler(req =>
+        {
+            var u = req.RequestUri?.AbsoluteUri ?? "";
+            if (u.Contains("geocoding-api.open-meteo.com", StringComparison.OrdinalIgnoreCase))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(JsonSerializer.Serialize(new
+                    {
+                        results = new[] { new { name = "Bellmore", latitude = 40.0, longitude = -73.0, country = "US" } }
+                    }), Encoding.UTF8, "application/json")
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(new
+                {
+                    current = new
+                    {
+                        temperature_2m = 72.0,
+                        apparent_temperature = 70.0,
+                        precipitation_probability = 10.0,
+                        weather_code = 0,
+                        wind_speed_10m = 5.0
+                    }
+                }), Encoding.UTF8, "application/json")
+            };
+        });
+        var settings = BaseSettings();
+        settings.LiveTools!.DefaultWeatherLocation = "Bellmore NY";
+
+        Assert.True(KyraInlineLivePromptRouter.TryBuildWeatherParse("what’s the weather today", out var parse));
+        var route = await KyraLiveSlashCoordinator.ExecuteLiveAsync(
+            parse,
+            settings,
+            new KyraToolHostFacts { DefaultWeatherLocation = "Bellmore NY" },
+            CancellationToken.None,
+            handler);
+        var response = route.ToCopilotResponse();
+
+        Assert.NotNull(response);
+        Assert.True(response!.UsedOnlineData);
+        Assert.Contains("Open-Meteo", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("not capable", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("I don't have", response.Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task WeatherPrompt_WithoutLocationOrDefault_AsksForLocation()
+    {
+        Assert.True(KyraInlineLivePromptRouter.TryBuildWeatherParse("what’s the weather today", out var parse));
+        var route = await KyraLiveSlashCoordinator.ExecuteLiveAsync(
+            parse,
+            BaseSettings(),
+            new KyraToolHostFacts(),
+            CancellationToken.None,
+            new StubHandler());
+        var response = route.ToCopilotResponse();
+
+        Assert.NotNull(response);
+        Assert.False(response!.UsedOnlineData);
+        Assert.Contains("needs a place", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("not capable", response.Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task WeatherProviderFailure_UsesHonestUnavailableMessage()
+    {
+        var settings = BaseSettings();
+        settings.LiveTools!.DefaultWeatherLocation = "Bellmore NY";
+        var route = await KyraLiveSlashCoordinator.ExecuteLiveAsync(
+            KyraSlashCommandParser.Parse("/weather"),
+            settings,
+            new KyraToolHostFacts { DefaultWeatherLocation = "Bellmore NY" },
+            CancellationToken.None,
+            new StubHandler());
+        var response = route.ToCopilotResponse();
+
+        Assert.NotNull(response);
+        Assert.False(response!.UsedOnlineData);
+        Assert.Contains("Live weather is unavailable right now", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("not capable", response.Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Weather_CacheHit_SecondCall_NoSecondHttp_WhenSameInput()
     {
         var calls = 0;
@@ -220,6 +308,41 @@ public sealed class KyraLiveToolsTests
         Assert.True(r.Success);
         Assert.DoesNotContain("finnhub_super_secret", r.UserFacingSummary, StringComparison.Ordinal);
         Assert.DoesNotContain("finnhub_super_secret", r.ProviderAugmentation, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Stock_AlphaVantage_Response_DoesNotLeakTokenInSummary()
+    {
+        var handler = new RoutingHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(new
+            {
+                Global_Quote = new Dictionary<string, string>()
+            }).Replace("Global_Quote", "Global Quote", StringComparison.Ordinal)
+              .Replace("{}", "{\"05. price\":\"123.45\",\"10. change percent\":\"2.50%\",\"07. latest trading day\":\"2026-05-06\"}", StringComparison.Ordinal), Encoding.UTF8, "application/json")
+        });
+        var s = BaseSettings();
+        s.LiveTools!.StocksProvider = "alphavantage";
+        s.LiveTools.StocksApiKey = "alpha_super_secret_abc";
+        var tool = new KyraToolRegistry(handler).Tools.First(t => t.Name == "Stocks");
+        var r = await tool.ExecuteAsync(MkReq(KyraIntent.StockPrice, "MSFT", s, "MSFT"), default);
+        Assert.True(r.Success);
+        Assert.Contains("Alpha Vantage", r.UserFacingSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("alpha_super_secret", r.UserFacingSummary, StringComparison.Ordinal);
+        Assert.DoesNotContain("alpha_super_secret", r.ProviderAugmentation, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Crypto_HttpFailure_UsesHelpfulUnavailableWording()
+    {
+        var handler = new RoutingHandler(_ => new HttpResponseMessage(HttpStatusCode.TooManyRequests));
+        var tool = new KyraToolRegistry(handler).Tools.First(t => t.Name == "Crypto");
+        var r = await tool.ExecuteAsync(MkReq(KyraIntent.CryptoPrice, "BTC", BaseSettings(), "BTC"), default);
+
+        Assert.False(r.Success);
+        Assert.Contains("couldn’t load live BTC pricing", r.UserFacingSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("rate-limited", r.UserFacingSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("provider settings", r.UserFacingSummary, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

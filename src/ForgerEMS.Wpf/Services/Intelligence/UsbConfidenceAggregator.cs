@@ -23,8 +23,14 @@ public static class UsbConfidenceAggregator
 
         if (benchmark?.Succeeded == true)
         {
-            score += Math.Clamp(benchmark.ConfidenceScore / 3, 12, 28);
-            parts.Add("sequential file benchmark");
+            var readUnverified = benchmark.ReadLikelyCached || benchmark.ReadIsEstimate;
+            var benchmarkContribution = readUnverified
+                ? Math.Clamp(benchmark.ConfidenceScore / 6, 4, 10)
+                : Math.Clamp(benchmark.ConfidenceScore / 3, 12, 28);
+            score += benchmarkContribution;
+            parts.Add(readUnverified
+                ? "sequential write benchmark (read cache suspected)"
+                : "sequential file benchmark");
         }
 
         if (diff is not null &&

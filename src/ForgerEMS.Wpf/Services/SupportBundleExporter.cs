@@ -1,3 +1,4 @@
+#pragma warning disable CA1305 // Locale-sensitive calls; text is diagnostic/UI output
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -63,6 +64,9 @@ public static class SupportBundleExporter
             var si = Path.Combine(runtime.RuntimeRoot, "reports", "system-intelligence-latest.json");
             AddRedactedFileIfExists(zip, "reports/system-intelligence-latest.json", si);
 
+            var networkPulse = Path.Combine(runtime.RuntimeRoot, "reports", "network-pulse-latest.json");
+            AddRedactedFileIfExists(zip, "reports/network-pulse-latest.json", networkPulse);
+
             var bench = Path.Combine(runtime.RuntimeRoot, "cache", "usb-benchmarks.json");
             AddRedactedFileIfExists(zip, "cache/usb-benchmarks.json", bench);
 
@@ -96,6 +100,7 @@ public static class SupportBundleExporter
             - Redacted runtime session log and recent runtime logs
             - Redacted shared logs under %LOCALAPPDATA%\ForgerEMS\logs (startup, diagnostics, intelligence)
             - Latest System Intelligence JSON (paths redacted)
+            - Latest Network Pulse JSON when present (redacted; lightweight probe summary only)
             - USB benchmark cache JSON (redacted)
             - Managed download result JSON from the selected USB root (if present)
             - Update-check diagnostics and configuration health summaries from the app
@@ -103,11 +108,12 @@ public static class SupportBundleExporter
             Redaction:
             - Private paths may appear as [REDACTED_PRIVATE_PATH] where the redactor applies.
             - API keys and tokens are not exported from environment variables.
+            - Review before sharing. Reports may include hardware details, network adapter data, USB device details, provider status, and diagnostic notes.
 
             Where to send:
             ForgerDigitalSolutions@outlook.com
 
-            Do not email passwords, product keys, private documents, or full disk images.
+            Do not email passwords, product keys, API keys, tokens, private documents, sensitive personal files, or full disk images.
             """);
     }
 
