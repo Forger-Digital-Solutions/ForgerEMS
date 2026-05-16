@@ -28,6 +28,7 @@
     <ForgerNuGetPackageRoot Condition="'$(ForgerNuGetPackageRoot)' == '' and '$(NUGET_PACKAGES)' != ''">$(NUGET_PACKAGES)\</ForgerNuGetPackageRoot>
     <ForgerNuGetPackageRoot Condition="'$(ForgerNuGetPackageRoot)' == ''">$(UserProfile)\.nuget\packages\</ForgerNuGetPackageRoot>
     <ForgerLibreHardwareMonitorDll>$(ForgerNuGetPackageRoot)librehardwaremonitorlib\0.9.6\runtimes\win-x64\lib\net8.0\LibreHardwareMonitorLib.dll</ForgerLibreHardwareMonitorDll>
+    <IncludeKyraSdkDogfoodTool Condition="'$(IncludeKyraSdkDogfoodTool)' == ''">false</IncludeKyraSdkDogfoodTool>
   </PropertyGroup>
 
   <ItemGroup>
@@ -76,12 +77,12 @@
     <Copy SourceFiles="$(ForgerLibreHardwareMonitorDll)" DestinationFiles="$(PublishDir)providers\sensors\LibreHardwareMonitorLib.dll" SkipUnchangedFiles="true" />
   </Target>
 
-  <Target Name="CopyKyraSdkDogfoodTool" AfterTargets="Build">
+  <Target Name="CopyKyraSdkDogfoodTool" AfterTargets="Build" Condition="'$(IncludeKyraSdkDogfoodTool)' == 'true'">
     <PropertyGroup>
       <_KyraSdkDogfoodOut>$(MSBuildThisFileDirectory)..\ForgerEMS.Kyra.SdkDogfood\bin\$(Configuration)\net8.0\</_KyraSdkDogfoodOut>
       <_KyraSdkDogfoodDest>$(OutputPath)tools\kyra-sdk-dogfood\</_KyraSdkDogfoodDest>
     </PropertyGroup>
-    <MSBuild Projects="$(MSBuildThisFileDirectory)..\ForgerEMS.Kyra.SdkDogfood\ForgerEMS.Kyra.SdkDogfood.csproj" Properties="Configuration=$(Configuration)" Targets="Build" />
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\ForgerEMS.Kyra.SdkDogfood\ForgerEMS.Kyra.SdkDogfood.csproj" Properties="Configuration=$(Configuration);UseKyraSdkProjectReference=$(UseKyraSdkProjectReference)" Targets="Build" />
     <ItemGroup>
       <_KyraSdkDogfoodFiles Include="$(_KyraSdkDogfoodOut)**\*.*" />
     </ItemGroup>
@@ -89,12 +90,12 @@
     <Copy SourceFiles="@(_KyraSdkDogfoodFiles)" DestinationFolder="$(_KyraSdkDogfoodDest)%(RecursiveDir)" SkipUnchangedFiles="true" />
   </Target>
 
-  <Target Name="CopyKyraSdkDogfoodToolToPublish" AfterTargets="Publish">
+  <Target Name="CopyKyraSdkDogfoodToolToPublish" AfterTargets="Publish" Condition="'$(IncludeKyraSdkDogfoodTool)' == 'true'">
     <PropertyGroup>
       <_KyraSdkDogfoodOut>$(MSBuildThisFileDirectory)..\ForgerEMS.Kyra.SdkDogfood\bin\$(Configuration)\net8.0\</_KyraSdkDogfoodOut>
       <_KyraSdkDogfoodDest>$(PublishDir)tools\kyra-sdk-dogfood\</_KyraSdkDogfoodDest>
     </PropertyGroup>
-    <MSBuild Projects="$(MSBuildThisFileDirectory)..\ForgerEMS.Kyra.SdkDogfood\ForgerEMS.Kyra.SdkDogfood.csproj" Properties="Configuration=$(Configuration)" Targets="Build" />
+    <MSBuild Projects="$(MSBuildThisFileDirectory)..\ForgerEMS.Kyra.SdkDogfood\ForgerEMS.Kyra.SdkDogfood.csproj" Properties="Configuration=$(Configuration);UseKyraSdkProjectReference=$(UseKyraSdkProjectReference)" Targets="Build" />
     <ItemGroup>
       <_KyraSdkDogfoodPublishFiles Include="$(_KyraSdkDogfoodOut)**\*.*" />
     </ItemGroup>

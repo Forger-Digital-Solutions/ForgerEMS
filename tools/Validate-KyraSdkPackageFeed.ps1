@@ -16,6 +16,7 @@
   3. Dev sibling: ../../Kyra_Assistant/repo/release/sdk-current/feed (if present)
 
   Writes nuget.config.ci (gitignored) for restore; does not modify tracked nuget.config.
+  Restores/builds ForgerEMS.Kyra.Sdk.sln (not default ForgerEMS.sln).
 #>
 param(
     [string] $KyraSdkFeedPath = '',
@@ -27,8 +28,9 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$SolutionPath = Join-Path $RepoRoot 'ForgerEMS.sln'
+$SolutionPath = Join-Path $RepoRoot 'ForgerEMS.Kyra.Sdk.sln'
 $NuGetConfigCi = Join-Path $RepoRoot 'nuget.config.ci'
+$KyraSdkMsbuildProperties = 'UseKyraSdkProjectReference=false;IncludeKyraSdkDogfoodTool=true'
 
 function Resolve-KyraSdkFeedDirectory {
     param([string] $Candidate)
@@ -119,9 +121,9 @@ Write-NuGetConfigCi -FeedDirectory $feedDirectory
 $restoreArgs = @(
     'restore', $SolutionPath,
     '--configfile', $NuGetConfigCi,
-    '-p:UseKyraSdkProjectReference=false'
+    "-p:$KyraSdkMsbuildProperties"
 )
-Write-Host "==> dotnet restore ForgerEMS.sln (package mode)"
+Write-Host "==> dotnet restore ForgerEMS.Kyra.Sdk.sln (package mode)"
 & dotnet @restoreArgs
 if ($LASTEXITCODE -ne 0) { throw 'Package-mode restore failed.' }
 
@@ -130,9 +132,9 @@ $buildArgs = @(
     '-c', $Configuration,
     '--no-restore',
     '--configfile', $NuGetConfigCi,
-    '-p:UseKyraSdkProjectReference=false'
+    "-p:$KyraSdkMsbuildProperties"
 )
-Write-Host "==> dotnet build ForgerEMS.sln (package mode)"
+Write-Host "==> dotnet build ForgerEMS.Kyra.Sdk.sln (package mode)"
 & dotnet @buildArgs
 if ($LASTEXITCODE -ne 0) { throw 'Package-mode build failed.' }
 
