@@ -9,9 +9,30 @@ public class KyraSdkPackageFeedCiTests
         Assert.Contains("-KyraSdkFeedPath", script, StringComparison.Ordinal);
         Assert.Contains("KYRA_SDK_FEED_PATH", script, StringComparison.Ordinal);
         Assert.Contains("nuget.config.ci", script, StringComparison.Ordinal);
+        Assert.Contains("ForgerEMS.Kyra.Sdk.sln", script, StringComparison.Ordinal);
         Assert.Contains("UseKyraSdkProjectReference=false", script, StringComparison.Ordinal);
+        Assert.Contains("IncludeKyraSdkDogfoodTool=true", script, StringComparison.Ordinal);
         Assert.Contains("ForgerEMS.Kyra.HostAdapter.Tests", script, StringComparison.Ordinal);
         Assert.Contains("ForgerEMS.Wpf.Tests", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Default_solution_excludes_kyra_sdk_projects()
+    {
+        var sln = File.ReadAllText(Path.Combine(FindRepoRoot(), "ForgerEMS.sln"));
+        Assert.DoesNotContain("ForgerEMS.Kyra.HostAdapter", sln, StringComparison.Ordinal);
+        Assert.DoesNotContain("ForgerEMS.Kyra.SdkDogfood", sln, StringComparison.Ordinal);
+        Assert.DoesNotContain("ForgerEMS.Kyra.HostAdapter.Tests", sln, StringComparison.Ordinal);
+        Assert.Contains("ForgerEMS.Wpf", sln, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Kyra_sdk_solution_includes_package_mode_projects()
+    {
+        var sln = File.ReadAllText(Path.Combine(FindRepoRoot(), "ForgerEMS.Kyra.Sdk.sln"));
+        Assert.Contains("ForgerEMS.Kyra.HostAdapter", sln, StringComparison.Ordinal);
+        Assert.Contains("ForgerEMS.Kyra.SdkDogfood", sln, StringComparison.Ordinal);
+        Assert.Contains("ForgerEMS.Kyra.HostAdapter.Tests", sln, StringComparison.Ordinal);
     }
 
     [Fact]

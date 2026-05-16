@@ -25,6 +25,10 @@ public class KyraSdkDogfoodPathTests
         Assert.DoesNotContain(projectRefs, r => r.Contains("Kyra.Local.Core", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(projectRefs, r => r.Contains("Kyra.Combined.Core", StringComparison.OrdinalIgnoreCase));
         Assert.Contains("CopyKyraSdkDogfoodTool", text, StringComparison.Ordinal);
+        Assert.Contains("IncludeKyraSdkDogfoodTool", text, StringComparison.Ordinal);
+        Assert.Contains("IncludeKyraSdkDogfoodTool)' == 'true'", text, StringComparison.Ordinal);
+        Assert.Contains("<IncludeKyraSdkDogfoodTool Condition=", text, StringComparison.Ordinal);
+        Assert.Contains(">false</IncludeKyraSdkDogfoodTool>", text, StringComparison.Ordinal);
         Assert.Contains("tools\\kyra-sdk-dogfood", text, StringComparison.OrdinalIgnoreCase);
     }
 
