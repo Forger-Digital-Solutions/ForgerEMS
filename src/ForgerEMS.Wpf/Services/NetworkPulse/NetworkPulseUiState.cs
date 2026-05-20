@@ -64,6 +64,7 @@ public sealed record NetworkPulseUiState(
             NetworkPulseStatus.Good => "Stable",
             NetworkPulseStatus.Slow => "Slow",
             NetworkPulseStatus.Unstable => "Unstable",
+            NetworkPulseStatus.Limited => "Limited",
             NetworkPulseStatus.Offline => "Offline",
             NetworkPulseStatus.Unknown => "Unknown",
             NetworkPulseStatus.Testing => "Testing…",

@@ -3,7 +3,7 @@ using System.Globalization;
 
 namespace VentoyToolkitSetup.Wpf.Services.NetworkPulse;
 
-/// <summary>User-facing compact Internet widget strings (Line1 includes freshness; Line2 speeds; Line3 unused).</summary>
+/// <summary>User-facing compact Internet widget strings: status, metrics, then freshness/detail.</summary>
 public static class NetworkPulseInternetWidgetText
 {
     public const string UploadNotTested = "not tested";
@@ -51,35 +51,34 @@ public static class NetworkPulseInternetWidgetText
         var upMeasured = uploadProbesEnabled &&
                          s.UploadKind == NetworkPulseMeasurementKind.Measured &&
                          NetworkPulseSpeedSanity.IsPlausibleMeasuredMbps(s.UploadMbps);
-        var upLine = upMeasured ? $"↑ {FormatMbps(s.UploadMbps)} Mbps" : $"↑ {UploadNotTested}";
 
         var speedFailedThisCycle = IsSpeedFailure(s);
         var surface = ClassifySurface(s, pingShow, downDisplay, consecutiveHardFailures, freshnessStaleAfter, utcNow, last, speedFailedThisCycle);
 
-        var pingPart = pingShow is > 0
+        var pingMetric = pingShow is > 0
             ? (pingCarried && pingAge > TimeSpan.FromSeconds(5)
-                ? $"{pingShow.Value.ToString("0", CultureInfo.InvariantCulture)} ms (last good {FormatAge(pingAge)} ago)"
-                : $"{pingShow.Value.ToString("0", CultureInfo.InvariantCulture)} ms")
-            : "ping —";
+                ? $"Ping: {pingShow.Value.ToString("0", CultureInfo.InvariantCulture)} ms (last good {FormatAge(pingAge)} ago)"
+                : $"Ping: {pingShow.Value.ToString("0", CultureInfo.InvariantCulture)} ms")
+            : "Latency unavailable";
 
         var checkedPart = s.LastCheckedUtc == DateTimeOffset.MinValue
-            ? "ping starting…"
-            : $"ping checked {FormatAge(utcNow - s.LastCheckedUtc)} ago";
-        if (speedFailedThisCycle && surface == "Limited")
+            ? "Starting network checks…"
+            : $"Checked {FormatAge(utcNow - s.LastCheckedUtc)} ago";
+        if (s.Status == NetworkPulseStatus.Testing)
         {
-            checkedPart = "speed check failed";
+            checkedPart = "Measuring now";
         }
 
-        var line1 = $"Internet: {surface} · {pingPart} · {checkedPart}";
+        var line1 = $"Internet: {surface}";
 
         string downText;
         if (downDisplay is null or <= 0)
         {
-            downText = speedFailedThisCycle ? "↓ speed check failed" : "↓ not tested";
+            downText = speedFailedThisCycle ? "Down: unavailable this cycle" : "Down: not measured";
         }
         else if (!downMeasured)
         {
-            var ageNote = "last tested earlier";
+            var ageNote = "last measured earlier";
             if (last.DownloadUtc != default &&
                 NetworkPulseSpeedSanity.IsPlausibleMeasuredMbps(last.DownloadMbps) &&
                 Math.Abs(last.DownloadMbps!.Value - downDisplay!.Value) < 0.001)
@@ -87,25 +86,27 @@ public static class NetworkPulseInternetWidgetText
                 var age = utcNow - last.DownloadUtc;
                 if (age > freshnessStaleAfter)
                 {
-                    ageNote = $"speed stale; last good {FormatAge(age)} ago";
+                    ageNote = $"stale; last good {FormatAge(age)} ago";
                 }
                 else
                 {
                     ageNote = speedFailedThisCycle
                         ? $"last good {FormatAge(age)} ago"
-                        : $"last tested {FormatAge(age)} ago";
+                        : $"last measured {FormatAge(age)} ago";
                 }
             }
 
-            downText = $"↓ {FormatMbps(downDisplay)} Mbps {ageNote}";
+            downText = $"Down: {FormatMbps(downDisplay)} Mbps ({ageNote})";
         }
         else
         {
-            downText = $"↓ {FormatMbps(downDisplay)} Mbps";
+            downText = $"Down: {FormatMbps(downDisplay)} Mbps";
         }
 
-        var line2 = $"{downText} · {upLine}";
-        return (line1, line2, string.Empty);
+        var upText = upMeasured ? $"Up: {FormatMbps(s.UploadMbps)} Mbps" : $"Up: {UploadNotTested}";
+        var line2 = $"{downText} · {upText} · {pingMetric}";
+        var detail = BuildFreshnessDetail(surface, checkedPart, speedFailedThisCycle, s, pingShow, downDisplay);
+        return (line1, line2, detail);
     }
 
     private static string ClassifySurface(
@@ -118,6 +119,16 @@ public static class NetworkPulseInternetWidgetText
         NetworkPulseLastKnownGood last,
         bool speedFailedThisCycle)
     {
+        if (s.Status == NetworkPulseStatus.Testing)
+        {
+            return "Measuring";
+        }
+
+        if (s.Status == NetworkPulseStatus.Limited)
+        {
+            return "Limited";
+        }
+
         if (consecutiveHardFailures >= 6 && !s.InternetReachable && s.LatencyKind != NetworkPulseMeasurementKind.Measured)
         {
             return "Offline";
@@ -146,19 +157,14 @@ public static class NetworkPulseInternetWidgetText
             return "Limited";
         }
 
-        if (speedFailedThisCycle && (s.LatencyKind == NetworkPulseMeasurementKind.Measured || pingShow is > 0))
-        {
-            return "Limited";
-        }
-
         if (s.LatencyKind != NetworkPulseMeasurementKind.Measured && pingShow is null)
         {
-            return consecutiveHardFailures >= 2 ? "Limited" : "Unknown";
+            return s.InternetReachable ? "Online" : consecutiveHardFailures >= 2 ? "Limited" : "Unknown";
         }
 
         if (s.Status is NetworkPulseStatus.Unstable or NetworkPulseStatus.Unknown)
         {
-            return pingShow is > 0 || downShow is > 0 ? "Limited" : "Unknown";
+            return s.InternetReachable || pingShow is > 0 || downShow is > 0 ? "Online" : "Unknown";
         }
 
         if (s.Status is NetworkPulseStatus.Slow or NetworkPulseStatus.Good)
@@ -172,6 +178,42 @@ public static class NetworkPulseInternetWidgetText
     private static bool IsSpeedFailure(NetworkPulseSnapshot s) =>
         s.DataSourceNotes.Contains("speed check failed", StringComparison.OrdinalIgnoreCase) ||
         s.DataSourceNotes.Contains("Download sample failed", StringComparison.OrdinalIgnoreCase);
+
+    private static string BuildFreshnessDetail(
+        string surface,
+        string checkedPart,
+        bool speedFailedThisCycle,
+        NetworkPulseSnapshot s,
+        double? pingShow,
+        double? downShow)
+    {
+        if (surface == "Measuring")
+        {
+            return "Measuring now";
+        }
+
+        if (speedFailedThisCycle && s.InternetReachable)
+        {
+            return $"{checkedPart} · Speed sample unavailable; internet probe succeeded.";
+        }
+
+        if (surface == "Online" && pingShow is null && downShow is null)
+        {
+            return $"{checkedPart} · Internet online; latency/speed not measured this cycle.";
+        }
+
+        if (surface == "Limited")
+        {
+            return $"{checkedPart} · Route exists but DNS/HTTPS/captive probes are mixed or failing.";
+        }
+
+        if (surface == "Stale")
+        {
+            return $"{checkedPart} · Last measurement is stale.";
+        }
+
+        return checkedPart;
+    }
 
     private static DateTimeOffset MaxUtc(DateTimeOffset a, DateTimeOffset b, DateTimeOffset c)
     {

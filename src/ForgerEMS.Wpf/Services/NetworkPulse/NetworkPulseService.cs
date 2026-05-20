@@ -120,11 +120,16 @@ public sealed class NetworkPulseService : IDisposable
 
         PostStatus(NetworkPulseStatus.Testing);
         var adapter = NetworkPulseEnvironmentReader.TryGetActiveAdapter();
-        var reach = await _speedProbeRunner.TryHeadReachableAsync(ct).ConfigureAwait(false);
+        var httpReach = await _speedProbeRunner.TryHttpReachableAsync(ct).ConfigureAwait(false);
+        var captiveSuspected = httpReach.Succeeded &&
+                               httpReach.ErrorCategory.Equals("UnexpectedProbeBody", StringComparison.OrdinalIgnoreCase);
+        var reach = httpReach.Succeeded && !captiveSuspected;
         var icmpN = NetworkPulseCadence.LatencySampleCount(settings.Mode);
         var latency = await NetworkLatencyMonitor.MeasureAsync(icmpN, ct).ConfigureAwait(false);
+        var dnsOk = latency.DnsLookupMs is > 0;
+        var hasUsableRoute = adapter.HasUsableRoute || httpReach.Succeeded || dnsOk || latency.AnyIcmpSuccess;
 
-        var hardFail = !reach && !latency.AnyIcmpSuccess;
+        var hardFail = !hasUsableRoute && !reach && !latency.AnyIcmpSuccess && !dnsOk;
         if (hardFail)
         {
             _consecutiveHardFailures++;
@@ -214,14 +219,16 @@ public sealed class NetworkPulseService : IDisposable
             uploadKind = NetworkPulseMeasurementKind.Unavailable;
         }
 
-        var latencyKind = latency.AnyIcmpSuccess ? NetworkPulseMeasurementKind.Measured : NetworkPulseMeasurementKind.Unavailable;
+        var fallbackHttpLatency = !latency.AnyIcmpSuccess && httpReach.ElapsedMs is > 0 ? httpReach.ElapsedMs : null;
+        var effectivePingMs = latency.IcmpMedianMs ?? fallbackHttpLatency;
+        var latencyKind = effectivePingMs is > 0 ? NetworkPulseMeasurementKind.Measured : NetworkPulseMeasurementKind.Unavailable;
         var confidence = ClassifyConfidence(latency, downloadKind == NetworkPulseMeasurementKind.Measured);
-        var rawStatus = ClassifyStatus(reach, latency, downloadMbps, latencyKind);
+        var rawStatus = ClassifyStatus(hasUsableRoute, reach, dnsOk, latency, downloadMbps, latencyKind);
         var smoothed = _stabilizer.Smooth(
             rawStatus,
             reach,
-            latency.AnyIcmpSuccess,
-            latency.IcmpMedianMs,
+            latencyKind == NetworkPulseMeasurementKind.Measured,
+            effectivePingMs,
             latency.JitterMs,
             latency.PacketLossPercent,
             downloadMbps,
@@ -233,8 +240,8 @@ public sealed class NetworkPulseService : IDisposable
 
         var reliability = NetworkPulseReliabilityScorer.Compute(
             reach,
-            latency.AnyIcmpSuccess,
-            latency.IcmpMedianMs,
+            latencyKind == NetworkPulseMeasurementKind.Measured,
+            effectivePingMs,
             latency.JitterMs,
             latency.PacketLossPercent,
             smoothed.RecentReachFailures,
@@ -242,14 +249,22 @@ public sealed class NetworkPulseService : IDisposable
         var reliabilityExplain = NetworkPulseReliabilityScorer.Explain(
             reliability,
             reach,
-            latency.AnyIcmpSuccess,
+            latencyKind == NetworkPulseMeasurementKind.Measured,
             latency.PacketLossPercent);
 
         var spark = NetworkPulseSparklineGeometryBuilder.BuildPingSparkline(smoothed.SparkPingNormalized, 120, 26);
 
         var notes =
             "Latency: ICMP to a public DNS hostname + optional default-gateway ping + DNS lookup timing (lookup may be cached). " +
-            "Reachability: HTTPS HEAD to the Windows captive-portal probe host. " +
+            (!latency.AnyIcmpSuccess && fallbackHttpLatency is > 0
+                ? "ICMP ping was unavailable; latency shown uses HTTPS probe timing. "
+                : string.Empty) +
+            "Reachability: HTTPS GET to the Windows captive-portal probe host. " +
+            (!adapter.HasUsableRoute ? "No active default route was reported by Windows networking APIs. " : adapter.RouteDetail + " ") +
+            (!dnsOk && reach ? "DNS lookup failed or timed out, but HTTPS reachability succeeded. " : string.Empty) +
+            (captiveSuspected ? "HTTPS probe returned unexpected content; captive portal or interception is suspected. " : string.Empty) +
+            (!reach && adapter.HasUsableRoute ? "HTTPS reachability failed while an active route exists. " : string.Empty) +
+            (!string.IsNullOrWhiteSpace(httpReach.ErrorCategory) && (!reach || captiveSuspected) ? $"HTTPS probe category: {httpReach.ErrorCategory}. " : string.Empty) +
             (downloadKind == NetworkPulseMeasurementKind.Measured
                 ? "Download sample: short HTTPS fetch capped by Network Pulse mode (lightweight measured throughput, not a full speed test)."
                 : speedProbeFailed
@@ -268,7 +283,7 @@ public sealed class NetworkPulseService : IDisposable
             adapter.Name,
             adapter.Kind,
             adapter.LinkSpeedMbpsEstimated,
-            latency.IcmpMedianMs,
+            effectivePingMs,
             latency.JitterMs,
             latency.PacketLossPercent,
             downloadMbps,
@@ -283,9 +298,9 @@ public sealed class NetworkPulseService : IDisposable
             notes,
             "Uses small network checks only. Does not run a full Ookla-style saturation test. Never treats adapter link speed as internet speed.");
 
-        if (latency.AnyIcmpSuccess && latency.IcmpMedianMs is > 0)
+        if (effectivePingMs is > 0)
         {
-            _lastGood.AcceptPing(latency.IcmpMedianMs, now);
+            _lastGood.AcceptPing(effectivePingMs, now);
         }
 
         if (downloadKind == NetworkPulseMeasurementKind.Measured)
@@ -364,9 +379,9 @@ public sealed class NetworkPulseService : IDisposable
         snapshot = default!;
         var hints = _hostHints();
         if (settings.PauseDuringHostHeavyNetwork &&
-            (hints.AppGlobalBusy || hints.AppUpdateDownloadInProgress || hints.UsbBenchmarkInProgress))
+            hints.AppUpdateDownloadInProgress)
         {
-            snapshot = BuildPausedSnapshot("Paused while ForgerEMS is busy with network, update, or USB benchmark activity.");
+            snapshot = BuildPausedSnapshot("Paused during an app update download because that pause policy is enabled.");
             return true;
         }
 
@@ -480,44 +495,57 @@ public sealed class NetworkPulseService : IDisposable
     }
 
     internal static NetworkPulseStatus ClassifyStatusForTests(bool reach, LatencyMonitorResult latency, double? downloadMbps, NetworkPulseMeasurementKind latencyKind) =>
-        ClassifyStatus(reach, latency, downloadMbps, latencyKind);
+        ClassifyStatus(
+            hasUsableRoute: reach || latency.AnyIcmpSuccess || latency.DnsLookupMs is > 0,
+            httpsReachable: reach,
+            dnsSucceeded: latency.DnsLookupMs is > 0,
+            latency,
+            downloadMbps,
+            latencyKind);
 
-    private static NetworkPulseStatus ClassifyStatus(bool reach, LatencyMonitorResult latency, double? downloadMbps, NetworkPulseMeasurementKind latencyKind)
+    internal static NetworkPulseStatus ClassifyStatusForTests(
+        bool hasUsableRoute,
+        bool httpsReachable,
+        bool dnsSucceeded,
+        LatencyMonitorResult latency,
+        double? downloadMbps,
+        NetworkPulseMeasurementKind latencyKind) =>
+        ClassifyStatus(hasUsableRoute, httpsReachable, dnsSucceeded, latency, downloadMbps, latencyKind);
+
+    private static NetworkPulseStatus ClassifyStatus(
+        bool hasUsableRoute,
+        bool httpsReachable,
+        bool dnsSucceeded,
+        LatencyMonitorResult latency,
+        double? downloadMbps,
+        NetworkPulseMeasurementKind latencyKind)
     {
-        if (!reach && !latency.AnyIcmpSuccess)
+        if (!hasUsableRoute && !httpsReachable && !dnsSucceeded && !latency.AnyIcmpSuccess)
         {
             return NetworkPulseStatus.Offline;
         }
 
-        if (latencyKind == NetworkPulseMeasurementKind.Unavailable && !reach)
+        if (!httpsReachable)
         {
-            return NetworkPulseStatus.Offline;
+            return hasUsableRoute || dnsSucceeded || latency.AnyIcmpSuccess
+                ? NetworkPulseStatus.Limited
+                : NetworkPulseStatus.Offline;
         }
 
-        if (reach && !latency.AnyIcmpSuccess)
-        {
-            return NetworkPulseStatus.Unknown;
-        }
-
-        if (latency.PacketLossPercent >= 8 || (latency.JitterMs ?? 0) >= 80)
+        if (latency.AnyIcmpSuccess && (latency.PacketLossPercent >= 8 || (latency.JitterMs ?? 0) >= 80))
         {
             return NetworkPulseStatus.Unstable;
         }
 
         var ping = latency.IcmpMedianMs ?? 999;
-        if (ping >= 220)
+        if (latency.AnyIcmpSuccess && ping >= 220)
         {
             return NetworkPulseStatus.Slow;
         }
 
-        if (downloadMbps is < 3 && latency.AnyIcmpSuccess && reach)
+        if (downloadMbps is < 3 && latencyKind == NetworkPulseMeasurementKind.Measured && httpsReachable)
         {
             return NetworkPulseStatus.Slow;
-        }
-
-        if (!reach && latency.AnyIcmpSuccess)
-        {
-            return NetworkPulseStatus.Unstable;
         }
 
         return NetworkPulseStatus.Good;
@@ -567,6 +595,7 @@ public sealed class NetworkPulseService : IDisposable
             NetworkPulseStatus.Good => "Stable",
             NetworkPulseStatus.Slow => "Slow",
             NetworkPulseStatus.Unstable => "Unstable",
+            NetworkPulseStatus.Limited => "Limited",
             NetworkPulseStatus.Offline => "Offline",
             NetworkPulseStatus.Unknown => "Unknown",
             NetworkPulseStatus.Testing => "Testing…",

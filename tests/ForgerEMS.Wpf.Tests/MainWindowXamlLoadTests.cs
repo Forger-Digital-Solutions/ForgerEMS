@@ -51,7 +51,7 @@ public sealed class MainWindowXamlLoadTests
         Assert.Contains("Grid.ColumnSpan=\"3\"", text, StringComparison.Ordinal);
         Assert.Contains("InternetWidgetLine1", text, StringComparison.Ordinal);
         Assert.Contains("InternetWidgetLine2", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("NetworkPulse.InternetWidgetLine3", text, StringComparison.Ordinal);
+        Assert.Contains("NetworkPulse.InternetWidgetLine3", text, StringComparison.Ordinal);
         Assert.Contains("HorizontalAlignment=\"Right\"", text, StringComparison.Ordinal);
     }
 
@@ -119,8 +119,8 @@ public sealed class MainWindowXamlLoadTests
         Assert.DoesNotContain("Padding=\"10,8\"", header, StringComparison.Ordinal);
         // MaxHeight="56" was removed — the widget auto-sizes so Line 2 is never clipped.
         Assert.DoesNotContain("MaxHeight=\"56\"", header, StringComparison.Ordinal);
-        // Compact padding: "5,2" (reduced from "6,3" to cut height further).
-        Assert.Contains("Padding=\"5,2\"", header, StringComparison.Ordinal);
+        // Compact padding: enough for the third freshness line without bloating the header.
+        Assert.Contains("Padding=\"6,3\"", header, StringComparison.Ordinal);
     }
 
     [Fact]

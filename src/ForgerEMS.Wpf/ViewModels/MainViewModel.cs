@@ -429,9 +429,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _networkPulseViewModel,
             () => _networkPulseViewModel.CurrentSettings,
             () => new NetworkPulseHostActivityHints(
-                IsBusy,
-                _updateDownloadInProgress,
-                _benchmarksInProgress.Count > 0),
+                _updateDownloadInProgress),
             SynchronizationContext.Current,
             () => Path.Combine(_appRuntimeService.RuntimeRoot, "reports"),
             line => _appRuntimeService.AppendSessionLog(line));

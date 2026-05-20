@@ -1411,7 +1411,7 @@
                       Grid.RowSpan="2"
                       HorizontalAlignment="Right"
                       VerticalAlignment="Top"
-                      MaxWidth="360">
+                      MaxWidth="430">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -1454,13 +1454,13 @@
                             Margin="0,3,0,0"
                             HorizontalAlignment="Right"
                             VerticalAlignment="Top"
-                            MaxWidth="340"
+                            MaxWidth="420"
                             Visibility="{Binding NetworkPulse.HeaderWidgetVisibility}"
                             Background="#33101824"
                             BorderBrush="#55394659"
                             BorderThickness="1"
                             CornerRadius="4"
-                            Padding="5,2">
+                            Padding="6,3">
                         <Grid>
                             <Button x:Name="NetworkPulseFlyoutTarget"
                                     HorizontalContentAlignment="Stretch"
@@ -1473,8 +1473,8 @@
                                     ToolTip="{Binding NetworkPulse.HeaderToolTip}">
                                 <StackPanel>
                                     <TextBlock Text="{Binding NetworkPulse.InternetWidgetLine1}"
-                                               Foreground="#FFE8F4FF"
-                                               FontSize="10.5"
+                                               Foreground="{Binding NetworkPulse.HeaderStatusBrush}"
+                                               FontSize="11"
                                                FontWeight="SemiBold"
                                                LineHeight="13"
                                                TextTrimming="CharacterEllipsis"
@@ -1482,8 +1482,15 @@
                                     <TextBlock Margin="0,1,0,0"
                                                Text="{Binding NetworkPulse.InternetWidgetLine2}"
                                                Foreground="#FFC9D8EE"
-                                               FontSize="10"
+                                               FontSize="10.25"
                                                LineHeight="12"
+                                               TextTrimming="CharacterEllipsis"
+                                               TextWrapping="NoWrap" />
+                                    <TextBlock Margin="0,1,0,0"
+                                               Text="{Binding NetworkPulse.InternetWidgetLine3}"
+                                               Foreground="#99B8CCE8"
+                                               FontSize="9.75"
+                                               LineHeight="11"
                                                TextTrimming="CharacterEllipsis"
                                                TextWrapping="NoWrap" />
                                 </StackPanel>

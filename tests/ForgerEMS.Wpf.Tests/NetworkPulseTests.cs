@@ -42,7 +42,7 @@ public sealed class NetworkPulseSettingsStoreTests
     }
 
     [Fact]
-    public void ClassifyStatus_IcmpBlockedButReachable_IsUnknown()
+    public void ClassifyStatus_IcmpBlockedButReachable_IsGood()
     {
         var latency = new LatencyMonitorResult(null, null, 0, null, null, AnyIcmpSuccess: false);
         var status = NetworkPulseService.ClassifyStatusForTests(
@@ -50,7 +50,7 @@ public sealed class NetworkPulseSettingsStoreTests
             latency,
             downloadMbps: null,
             latencyKind: NetworkPulseMeasurementKind.Unavailable);
-        Assert.Equal(NetworkPulseStatus.Unknown, status);
+        Assert.Equal(NetworkPulseStatus.Good, status);
     }
 
     [Fact]
@@ -63,6 +63,45 @@ public sealed class NetworkPulseSettingsStoreTests
             downloadMbps: null,
             latencyKind: NetworkPulseMeasurementKind.Unavailable);
         Assert.Equal(NetworkPulseStatus.Offline, status);
+    }
+
+    [Fact]
+    public void ClassifyStatus_DnsFailureButHttpsSuccess_IsGood()
+    {
+        var latency = new LatencyMonitorResult(null, null, 0, null, null, AnyIcmpSuccess: false);
+        var status = NetworkPulseService.ClassifyStatusForTests(
+            hasUsableRoute: true,
+            httpsReachable: true,
+            dnsSucceeded: false,
+            latency,
+            downloadMbps: null,
+            latencyKind: NetworkPulseMeasurementKind.Measured);
+        Assert.Equal(NetworkPulseStatus.Good, status);
+    }
+
+    [Fact]
+    public void ClassifyStatus_HttpsFailureWithRoute_IsLimited()
+    {
+        var latency = new LatencyMonitorResult(null, null, 0, null, null, AnyIcmpSuccess: false);
+        var status = NetworkPulseService.ClassifyStatusForTests(
+            hasUsableRoute: true,
+            httpsReachable: false,
+            dnsSucceeded: false,
+            latency,
+            downloadMbps: null,
+            latencyKind: NetworkPulseMeasurementKind.Unavailable);
+        Assert.Equal(NetworkPulseStatus.Limited, status);
+    }
+
+    [Fact]
+    public void EnvironmentReader_ApipaAndVirtualHelpers_AreConservative()
+    {
+        Assert.False(NetworkPulseEnvironmentReader.IsUsableIpv4Address(System.Net.IPAddress.Parse("169.254.10.20")));
+        Assert.True(NetworkPulseEnvironmentReader.IsUsableIpv4Address(System.Net.IPAddress.Parse("192.168.1.20")));
+        Assert.True(NetworkPulseEnvironmentReader.IsVirtualAdapter(
+            "vEthernet (WSL)",
+            "Hyper-V Virtual Ethernet Adapter",
+            System.Net.NetworkInformation.NetworkInterfaceType.Ethernet));
     }
 
     [Fact]
@@ -290,7 +329,7 @@ public sealed class NetworkPulseInternetWidgetTextTests
             string.Empty,
             "n",
             "s");
-        var (l1, l2, _) = NetworkPulseInternetWidgetText.Build(
+        var (l1, l2, l3) = NetworkPulseInternetWidgetText.Build(
             true,
             true,
             snap,
@@ -301,9 +340,9 @@ public sealed class NetworkPulseInternetWidgetTextTests
             TimeSpan.FromMinutes(10),
             DateTimeOffset.UtcNow);
         Assert.Contains("Online", l1, StringComparison.Ordinal);
-        Assert.Contains("18 ms", l1, StringComparison.Ordinal);
-        Assert.Contains("ping checked", l1, StringComparison.Ordinal);
-        Assert.Contains("↓ 120 Mbps", l2, StringComparison.Ordinal);
+        Assert.Contains("18 ms", l2, StringComparison.Ordinal);
+        Assert.Contains("Checked", l3, StringComparison.Ordinal);
+        Assert.Contains("Down: 120 Mbps", l2, StringComparison.Ordinal);
         Assert.Contains(NetworkPulseInternetWidgetText.UploadNotTested, l2, StringComparison.Ordinal);
     }
 
@@ -344,7 +383,7 @@ public sealed class NetworkPulseInternetWidgetTextTests
             TimeSpan.FromMinutes(10),
             DateTimeOffset.UtcNow);
         Assert.Contains("94", l2, StringComparison.Ordinal);
-        Assert.Contains("last tested", l2, StringComparison.Ordinal);
+        Assert.Contains("last measured", l2, StringComparison.Ordinal);
         Assert.DoesNotContain("prior", l2, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -548,18 +587,18 @@ public sealed class NetworkPulseInternetWidgetTextTests
             1, 1,
             now,
             string.Empty, "Download throughput: not sampled this cycle (disabled, paused, or not yet due).", "s");
-        var (l1, l2, _) = NetworkPulseInternetWidgetText.Build(
+        var (l1, l2, l3) = NetworkPulseInternetWidgetText.Build(
             true, true, snap,
             new NetworkPulseSmoothedHeadline(NetworkPulseStatus.Good, "Stable", 20.3, null, Array.Empty<double>(), 0, 0),
             last, false, 0, TimeSpan.FromMinutes(10), now);
         Assert.Contains("Online", l1, StringComparison.Ordinal);
         Assert.DoesNotContain("Limited", l1, StringComparison.Ordinal);
-        Assert.Contains("ping checked 0s ago", l1, StringComparison.Ordinal);
-        Assert.Contains("20.3 Mbps last tested 30s ago", l2, StringComparison.Ordinal);
+        Assert.Contains("Checked 0s ago", l3, StringComparison.Ordinal);
+        Assert.Contains("20.3 Mbps (last measured 30s ago)", l2, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void SpeedFailureWithPingOk_ShowsLimited_AndLastGoodSpeed()
+    public void SpeedFailureWithPingOk_ShowsOnline_AndLastGoodSpeed()
     {
         var now = DateTimeOffset.UtcNow;
         var last = new NetworkPulseLastKnownGood();
@@ -577,13 +616,14 @@ public sealed class NetworkPulseInternetWidgetTextTests
             1, 1,
             now,
             string.Empty, "Download sample failed this cycle; previous last-good values are preserved when available.", "s");
-        var (l1, l2, _) = NetworkPulseInternetWidgetText.Build(
+        var (l1, l2, l3) = NetworkPulseInternetWidgetText.Build(
             true, true, snap,
             new NetworkPulseSmoothedHeadline(NetworkPulseStatus.Good, "Stable", null, null, Array.Empty<double>(), 0, 0),
             last, false, 0, TimeSpan.FromMinutes(10), now);
-        Assert.Contains("Limited", l1, StringComparison.Ordinal);
-        Assert.Contains("speed check failed", l1, StringComparison.Ordinal);
-        Assert.Contains("20.3 Mbps last good 2m ago", l2, StringComparison.Ordinal);
+        Assert.Contains("Online", l1, StringComparison.Ordinal);
+        Assert.DoesNotContain("Limited", l1, StringComparison.Ordinal);
+        Assert.Contains("Speed sample unavailable", l3, StringComparison.Ordinal);
+        Assert.Contains("20.3 Mbps (last good 2m ago)", l2, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -608,6 +648,101 @@ public sealed class NetworkPulseInternetWidgetTextTests
             new NetworkPulseLastKnownGood(),
             false, consecutiveHardFailures: 6, TimeSpan.FromMinutes(10), DateTimeOffset.UtcNow);
         Assert.Contains("Offline", l1, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LimitedStatus_ShowsLimitedOnlyForProbeSupportedIssue()
+    {
+        var snap = new NetworkPulseSnapshot(
+            NetworkPulseStatus.Limited,
+            NetworkPulseConfidence.Low,
+            false,
+            "Ethernet",
+            NetworkPulseConnectionKind.Ethernet,
+            null, null, null, 0, null, null,
+            NetworkPulseMeasurementKind.Unavailable,
+            NetworkPulseMeasurementKind.Unavailable,
+            NetworkPulseMeasurementKind.Unavailable,
+            null, null,
+            DateTimeOffset.UtcNow,
+            string.Empty,
+            "HTTPS reachability failed while an active route exists.",
+            "s");
+        var (l1, _, l3) = NetworkPulseInternetWidgetText.Build(
+            true, true, snap,
+            new NetworkPulseSmoothedHeadline(NetworkPulseStatus.Limited, "Limited", null, null, Array.Empty<double>(), 0, 0),
+            new NetworkPulseLastKnownGood(),
+            false, consecutiveHardFailures: 0, TimeSpan.FromMinutes(10), DateTimeOffset.UtcNow);
+        Assert.Contains("Limited", l1, StringComparison.Ordinal);
+        Assert.Contains("DNS/HTTPS", l3, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ViewModel_ApplyTestingThenOnline_TogglesIsMeasuringAndObservableValues()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"npulse-vm-{Guid.NewGuid():N}.json");
+        try
+        {
+            var vm = new VentoyToolkitSetup.Wpf.ViewModels.NetworkPulseViewModel(new NetworkPulseSettingsStore(path));
+            vm.ApplyTestingStatus(NetworkPulseStatus.Testing);
+            Assert.True(vm.IsMeasuring);
+            Assert.Equal("Measuring", vm.Status);
+
+            var now = DateTimeOffset.UtcNow;
+            var snap = new NetworkPulseSnapshot(
+                NetworkPulseStatus.Good,
+                NetworkPulseConfidence.High,
+                true,
+                "Ethernet",
+                NetworkPulseConnectionKind.Ethernet,
+                null, 18, 2, 0, 100, null,
+                NetworkPulseMeasurementKind.Measured,
+                NetworkPulseMeasurementKind.Unavailable,
+                NetworkPulseMeasurementKind.Measured,
+                1, 1,
+                now,
+                string.Empty,
+                "n",
+                "s");
+            var (l1, l2, l3) = NetworkPulseInternetWidgetText.Build(
+                true, true, snap,
+                new NetworkPulseSmoothedHeadline(NetworkPulseStatus.Good, "Stable", 100, null, Array.Empty<double>(), 0, 0),
+                new NetworkPulseLastKnownGood(),
+                false, 0, TimeSpan.FromMinutes(10), now);
+            vm.Apply(new NetworkPulseUiState(
+                snap,
+                new NetworkPulseSmoothedHeadline(NetworkPulseStatus.Good, "Stable", 100, null, Array.Empty<double>(), 0, 0),
+                NetworkPulseReliabilityTier.Good,
+                "Healthy",
+                null,
+                null,
+                "No smoothing issue.",
+                "summary",
+                l1,
+                l2,
+                l3));
+
+            Assert.False(vm.IsMeasuring);
+            Assert.Equal("Online", vm.Status);
+            Assert.Equal(18, vm.LatencyMs);
+            Assert.Equal(100, vm.DownloadMbps);
+            Assert.Null(vm.UploadMbps);
+            Assert.Equal(now, vm.LastCheckedAt);
+            Assert.Equal(string.Empty, vm.LastErrorCategory);
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+            catch
+            {
+            }
+        }
     }
 
     [Fact]
@@ -702,7 +837,7 @@ public sealed class NetworkPulseInternetWidgetTextTests
     }
 
     [Fact]
-    public void SingleFailedCycle_KeepsLastGoodPing_InLine1()
+    public void SingleFailedCycle_KeepsLastGoodPing_InMetricsLine()
     {
         var last = new NetworkPulseLastKnownGood();
         last.AcceptPing(22, DateTimeOffset.UtcNow.AddSeconds(-5));
@@ -720,11 +855,11 @@ public sealed class NetworkPulseInternetWidgetTextTests
             null, null,
             DateTimeOffset.UtcNow,
             string.Empty, "n", "s");
-        var (l1, _, _) = NetworkPulseInternetWidgetText.Build(
+        var (_, l2, _) = NetworkPulseInternetWidgetText.Build(
             true, true, snap,
             new NetworkPulseSmoothedHeadline(NetworkPulseStatus.Unknown, "Unknown", null, null, Array.Empty<double>(), 0, 0),
             last, false, 0, TimeSpan.FromMinutes(10), DateTimeOffset.UtcNow);
-        Assert.Contains("22", l1, StringComparison.Ordinal);
+        Assert.Contains("22", l2, StringComparison.Ordinal);
     }
 
     [Fact]

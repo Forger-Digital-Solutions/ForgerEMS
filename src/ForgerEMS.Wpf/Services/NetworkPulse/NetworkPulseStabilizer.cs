@@ -125,6 +125,11 @@ public sealed class NetworkPulseStabilizer
             return (raw, Chip(raw, null));
         }
 
+        if (raw == NetworkPulseStatus.Limited)
+        {
+            return (NetworkPulseStatus.Limited, Chip(NetworkPulseStatus.Limited, null));
+        }
+
         if (!reach && !icmpOk)
         {
             if (_reachFailStreak < OfflineConfirmSamples)
@@ -173,6 +178,7 @@ public sealed class NetworkPulseStabilizer
             NetworkPulseStatus.Good => "Stable",
             NetworkPulseStatus.Slow => "Slow",
             NetworkPulseStatus.Unstable => "Unstable",
+            NetworkPulseStatus.Limited => "Limited",
             NetworkPulseStatus.Offline => "Offline",
             NetworkPulseStatus.Unknown => "Unknown",
             NetworkPulseStatus.Testing => "Testing…",
