@@ -254,6 +254,97 @@ public sealed class MainWindowXamlLoadTests
     }
 
     [Fact]
+    public void MainWindow_DriveValidatorProgressBar_IsBoundOneWay()
+    {
+        // RangeBase.Value (ProgressBar.Value, Slider.Value, …) binds TwoWay by default. Binding it to a
+        // read-only ViewModel property (e.g. `private set`) causes WPF to throw at app startup with:
+        //   "A TwoWay or OneWayToSource binding cannot work on the read-only property
+        //    'DriveValidatorProgressValue' of type '…MainViewModel'."
+        // The DriveValidatorProgressValue setter is intentionally private (display-only progress state),
+        // so the XAML binding MUST set Mode=OneWay. This test fails if anyone reverts that.
+        var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
+        var text = File.ReadAllText(xamlPath);
+
+        Assert.Contains("DriveValidatorProgressValue", text, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "Value=\"{Binding DriveValidatorProgressValue}\"",
+            text,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Value=\"{Binding DriveValidatorProgressValue, Mode=OneWay}\"",
+            text,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainWindow_DriveValidatorReadOnlyDisplays_DoNotUseTwoWayBindings()
+    {
+        // Defence-in-depth: walk every Drive Validator binding in MainWindow.xaml and ensure none of the
+        // read-only display properties is wired as TwoWay or OneWayToSource. The TwoWay binding on
+        // DriveValidatorModeIndex is allowed because that property has a public setter.
+        var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
+        var text = File.ReadAllText(xamlPath);
+
+        var readOnlyProps = new[]
+        {
+            "DriveValidatorIntro",
+            "DriveValidatorTargetDisplay",
+            "DriveValidatorCapacityDisplay",
+            "DriveValidatorFileSystemDisplay",
+            "DriveValidatorFreeSpaceDisplay",
+            "DriveValidatorBusPortDisplay",
+            "DriveValidatorPhaseDisplay",
+            "DriveValidatorProgressDisplay",
+            "DriveValidatorProgressValue",
+            "DriveValidatorResultSummary",
+            "DriveValidatorEvidenceDisplay",
+            "DriveValidatorBuilderWarningText",
+            "HasDriveValidatorBuilderWarning"
+        };
+
+        foreach (var prop in readOnlyProps)
+        {
+            Assert.DoesNotContain($"{{Binding {prop}, Mode=TwoWay}}", text, StringComparison.Ordinal);
+            Assert.DoesNotContain($"{{Binding {prop}, Mode=OneWayToSource}}", text, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void MainWindow_DriveValidatorReadOnlyProperties_HavePrivateSetters()
+    {
+        // Belt-and-braces guard: if anyone later promotes a private setter to public to make a TwoWay
+        // binding "work", this test surfaces the change so the binding intent stays explicit (these
+        // are display-only progress / phase / evidence projections from the validator service —
+        // making them publicly settable would let the UI overwrite service state).
+        var vmType = typeof(MainViewModel);
+        string[] readOnlyNames =
+        [
+            "DriveValidatorProgressValue",
+            "DriveValidatorPhaseDisplay",
+            "DriveValidatorProgressDisplay",
+            "DriveValidatorResultSummary",
+            "DriveValidatorEvidenceDisplay",
+            "DriveValidatorBuilderWarningText",
+            "DriveValidatorTargetDisplay",
+            "DriveValidatorCapacityDisplay",
+            "DriveValidatorFileSystemDisplay",
+            "DriveValidatorFreeSpaceDisplay",
+            "DriveValidatorBusPortDisplay",
+            "DriveValidatorModeDisplay"
+        ];
+
+        foreach (var name in readOnlyNames)
+        {
+            var prop = vmType.GetProperty(name);
+            Assert.NotNull(prop);
+            var setter = prop!.SetMethod;
+            Assert.True(
+                setter is null || !setter.IsPublic,
+                $"{name} should not expose a public setter; UI bindings to it must use Mode=OneWay.");
+        }
+    }
+
+    [Fact]
     public void MainWindow_KyraSidebarNavButton_DisplaysBeta()
     {
         var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
