@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using VentoyToolkitSetup.Wpf.Models;
 
 namespace VentoyToolkitSetup.Wpf.Services.Intelligence;
 
@@ -205,6 +206,12 @@ public sealed class UsbKnownPortRecord
     public int LabelConfirmedDeviceSeenCount { get; set; }
 
     public string? LabelConfirmedDriveLetter { get; set; }
+
+    public DriveValidationPortStatus LastDriveValidationPortStatus { get; set; }
+
+    public string? LastDriveValidationSummary { get; set; }
+
+    public DateTimeOffset? LastDriveValidationUtc { get; set; }
 }
 
 public sealed class UsbControllerInfo

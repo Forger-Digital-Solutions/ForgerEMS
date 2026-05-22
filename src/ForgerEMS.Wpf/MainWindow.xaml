@@ -2347,6 +2347,94 @@
                         </StackPanel>
                     </GroupBox>
 
+                    <GroupBox Header="Drive Validator">
+                        <StackPanel>
+                            <TextBlock Margin="0,0,0,8"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource PanelTextBrush}"
+                                       Text="{Binding DriveValidatorIntro}"
+                                       TextWrapping="Wrap" />
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Selected target" />
+                                <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding DriveValidatorTargetDisplay}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="1" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Reported capacity" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding DriveValidatorCapacityDisplay}" />
+                                <TextBlock Grid.Row="2" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="File system / free" />
+                                <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding DriveValidatorFileSystemDisplay}" />
+                                <TextBlock Grid.Row="3" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Free space" />
+                                <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding DriveValidatorFreeSpaceDisplay}" />
+                                <TextBlock Grid.Row="4" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Bus / port" />
+                                <TextBlock Grid.Row="4" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding DriveValidatorBusPortDisplay}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="5" Margin="0,0,12,0" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Validation mode" />
+                                <ComboBox Grid.Row="5"
+                                          Grid.Column="1"
+                                          SelectedIndex="{Binding DriveValidatorModeIndex, Mode=TwoWay}"
+                                          MinWidth="220">
+                                    <ComboBoxItem Content="Quick Safe Check" />
+                                    <ComboBoxItem Content="Sampled Capacity Check" />
+                                    <ComboBoxItem Content="Full Free-Space Validation" />
+                                </ComboBox>
+                            </Grid>
+                            <WrapPanel Margin="0,0,0,8">
+                                <Button Margin="0,0,8,4"
+                                        Padding="10,6"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Content="Start validation"
+                                        Command="{Binding RunDriveValidatorCommand}" />
+                                <Button Margin="0,0,8,4"
+                                        Padding="10,6"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Content="Cancel"
+                                        Command="{Binding CancelDriveValidatorCommand}" />
+                            </WrapPanel>
+                            <TextBlock Margin="0,0,0,4"
+                                       FontSize="11.5"
+                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                       Text="{Binding DriveValidatorPhaseDisplay}"
+                                       TextWrapping="Wrap" />
+                            <ProgressBar Height="6"
+                                         Margin="0,0,0,8"
+                                         Maximum="100"
+                                         Value="{Binding DriveValidatorProgressValue}" />
+                            <TextBlock Margin="0,0,0,8"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                       Text="{Binding DriveValidatorProgressDisplay}" />
+                            <Border Margin="0,0,0,8"
+                                    Padding="10,8"
+                                    Background="#B80A101A"
+                                    BorderBrush="{DynamicResource PanelBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="8">
+                                <TextBlock FontWeight="SemiBold"
+                                           Foreground="{DynamicResource PanelTextBrush}"
+                                           Text="{Binding DriveValidatorResultSummary}"
+                                           TextWrapping="Wrap" />
+                            </Border>
+                            <Expander Header="Evidence / details"
+                                      Foreground="{DynamicResource PanelMutedTextBrush}">
+                                <TextBlock Margin="0,8,0,0"
+                                           FontFamily="Consolas"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource PanelMutedTextBrush}"
+                                           Text="{Binding DriveValidatorEvidenceDisplay}"
+                                           TextWrapping="Wrap" />
+                            </Expander>
+                        </StackPanel>
+                    </GroupBox>
+
                     <GroupBox Header="Ventoy">
                         <StackPanel>
                             <Border Padding="12"
@@ -2427,6 +2515,19 @@
                                 <TextBlock FontSize="12"
                                            Foreground="{Binding TargetWarningForeground}"
                                            Text="{Binding ActionWarningText}"
+                                           TextWrapping="Wrap" />
+                            </Border>
+
+                            <Border Margin="0,0,0,10"
+                                    Padding="12"
+                                    Visibility="{Binding HasDriveValidatorBuilderWarning, Converter={StaticResource BoolToVis}}"
+                                    Background="#33F59E0B"
+                                    BorderBrush="#FFF59E0B"
+                                    BorderThickness="1"
+                                    CornerRadius="10">
+                                <TextBlock FontSize="12"
+                                           Foreground="#FF92400E"
+                                           Text="{Binding DriveValidatorBuilderWarningText}"
                                            TextWrapping="Wrap" />
                             </Border>
 

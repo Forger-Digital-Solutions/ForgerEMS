@@ -544,6 +544,13 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
             var verification = rec.HasStrongPortTopologyEvidence
                 ? "topology evidence saved"
                 : "weak topology; confirm when connected";
+            var driveValidation = rec.LastDriveValidationPortStatus switch
+            {
+                DriveValidationPortStatus.ValidatedOk => "Drive validation: OK",
+                DriveValidationPortStatus.Warnings => "Drive validation: warnings",
+                DriveValidationPortStatus.FailedValidation => "Drive validation: failed",
+                _ => "Drive validation: not run"
+            };
             SavedPortLabels.Add(new UsbSavedPortLabelOption
             {
                 MappingId = rec.MappingId,
@@ -551,7 +558,8 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
                 NormalizedLabelKey = rec.NormalizedLabelKey,
                 LastSeenDisplay = "Last seen: " + lastSeen,
                 LastBenchmarkDisplay = "Benchmark: " + benchmark,
-                VerificationDisplay = verification
+                VerificationDisplay = verification,
+                DriveValidationDisplay = driveValidation
             });
         }
 

@@ -168,6 +168,17 @@ ForgerEMS is Windows-first. The macOS, Android, and iOS / iPadOS USB Builder pac
 - User-supplied installers, IPSW files, and firmware live in their drop folders on the user's USB; the user remains responsible for legality, licensing, and device suitability.
 - Mobile flashing / restore operations can **erase data or brick devices**. **Apple Activation Lock**, **Google FRP**, **OEM account locks**, and **ownership verification** are outside ForgerEMS — the app does not bypass any vendor authorization or DRM flow.
 
+## Drive Validator
+
+The optional **Drive Validator** tool in the USB Builder area writes temporary ForgerEMS test files into the free space of a selected removable USB target so it can read them back and look for verification errors or suspicious capacity behavior.
+
+- Safe modes create files **only** inside a `.forgerems-drive-validator` folder on the chosen USB target and remove them afterward. They do **not** read your existing files, do **not** delete user data, and do **not** format the drive.
+- Cached results are written to `%LOCALAPPDATA%\ForgerEMS\Runtime\cache\drive-validation-results.json` and contain: target volume root, drive model, file system, label, total/free-space sizes at the time of the run, a best-effort volume serial, a composite identity fingerprint, and the run's evidence summary (sample count, bytes written/verified, write/read speed, mismatch and alias-flag counters, and the cleanup status string). The cached file does **not** include the contents of user files, and it does **not** include API keys, tokens, passwords, or product keys.
+- The cache is keyed by a composite identity (root path + best-effort volume serial + drive model + reported size + label) so a different drive that mounts on the same letter is **not** treated as already validated. Entries older than 30 days are ignored.
+- Drive Validator results may be summarized in support bundles when you choose to export one. Review the bundle before sharing.
+
+---
+
 ## USB Builder Profile persistence
 
 When a technician changes the USB Builder Profile selection, ForgerEMS saves the choice locally at `%LOCALAPPDATA%\ForgerEMS\Runtime\config\usb-builder-profile.json`. That file contains only the list of included pack IDs (for example `core`, `windows`, `legacy-windows`, `linux-rescue`, `diagnostics`, `oem-tools`, `macos`, `android`, `ios-ipados`). It does not contain hardware identifiers, USB serial numbers, or personal information. It is not uploaded automatically.

@@ -63,6 +63,8 @@ public sealed class UsbSavedPortLabelOption
 
     public string VerificationDisplay { get; init; } = "Needs confirmation";
 
+    public string DriveValidationDisplay { get; init; } = "Drive validation: not run";
+
     public static string ConfirmButtonText => "Confirm";
 }
 

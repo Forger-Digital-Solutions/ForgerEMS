@@ -331,6 +331,19 @@ Email **ForgerDigitalSolutions@outlook.com** with app version, Windows version, 
 
 ---
 
+## What is Drive Validator?
+
+**Drive Validator** (USB Builder tab) writes **temporary ForgerEMS test files** into **free space** on a selected removable USB target, reads them back, and checks for verification errors or suspicious capacity behavior. It does **not** format the drive and does **not** delete your existing files — only files under `.forgerems-drive-validator` are created and removed afterward.
+
+- **Quick Safe Check** and **Sampled Capacity Check** use bounded writes spread across free space. A passing result is reported as **"No issues found in sampled validation"** — it does **not** prove the drive is genuine, healthy, or fit for any specific use. Sophisticated fake-capacity media can still evade a small sample.
+- **Full Free-Space Validation** is stronger evidence (it writes across the available free-space budget) but is **slow** and causes **heavy USB writes**. Even a clean Full Free-Space pass is evidence of correct file-system-visible behavior, not a sector-level guarantee.
+- **Destructive Full Media validation** is **not available in this build**. If it is ever enabled later, it will require typing an exact confirmation phrase and will erase the entire drive.
+- Drive Validator **refuses to run** against the Windows OS drive, system / boot / EFI / VTOYEFI / recovery partitions, BitLocker-encrypted volumes, and internal fixed disks. The existing USB Builder hard safety blocks still apply.
+- Drive Validator results are **advisory evidence for a technician**. They are not a warranty, certification, or replacement for vendor diagnostics. **Back up** important data before any storage validation, and ForgerEMS is **not responsible** for failing media or any destructive action you explicitly confirm.
+- Cached results are keyed by a composite identity (root path + best-effort volume serial + drive model + size + label) so a different drive that mounts on the same letter is **not** treated as already validated. Entries older than 30 days expire.
+
+---
+
 ## What is ForgerEMS in one sentence?
 
 A Windows technician suite for **USB toolkit building**, **USB Intelligence**, **System Intelligence**, **Diagnostics**, **Toolkit Manager**, and **Kyra**.

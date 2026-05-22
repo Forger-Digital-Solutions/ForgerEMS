@@ -70,6 +70,9 @@ public static class SupportBundleExporter
             var bench = Path.Combine(runtime.RuntimeRoot, "cache", "usb-benchmarks.json");
             AddRedactedFileIfExists(zip, "cache/usb-benchmarks.json", bench);
 
+            var driveValidation = Path.Combine(runtime.RuntimeRoot, "cache", "drive-validation-results.json");
+            AddRedactedFileIfExists(zip, "cache/drive-validation-results.json", driveValidation);
+
             if (!string.IsNullOrWhiteSpace(usbRootForManagedJson))
             {
                 var managed = Path.Combine(

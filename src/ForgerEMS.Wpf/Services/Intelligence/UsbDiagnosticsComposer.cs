@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using VentoyToolkitSetup.Wpf.Models;
+using VentoyToolkitSetup.Wpf.Services.DriveValidation;
 
 namespace VentoyToolkitSetup.Wpf.Services.Intelligence;
 
@@ -67,6 +69,38 @@ public static class UsbDiagnosticsComposer
             {
                 Severity = DiagnosticSeverityLevel.Ok,
                 Message = "Speed classification improved from unknown to a concrete USB class."
+            });
+        }
+
+        var portRecEarly = !string.IsNullOrWhiteSpace(snapshot.SelectedTargetStablePortKey) && profile is not null
+            ? profile.KnownPorts.FirstOrDefault(p => p.StablePortKey == snapshot.SelectedTargetStablePortKey)
+            : null;
+        if (portRecEarly is not null &&
+            portRecEarly.LastDriveValidationPortStatus != DriveValidationPortStatus.NotValidated)
+        {
+            var dvMsg = string.IsNullOrWhiteSpace(portRecEarly.LastDriveValidationSummary)
+                ? DriveValidationUiCopy.PortStatusDisplay(portRecEarly.LastDriveValidationPortStatus)
+                : portRecEarly.LastDriveValidationSummary;
+
+            // Treat history older than 30 days as advisory — the port may be holding a different drive now.
+            var stale = portRecEarly.LastDriveValidationUtc is { } when
+                ? DateTimeOffset.UtcNow - portRecEarly.LastDriveValidationUtc.Value > TimeSpan.FromDays(30)
+                : false;
+
+            var severity = portRecEarly.LastDriveValidationPortStatus switch
+            {
+                DriveValidationPortStatus.ValidatedOk => stale ? DiagnosticSeverityLevel.Unknown : DiagnosticSeverityLevel.Ok,
+                DriveValidationPortStatus.Warnings => DiagnosticSeverityLevel.Warning,
+                DriveValidationPortStatus.FailedValidation => DiagnosticSeverityLevel.Warning,
+                _ => DiagnosticSeverityLevel.Unknown
+            };
+
+            issues.Add(new UsbDiagnosticIssue
+            {
+                Severity = severity,
+                Message = stale
+                    ? "Drive Validator (stale history >30d): " + dvMsg
+                    : "Drive Validator: " + dvMsg
             });
         }
 

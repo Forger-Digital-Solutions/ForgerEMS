@@ -63,6 +63,20 @@ Run from a PowerShell prompt against the installed (or unzipped) `release/curren
 - [ ] `Verify-VentoyCore.ps1` exits 0 with 9/9 PASS.
 - [ ] `Verify-VentoyCore.ps1 -RevalidateManagedDownloads` exits 0, reports `30 active managed items, OK 22 / OK-LIMITED 8 / DRIFT 0` (counts may shift in future preview cycles — DRIFT must be 0).
 
+## 7b. Drive Validator (USB Builder)
+
+- [ ] Drive Validator section renders under USB Builder, between USB Intelligence/port mapping and Ventoy.
+- [ ] With no USB target selected, **Start validation** is disabled and the warning hint reads "Run Drive Validator before building a technician USB."
+- [ ] Selecting a system / EFI / VTOYEFI partition leaves the **Start validation** button disabled and the safety note explains why.
+- [ ] On a removable USB target, **Quick Safe Check** completes and reports "No issues found in sampled validation" (or "Passed with warnings" on a slow drive). Verify no `.forgerems-drive-validator` folder is left behind after a normal run.
+- [ ] **Sampled Capacity Check** completes and the Evidence expander shows samples written/verified, bytes, speeds, mismatches, alias flags, identity confidence, and the cleanup status.
+- [ ] **Full Free-Space Validation** asks for confirmation before starting (heavy writes warning).
+- [ ] **Destructive Full Media** mode is NOT selectable in the mode dropdown; the service reports "not available in this build" if invoked programmatically.
+- [ ] **Cancel** during a run is visible and stops the run; the result reports Cancelled and the leftover cleanup status if any.
+- [ ] After a Failed result, **Setup USB**, **Update USB**, and **Install / Update Ventoy** prompt with the Drive Validator warning and ask to continue.
+- [ ] After a Not-Validated state, those same actions prompt the non-blocking recommendation.
+- [ ] Mapped USB port card / diagnostics show the Drive Validator status as a separate item (Not validated / OK / Warnings / Failed), distinct from the speed/benchmark result. A history older than 30 days renders as "stale".
+
 ## 8. Release artifact integrity
 
 - [ ] `release/current/CHECKSUMS.sha256` verifies against the on-disk artifacts (use `Get-FileHash -Algorithm SHA256` and compare).

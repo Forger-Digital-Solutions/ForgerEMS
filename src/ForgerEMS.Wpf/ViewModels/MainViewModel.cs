@@ -30,11 +30,12 @@ using VentoyToolkitSetup.Wpf.Services.Intelligence;
 using VentoyToolkitSetup.Wpf.Services.Kyra;
 using VentoyToolkitSetup.Wpf.Services.KyraTools;
 using VentoyToolkitSetup.Wpf.Services.Licensing;
+using VentoyToolkitSetup.Wpf.Services.DriveValidation;
 using VentoyToolkitSetup.Wpf.Services.NetworkPulse;
 
 namespace VentoyToolkitSetup.Wpf.ViewModels;
 
-public sealed class MainViewModel : ObservableObject, IDisposable
+public sealed partial class MainViewModel : ObservableObject, IDisposable
 {
     private sealed class Releaser(SemaphoreSlim gate) : IDisposable
     {
@@ -67,12 +68,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly IVentoyIntegrationService _ventoyIntegrationService;
     private readonly IAppRuntimeService _appRuntimeService;
     private readonly IUsbBenchmarkService _usbBenchmarkService;
+    private readonly IDriveValidationService _driveValidationService;
     private readonly ICopilotService _copilotService;
     private readonly ICopilotProviderRegistry _copilotProviderRegistry;
     private readonly IUsbIntelligenceService _usbIntelligenceService;
     private readonly IAutoIntelligenceOrchestrator _autoIntelligenceOrchestrator;
     private readonly IWslCommandExecutor _wslExecutor;
     private readonly Dictionary<string, UsbBenchmarkResult> _benchmarkResultsByRoot = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, DriveValidationResult> _driveValidationResultsByRoot = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _benchmarksInProgress = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _usbBuilderActionGate = new(1, 1);
     private readonly UsbMachineProfileStore _usbMachineProfileStore;
@@ -81,6 +84,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _usbMappingWorkflowStatus = string.Empty;
     private string _usbMappingLabelDraft = string.Empty;
     private readonly string _benchmarkCachePath;
+    private readonly string _driveValidationCachePath;
     private readonly string _copilotConfigPath;
     private readonly string _betaConfigPath;
     private readonly string _updateConfigPath;
@@ -413,7 +417,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ICopilotProviderRegistry copilotProviderRegistry,
         IWslCommandExecutor? wslExecutor = null,
         IUsbIntelligenceService? usbIntelligenceService = null,
-        IAutoIntelligenceOrchestrator? autoIntelligenceOrchestrator = null)
+        IAutoIntelligenceOrchestrator? autoIntelligenceOrchestrator = null,
+        IDriveValidationService? driveValidationService = null)
     {
         _backendDiscoveryService = backendDiscoveryService;
         _powerShellRunnerService = powerShellRunnerService;
@@ -424,6 +429,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _ventoyIntegrationService = ventoyIntegrationService;
         _appRuntimeService = appRuntimeService;
         _usbBenchmarkService = usbBenchmarkService;
+        _driveValidationService = driveValidationService ?? new DriveValidationService();
         _copilotService = copilotService;
         _copilotProviderRegistry = copilotProviderRegistry;
         _usbIntelligenceService = usbIntelligenceService ?? new UsbIntelligenceService();
@@ -438,6 +444,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _usbMachineProfileStore = new UsbMachineProfileStore(_appRuntimeService.RuntimeRoot);
         _machineProfileStore = new MachineProfileStore(_appRuntimeService.RuntimeRoot);
         _benchmarkCachePath = Path.Combine(_appRuntimeService.RuntimeRoot, "cache", "usb-benchmarks.json");
+        _driveValidationCachePath = Path.Combine(_appRuntimeService.RuntimeRoot, "cache", "drive-validation-results.json");
         _copilotConfigPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "copilot-settings.json");
         _kyraMemoryPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "kyra-memory.json");
         _kyraMachineMemoryPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "kyra-machine-memory.json");
@@ -459,6 +466,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             line => _appRuntimeService.AppendSessionLog(line));
         _updateCheckService = new GitHubReleaseUpdateCheckService();
         LoadBenchmarkCache();
+        LoadDriveValidationCache();
         LoadCopilotSettings();
         LoadBetaSettings();
         LoadUpdateSettings();
@@ -582,6 +590,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             new AsyncRelayCommand(RunUsbIntelligenceBenchmarkAsync, CanRunUsbIntelligenceBenchmark);
         CancelUsbIntelligenceBenchmarkCommand =
             new RelayCommand(CancelActiveUsbBenchmark, IsAnyUsbBenchmarkActive);
+        RunDriveValidatorCommand = new AsyncRelayCommand(RunDriveValidatorAsync, CanRunDriveValidator);
+        CancelDriveValidatorCommand = new RelayCommand(CancelDriveValidator, () => _driveValidationCts is { Token.IsCancellationRequested: false });
         AskCopilotWarningCommand = new AsyncRelayCommand(() => AskCopilotAsync("/warning"), () => !IsCopilotGenerating);
         AskCopilotListingCommand = new AsyncRelayCommand(() => AskCopilotAsync("/listing facebook"), () => !IsCopilotGenerating);
         AskCopilotLiveToolsCommand = new AsyncRelayCommand(() => AskCopilotAsync("/provider"), () => !IsCopilotGenerating);
@@ -945,6 +955,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public RelayCommand CancelUsbIntelligenceBenchmarkCommand { get; }
 
+    public AsyncRelayCommand RunDriveValidatorCommand { get; }
+
+    public RelayCommand CancelDriveValidatorCommand { get; }
+
     public AsyncRelayCommand AskCopilotWarningCommand { get; }
 
     public AsyncRelayCommand AskCopilotListingCommand { get; }
@@ -1086,6 +1100,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             RefreshUsbIntelligenceFromDisk();
             RefreshManagedDownloadRunArtifactFromSelectedUsb();
+            RefreshDriveValidatorPanel();
         }
     }
 
@@ -3628,6 +3643,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
+        if (!TryAcknowledgeDriveValidationForBuild("Setup USB"))
+        {
+            return;
+        }
+
         if (!ConfirmTargetedAction(
                 "Setup USB",
                 selectedUsbTarget,
@@ -3669,6 +3689,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private async Task RunUpdateUsbAsync()
     {
         if (!TryGetValidatedSelectedTarget("Update USB", out var selectedUsbTarget))
+        {
+            return;
+        }
+
+        if (!TryAcknowledgeDriveValidationForBuild("Update USB"))
         {
             return;
         }
@@ -6459,6 +6484,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             !_userPromptService.Confirm(
                 "USB builder pre-flight",
                 $"{preflight.Message}{Environment.NewLine}{Environment.NewLine}Continue preparing Ventoy on this port?"))
+        {
+            return;
+        }
+
+        if (!TryAcknowledgeDriveValidationForBuild("Install / Update Ventoy"))
         {
             return;
         }
@@ -13904,6 +13934,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         OpenUsbMappingWizardCommand.RaiseCanExecuteChanged();
         RunUsbIntelligenceBenchmarkCommand.RaiseCanExecuteChanged();
         CancelUsbIntelligenceBenchmarkCommand.RaiseCanExecuteChanged();
+        RunDriveValidatorCommand.RaiseCanExecuteChanged();
+        CancelDriveValidatorCommand.RaiseCanExecuteChanged();
         CheckForUpdatesNowCommand.RaiseCanExecuteChanged();
         AppUpdateDownloadInstallerCommand.RaiseCanExecuteChanged();
         AppUpdateDownloadAdvancedInstallerCommand.RaiseCanExecuteChanged();

@@ -162,6 +162,7 @@
                                                             <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding Label}" TextWrapping="Wrap" />
                                                             <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" FontSize="11" Text="{Binding LastSeenDisplay}" TextWrapping="Wrap" />
                                                             <TextBlock Foreground="{DynamicResource PanelMutedTextBrush}" FontSize="11" Text="{Binding LastBenchmarkDisplay}" TextWrapping="Wrap" />
+                                                            <TextBlock Foreground="{DynamicResource PanelMutedTextBrush}" FontSize="11" Text="{Binding DriveValidationDisplay}" TextWrapping="Wrap" />
                                                             <TextBlock Foreground="{DynamicResource PanelMutedTextBrush}" FontSize="11" Text="{Binding VerificationDisplay}" TextWrapping="Wrap" />
                                                         </StackPanel>
                                                         <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
