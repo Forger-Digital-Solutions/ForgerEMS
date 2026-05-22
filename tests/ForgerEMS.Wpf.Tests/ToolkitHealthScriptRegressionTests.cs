@@ -38,8 +38,9 @@ public sealed class ToolkitHealthScriptRegressionTests
         var script = File.ReadAllText(FindRepoFile("backend", "ToolkitManager", "Get-ForgerEMSToolkitHealth.ps1"));
 
         Assert.Contains("Get-Sha256FromSourceUrl", script, StringComparison.Ordinal);
-        Assert.Contains("$shaUrl = [string]$Item.sha256Url", script, StringComparison.Ordinal);
-        Assert.Contains("Resolved SHA256 from sha256Url", script, StringComparison.Ordinal);
+        Assert.Contains("$sha256Url = ([string]$Item.sha256Url).Trim()", script, StringComparison.Ordinal);
+        Assert.Contains("Resolved {0} from checksum URL", script, StringComparison.Ordinal);
+        Assert.Contains("checksumAlgorithm", script, StringComparison.Ordinal);
         Assert.Contains("offline checksum pending", script, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -126,6 +127,37 @@ public sealed class ToolkitHealthScriptRegressionTests
             Assert.Equal("VERIFICATION_PENDING", item.GetProperty("status").GetString());
             Assert.Contains("offline checksum pending", item.GetProperty("verification").GetString(), StringComparison.OrdinalIgnoreCase);
             Assert.Equal(0, report.RootElement.GetProperty("summary").GetProperty("missingRequired").GetInt32());
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ToolkitHealthScript_VerifiesSha512ManagedFile()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var iso = Path.Combine(root, "ISO", "BSD", "NetBSD-10.1-amd64.iso");
+            Directory.CreateDirectory(Path.GetDirectoryName(iso)!);
+            File.WriteAllText(iso, "verified-netbsd");
+            var hash = Convert.ToHexString(SHA512.HashData(File.ReadAllBytes(iso))).ToLowerInvariant();
+            var checksumFile = Path.Combine(root, "SHA512");
+            File.WriteAllText(checksumFile, $"SHA512 (NetBSD-10.1-amd64.iso) = {hash}");
+            var manifestPath = Path.Combine(root, "manifest.json");
+            File.WriteAllText(manifestPath, $$"""
+            {"items":[
+              {"name":"NetBSD 10.1 amd64 ISO","type":"file","dest":"ISO\\BSD\\NetBSD-10.1-amd64.iso","url":"https://cdn.netbsd.org/pub/NetBSD/images/10.1/NetBSD-10.1-amd64.iso","sha512Url":"{{EscapeJson(checksumFile)}}","enabled":true,"notes":"Active managed autodownload: NetBSD installer."}
+            ]}
+            """);
+
+            var report = RunToolkitHealthScript(root, manifestPath);
+            var item = report.RootElement.GetProperty("items").EnumerateArray().Single();
+            Assert.Equal("INSTALLED", item.GetProperty("status").GetString());
+            Assert.Contains("SHA512 verified", item.GetProperty("verification").GetString(), StringComparison.Ordinal);
+            Assert.Equal("Match", item.GetProperty("checksumStatus").GetString());
         }
         finally
         {

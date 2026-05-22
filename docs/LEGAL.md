@@ -35,6 +35,20 @@ You are responsible for selecting the correct **USB**, **volume**, and **partiti
 
 You are responsible for verifying **integrity** (checksums when published) and **legitimacy** of anything you download — including third-party installers, ISOs, and manifest-listed utilities. ForgerEMS may **reference**, **integrate with**, **download**, or **guide** you to third-party tools; those tools remain under their **own licenses and terms**. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
+ForgerEMS catalog entries use a fixed set of action labels in their `.url` filenames or display: **DOWNLOAD** / **AUTO DOWNLOAD** (official, redistributable, machine-resolvable source), **MANUAL DOWNLOAD** (official vendor page where the user must choose / sign in / accept terms), **MANUAL MEDIA REQUIRED** (user must supply ISO / installer / IPSW / firmware themselves), **GUIDE** (official how-to instructions), and **INFO** (true reference material). ForgerEMS will not auto-download an item whose source is non-redistributable, requires a license acceptance flow, or requires a device / model / carrier choice.
+
+---
+
+## Cross-platform toolkit packs (macOS, Android, iOS / iPadOS)
+
+ForgerEMS is Windows-first. The macOS, Android, and iOS / iPadOS USB Builder packs are off by default and treat all media as **manual media required**.
+
+- ForgerEMS **does not redistribute** legacy Windows ISOs, macOS installers / DMGs / PKGs, iOS / iPadOS IPSW files, or Android OEM firmware (Samsung, Motorola, OnePlus, etc.). The user supplies that media themselves.
+- ForgerEMS **does not auto-download** files from third-party IPSW indexes, firmware mirrors, or unofficial software hosts.
+- macOS, Android, and iOS / iPadOS catalog entries link only to official **Apple support**, **Google / Android / AOSP**, and OEM vendor pages.
+- Mobile flashing / restore operations can **erase data or brick devices**. **Apple Activation Lock**, **Google FRP**, **OEM account locks**, and **ownership verification** are outside ForgerEMS — the app does not bypass any vendor authorization, DRM, account lock, or licensing flow.
+- Unchecking a USB Builder pack only **skips seeding/updating** that pack on the next Setup USB or Update USB run. It does **not delete** files already on the USB.
+
 ---
 
 ## LibreHardwareMonitor and sensor provider notices

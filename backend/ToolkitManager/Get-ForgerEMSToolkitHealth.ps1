@@ -16,6 +16,14 @@ else {
     throw "ForgerEMS runtime helper was not found. Checked: $runtimeHelperPath"
 }
 
+$checksumResolverPath = Join-Path $PSScriptRoot "ChecksumResolver.ps1"
+if (Test-Path -LiteralPath $checksumResolverPath) {
+    . $checksumResolverPath
+}
+else {
+    throw "Checksum resolver helper was not found. Checked: $checksumResolverPath"
+}
+
 function Write-ToolkitLog {
     param(
         [Parameter(Mandatory)][string]$Message,
@@ -69,6 +77,35 @@ function Test-IsCRoot {
 
     $root = [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($Path))
     return [string]::Equals($root, "C:\", [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Get-CatalogMetadataString {
+    param($Value)
+
+    # Manifest schema accepts either a string or a JSON array of strings for fields like architecture / bootMode.
+    # Normalize both shapes to a single comma-separated string so downstream JSON consumers see a stable scalar.
+    if ($null -eq $Value) {
+        return ""
+    }
+
+    if ($Value -is [string]) {
+        return $Value.Trim()
+    }
+
+    if ($Value -is [System.Collections.IEnumerable]) {
+        $parts = @()
+        foreach ($entry in $Value) {
+            if ($null -eq $entry) { continue }
+            $text = [string]$entry
+            if (-not [string]::IsNullOrWhiteSpace($text)) {
+                $parts += $text.Trim()
+            }
+        }
+
+        return ($parts -join ", ")
+    }
+
+    return [string]$Value
 }
 
 function Get-Category {
@@ -389,49 +426,10 @@ function Find-AlternateItemPath {
     return ""
 }
 
-function Get-Sha256FromSourceUrl {
-    param(
-        [string]$ShaUrl
-    )
-
-    if ([string]::IsNullOrWhiteSpace($ShaUrl)) {
-        return ""
-    }
-
-    if (Test-Path -LiteralPath $ShaUrl -PathType Leaf) {
-        try {
-            $content = Get-Content -LiteralPath $ShaUrl -Raw -ErrorAction Stop
-            $match = [regex]::Match([string]$content, '([a-fA-F0-9]{64})')
-            if ($match.Success) {
-                return $match.Groups[1].Value.ToLowerInvariant()
-            }
-        }
-        catch {
-            Write-ToolkitLog ("Checksum source file read failed: {0}" -f $_.Exception.Message) "WARN"
-        }
-
-        return ""
-    }
-
-    try {
-        $uri = [Uri]$ShaUrl
-        if ($uri.Scheme -notin @("http", "https")) {
-            return ""
-        }
-
-        $response = Invoke-WebRequest -Uri $ShaUrl -TimeoutSec 45 -UseBasicParsing -ErrorAction Stop
-        $content = [string]$response.Content
-        $match = [regex]::Match($content, '([a-fA-F0-9]{64})')
-        if ($match.Success) {
-            return $match.Groups[1].Value.ToLowerInvariant()
-        }
-    }
-    catch {
-        Write-ToolkitLog ("Checksum source fetch failed: {0}" -f $_.Exception.Message) "WARN"
-    }
-
-    return ""
-}
+# Get-Sha256FromSourceUrl is now provided by ChecksumResolver.ps1 (dot-sourced
+# above). It accepts -TargetFileName for filename-aware multi-line checksum
+# files; legacy single-hash files still resolve without a target filename for
+# backwards compatibility.
 
 function Get-ManagedCoverageToken {
     param($Report)
@@ -492,8 +490,13 @@ function Get-ToolkitItemStatus {
     $destination = Normalize-RelativePath -Path ([string]$Item.dest)
     $type = [string]$Item.type
     $name = [string]$Item.name
-    $expectedHash = [string]$Item.sha256
-    $shaUrl = [string]$Item.sha256Url
+    $sha256 = ([string]$Item.sha256).Trim().ToLowerInvariant()
+    $sha256Url = ([string]$Item.sha256Url).Trim()
+    $sha512 = ([string]$Item.sha512).Trim().ToLowerInvariant()
+    $sha512Url = ([string]$Item.sha512Url).Trim()
+    $checksumAlgorithm = if ($sha256) { "SHA256" } elseif ($sha512) { "SHA512" } elseif ($sha256Url) { "SHA256" } elseif ($sha512Url) { "SHA512" } else { "" }
+    $expectedHash = if ($checksumAlgorithm -eq "SHA512") { $sha512 } else { $sha256 }
+    $checksumUrl = if ($checksumAlgorithm -eq "SHA512") { $sha512Url } else { $sha256Url }
     $url = [string]$Item.url
     $classificationInfo = Get-ItemClassification -Item $Item
     $classification = [string]$classificationInfo.Name
@@ -574,27 +577,61 @@ function Get-ToolkitItemStatus {
         $resolvedProbe = Get-ToolkitFileProbe -LiteralPath $resolvedPath
         if ($resolvedProbe.Exists -and $resolvedProbe.SizeBytes -gt 0) {
             $finalProbe = $resolvedProbe
-            if ([string]::IsNullOrWhiteSpace($expectedHash) -and -not [string]::IsNullOrWhiteSpace($shaUrl)) {
-                Write-ToolkitLog ("Checksum source URL available: {0}" -f $shaUrl) "INFO"
-                $expectedHash = Get-Sha256FromSourceUrl -ShaUrl $shaUrl
+            if ([string]::IsNullOrWhiteSpace($expectedHash) -and -not [string]::IsNullOrWhiteSpace($checksumUrl)) {
+                Write-ToolkitLog ("{0} checksum source URL available: {1}" -f $checksumAlgorithm, $checksumUrl) "INFO"
+                # Derive the target filename so multi-line checksum files can be parsed safely.
+                # Precedence: manifest destination basename (canonical artifact name we just hashed) ->
+                # local resolved path -> URL basename. The dest basename is the authoritative key because
+                # that is the exact filename the vendor's checksum file will reference.
+                $targetFileName = ""
+                if (-not [string]::IsNullOrWhiteSpace($destination)) {
+                    try {
+                        $targetFileName = [IO.Path]::GetFileName($destination)
+                    }
+                    catch {
+                        $targetFileName = ""
+                    }
+                }
+                if ([string]::IsNullOrWhiteSpace($targetFileName) -and -not [string]::IsNullOrWhiteSpace($resolvedPath)) {
+                    $targetFileName = [IO.Path]::GetFileName($resolvedPath)
+                }
+                if ([string]::IsNullOrWhiteSpace($targetFileName) -and -not [string]::IsNullOrWhiteSpace($url)) {
+                    try {
+                        $targetFileName = [IO.Path]::GetFileName([Uri]$url)
+                    }
+                    catch {
+                        $targetFileName = ""
+                    }
+                }
+                $expectedHash = if ($checksumAlgorithm -eq "SHA512") {
+                    Get-Sha512FromSourceUrl -ShaUrl $checksumUrl -TargetFileName $targetFileName
+                }
+                else {
+                    Get-Sha256FromSourceUrl -ShaUrl $checksumUrl -TargetFileName $targetFileName
+                }
                 if (-not [string]::IsNullOrWhiteSpace($expectedHash)) {
-                    Write-ToolkitLog ("Resolved SHA256 from sha256Url: {0}" -f $expectedHash) "OK"
+                    Write-ToolkitLog ("Resolved {0} from checksum URL: {1}" -f $checksumAlgorithm, $expectedHash) "OK"
                 }
             }
 
             if (-not [string]::IsNullOrWhiteSpace($expectedHash)) {
                 try {
-                    $actualHash = Get-ForgerSha256 -LiteralPath $resolvedPath
-                    Write-ToolkitLog ("SHA256 hash provider: {0} file={1}" -f (Get-ForgerLastHashProvider), (Get-ForgerSafePathForLog -Path $resolvedPath)) "INFO"
+                    $actualHash = if ($checksumAlgorithm -eq "SHA512") {
+                        Get-ForgerSha512 -LiteralPath $resolvedPath
+                    }
+                    else {
+                        Get-ForgerSha256 -LiteralPath $resolvedPath
+                    }
+                    Write-ToolkitLog ("{0} hash provider: {1} file={2}" -f $checksumAlgorithm, (Get-ForgerLastHashProvider), (Get-ForgerSafePathForLog -Path $resolvedPath)) "INFO"
                     if ([string]::Equals($actualHash, $expectedHash.ToLowerInvariant(), [System.StringComparison]::OrdinalIgnoreCase)) {
                         $status = "INSTALLED"
-                        $verification = "SHA256 verified."
+                        $verification = "$checksumAlgorithm verified."
                         $checksumStatus = "Match"
                         $recommendation = "No action needed."
                     }
                     else {
                         $status = "HASH_FAILED"
-                        $verification = "SHA256 mismatch."
+                        $verification = "$checksumAlgorithm mismatch."
                         $checksumStatus = "Mismatch"
                         $recommendation = "Run Update Toolkit to replace this managed item from the manifest source."
                     }
@@ -609,12 +646,12 @@ function Get-ToolkitItemStatus {
             }
             else {
                 $status = "VERIFICATION_PENDING"
-                if (-not [string]::IsNullOrWhiteSpace($shaUrl)) {
-                    $verification = "File present; offline checksum pending (sha256Url unavailable or unresolved)."
+                if (-not [string]::IsNullOrWhiteSpace($checksumUrl)) {
+                    $verification = "File present; offline checksum pending (checksum URL unavailable or unresolved)."
                     $recommendation = "File is present. Re-run Revalidate when network is available to verify checksum."
                 }
                 else {
-                    $verification = "File present; checksum not verified (manifest has no pinned SHA256)."
+                    $verification = "File present; checksum not verified (manifest has no pinned supported checksum)."
                     $recommendation = "File is present. Optional integrity verification may be done manually if required."
                 }
                 $checksumStatus = "Pending"
@@ -645,6 +682,8 @@ function Get-ToolkitItemStatus {
         $status
     ) "INFO"
 
+    $freshness = $Item.freshness
+
     return [PSCustomObject][ordered]@{
         tool = $name
         category = Get-Category -Destination $destination
@@ -670,8 +709,29 @@ function Get-ToolkitItemStatus {
         classificationReason = $classificationReason
         sha256Expected = $expectedHash
         sha256Actual = $actualHash
+        checksumAlgorithm = $checksumAlgorithm
         sourceType = [string]$Item.sourceType
         url = $url
+        # Additive catalog metadata (introduced 2026-05-21). Fields are optional in the manifest; missing entries surface as empty strings/false so downstream consumers stay schema-stable.
+        kind = [string]$Item.kind
+        family = [string]$Item.family
+        osCategory = [string]$Item.osCategory
+        architecture = Get-CatalogMetadataString -Value $Item.architecture
+        bootMode = Get-CatalogMetadataString -Value $Item.bootMode
+        recommendedUse = [string]$Item.recommendedUse
+        technicianNotes = [string]$Item.technicianNotes
+        licenseNote = [string]$Item.licenseNote
+        manualOnly = if ($null -ne $Item.manualOnly) { [bool]$Item.manualOnly } else { $false }
+        legacyWarning = [string]$Item.legacyWarning
+        ventoyNotes = [string]$Item.ventoyNotes
+        secureBootNote = [string]$Item.secureBootNote
+        sourceTrust = [string]$Item.sourceTrust
+        currentPinnedVersion = [string]$freshness.currentPinnedVersion
+        latestKnownStableVersion = [string]$freshness.latestKnownStableVersion
+        lastFreshnessAuditUtc = [string]$freshness.lastFreshnessAuditUtc
+        freshnessStatus = [string]$freshness.freshnessStatus
+        checksumVerificationMode = [string]$freshness.checksumVerificationMode
+        updateRecommendation = [string]$freshness.updateRecommendation
     }
 }
 

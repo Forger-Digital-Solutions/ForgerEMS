@@ -22,7 +22,8 @@ Meaning:
 upstream URL is permanently stable; it means the current manifest points to an
 official direct artifact with acceptable checksum coverage today.
 
-Current safe count: `16`
+Current safe count: `16` (unchanged in the OS/toolkit expansion pass —
+no fabricated checksums; every new OS/tool addition lands as `manual only`).
 
 Health snapshot:
 
@@ -77,31 +78,114 @@ Status note:
   The manifest now also records the asset-specific GitHub release digest URL as
   an official checksum source.
 
-## Manual Only
+## Manual Only — Windows family
 
-- `Windows 11 Download Page`
-- `Windows 10 Download Page`
-- `Debian Live Images Download Page`
-- `Arch Linux Download Page`
-- `FreeDOS Download Page`
-- `Fedora Workstation Download Page`
-- `CrystalDiskMark Download Page`
-- `Samsung Magician Download Page`
-- `WD Dashboard Download Page`
-- `7-Zip Download Page`
-- `Nmap Download Page`
-- `Microsoft Visual C++ Redistributable Download Page`
-- `.NET 8 Desktop Runtime Download Page`
-- `Firefox All Languages Download Page`
-- `Chrome Enterprise Browser Download Page`
-- `MediCat Download Page`
-- `Sergei Strelec WinPE Info`
-- `Ultimate Boot CD Download Page`
-- `AnyDesk Download Page`
-- `HWiNFO Download Page`
-- `OCCT Download Page`
-- `CPU-Z Download Page`
-- `HWMonitor Download Page`
+Current Windows manual entries (modern + full legacy chain). All Windows
+entries are `Manual ISO Required`. ForgerEMS does not redistribute Windows
+media; the technician supplies the ISO from a legitimate source.
+
+- `Windows 11 Download Page` — supported, Microsoft Media Creation Tool / ISO.
+- `Windows 10 Download Page` — supported (Extended Support window).
+- `Windows Server Evaluation Center` — current-server 180-day eval.
+- `Windows ADK and WinPE Info` — build official WinPE recovery media.
+- `Windows 8.1 Lifecycle Info` — Microsoft Learn lifecycle page. EOL 2023-01-10.
+- `Windows 8 Lifecycle Info` — Microsoft Learn lifecycle page. EOL 2016-01-12.
+- `Windows 7 Lifecycle Info` — Microsoft Learn lifecycle page. EOL 2020-01-14.
+- `Windows Vista Lifecycle Info` — Wikipedia info page. EOL 2017-04-11.
+- `Windows XP Lifecycle Info` — Wikipedia info page. EOL 2014-04-08.
+- `Windows 2000 Lifecycle Info` — Wikipedia info page. EOL 2010-07-13.
+- `Windows ME Lifecycle Info` — Wikipedia info page. EOL 2006-07-11.
+- `Windows 98 Lifecycle Info` — Wikipedia info page. EOL 2006-07-11.
+- `Windows 95 Lifecycle Info` — Wikipedia info page. EOL 2001-12-31.
+- `Sergei Strelec WinPE Info` — community WinPE bundle (provenance review).
+
+Every legacy Windows entry carries an explicit `legacyWarning` and is tagged
+`osCategory: Legacy` (or `Hobby` for the 9x line). The UI must render these
+with the `Manual ISO Required` + `Unsupported by vendor` badges, never as
+"Recommended".
+
+## Manual Only — Linux desktop / live family
+
+- `Ubuntu Download Page` (info shortcut for managed Ubuntu ISO).
+- `Linux Mint Download Page` (info shortcut for managed Mint ISO).
+- `Fedora Workstation Download Page`.
+- `Debian Live Images Download Page`.
+- `Debian netinst Download Page`.
+- `Arch Linux Download Page`.
+- `Endless OS Download Page`.
+- `Pop!_OS Download Page`.
+- `Zorin OS Download Page`.
+- `elementary OS Download Page`.
+- `MX Linux Download Page`.
+- `EndeavourOS Download Page`.
+- `KDE neon Download Page`.
+- `Manjaro Download Page`.
+- `openSUSE Download Page`.
+- `Tails Download Page` — informed-consent / authorized use only.
+- `Qubes OS Download Page` — Xen-based compartmentalised OS (hardware HCL).
+
+## Manual Only — Linux server / admin / hypervisor / appliance
+
+- `Ubuntu Server Download Page`.
+- `Fedora Server Download Page`.
+- `Rocky Linux Download Page`.
+- `AlmaLinux Download Page`.
+- `Alpine Linux Download Page`.
+- `Proxmox VE Download Page` — KVM/LXC hypervisor.
+- `TrueNAS SCALE Download Page` — Linux-based NAS appliance.
+- `pfSense Community Edition Download Page` — FreeBSD-based firewall.
+- `OPNsense Download Page` — FreeBSD-based firewall (community-first).
+
+## Manual Only — Recovery / Forensic / Security distros
+
+- `Kali Linux Download Page` (info shortcut for managed Kali ISO).
+- `SystemRescue Download Page` (info shortcut for managed ISO).
+- `Parrot OS Download Page`.
+- `Rescatux Download Page`.
+- `Super Grub2 Disk Download Page`.
+- `MemTest86 (PassMark UEFI) Download Page` — UEFI-aware; complements the
+  bundled MemTest86+ ISO.
+- `Parted Magic Download Page` — paid commercial all-in-one rescue distro.
+- `Hiren's BootCD PE Download Page` (review-first; see below).
+
+## Manual Only — BSD / Other-Unix / Hobby / Nostalgia
+
+- `FreeBSD Download Page`.
+- `NetBSD Download Page`.
+- `OpenBSD Download Page`.
+- `OpenIndiana Download Page`.
+- `ReactOS Download Page` — alpha quality.
+- `Haiku Download Page`.
+- `KolibriOS Download Page` — assembly hobby OS.
+- `Tiny Core Linux Download Page`.
+- `Puppy Linux Download Page`.
+- `Slackware Download Page`.
+- `Gentoo Linux Download Page`.
+- `FreeDOS Download Page` — BIOS flashing / legacy DOS workflows.
+
+## Manual Only — Technician utilities (expanded)
+
+- Disk: `CrystalDiskMark`, `Samsung Magician`, `WD Dashboard`, `HDDScan`,
+  `DiskGenius`, `CrystalDiskInfo (info)`, `MiniTool Partition Wizard Free`,
+  `EaseUS Partition Master Free`, `Macrium Reflect Home Info`,
+  `TestDisk and PhotoRec`, `Recuva`, `Smartmontools`.
+- Hardware: `CPU-Z`, `HWiNFO`, `HWMonitor`, `OCCT`, `GPU-Z`, `AIDA64`,
+  `Speccy`.
+- Network: `Advanced IP Scanner`, `Angry IP Scanner (info)`, `Nmap`,
+  `Wireshark`, `PuTTY`, `WinSCP`.
+- Security: `Malwarebytes AdwCleaner`, `Emsisoft Emergency Kit`,
+  `KeePass`, `VeraCrypt`, `ClamWin / ClamAV`,
+  `Kaspersky Virus Removal Tool Info`.
+- System: `Autoruns`, `Process Explorer`, `Sysinternals Suite`, `7-Zip`,
+  `BlueScreenView (info)`, `DriverStoreExplorer (info)`, `Everything Search`,
+  `System Informer (Process Hacker)`, `NirLauncher`, `Notepad++`.
+- GPU: `DDU`, `NVCleanInstall`.
+- Remote: `AnyDesk`, `RustDesk (info)`.
+- USB: `Ventoy (info)`, `Rufus (info)`, `balenaEtcher (info)`,
+  `Win32 Disk Imager`.
+- Browser / Runtime: `Firefox All Languages`, `Chrome Enterprise`,
+  `Microsoft VC++ Redistributable`, `.NET 8 Desktop Runtime`.
+- MediCat: `MediCat Download Page` — large community toolkit.
 
 ## Review-First
 
@@ -119,6 +203,37 @@ Status note:
 - `Intel Driver Download Center`
 - `Realtek Downloads`
 
+## OS / Tool Metadata (added in this pass)
+
+Every catalog item now optionally carries technician metadata:
+
+- `kind` — `os`, `tool`, `driver-shortcut`, `runtime`, `browser`.
+- `family` — `Windows`, `Linux`, `BSD`, `Other-Unix`, `Hobby`, `DOS`,
+  `Recovery`, `Security`, `Network-Appliance`, `Hypervisor`, etc.
+- `osCategory` — `Desktop`, `Server`, `Recovery`, `Forensic`, `Security`,
+  `Legacy`, `Hobby`, `Network-Appliance`, `Hypervisor`.
+- `architecture` — single token or array (`amd64`, `arm64`, `x86`, …).
+- `bootMode` — single token or array (`uefi`, `bios`, `secure-boot`,
+  `uefi-csm`, `legacy-only`).
+- `recommendedUse` — one-line technician-facing summary.
+- `technicianNotes` — gotchas / driver caveats / install notes.
+- `licenseNote` — `Free / open source`, `Microsoft EULA`,
+  `Paid - vendor licence required`, `Discontinued / unsupported by vendor`,
+  `Free for personal use`, etc.
+- `manualOnly` — explicit boolean (redundant with `type: page`).
+- `legacyWarning` — shown on the UI for EOL / unsupported items.
+- `ventoyNotes` — Ventoy-specific compatibility note.
+- `secureBootNote` — Secure Boot status note for the entry.
+- `sourceTrust` — `official`, `community`, or `manual`.
+
+These fields are optional and additive. Existing tooling
+(`Get-ForgerEMSToolkitHealth.ps1`, `Setup_Toolkit.ps1`, `Update-ForgerEMS.ps1`,
+`Verify-VentoyCore.ps1`) reads only the previously defined fields and ignores
+the new ones, so this is fully backwards compatible. The schema
+([`ForgerEMS.updates.schema.json`](../manifests/ForgerEMS.updates.schema.json))
+documents the new field shape; both single-string and array forms are
+accepted for `architecture` and `bootMode`.
+
 ## Checksum Sourcing Notes
 
 - Prefer asset-specific checksum sources over HTML pages whenever the upstream
@@ -132,6 +247,12 @@ Status note:
 - Manual/runtime/browser shortcuts intentionally stay as `page` entries. The
   upstream flows are dynamic, license-sensitive, architecture-sensitive, or
   better verified by a human at install time.
+- **Newly added Linux server distros (Debian netinst, Fedora Server,
+  Rocky, AlmaLinux, Alpine, openSUSE Leap)** are kept as `manual only` pages
+  for now — the safe path forward is to promote individual entries to `file`
+  only after a real, hashed ISO has been verified against a vendor checksum
+  file during a future maintenance pass. No checksums were fabricated for any
+  new entry in this expansion.
 
 ## 2026 Candidate Decisions
 
@@ -151,7 +272,12 @@ Status note:
 | `.NET Desktop Runtime` | `manual/info-only` | Official Microsoft page tracks current servicing builds and architectures. |
 | `Ubuntu current/previous LTS` | `managed current LTS + manual page` | Existing managed Ubuntu LTS item retained; page shortcut covers operator choice. |
 | `MemTest86+` | `managed download` | Existing official versioned artifact has checksum coverage. |
+| `MemTest86 (PassMark UEFI)` | `manual/info-only` | UEFI-only PassMark variant. Free vs. paid editions. Complements existing MemTest86+ managed download. |
 | `FreeDOS` | `manual/info-only` | Useful for legacy firmware/DOS workflows, but boot mode and package choice are operator-specific. |
+| `Legacy Windows (7 / Vista / XP / 2000 / ME / 98 / 95)` | `manual/info-only` | Unsupported by vendor; user must provide own retail/volume licensed ISO. Microsoft Learn / Wikipedia lifecycle pages are the only sources we link. |
+| `BSD / Other-Unix (FreeBSD, NetBSD, OpenBSD, OpenIndiana)` | `manual/info-only` | Official multi-arch/mirror flow; no fabricated checksums. |
+| `Hobby (ReactOS, Haiku, KolibriOS, Tiny Core, Puppy, Slackware, Gentoo)` | `manual/info-only` | Hobby/niche distros; redirect to official project pages. |
+| `Server appliances (Proxmox, TrueNAS SCALE, pfSense CE, OPNsense)` | `manual/info-only` | Some require account/form (pfSense); all use multi-flavor downloaders. |
 
 ## Fragility And Fallbacks
 

@@ -283,6 +283,19 @@ function Assert-Sha256Value {
     }
 }
 
+function Assert-Sha512Value {
+    param(
+        [AllowNull()]$Value,
+        [Parameter(Mandatory)][string]$FieldName
+    )
+
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) { return }
+
+    if (-not ([string]$Value -match '^[a-fA-F0-9]{128}$')) {
+        throw "$FieldName must be a 128-character SHA-512 hex string."
+    }
+}
+
 function Assert-ManagedDownloadSourceTypeValue {
     param(
         [AllowNull()]$Value,
@@ -356,8 +369,10 @@ function Get-ManagedItemsMissingChecksumCoverage {
 
         $hasSha256 = -not [string]::IsNullOrWhiteSpace([string]$item.sha256)
         $hasSha256Url = -not [string]::IsNullOrWhiteSpace([string]$item.sha256Url)
+        $hasSha512 = -not [string]::IsNullOrWhiteSpace([string]$item.sha512)
+        $hasSha512Url = -not [string]::IsNullOrWhiteSpace([string]$item.sha512Url)
 
-        if ($hasSha256 -or $hasSha256Url) { continue }
+        if ($hasSha256 -or $hasSha256Url -or $hasSha512 -or $hasSha512Url) { continue }
 
         $missing.Add([PSCustomObject]@{
             Name = [string]$item.name
@@ -394,8 +409,10 @@ function Get-EnabledManagedFileItems {
 function Get-ChecksumCoverageModeText {
     param([Parameter(Mandatory)]$Item)
 
-    $hasPinnedChecksum = -not [string]::IsNullOrWhiteSpace([string]$Item.sha256)
-    $hasChecksumUrl = -not [string]::IsNullOrWhiteSpace([string]$Item.sha256Url)
+    $hasPinnedChecksum = (-not [string]::IsNullOrWhiteSpace([string]$Item.sha256)) -or
+                         (-not [string]::IsNullOrWhiteSpace([string]$Item.sha512))
+    $hasChecksumUrl = (-not [string]::IsNullOrWhiteSpace([string]$Item.sha256Url)) -or
+                      (-not [string]::IsNullOrWhiteSpace([string]$Item.sha512Url))
 
     if ($hasPinnedChecksum -and $hasChecksumUrl) { return "pinned+remote" }
     if ($hasPinnedChecksum) { return "pinned-only" }
@@ -455,6 +472,20 @@ function Get-ManagedFileResilienceMetadataIssues {
         $fallbackRule = [string]$item.fallbackRule
         $maintenanceRankText = [string]$item.maintenanceRank
         $borderline = $item.borderline
+
+        try {
+            Assert-Sha256Value -Value $item.sha256 -FieldName "sha256"
+        }
+        catch {
+            [void]$issues.Add($name + " has an invalid sha256 value.")
+        }
+
+        try {
+            Assert-Sha512Value -Value $item.sha512 -FieldName "sha512"
+        }
+        catch {
+            [void]$issues.Add($name + " has an invalid sha512 value.")
+        }
 
         if ([string]::IsNullOrWhiteSpace($sourceType)) {
             [void]$issues.Add($name + " is missing sourceType.")
@@ -549,8 +580,17 @@ function Get-ManagedDownloadRevalidationRows {
         $urlResult = Test-RemoteHead -Uri $declaredUrl
         $checksumMode = Get-ChecksumCoverageModeText -Item $item
 
-        $hasChecksumUrl = -not [string]::IsNullOrWhiteSpace([string]$item.sha256Url)
-        $checksumUrl = if ($hasChecksumUrl) { [string]$item.sha256Url } else { "" }
+        $hasChecksumUrl = (-not [string]::IsNullOrWhiteSpace([string]$item.sha256Url)) -or
+                          (-not [string]::IsNullOrWhiteSpace([string]$item.sha512Url))
+        $checksumUrl = if (-not [string]::IsNullOrWhiteSpace([string]$item.sha256Url)) {
+            [string]$item.sha256Url
+        }
+        elseif (-not [string]::IsNullOrWhiteSpace([string]$item.sha512Url)) {
+            [string]$item.sha512Url
+        }
+        else {
+            ""
+        }
         $checksumResult = $null
         if ($hasChecksumUrl) {
             $checksumResult = Test-RemoteHead -Uri $checksumUrl
@@ -1688,11 +1728,22 @@ if ($Online) {
                 $itemType = if ($item.type) { ([string]$item.type).Trim().ToLowerInvariant() } else { "file" }
 
                 if ($itemType -eq "file") {
-                    $hasPinnedChecksum = -not [string]::IsNullOrWhiteSpace([string]$item.sha256)
-                    $hasChecksumUrl = -not [string]::IsNullOrWhiteSpace([string]$item.sha256Url)
+                    $hasPinnedChecksum = (-not [string]::IsNullOrWhiteSpace([string]$item.sha256)) -or
+                                         (-not [string]::IsNullOrWhiteSpace([string]$item.sha512))
+                    $hasChecksumUrl = (-not [string]::IsNullOrWhiteSpace([string]$item.sha256Url)) -or
+                                      (-not [string]::IsNullOrWhiteSpace([string]$item.sha512Url))
+                    $checksumUrl = if (-not [string]::IsNullOrWhiteSpace([string]$item.sha256Url)) {
+                        [string]$item.sha256Url
+                    }
+                    elseif (-not [string]::IsNullOrWhiteSpace([string]$item.sha512Url)) {
+                        [string]$item.sha512Url
+                    }
+                    else {
+                        ""
+                    }
 
-                    if ($item.sha256Url) {
-                        $shaResult = Test-RemoteHead -Uri ([string]$item.sha256Url)
+                    if ($checksumUrl) {
+                        $shaResult = Test-RemoteHead -Uri $checksumUrl
 
                         if ($shaResult.Reachable) {
                             if ($shaResult.Note) {
@@ -1701,7 +1752,7 @@ if ($Online) {
 
                             $declaredChecksumHost = ""
                             $finalChecksumHost = ""
-                            try { $declaredChecksumHost = ([Uri]([string]$item.sha256Url)).Host } catch {}
+                            try { $declaredChecksumHost = ([Uri]$checksumUrl).Host } catch {}
                             try { $finalChecksumHost = ([Uri]$shaResult.FinalUri).Host } catch {}
 
                             if (-not [string]::IsNullOrWhiteSpace($declaredChecksumHost) -and -not [string]::IsNullOrWhiteSpace($finalChecksumHost) -and $declaredChecksumHost -ne $finalChecksumHost -and -not (Test-CrossHostRedirectIsExpected -SourceType $sourceType)) {

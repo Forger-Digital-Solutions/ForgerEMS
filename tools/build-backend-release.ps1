@@ -345,6 +345,7 @@ function Get-ReleaseChecksumRelativePaths {
         "ForgerEMS.Runtime.ps1",
         "SystemIntelligence/Invoke-ForgerEMSSystemScan.ps1",
         "ToolkitManager/Get-ForgerEMSToolkitHealth.ps1",
+        "ToolkitManager/ChecksumResolver.ps1",
         "ForgerEMS.updates.json",
         "manifests/ForgerEMS.updates.schema.json",
         "manifests/vendor.inventory.json",
@@ -712,6 +713,7 @@ foreach ($scriptName in @(
 
 Copy-Item -LiteralPath (Join-Path $canonicalScriptRoot "SystemIntelligence\Invoke-ForgerEMSSystemScan.ps1") -Destination (Join-Path $targetRoot "SystemIntelligence\Invoke-ForgerEMSSystemScan.ps1") -Force
 Copy-Item -LiteralPath (Join-Path $canonicalScriptRoot "ToolkitManager\Get-ForgerEMSToolkitHealth.ps1") -Destination (Join-Path $targetRoot "ToolkitManager\Get-ForgerEMSToolkitHealth.ps1") -Force
+Copy-Item -LiteralPath (Join-Path $canonicalScriptRoot "ToolkitManager\ChecksumResolver.ps1") -Destination (Join-Path $targetRoot "ToolkitManager\ChecksumResolver.ps1") -Force
 
 Copy-Item -LiteralPath $manifestPath -Destination (Join-Path $targetRoot "ForgerEMS.updates.json") -Force
 Copy-Item -LiteralPath $schemaPath -Destination (Join-Path $targetRoot "manifests\ForgerEMS.updates.schema.json") -Force

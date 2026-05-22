@@ -158,6 +158,24 @@ Tools you install separately are governed by their own policies.
 
 ---
 
+## Cross-platform toolkit packs (macOS, Android, iOS / iPadOS)
+
+ForgerEMS is Windows-first. The macOS, Android, and iOS / iPadOS USB Builder packs are off by default and require manual media.
+
+- ForgerEMS **does not redistribute** macOS installers, DMGs, PKGs, iOS / iPadOS IPSW files, or Android OEM firmware.
+- ForgerEMS **does not auto-download** files from third-party IPSW indexes, firmware mirrors, or unofficial software hosts.
+- The catalog only links to **official Apple, Google, AOSP, Samsung, Motorola, and OnePlus** support pages and Android Platform-Tools.
+- User-supplied installers, IPSW files, and firmware live in their drop folders on the user's USB; the user remains responsible for legality, licensing, and device suitability.
+- Mobile flashing / restore operations can **erase data or brick devices**. **Apple Activation Lock**, **Google FRP**, **OEM account locks**, and **ownership verification** are outside ForgerEMS — the app does not bypass any vendor authorization or DRM flow.
+
+## USB Builder Profile persistence
+
+When a technician changes the USB Builder Profile selection, ForgerEMS saves the choice locally at `%LOCALAPPDATA%\ForgerEMS\Runtime\config\usb-builder-profile.json`. That file contains only the list of included pack IDs (for example `core`, `windows`, `legacy-windows`, `linux-rescue`, `diagnostics`, `oem-tools`, `macos`, `android`, `ios-ipados`). It does not contain hardware identifiers, USB serial numbers, or personal information. It is not uploaded automatically.
+
+Unchecking a pack only skips seeding/updating it on the next Setup USB or Update USB run. **It does not delete any file already on the USB.** Existing user-supplied installers, IPSW files, firmware packages, and drop-folder contents are left alone.
+
+---
+
 ## Beta
 
 Privacy-related behavior may change between beta builds; check in-app **Kyra AI Settings** and **Settings → App updates** for the current behavior on your build.

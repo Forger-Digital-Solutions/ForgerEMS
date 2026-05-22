@@ -14,7 +14,7 @@ ForgerEMS is a **Windows desktop technician workbench** centered on **USB toolki
 
 ## What is included
 
-- **USB Builder** for safer Ventoy-oriented USB toolkit preparation and maintenance
+- **USB Builder** for safer Ventoy-oriented USB toolkit preparation and maintenance, with a **USB Builder Profile** that lets technicians pick which packs (Windows, Legacy Windows, Linux Rescue, Diagnostics, OEM Tools, macOS, Android, iOS / iPadOS) get seeded or refreshed. Core ForgerEMS USB structure is always required; macOS, Android, and iOS / iPadOS are off by default and treat all media as manual
 - **Toolkit Manager** for manifest-driven managed/manual tool health
 - **System Intelligence** for local hardware, health, network, storage, security, and resale-oriented summaries
 - **Hardware X-Ray** for detected hardware and available sensor coverage
@@ -48,6 +48,7 @@ Repair and resale workflows still waste hours on **wrong USB ports**, **mystery 
 - **Offline-capable:** local scans, local logs, and **Kyra offline** should work without signing up for anything.  
 - **Technician-friendly:** fewer mystery toggles; clearer “manual required” paths where auto-download is not safe or legal.  
 - **ZIP-first distribution:** official releases emphasize a **verified bundle** (`START_HERE.bat`, checksums) rather than pushing everyone straight at a raw installer download.
+- **Official sources only for cross-platform packs:** macOS, iOS / iPadOS, and Android catalog links point to Apple, Google / AOSP, and OEM vendor pages. ForgerEMS does not redistribute macOS installers, iOS / iPadOS IPSW files, Android OEM firmware, or legacy Windows ISOs, and does not use third-party IPSW indexes or firmware mirrors.
 
 ---
 

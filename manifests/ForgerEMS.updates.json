@@ -14,6 +14,67 @@
     "userAgent": "ForgerEMS-Updater/3.1",
     "maxArchivePerItem": 5
   },
+  "builderCategories": [
+    {
+      "categoryId": "core",
+      "categoryDisplayName": "Core ForgerEMS USB structure",
+      "defaultIncluded": true,
+      "required": true,
+      "platform": "Core"
+    },
+    {
+      "categoryId": "windows",
+      "categoryDisplayName": "Windows installers and recovery",
+      "defaultIncluded": true,
+      "platform": "Windows"
+    },
+    {
+      "categoryId": "legacy-windows",
+      "categoryDisplayName": "Legacy Windows manual media drop folders",
+      "defaultIncluded": true,
+      "requiresManualMedia": true,
+      "platform": "Windows"
+    },
+    {
+      "categoryId": "linux-rescue",
+      "categoryDisplayName": "Linux rescue and installer tools",
+      "defaultIncluded": true,
+      "platform": "Linux"
+    },
+    {
+      "categoryId": "macos",
+      "categoryDisplayName": "macOS installer workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": true,
+      "platform": "macOS"
+    },
+    {
+      "categoryId": "android",
+      "categoryDisplayName": "Android platform tools and firmware workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": true,
+      "platform": "Android"
+    },
+    {
+      "categoryId": "ios-ipados",
+      "categoryDisplayName": "iOS / iPadOS restore workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": true,
+      "platform": "Apple Mobile"
+    },
+    {
+      "categoryId": "oem-tools",
+      "categoryDisplayName": "OEM recovery links and vendor tools",
+      "defaultIncluded": true,
+      "platform": "OEM"
+    },
+    {
+      "categoryId": "diagnostics",
+      "categoryDisplayName": "Diagnostics and rescue utilities",
+      "defaultIncluded": true,
+      "platform": "Tools"
+    }
+  ],
   "items": [
     {
       "name": "SystemRescue 13.00 (amd64)",
@@ -27,7 +88,31 @@
       "maintenanceRank": 4,
       "enabled": true,
       "archive": true,
-      "notes": "Active managed autodownload: Linux recovery environment."
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Recovery",
+      "architecture": "amd64",
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Linux-based recovery / rescue toolkit.",
+      "licenseNote": "Free / open source.",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: Linux recovery environment.",
+      "freshness": {
+        "currentPinnedVersion": "13.00",
+        "latestKnownStableVersion": "13.00",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256url-only",
+        "upstreamReleaseType": "vendor-version-page",
+        "lastKnownChecksumSource": "Vendor per-file .sha256 companion at system-rescue.org",
+        "updateRecommendation": "No upstream change observed; remain pinned at 13.00."
+      }
     },
     {
       "name": "GParted Live 1.8.1-3 (amd64)",
@@ -41,7 +126,31 @@
       "maintenanceRank": 5,
       "enabled": true,
       "archive": true,
-      "notes": "Active managed autodownload: partition editor live ISO."
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Recovery",
+      "architecture": "amd64",
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Partition editor live ISO. Resize, move, repair partitions on any drive.",
+      "licenseNote": "Free / open source (GPL).",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: partition editor live ISO.",
+      "freshness": {
+        "currentPinnedVersion": "1.8.1-3",
+        "latestKnownStableVersion": "1.8.1-3",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "vendor-version-page",
+        "lastKnownChecksumSource": "gparted.org download page listing (operator-paste)",
+        "updateRecommendation": "No upstream change observed; remain pinned."
+      }
     },
     {
       "name": "Clonezilla Live 3.3.1-35 (amd64)",
@@ -55,38 +164,109 @@
       "maintenanceRank": 6,
       "enabled": true,
       "archive": true,
-      "notes": "Active managed autodownload: disk imaging / cloning live ISO."
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Recovery",
+      "architecture": "amd64",
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Disk imaging and cloning live ISO. Bare-metal backup/restore.",
+      "licenseNote": "Free / open source (GPL).",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: disk imaging / cloning live ISO.",
+      "freshness": {
+        "currentPinnedVersion": "3.3.1-35",
+        "latestKnownStableVersion": "3.3.1-35",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "vendor-version-page",
+        "lastKnownChecksumSource": "clonezilla.org/downloads.php (operator-paste)",
+        "updateRecommendation": "No upstream change observed; remain pinned."
+      }
     },
     {
-      "name": "Rescuezilla 2.6.1 (64-bit oracular)",
+      "name": "Rescuezilla 2.6.2 (64-bit oracular)",
       "type": "file",
-      "dest": "ISO\\Tools\\rescuezilla-2.6.1-64bit.oracular.iso",
-      "url": "https://github.com/rescuezilla/rescuezilla/releases/download/2.6.1/rescuezilla-2.6.1-64bit.oracular.iso",
-      "sha256": "7eaa7318634d4831d9bdf2b683acdcd68fb8dd42835fee0db8cb908ddfed2c74",
-      "sha256Url": "https://github.com/rescuezilla/rescuezilla/releases/download/2.6.1/SHA256SUM",
+      "dest": "ISO\\Tools\\rescuezilla-2.6.2-64bit.oracular.iso",
+      "url": "https://github.com/rescuezilla/rescuezilla/releases/download/2.6.2/rescuezilla-2.6.2-64bit.oracular.iso",
+      "sha256": "b34dd78e80104a4e3b8b7bd18dfec95ba3719e7919b12b06769c5285e5487664",
+      "sha256Url": "https://github.com/rescuezilla/rescuezilla/releases/download/2.6.2/SHA256SUM",
       "sourceType": "github-release",
       "fragilityLevel": "medium",
-      "fallbackRule": "Use rescuezilla.com or the matching official GitHub release for the same version and keep the SHA256SUM coverage. Demote if the release asset or checksum file stops matching.",
+      "fallbackRule": "Use rescuezilla.com or the matching official GitHub release for the same version and keep SHA256SUM coverage. Demote if the release asset or checksum file stops matching.",
       "maintenanceRank": 13,
       "enabled": true,
       "archive": true,
-      "notes": "Active managed autodownload: GUI rescue/backup imaging ISO."
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Recovery",
+      "architecture": "amd64",
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "GUI rescue/backup imaging. Clonezilla front-end with friendlier UX.",
+      "licenseNote": "Free / open source (GPL).",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: GUI rescue/backup imaging ISO.",
+      "freshness": {
+        "currentPinnedVersion": "2.6.2",
+        "latestKnownStableVersion": "2.6.2",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "github-releases",
+        "lastKnownChecksumSource": "GitHub release SHA256SUM asset",
+        "updateRecommendation": "Pinned at verified stable 2.6.2 after official source/checksum review on 2026-05-21."
+      }
     },
-
     {
-      "name": "Ventoy pinned fallback 1.1.11 (Windows package)",
+      "name": "Ventoy pinned fallback 1.1.12 (Windows package)",
       "type": "file",
-      "dest": "Tools\\Portable\\USB\\ventoy-1.1.11-windows.zip",
-      "url": "https://sourceforge.net/projects/ventoy/files/v1.1.11/ventoy-1.1.11-windows.zip/download",
-      "sha256": "1e56e02fc424c194fc4f33357cb949867854f386d67eaf9764f1c96264561493",
-      "sha256Url": "https://sourceforge.net/projects/ventoy/files/v1.1.11/sha256.txt/download",
-      "sourceType": "sourceforge",
-      "fragilityLevel": "high",
-      "fallbackRule": "Use ventoy.net to confirm the same versioned SourceForge asset and keep the official checksum file. Demote if the path stops being a direct official artifact or checksum coverage disappears.",
+      "dest": "Tools\\Portable\\USB\\ventoy-1.1.12-windows.zip",
+      "url": "https://github.com/ventoy/Ventoy/releases/download/v1.1.12/ventoy-1.1.12-windows.zip",
+      "sha256": "e70c505be08d99c55e506832f596c430a9c36f8d087f25542d3f6d332d9b6473",
+      "sha256Url": "https://api.github.com/repos/ventoy/Ventoy/releases/assets/403313750",
+      "sourceType": "github-release",
+      "fragilityLevel": "medium",
+      "fallbackRule": "Use ventoy.net and the matching official GitHub release asset/digest for the same version. Demote if the asset disappears or digest coverage stops agreeing.",
       "maintenanceRank": 3,
       "enabled": true,
       "archive": true,
-      "notes": "Pinned verified fallback only. USB Builder first attempts latest official Ventoy release resolution, then falls back to this package when latest metadata/checksum lookup is unavailable."
+      "kind": "tool",
+      "family": "USB",
+      "architecture": "amd64",
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "USB Builder fallback. Bootable multi-ISO USB tool.",
+      "licenseNote": "Free / open source (GPLv3 + proprietary EFI components per Ventoy distribution).",
+      "sourceTrust": "official",
+      "notes": "Pinned verified fallback only. USB Builder first attempts latest official Ventoy release resolution, then falls back to this package when latest metadata/checksum lookup is unavailable.",
+      "freshness": {
+        "currentPinnedVersion": "1.1.12",
+        "latestKnownStableVersion": "1.1.12",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "github-asset-digest",
+        "upstreamReleaseType": "github-releases",
+        "lastKnownChecksumSource": "GitHub release asset digest endpoint (api.github.com), cross-checked against Ventoy release sha256.txt",
+        "updateRecommendation": "Pinned at verified stable 1.1.12 after official source/checksum review on 2026-05-21."
+      }
     },
     {
       "name": "MediCat Download Page",
@@ -96,13 +276,30 @@
       "enabled": true,
       "notes": "Manual only: large community toolkit."
     },
-
     {
       "name": "Windows 11 Download Page",
       "type": "page",
       "dest": "ISO\\Windows\\DOWNLOAD - Windows 11.url",
       "url": "https://www.microsoft.com/software-download/windows11",
       "enabled": true,
+      "kind": "os",
+      "family": "Windows",
+      "osCategory": "Desktop",
+      "architecture": [
+        "amd64",
+        "arm64"
+      ],
+      "bootMode": [
+        "uefi",
+        "secure-boot"
+      ],
+      "recommendedUse": "Current supported Windows client. Use Microsoft Media Creation Tool or ISO download.",
+      "technicianNotes": "TPM 2.0 + Secure Boot required by default on 11. Some retail SKUs require Microsoft Account at OOBE.",
+      "licenseNote": "Microsoft EULA. Activation key required for production use.",
+      "manualOnly": true,
+      "ventoyNotes": "Ventoy supports modern Windows ISOs directly. Secure Boot supported.",
+      "secureBootNote": "Secure Boot supported and recommended.",
+      "sourceTrust": "official",
       "notes": "Manual only: Microsoft official download flow."
     },
     {
@@ -111,7 +308,309 @@
       "dest": "ISO\\Windows\\DOWNLOAD - Windows 10.url",
       "url": "https://www.microsoft.com/software-download/windows10ISO",
       "enabled": true,
+      "kind": "os",
+      "family": "Windows",
+      "osCategory": "Desktop",
+      "architecture": [
+        "amd64",
+        "x86"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "Current supported (Extended Support window) Windows client for fleets still on 10.",
+      "technicianNotes": "Microsoft mainstream support ended; ESU available for paid customers. Use Microsoft Media Creation Tool or direct ISO download.",
+      "licenseNote": "Microsoft EULA. Activation key required for production use.",
+      "manualOnly": true,
+      "ventoyNotes": "Fully supported by Ventoy. Secure Boot supported.",
+      "secureBootNote": "Secure Boot supported.",
+      "sourceTrust": "official",
       "notes": "Manual only: Microsoft official download flow."
+    },
+    {
+      "name": "Windows 8.1 Lifecycle Info",
+      "type": "page",
+      "dest": "ISO\\Windows-Legacy\\MANUAL ISO REQUIRED - Windows 8.1.url",
+      "url": "https://learn.microsoft.com/lifecycle/products/windows-81",
+      "enabled": true,
+      "kind": "os",
+      "family": "Windows",
+      "osCategory": "Legacy",
+      "architecture": [
+        "amd64",
+        "x86"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Legacy / lab use only. Use only for recovery, retro systems, or isolated labs.",
+      "technicianNotes": "End of support: 2023-01-10. Manual ISO required. ISO must be supplied by the user from their own retail/volume licence. Drop ISO into ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows 8.1\\.",
+      "licenseNote": "Microsoft EULA. User must provide legally obtained media.",
+      "manualOnly": true,
+      "legacyWarning": "Unsupported by vendor. Use only for recovery, retro systems, or isolated labs.",
+      "ventoyNotes": "Boots from Ventoy on most hardware. Secure Boot support varies.",
+      "secureBootNote": "Secure Boot may need to be disabled on modern firmware.",
+      "sourceTrust": "official",
+      "notes": "Manual ISO required. Reference: Microsoft Learn lifecycle. Use only legally obtained media; do not use random internet ISO mirrors."
+    },
+    {
+      "name": "Windows 8 Lifecycle Info",
+      "type": "page",
+      "dest": "ISO\\Windows-Legacy\\MANUAL ISO REQUIRED - Windows 8.url",
+      "url": "https://learn.microsoft.com/lifecycle/products/windows-8",
+      "enabled": true,
+      "kind": "os",
+      "family": "Windows",
+      "osCategory": "Legacy",
+      "architecture": [
+        "amd64",
+        "x86"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Legacy / lab use only. Use only for recovery, retro systems, or isolated labs.",
+      "technicianNotes": "End of support: 2016-01-12. Manual ISO required. ISO must be supplied by the user from their own licence. Drop ISO into ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows 8\\.",
+      "licenseNote": "Microsoft EULA. User must provide legally obtained media.",
+      "manualOnly": true,
+      "legacyWarning": "Unsupported by vendor. Use only for recovery, retro systems, or isolated labs.",
+      "ventoyNotes": "Boots from Ventoy on most hardware. Secure Boot support varies.",
+      "secureBootNote": "Secure Boot may need to be disabled.",
+      "sourceTrust": "official",
+      "notes": "Manual ISO required. Reference: Microsoft Learn lifecycle. Use only legally obtained media; do not use random internet ISO mirrors."
+    },
+    {
+      "name": "Windows 7 Lifecycle Info",
+      "type": "page",
+      "dest": "ISO\\Windows-Legacy\\MANUAL ISO REQUIRED - Windows 7.url",
+      "url": "https://learn.microsoft.com/lifecycle/products/windows-7",
+      "enabled": true,
+      "kind": "os",
+      "family": "Windows",
+      "osCategory": "Legacy",
+      "architecture": [
+        "amd64",
+        "x86"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Legacy / lab use only. Common need for older industrial / embedded hardware.",
+      "technicianNotes": "End of support: 2020-01-14. ESU ended 2023-01-10. Manual ISO required. Modern USB 3.0 / NVMe drivers typically need to be slipstreamed. Drop ISO into ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows 7\\.",
+      "licenseNote": "Microsoft EULA. User must provide legally obtained media.",
+      "manualOnly": true,
+      "legacyWarning": "Unsupported by vendor. Use only for recovery, retro systems, or isolated labs.",
+      "ventoyNotes": "Ventoy works; for very old hardware you may need to slipstream USB 3.0 drivers into the ISO.",
+      "secureBootNote": "Does not support modern Secure Boot. Disable Secure Boot to install.",
+      "sourceTrust": "official",
+      "notes": "Manual ISO required. Reference: Microsoft Learn lifecycle. Use only legally obtained media; do not use random internet ISO mirrors."
+    },
+    {
+      "name": "Windows Vista Lifecycle Info",
+      "type": "page",
+      "dest": "ISO\\Windows-Legacy\\MANUAL ISO REQUIRED - Windows Vista.url",
+      "url": "https://learn.microsoft.com/lifecycle/products/windows-vista",
+      "enabled": true,
+      "kind": "os",
+      "family": "Windows",
+      "osCategory": "Legacy",
+      "architecture": [
+        "amd64",
+        "x86"
+      ],
+      "bootMode": [
+        "bios",
+        "uefi"
+      ],
+      "recommendedUse": "Legacy / lab use only. Mostly historical interest.",
+      "technicianNotes": "End of support: 2017-04-11. Manual ISO required. Microsoft no longer hosts the ISO. Very limited modern driver coverage. Drop ISO into ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows Vista\\.",
+      "licenseNote": "Microsoft EULA. User must provide legally obtained media.",
+      "manualOnly": true,
+      "legacyWarning": "Unsupported by vendor. Lab / retro use only. Microsoft no longer hosts the ISO.",
+      "ventoyNotes": "Compatibility varies. Older installers may need legacy BIOS / CSM boot.",
+      "secureBootNote": "Does not support Secure Boot.",
+      "sourceTrust": "official",
+      "notes": "Manual ISO required. Reference: Microsoft Learn lifecycle. Microsoft no longer hosts the Vista ISO; use only legally obtained retail/volume media."
+    },
+    {
+      "name": "Windows XP Lifecycle Info",
+      "type": "page",
+      "dest": "ISO\\Windows-Legacy\\MANUAL ISO REQUIRED - Windows XP.url",
+      "url": "https://learn.microsoft.com/lifecycle/products/windows-xp",
+      "enabled": true,
+      "kind": "os",
+      "family": "Windows",
+      "osCategory": "Legacy",
+      "architecture": [
+        "x86",
+        "amd64"
+      ],
+      "bootMode": [
+        "bios"
+      ],
+      "recommendedUse": "Legacy / retro / industrial recovery. Common need for old POS, CNC, lab equipment.",
+      "technicianNotes": "End of support: 2014-04-08. Manual ISO required. AHCI/SATA drivers often need to be loaded via F6 floppy or slipstreamed. Disable XHCI/USB 3 in firmware. Drop ISO into ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows XP\\.",
+      "licenseNote": "Microsoft EULA. User must provide legally obtained media.",
+      "manualOnly": true,
+      "legacyWarning": "Unsupported by vendor. Use only for recovery, retro systems, or isolated labs. NEVER expose to the public internet.",
+      "ventoyNotes": "Ventoy can boot XP installers; modern UEFI-only firmware will not be able to load XP at all. IDE/SATA driver slipstreaming may be required.",
+      "secureBootNote": "Does not support Secure Boot. Legacy BIOS / CSM required.",
+      "sourceTrust": "official",
+      "notes": "Manual ISO required. Reference: Microsoft Learn lifecycle. Use only legally obtained retail/volume media; do not use random internet ISO mirrors."
+    },
+    {
+      "name": "Windows 2000 Lifecycle Info",
+      "type": "page",
+      "dest": "ISO\\Windows-Legacy\\MANUAL ISO REQUIRED - Windows 2000.url",
+      "url": "https://learn.microsoft.com/lifecycle/products/windows-2000",
+      "enabled": true,
+      "kind": "os",
+      "family": "Windows",
+      "osCategory": "Legacy",
+      "architecture": [
+        "x86"
+      ],
+      "bootMode": [
+        "bios"
+      ],
+      "recommendedUse": "Legacy / retro / lab. Pre-XP NT line.",
+      "technicianNotes": "End of support: 2010-07-13. Manual ISO required. Predates modern AHCI/SATA. Use IDE compatibility mode. Drop ISO into ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows 2000\\.",
+      "licenseNote": "Microsoft EULA. User must provide legally obtained media.",
+      "manualOnly": true,
+      "legacyWarning": "Unsupported by vendor. Lab / retro use only. NEVER expose to network.",
+      "ventoyNotes": "Compatibility varies. May need IDE compatibility mode and legacy BIOS / CSM.",
+      "secureBootNote": "Does not support Secure Boot. Legacy BIOS required.",
+      "sourceTrust": "official",
+      "notes": "Manual ISO required. Reference: Microsoft Learn lifecycle. Use only legally obtained retail/volume media; do not use random internet ISO mirrors."
+    },
+    {
+      "name": "Windows ME Reference Info",
+      "type": "page",
+      "dest": "ISO\\Windows-Legacy\\MANUAL ISO REQUIRED - Windows ME.url",
+      "url": "https://en.wikipedia.org/wiki/Windows_Me",
+      "enabled": true,
+      "kind": "os",
+      "family": "Windows",
+      "osCategory": "Hobby",
+      "architecture": [
+        "x86"
+      ],
+      "bootMode": [
+        "bios"
+      ],
+      "recommendedUse": "Retro / nostalgia use only. 9x kernel.",
+      "technicianNotes": "End of support: 2006-07-11. Manual ISO required. 9x kernel; very poor stability. Hobbyist value. Drop ISO into ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows ME\\.",
+      "licenseNote": "Microsoft EULA. User must provide legally obtained media.",
+      "manualOnly": true,
+      "legacyWarning": "Unsupported by vendor. Hobby / retro use only.",
+      "ventoyNotes": "Compatibility varies. 9x installers may need legacy BIOS / CSM and a boot floppy image.",
+      "secureBootNote": "Does not support Secure Boot. Legacy BIOS required.",
+      "sourceTrust": "manual",
+      "notes": "Manual ISO required. No Microsoft Learn lifecycle page exists for Windows ME; the shortcut points to a neutral encyclopedia reference. Use only legally obtained retail media; do not use random internet ISO mirrors."
+    },
+    {
+      "name": "Windows 98 Reference Info",
+      "type": "page",
+      "dest": "ISO\\Windows-Legacy\\MANUAL ISO REQUIRED - Windows 98.url",
+      "url": "https://en.wikipedia.org/wiki/Windows_98",
+      "enabled": true,
+      "kind": "os",
+      "family": "Windows",
+      "osCategory": "Hobby",
+      "architecture": [
+        "x86"
+      ],
+      "bootMode": [
+        "bios"
+      ],
+      "recommendedUse": "Retro / hobby. Often paired with FreeDOS for legacy gaming setups.",
+      "technicianNotes": "End of support: 2006-07-11. Manual ISO required. DOS/9x kernel. Limited hardware support beyond original era. Drop ISO into ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows 98\\.",
+      "licenseNote": "Microsoft EULA. User must provide legally obtained media.",
+      "manualOnly": true,
+      "legacyWarning": "Unsupported by vendor. Hobby / retro use only.",
+      "ventoyNotes": "Compatibility varies. 9x installers typically need a DOS boot disk and legacy BIOS / CSM.",
+      "secureBootNote": "Does not support Secure Boot. Legacy BIOS required.",
+      "sourceTrust": "manual",
+      "notes": "Manual ISO required. No Microsoft Learn lifecycle page exists for Windows 98; the shortcut points to a neutral encyclopedia reference. Use only legally obtained retail media; do not use random internet ISO mirrors."
+    },
+    {
+      "name": "Windows 95 Reference Info",
+      "type": "page",
+      "dest": "ISO\\Windows-Legacy\\MANUAL ISO REQUIRED - Windows 95.url",
+      "url": "https://en.wikipedia.org/wiki/Windows_95",
+      "enabled": true,
+      "kind": "os",
+      "family": "Windows",
+      "osCategory": "Hobby",
+      "architecture": [
+        "x86"
+      ],
+      "bootMode": [
+        "bios"
+      ],
+      "recommendedUse": "Retro / hobby. Mostly emulator / VM use.",
+      "technicianNotes": "End of support: 2001-12-31. Manual ISO required. Boot disk required for original install media. Usually only viable in a VM. Drop ISO into ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows 95\\.",
+      "licenseNote": "Microsoft EULA. User must provide legally obtained media.",
+      "manualOnly": true,
+      "legacyWarning": "Unsupported by vendor. Hobby / retro / VM use only.",
+      "ventoyNotes": "Compatibility varies. Typically only viable inside a VM; bare-metal boot rarely works on modern firmware.",
+      "secureBootNote": "Does not support Secure Boot. Legacy BIOS required.",
+      "sourceTrust": "manual",
+      "notes": "Manual ISO required. No Microsoft Learn lifecycle page exists for Windows 95; the shortcut points to a neutral encyclopedia reference. Use only legally obtained retail media; do not use random internet ISO mirrors."
+    },
+    {
+      "name": "Windows Server Evaluation Center",
+      "type": "page",
+      "dest": "ISO\\Windows\\DOWNLOAD - Windows Server Eval.url",
+      "url": "https://www.microsoft.com/en-us/evalcenter/download-windows-server-2025",
+      "enabled": true,
+      "kind": "os",
+      "family": "Windows",
+      "osCategory": "Server",
+      "architecture": [
+        "amd64"
+      ],
+      "bootMode": [
+        "uefi",
+        "secure-boot"
+      ],
+      "recommendedUse": "180-day evaluation builds of current Windows Server.",
+      "technicianNotes": "Microsoft Evaluation Center is the official source. Evaluation builds expire; not for production licensing.",
+      "licenseNote": "Microsoft Evaluation EULA. Time-limited.",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot supported.",
+      "sourceTrust": "official",
+      "notes": "Manual only: Microsoft Evaluation Center download flow."
+    },
+    {
+      "name": "Windows ADK and WinPE Info",
+      "type": "page",
+      "dest": "ISO\\Windows\\INFO - Windows ADK + WinPE.url",
+      "url": "https://learn.microsoft.com/windows-hardware/get-started/adk-install",
+      "enabled": true,
+      "kind": "os",
+      "family": "Windows",
+      "osCategory": "Recovery",
+      "architecture": [
+        "amd64",
+        "arm64",
+        "x86"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Build official WinPE recovery media from the Windows ADK.",
+      "technicianNotes": "WinPE is a free Microsoft component, distributed through the Windows ADK. Build your own ISO using copype.cmd / MakeWinPEMedia.",
+      "licenseNote": "Microsoft Software Licence Terms (Windows ADK).",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only: official Microsoft ADK install instructions. ForgerEMS does not redistribute WinPE."
     },
     {
       "name": "Sergei Strelec WinPE Info",
@@ -119,9 +618,25 @@
       "dest": "ISO\\Windows\\INFO - WinPE (Sergei Strelec).url",
       "url": "https://sergeistrelec.name/",
       "enabled": true,
+      "kind": "os",
+      "family": "Windows",
+      "osCategory": "Recovery",
+      "architecture": [
+        "amd64",
+        "x86"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Community WinPE rescue/repair bundle.",
+      "technicianNotes": "Useful WinPE diagnostic bundle, but bundles Microsoft components with mixed redistribution status.",
+      "licenseNote": "Mixed / unclear. Review before bundling.",
+      "manualOnly": true,
+      "legacyWarning": "Community bundle - confirm provenance before use in client environments.",
+      "sourceTrust": "community",
       "notes": "Manual only: community WinPE project."
     },
-
     {
       "name": "Hiren's BootCD PE Download Page",
       "type": "page",
@@ -155,19 +670,42 @@
       "notes": "Info shortcut: upstream page for the active managed autodownload GParted ISO."
     },
     {
-      "name": "MemTest86+ 8.00 (x86_64 ISO archive)",
+      "name": "MemTest86+ 8.10 (x86_64 ISO archive)",
       "type": "file",
-      "dest": "ISO\\Tools\\mt86plus_8.00_x86_64.iso.zip",
-      "url": "https://www.memtest.org/download/v8.00/mt86plus_8.00_x86_64.iso.zip",
-      "sha256": "df242b91b55571d5126e8236ce7942851b7015331aaf48cfb440a8f9d2c4cc6f",
-      "sha256Url": "https://www.memtest.org/download/v8.00/sha256sum.txt",
+      "dest": "ISO\\Tools\\mt86plus_8.10_x86_64.iso.zip",
+      "url": "https://www.memtest.org/download/v8.10/mt86plus_8.10_x86_64.iso.zip",
+      "sha256": "93530005d6ac6a85aa2a49c68604a43c25794ecccf796c4f8849a73a8001be9a",
+      "sha256Url": "https://www.memtest.org/download/v8.10/sha256sum.txt",
       "sourceType": "official-version-path",
       "fragilityLevel": "low",
       "fallbackRule": "Use the memtest.org versioned download directory and official sha256sum.txt for the same release. Demote if the workflow becomes page-only or checksum coverage disappears.",
       "maintenanceRank": 14,
       "enabled": true,
       "archive": true,
-      "notes": "Active managed autodownload: official x86_64 ISO archive. Extract the ISO before using it with Ventoy."
+      "kind": "tool",
+      "family": "Recovery",
+      "architecture": "amd64",
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Open-source memory diagnostic. Boot from Ventoy for RAM error detection.",
+      "licenseNote": "Free / open source (GPL).",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official x86_64 ISO archive. Extract the ISO before using it with Ventoy.",
+      "freshness": {
+        "currentPinnedVersion": "8.10",
+        "latestKnownStableVersion": "8.10",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "vendor-version-page",
+        "lastKnownChecksumSource": "memtest.org versioned sha256sum.txt",
+        "updateRecommendation": "Pinned at verified stable 8.10 after official source/checksum review on 2026-05-21."
+      }
     },
     {
       "name": "Ultimate Boot CD Download Page",
@@ -185,7 +723,6 @@
       "enabled": true,
       "notes": "Info shortcut: upstream page for the active managed autodownload MemTest86+ release."
     },
-
     {
       "name": "Ubuntu 24.04.4 LTS Desktop (amd64)",
       "type": "file",
@@ -198,7 +735,33 @@
       "maintenanceRank": 16,
       "enabled": true,
       "archive": true,
-      "notes": "Active managed autodownload: official Ubuntu desktop ISO."
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Desktop",
+      "architecture": "amd64",
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "General-purpose Linux desktop. Daily-driver / live USB.",
+      "licenseNote": "Free / open source (Canonical).",
+      "sourceTrust": "official",
+      "secureBootNote": "Secure Boot supported (signed shim+grub).",
+      "notes": "Active managed autodownload: official Ubuntu desktop ISO.",
+      "freshness": {
+        "currentPinnedVersion": "24.04.4",
+        "latestKnownStableVersion": "24.04.4",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "LTS",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "vendor-version-page",
+        "lastKnownChecksumSource": "releases.ubuntu.com/24.04.4/SHA256SUMS (operator-paste)",
+        "updateRecommendation": "LTS pinned at 24.04.4; watch for 24.04.5 point release."
+      }
     },
     {
       "name": "Linux Mint 22.3 Cinnamon (64-bit)",
@@ -213,7 +776,33 @@
       "borderline": true,
       "enabled": true,
       "archive": true,
-      "notes": "Active managed autodownload: official Linux Mint Cinnamon ISO from the project mirror."
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Desktop",
+      "architecture": "amd64",
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "Beginner-friendly Ubuntu-based desktop with Cinnamon.",
+      "licenseNote": "Free / open source.",
+      "sourceTrust": "official",
+      "secureBootNote": "Secure Boot supported.",
+      "notes": "Active managed autodownload: official Linux Mint Cinnamon ISO from the project mirror.",
+      "freshness": {
+        "currentPinnedVersion": "22.3",
+        "latestKnownStableVersion": "22.3",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "vendor-version-page",
+        "lastKnownChecksumSource": "linuxmint.com release sha256sum.txt (operator-paste)",
+        "updateRecommendation": "No upstream change observed; remain pinned."
+      }
     },
     {
       "name": "Kali Linux 2026.1 Installer (amd64)",
@@ -228,7 +817,34 @@
       "maintenanceRank": 15,
       "enabled": true,
       "archive": true,
-      "notes": "Active managed autodownload: official Kali installer ISO."
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Security",
+      "architecture": "amd64",
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "Penetration testing / security audits. Authorized use only.",
+      "technicianNotes": "Use only on authorized engagements. Most pen-testing tools are network-aware and must not be used outside scope.",
+      "licenseNote": "Free / open source (Offensive Security).",
+      "sourceTrust": "official",
+      "secureBootNote": "Secure Boot supported.",
+      "notes": "Active managed autodownload: official Kali installer ISO.",
+      "freshness": {
+        "currentPinnedVersion": "2026.1",
+        "latestKnownStableVersion": "2026.1",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "official-mirror-index",
+        "lastKnownChecksumSource": "cdimage.kali.org/kali-2026.1/SHA256SUMS",
+        "updateRecommendation": "No upstream change observed; remain pinned."
+      }
     },
     {
       "name": "Ubuntu Download Page",
@@ -236,6 +852,23 @@
       "dest": "ISO\\Linux\\DOWNLOAD - Ubuntu.url",
       "url": "https://ubuntu.com/download/desktop",
       "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Desktop",
+      "architecture": [
+        "amd64",
+        "arm64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "General-purpose Linux desktop. Excellent technician daily-driver / live USB.",
+      "licenseNote": "Free / open source (Canonical).",
+      "manualOnly": false,
+      "secureBootNote": "Secure Boot supported (signed shim+grub).",
+      "sourceTrust": "official",
       "notes": "Info shortcut: upstream page for the active managed autodownload Ubuntu ISO."
     },
     {
@@ -244,6 +877,23 @@
       "dest": "ISO\\Linux\\DOWNLOAD - Kali Linux.url",
       "url": "https://www.kali.org/get-kali/",
       "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Security",
+      "architecture": [
+        "amd64",
+        "arm64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "Penetration testing / security audits. Authorized use only.",
+      "licenseNote": "Free / open source (Offensive Security). Authorized testing only.",
+      "manualOnly": false,
+      "secureBootNote": "Secure Boot supported.",
+      "sourceTrust": "official",
       "notes": "Info shortcut: upstream page for the active managed autodownload Kali ISO."
     },
     {
@@ -252,6 +902,20 @@
       "dest": "ISO\\Linux\\DOWNLOAD - SystemRescue.url",
       "url": "https://www.system-rescue.org/Download/",
       "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Recovery",
+      "architecture": [
+        "amd64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Linux-based recovery / rescue toolkit.",
+      "licenseNote": "Free / open source.",
+      "manualOnly": false,
+      "sourceTrust": "official",
       "notes": "Info shortcut: upstream page for the active managed autodownload SystemRescue ISO."
     },
     {
@@ -260,6 +924,23 @@
       "dest": "ISO\\Linux\\DOWNLOAD - Fedora Workstation.url",
       "url": "https://www.fedoraproject.org/workstation/download/",
       "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Desktop",
+      "architecture": [
+        "amd64",
+        "arm64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "Bleeding-edge Linux desktop (Red Hat upstream).",
+      "licenseNote": "Free / open source (Fedora Project).",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot supported.",
+      "sourceTrust": "official",
       "notes": "Manual only: official Fedora workstation download page."
     },
     {
@@ -268,7 +949,52 @@
       "dest": "ISO\\Linux\\DOWNLOAD - Debian Live.url",
       "url": "https://www.debian.org/CD/live/",
       "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Desktop",
+      "architecture": [
+        "amd64",
+        "arm64",
+        "i386"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "Stable Debian live ISO across multiple desktop flavors.",
+      "licenseNote": "Free / open source (Debian Project).",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot supported.",
+      "sourceTrust": "official",
       "notes": "Manual only: official Debian live image page. Pick the current stable live flavor and verify with Debian-published checksums/signatures."
+    },
+    {
+      "name": "Debian netinst Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Debian netinst.url",
+      "url": "https://www.debian.org/distrib/netinst",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Server",
+      "architecture": [
+        "amd64",
+        "arm64",
+        "i386"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "Minimal Debian network installer for servers / lean desktops.",
+      "technicianNotes": "Requires network during install. Official SHA256/SHA512 + signatures published per release.",
+      "licenseNote": "Free / open source (Debian Project).",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot supported.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official Debian netinst page."
     },
     {
       "name": "Arch Linux Download Page",
@@ -276,6 +1002,22 @@
       "dest": "ISO\\Linux\\DOWNLOAD - Arch Linux.url",
       "url": "https://archlinux.org/download/",
       "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Desktop",
+      "architecture": [
+        "amd64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Rolling-release Arch installer ISO.",
+      "technicianNotes": "Rolling monthly ISO. Verify SHA256/BLAKE2b + PGP signature published on the Arch download page.",
+      "licenseNote": "Free / open source (Arch Linux).",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot not officially signed; expect to disable Secure Boot.",
+      "sourceTrust": "official",
       "notes": "Manual only: rolling monthly ISO with official SHA256/BLAKE2b and PGP verification on the Arch download page."
     },
     {
@@ -284,6 +1026,23 @@
       "dest": "ISO\\Tools\\DOWNLOAD - FreeDOS.url",
       "url": "https://www.freedos.org/download/",
       "enabled": true,
+      "kind": "os",
+      "family": "DOS",
+      "osCategory": "Recovery",
+      "architecture": [
+        "x86"
+      ],
+      "bootMode": [
+        "bios",
+        "uefi-csm"
+      ],
+      "recommendedUse": "BIOS flashing, legacy DOS diagnostics, vintage games.",
+      "technicianNotes": "Often needed for vendor BIOS update utilities. Requires BIOS or UEFI legacy/CSM mode.",
+      "licenseNote": "Free / open source (GPL).",
+      "manualOnly": true,
+      "ventoyNotes": "Boots from Ventoy. CSM/legacy boot required.",
+      "secureBootNote": "Secure Boot not supported.",
+      "sourceTrust": "official",
       "notes": "Manual only: useful for legacy BIOS/firmware workflows; FreeDOS notes BIOS or UEFI legacy-mode requirements."
     },
     {
@@ -292,6 +1051,20 @@
       "dest": "ISO\\Linux\\DOWNLOAD - Endless OS.url",
       "url": "https://www.endlessos.org/os",
       "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Desktop",
+      "architecture": [
+        "amd64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Education / low-bandwidth deployments.",
+      "licenseNote": "Free (Endless OS Foundation).",
+      "manualOnly": true,
+      "sourceTrust": "official",
       "notes": "Manual only: official Endless OS download page."
     },
     {
@@ -300,9 +1073,890 @@
       "dest": "ISO\\Linux\\DOWNLOAD - Linux Mint.url",
       "url": "https://linuxmint.com/download.php",
       "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Desktop",
+      "architecture": [
+        "amd64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "Beginner-friendly Ubuntu-based desktop.",
+      "licenseNote": "Free / open source.",
+      "manualOnly": false,
+      "secureBootNote": "Secure Boot supported.",
+      "sourceTrust": "official",
       "notes": "Info shortcut: upstream page for the active managed autodownload Linux Mint ISO."
     },
-
+    {
+      "name": "Pop!_OS Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Pop!_OS.url",
+      "url": "https://pop.system76.com/",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Desktop",
+      "architecture": [
+        "amd64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "Developer / creator desktop (System76). Strong NVIDIA hybrid graphics support.",
+      "licenseNote": "Free / open source (System76).",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot supported.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official Pop!_OS download page."
+    },
+    {
+      "name": "Zorin OS Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Zorin OS.url",
+      "url": "https://zorin.com/os/download/",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Desktop",
+      "architecture": [
+        "amd64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "Windows-style Linux desktop. Good for migrations.",
+      "licenseNote": "Free Core edition; paid Pro edition.",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot supported.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official Zorin OS download page."
+    },
+    {
+      "name": "elementary OS Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - elementary OS.url",
+      "url": "https://elementary.io/",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Desktop",
+      "architecture": [
+        "amd64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "Polished macOS-style Linux desktop.",
+      "licenseNote": "Free / open source (pay-what-you-want).",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot supported.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official elementary OS download page."
+    },
+    {
+      "name": "MX Linux Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - MX Linux.url",
+      "url": "https://mxlinux.org/download-links/",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Desktop",
+      "architecture": [
+        "amd64",
+        "i386"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Lightweight Debian-based desktop. Strong on older hardware.",
+      "licenseNote": "Free / open source.",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot supported on recent releases.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official MX Linux download page."
+    },
+    {
+      "name": "EndeavourOS Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - EndeavourOS.url",
+      "url": "https://endeavouros.com/latest-release/",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Desktop",
+      "architecture": [
+        "amd64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Friendlier Arch experience with offline+online installers.",
+      "licenseNote": "Free / open source.",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot may need to be disabled.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official EndeavourOS download page."
+    },
+    {
+      "name": "KDE neon Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - KDE neon.url",
+      "url": "https://neon.kde.org/download",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Desktop",
+      "architecture": [
+        "amd64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "Latest KDE Plasma on top of Ubuntu LTS.",
+      "licenseNote": "Free / open source (KDE).",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot supported.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official KDE neon download page."
+    },
+    {
+      "name": "Manjaro Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Manjaro.url",
+      "url": "https://manjaro.org/download/",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Desktop",
+      "architecture": [
+        "amd64",
+        "arm64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "User-friendly Arch derivative.",
+      "licenseNote": "Free / open source.",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot may need to be disabled.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official Manjaro download page."
+    },
+    {
+      "name": "openSUSE Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - openSUSE.url",
+      "url": "https://get.opensuse.org/",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Desktop",
+      "architecture": [
+        "amd64",
+        "arm64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "Leap stable Linux desktop/server installer; avoid rolling Tumbleweed for managed stable catalog entries.",
+      "licenseNote": "Free / open source (SUSE/openSUSE licenses).",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot generally supported on mainstream openSUSE media, subject to target firmware.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official openSUSE portal; promote Leap only after a stable versioned ISO/checksum pair is verified.",
+      "technicianNotes": "2026-05-21 recheck found official Leap checksum files, but live URL/HEAD validation was inconsistent during this pass. Keep manual until a versioned ISO and checksum URL revalidate reliably.",
+      "ventoyNotes": "Ventoy can boot many openSUSE ISOs; use media check and official sha256/asc files manually.",
+      "fallbackRule": "Use get.opensuse.org or download.opensuse.org only. Do not pin Current/latest aliases without a versioned artifact and matching checksum."
+    },
+    {
+      "name": "Tails Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Tails.url",
+      "url": "https://tails.net/install/index.en.html",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Security",
+      "architecture": [
+        "amd64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Amnesic live OS routed through Tor. Use only with informed consent.",
+      "technicianNotes": "Designed to leave no trace on host. Boot Tails verifier on USB; do not install to disk in normal workflows.",
+      "licenseNote": "Free / open source (Tails Project).",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only: official Tails install page with verification instructions."
+    },
+    {
+      "name": "Qubes OS Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Qubes OS.url",
+      "url": "https://www.qubes-os.org/downloads/",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Security",
+      "architecture": [
+        "amd64"
+      ],
+      "bootMode": [
+        "uefi"
+      ],
+      "recommendedUse": "Compartmentalised security-focused OS using Xen.",
+      "technicianNotes": "Requires VT-x/VT-d and supported hardware; not a portable live OS - dedicated install only.",
+      "licenseNote": "Free / open source.",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot must typically be disabled.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official Qubes OS download page. Hardware compatibility list applies."
+    },
+    {
+      "name": "Ubuntu Server Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Ubuntu Server.url",
+      "url": "https://ubuntu.com/download/server",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Server",
+      "architecture": [
+        "amd64",
+        "arm64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "Mainstream Linux server install media (Canonical LTS / interim).",
+      "licenseNote": "Free / open source (Canonical).",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot supported.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official Ubuntu Server download page."
+    },
+    {
+      "name": "Fedora Server Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Fedora Server.url",
+      "url": "https://fedoraproject.org/server/download",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Server",
+      "architecture": [
+        "amd64",
+        "arm64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "Cutting-edge Fedora-based server install media.",
+      "licenseNote": "Free / open source (Fedora Project).",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot supported.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official Fedora Server download page."
+    },
+    {
+      "name": "Rocky Linux Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Rocky Linux.url",
+      "url": "https://rockylinux.org/download",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Server",
+      "architecture": [
+        "amd64",
+        "arm64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "RHEL-compatible enterprise Linux for servers / labs.",
+      "licenseNote": "Free / open source (Rocky Enterprise Software Foundation).",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot supported.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official Rocky Linux download page."
+    },
+    {
+      "name": "AlmaLinux Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - AlmaLinux.url",
+      "url": "https://almalinux.org/get-almalinux/",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Server",
+      "architecture": [
+        "amd64",
+        "arm64",
+        "ppc64le",
+        "s390x"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "RHEL-compatible enterprise Linux for servers / labs.",
+      "licenseNote": "Free / open source (AlmaLinux OS Foundation).",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot supported.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official AlmaLinux download portal."
+    },
+    {
+      "name": "Alpine Linux Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Alpine Linux.url",
+      "url": "https://alpinelinux.org/downloads/",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Server",
+      "architecture": [
+        "amd64",
+        "arm64",
+        "armhf",
+        "x86"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Tiny musl-libc Linux for containers / embedded / minimal servers.",
+      "licenseNote": "Free / open source.",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot not signed by Microsoft; expect to disable Secure Boot for bare-metal boot.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official Alpine Linux download portal."
+    },
+    {
+      "name": "Proxmox VE Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Proxmox VE.url",
+      "url": "https://www.proxmox.com/en/downloads/category/iso-images-pve",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Hypervisor",
+      "architecture": [
+        "amd64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "KVM + LXC virtualization host (Debian-based).",
+      "technicianNotes": "Requires VT-x/AMD-V. Free to use; paid subscription unlocks enterprise repos.",
+      "licenseNote": "Free / open source. Enterprise repo requires paid subscription.",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot supported.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official Proxmox ISO download page."
+    },
+    {
+      "name": "TrueNAS SCALE Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - TrueNAS SCALE.url",
+      "url": "https://www.truenas.com/download-truenas-scale/",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Server",
+      "architecture": [
+        "amd64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Linux-based NAS / storage appliance from iXsystems.",
+      "technicianNotes": "ZFS-based storage. Free Community edition; Enterprise option with support contract.",
+      "licenseNote": "Free Community / paid Enterprise.",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot supported on recent builds.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official TrueNAS SCALE download page."
+    },
+    {
+      "name": "pfSense Community Edition Download Page",
+      "type": "page",
+      "dest": "ISO\\BSD\\DOWNLOAD - pfSense CE.url",
+      "url": "https://www.pfsense.org/download/",
+      "enabled": true,
+      "kind": "os",
+      "family": "BSD",
+      "osCategory": "Network-Appliance",
+      "architecture": [
+        "amd64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "FreeBSD-based firewall/router appliance OS.",
+      "technicianNotes": "CE is free for community use. Vendor (Netgate) also offers paid Plus edition. Read licence carefully.",
+      "licenseNote": "Free CE (Apache 2.0 since 2.7); paid Plus edition.",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only: official pfSense download page; user must complete vendor form to receive ISO link."
+    },
+    {
+      "name": "OPNsense Download Page",
+      "type": "page",
+      "dest": "ISO\\BSD\\DOWNLOAD - OPNsense.url",
+      "url": "https://opnsense.org/download/",
+      "enabled": true,
+      "kind": "os",
+      "family": "BSD",
+      "osCategory": "Network-Appliance",
+      "architecture": [
+        "amd64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "FreeBSD-based firewall/router appliance (open-source-first).",
+      "licenseNote": "Free / open source (Deciso B.V.).",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only: official OPNsense download page."
+    },
+    {
+      "name": "Parrot OS Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Parrot OS.url",
+      "url": "https://parrotsec.org/download/",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Security",
+      "architecture": [
+        "amd64",
+        "arm64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "Security-focused Debian-based distro alternative to Kali.",
+      "licenseNote": "Free / open source (Parrot Foundation).",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot supported.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official Parrot OS download page."
+    },
+    {
+      "name": "Rescatux Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Rescatux.url",
+      "url": "https://www.supergrubdisk.org/rescatux/",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Recovery",
+      "architecture": [
+        "amd64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "GUI-driven Linux/Windows boot repair, password reset (Linux), partition rescue.",
+      "licenseNote": "Free / open source.",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only: official Rescatux page on the Super Grub2 Disk site."
+    },
+    {
+      "name": "Super Grub2 Disk Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Super Grub2 Disk.url",
+      "url": "https://www.supergrubdisk.org/super-grub2-disk/",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Recovery",
+      "architecture": [
+        "amd64",
+        "x86"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Boot a broken Linux/Windows install when GRUB is gone.",
+      "licenseNote": "Free / open source.",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only: official Super Grub2 Disk download page."
+    },
+    {
+      "name": "MemTest86 (PassMark UEFI) Download Page",
+      "type": "page",
+      "dest": "ISO\\Tools\\DOWNLOAD - MemTest86 (PassMark UEFI).url",
+      "url": "https://www.memtest86.com/download.htm",
+      "enabled": true,
+      "kind": "tool",
+      "family": "Recovery",
+      "osCategory": "Recovery",
+      "architecture": [
+        "amd64",
+        "x86"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Modern UEFI memory diagnostic from PassMark. Distinct from open-source MemTest86+.",
+      "technicianNotes": "Free version is sufficient for basic tests. Paid Pro/Site edition adds advanced features. Already complements the bundled MemTest86+ ISO.",
+      "licenseNote": "Free for personal use; paid Pro/Site editions.",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only: official PassMark MemTest86 download page."
+    },
+    {
+      "name": "Parted Magic Download Page",
+      "type": "page",
+      "dest": "ISO\\Tools\\DOWNLOAD - Parted Magic.url",
+      "url": "https://partedmagic.com/",
+      "enabled": true,
+      "kind": "tool",
+      "family": "Recovery",
+      "osCategory": "Recovery",
+      "architecture": [
+        "amd64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Commercial all-in-one disk/partition/secure-erase rescue distro.",
+      "technicianNotes": "Paid commercial download since 2013. Useful for SSD secure-erase across many vendors.",
+      "licenseNote": "Paid - vendor licence required.",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only - paid: vendor licence required. Official page only; ForgerEMS does not redistribute."
+    },
+    {
+      "name": "ReactOS Download Page",
+      "type": "page",
+      "dest": "ISO\\Hobby\\DOWNLOAD - ReactOS.url",
+      "url": "https://reactos.org/download/",
+      "enabled": true,
+      "kind": "os",
+      "family": "Hobby",
+      "osCategory": "Hobby",
+      "architecture": [
+        "x86"
+      ],
+      "bootMode": [
+        "bios",
+        "uefi-csm"
+      ],
+      "recommendedUse": "Open-source Windows-NT-compatible OS. Hobby / experimental use.",
+      "technicianNotes": "Alpha-quality. Best used in a VM. Compatibility with real Windows software is partial.",
+      "licenseNote": "Free / open source (GPL).",
+      "manualOnly": true,
+      "legacyWarning": "Alpha / experimental. Hobby / lab use only.",
+      "secureBootNote": "Does not support Secure Boot.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official ReactOS download page.",
+      "ventoyNotes": "Use Ventoy only for VM/lab experiments; real hardware compatibility is limited.",
+      "fallbackRule": "Use reactos.org only and select stable release media manually. Do not automate alpha, beta, nightly, or third-party builds."
+    },
+    {
+      "name": "Haiku Download Page",
+      "type": "page",
+      "dest": "ISO\\Hobby\\DOWNLOAD - Haiku.url",
+      "url": "https://www.haiku-os.org/get-haiku/",
+      "enabled": true,
+      "kind": "os",
+      "family": "Hobby",
+      "osCategory": "Hobby",
+      "architecture": [
+        "amd64",
+        "x86"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "BeOS-inspired open-source desktop OS. Hobby / nostalgia.",
+      "licenseNote": "Free / open source (MIT-style Haiku licenses).",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot is not expected; disable Secure Boot for bare-metal tests.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official Haiku page; stable-only policy blocks beta-labelled media automation.",
+      "technicianNotes": "Kept manual because current Haiku release artifacts are beta-labelled; do not automate beta-channel OS media under the stable-only catalog policy.",
+      "ventoyNotes": "Use Ventoy only for lab/hobby testing and verify the release hash manually from haiku-os.org.",
+      "fallbackRule": "Use only the official Haiku get-haiku page. Do not substitute third-party mirrors or beta/nightly artifacts into managed downloads."
+    },
+    {
+      "name": "KolibriOS Download Page",
+      "type": "page",
+      "dest": "ISO\\Hobby\\DOWNLOAD - KolibriOS.url",
+      "url": "https://kolibrios.org/en/download/",
+      "enabled": true,
+      "kind": "os",
+      "family": "Hobby",
+      "osCategory": "Hobby",
+      "architecture": [
+        "x86"
+      ],
+      "bootMode": [
+        "bios"
+      ],
+      "recommendedUse": "Tiny assembly-language hobby OS. Curiosity / education.",
+      "licenseNote": "Free / open source.",
+      "manualOnly": true,
+      "legacyWarning": "Hobby / experimental. Lab use only.",
+      "secureBootNote": "Does not support Secure Boot.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official KolibriOS download page."
+    },
+    {
+      "name": "Tiny Core Linux Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Tiny Core Linux.url",
+      "url": "https://tinycorelinux.net/downloads.html",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Hobby",
+      "architecture": [
+        "x86",
+        "amd64"
+      ],
+      "bootMode": [
+        "bios",
+        "uefi"
+      ],
+      "recommendedUse": "Tiny live Linux (~16 MB Core / ~106 MB TinyCore) for old hardware or focused tasks.",
+      "licenseNote": "Free / open source.",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot not signed; expect to disable.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official Tiny Core Linux download page."
+    },
+    {
+      "name": "Puppy Linux Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Puppy Linux.url",
+      "url": "https://puppylinux-woof-ce.github.io/",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Hobby",
+      "architecture": [
+        "amd64",
+        "x86"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Lightweight live distro for old hardware. Multiple flavours.",
+      "licenseNote": "Free / open source.",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only: official Puppy Linux (Woof-CE) project page."
+    },
+    {
+      "name": "Slackware Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Slackware.url",
+      "url": "https://www.slackware.com/getslack/",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Desktop",
+      "architecture": [
+        "amd64",
+        "x86"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Classic Linux distribution for legacy/admin lab workflows.",
+      "licenseNote": "Free / open source.",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only: official Slackware page; promote only after direct ISO and checksum verification.",
+      "technicianNotes": "Kept manual because official acquisition is mirror-selection oriented and this pass did not verify a direct versioned ISO plus SHA-256 companion.",
+      "secureBootNote": "Secure Boot is not the default Slackware install path; expect to disable Secure Boot.",
+      "ventoyNotes": "Ventoy may boot Slackware ISOs; fall back to official install media instructions if needed.",
+      "fallbackRule": "Use slackware.com/getslack and official mirrors only. Do not automate mirror paths until exact SHA-256 coverage is verified."
+    },
+    {
+      "name": "Gentoo Linux Download Page",
+      "type": "page",
+      "dest": "ISO\\Linux\\DOWNLOAD - Gentoo Linux.url",
+      "url": "https://www.gentoo.org/downloads/",
+      "enabled": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Desktop",
+      "architecture": [
+        "amd64",
+        "arm64",
+        "x86",
+        "ppc64",
+        "riscv"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Source-based Linux for advanced users and embedded targets.",
+      "licenseNote": "Free / open source.",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot is not the default Gentoo install path; expect to disable Secure Boot.",
+      "sourceTrust": "official",
+      "notes": "Manual only: rolling/date-stamped media; stable managed pinning needs a separate policy.",
+      "technicianNotes": "Kept manual because Gentoo install media is rolling/date-stamped and digest files need a deliberate parser/release policy before managed automation.",
+      "ventoyNotes": "Ventoy can boot Gentoo minimal media, but technicians should follow the handbook and verify DIGESTS manually.",
+      "fallbackRule": "Use gentoo.org downloads only and verify DIGESTS/signatures manually. Do not promote weekly rolling media without a freshness policy."
+    },
+    {
+      "name": "NetBSD Download Page",
+      "type": "page",
+      "dest": "ISO\\BSD\\DOWNLOAD - NetBSD.url",
+      "url": "https://www.netbsd.org/releases/",
+      "enabled": true,
+      "kind": "os",
+      "family": "BSD",
+      "osCategory": "Server",
+      "architecture": [
+        "amd64",
+        "arm64",
+        "x86",
+        "many"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Portable BSD installer for broad architecture coverage.",
+      "licenseNote": "Free / open source (BSD).",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot is not the normal NetBSD install path; expect to disable Secure Boot.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official NetBSD release page; SHA512 resolver support exists, but managed promotion still requires live URL/checksum revalidation to pass consistently.",
+      "technicianNotes": "2026-05-21 recheck confirmed official NetBSD 10.1 amd64 ISO and SHA512 checksum files. Kept manual because operational Invoke-WebRequest/HEAD validation to cdn.netbsd.org/ftp.netbsd.org was refused intermittently in this environment, so managed revalidation would be fragile.",
+      "ventoyNotes": "Ventoy compatibility varies; use official install images manually when ISO boot is unreliable.",
+      "fallbackRule": "Use netbsd.org/cdn.netbsd.org release directories and verify NetBSD-10.1-amd64.iso with the vendor SHA512 file manually. Promote only when live URL and checksum-source probes are stable."
+    },
+    {
+      "name": "FreeBSD Download Page",
+      "type": "page",
+      "dest": "ISO\\BSD\\DOWNLOAD - FreeBSD.url",
+      "url": "https://www.freebsd.org/where/",
+      "enabled": true,
+      "kind": "os",
+      "family": "BSD",
+      "osCategory": "Server",
+      "architecture": [
+        "amd64",
+        "arm64",
+        "x86",
+        "riscv",
+        "powerpc"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Production-quality BSD server/workstation OS.",
+      "licenseNote": "Free / open source (BSD).",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot not officially signed.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official FreeBSD where-to-get-it page."
+    },
+    {
+      "name": "OpenBSD Download Page",
+      "type": "page",
+      "dest": "ISO\\BSD\\DOWNLOAD - OpenBSD.url",
+      "url": "https://www.openbsd.org/faq/faq4.html",
+      "enabled": true,
+      "kind": "os",
+      "family": "BSD",
+      "osCategory": "Server",
+      "architecture": [
+        "amd64",
+        "arm64",
+        "x86",
+        "many"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Security-focused BSD. Strong defaults for firewalls / bastion hosts.",
+      "licenseNote": "Free / open source (BSD/ISC).",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot not officially signed.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official OpenBSD installation FAQ (download mirrors and verification)."
+    },
+    {
+      "name": "OpenIndiana Download Page",
+      "type": "page",
+      "dest": "ISO\\Other-Unix\\DOWNLOAD - OpenIndiana.url",
+      "url": "https://www.openindiana.org/downloads/",
+      "enabled": true,
+      "kind": "os",
+      "family": "Other-Unix",
+      "osCategory": "Server",
+      "architecture": [
+        "amd64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Community illumos distribution (Solaris descendant).",
+      "licenseNote": "Free / open source (CDDL/MIT-ish).",
+      "manualOnly": true,
+      "secureBootNote": "Secure Boot not officially signed.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official OpenIndiana download page."
+    },
     {
       "name": "CrystalDiskInfo 9.8.0 (standard zip)",
       "type": "file",
@@ -316,7 +1970,26 @@
       "borderline": true,
       "enabled": true,
       "archive": true,
-      "notes": "Active managed autodownload: official CrystalDiskInfo standard ZIP from the vendor SourceForge project. The vendor does not publish a machine-readable checksum here, so the manifest pins a verified SHA256 from the official artifact."
+      "kind": "tool",
+      "family": "Disk",
+      "architecture": "amd64",
+      "recommendedUse": "SMART drive health reporting on Windows.",
+      "licenseNote": "Free / open source (modified MIT).",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official CrystalDiskInfo standard ZIP from the vendor SourceForge project. The vendor does not publish a machine-readable checksum here, so the manifest pins a verified SHA256 from the official artifact.",
+      "freshness": {
+        "currentPinnedVersion": "9.8.0",
+        "latestKnownStableVersion": "9.9.0",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "MinorUpdateAvailable",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "vendor-version-page",
+        "lastKnownChecksumSource": "crystalmark.info download list (operator-paste)",
+        "updateRecommendation": "Minor bump 9.8.0 -> 9.9.0 available; re-verify checksum before promoting."
+      }
     },
     {
       "name": "HDDScan Download Page",
@@ -340,7 +2013,18 @@
       "dest": "Tools\\Portable\\Disk\\DOWNLOAD - CrystalDiskInfo.url",
       "url": "https://crystalmark.info/en/software/crystaldiskinfo/",
       "enabled": true,
-      "notes": "Info shortcut: upstream page for the active managed autodownload CrystalDiskInfo package."
+      "kind": "tool",
+      "family": "Disk",
+      "architecture": "amd64",
+      "recommendedUse": "SMART drive health reporting on Windows.",
+      "technicianNotes": "Manual review page for CrystalDiskInfo 9.9.0. Rechecked 2026-05-21: the official page/SourceForge project shows the newer version, but no clean machine-readable vendor SHA-256 or SHA-512 checksum was proven, so ForgerEMS keeps the managed payload pinned at 9.8.0.",
+      "licenseNote": "Free / open source (modified MIT).",
+      "manualOnly": true,
+      "secureBootNote": "Not boot media.",
+      "sourceTrust": "official",
+      "ventoyNotes": "Portable Windows tool; no Ventoy boot behavior.",
+      "fallbackRule": "Use crystalmark.info and the official project file only. Do not use third-party checksum pages or mirror hashes.",
+      "notes": "Info shortcut: upstream page for the active managed autodownload CrystalDiskInfo package and update review."
     },
     {
       "name": "CrystalDiskMark Download Page",
@@ -366,7 +2050,6 @@
       "enabled": true,
       "notes": "TODO-safe manual shortcut only: official Western Digital support page. Do not promote to managed download without a vendor-verifiable checksum."
     },
-
     {
       "name": "CPU-Z Download Page",
       "type": "page",
@@ -389,7 +2072,18 @@
       "dest": "Tools\\Portable\\Hardware\\DOWNLOAD - GPU-Z.url",
       "url": "https://www.techpowerup.com/gpuz/",
       "enabled": true,
-      "notes": "Review first: GPU details utility."
+      "kind": "tool",
+      "family": "Hardware",
+      "architecture": "amd64",
+      "recommendedUse": "GPU identification and sensor inspection.",
+      "technicianNotes": "Kept manual because the vendor download flow is page-driven and this pass did not verify a stable machine-readable checksum for a pinned portable artifact.",
+      "licenseNote": "Freeware / proprietary (TechPowerUp terms).",
+      "manualOnly": true,
+      "secureBootNote": "Not boot media.",
+      "sourceTrust": "official",
+      "ventoyNotes": "Portable Windows tool; no Ventoy boot behavior.",
+      "fallbackRule": "Use techpowerup.com/gpuz only. Avoid third-party mirror buttons and do not automate without vendor checksum evidence.",
+      "notes": "Manual only: GPU details utility from TechPowerUp."
     },
     {
       "name": "HWMonitor Download Page",
@@ -405,9 +2099,281 @@
       "dest": "Tools\\Portable\\Hardware\\DOWNLOAD - OCCT.url",
       "url": "https://www.ocbase.com/download",
       "enabled": true,
+      "kind": "tool",
+      "family": "Hardware",
+      "licenseNote": "Free Personal edition; paid commercial editions.",
+      "manualOnly": true,
+      "sourceTrust": "official",
       "notes": "Manual only: business/commercial licensing applies."
     },
-
+    {
+      "name": "AIDA64 Extreme Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Hardware\\DOWNLOAD - AIDA64.url",
+      "url": "https://www.aida64.com/downloads",
+      "enabled": true,
+      "kind": "tool",
+      "family": "Hardware",
+      "licenseNote": "Paid - vendor licence required (trial available).",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only - paid: hardware identification / benchmarks. Official FinalWire/AIDA64 page."
+    },
+    {
+      "name": "Speccy Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Hardware\\DOWNLOAD - Speccy.url",
+      "url": "https://www.ccleaner.com/speccy",
+      "enabled": true,
+      "kind": "tool",
+      "family": "Hardware",
+      "licenseNote": "Free Home edition; paid Professional.",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only: hardware inventory by Piriform/CCleaner. Official page only."
+    },
+    {
+      "name": "MiniTool Partition Wizard Free Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Disk\\DOWNLOAD - MiniTool Partition Wizard Free.url",
+      "url": "https://www.minitool.com/partition-manager/partition-wizard-home.html",
+      "enabled": true,
+      "kind": "tool",
+      "family": "Disk",
+      "licenseNote": "Free Home edition; paid commercial editions.",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only: partition manager. Official vendor page only."
+    },
+    {
+      "name": "EaseUS Partition Master Free Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Disk\\DOWNLOAD - EaseUS Partition Master Free.url",
+      "url": "https://www.easeus.com/partition-manager/epm-free.html",
+      "enabled": true,
+      "kind": "tool",
+      "family": "Disk",
+      "licenseNote": "Free Home edition; paid commercial editions.",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only: partition manager. Official vendor page only."
+    },
+    {
+      "name": "Macrium Reflect Home Info",
+      "type": "page",
+      "dest": "Tools\\Portable\\Disk\\INFO - Macrium Reflect Home.url",
+      "url": "https://www.macrium.com/products/home",
+      "enabled": true,
+      "kind": "tool",
+      "family": "Disk",
+      "licenseNote": "Discontinued / unsupported by vendor (Macrium Reflect Free retired in 2024). Paid Home edition available.",
+      "manualOnly": true,
+      "legacyWarning": "Macrium Reflect Free has been retired. Use Reflect Home or an alternative imaging tool.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official Macrium imaging product page (no free edition available since 2024)."
+    },
+    {
+      "name": "TestDisk and PhotoRec Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Disk\\DOWNLOAD - TestDisk and PhotoRec.url",
+      "url": "https://www.cgsecurity.org/wiki/TestDisk_Download",
+      "enabled": true,
+      "kind": "tool",
+      "family": "Disk",
+      "recommendedUse": "Partition table repair and file recovery from damaged disks.",
+      "technicianNotes": "Powerful recovery tool; use read-only recovery workflows first. Kept manual because this pass did not verify a direct version-pinned Windows artifact with supported checksum metadata.",
+      "licenseNote": "Free / open source (GPL).",
+      "manualOnly": true,
+      "secureBootNote": "Not boot media.",
+      "sourceTrust": "official",
+      "ventoyNotes": "Windows/Linux utility archive; no Ventoy boot behavior unless using separate rescue media.",
+      "fallbackRule": "Use cgsecurity.org only and verify checksums/signatures manually when provided. Avoid repackaged recovery-tool bundles.",
+      "notes": "Manual only: file recovery and partition table repair from CGSecurity. Official page."
+    },
+    {
+      "name": "Recuva Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Disk\\DOWNLOAD - Recuva.url",
+      "url": "https://www.ccleaner.com/recuva",
+      "enabled": true,
+      "kind": "tool",
+      "family": "Disk",
+      "licenseNote": "Free Home edition; paid Professional.",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only: file recovery by Piriform/CCleaner. Official page."
+    },
+    {
+      "name": "Smartmontools Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Disk\\DOWNLOAD - Smartmontools.url",
+      "url": "https://www.smartmontools.org/wiki/Download",
+      "enabled": true,
+      "kind": "tool",
+      "family": "Disk",
+      "licenseNote": "Free / open source (GPL).",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only: SMART drive health command-line tools; promote only after exact official SHA-256 evidence is verified.",
+      "recommendedUse": "SMART drive health command-line utilities for disk diagnostics.",
+      "technicianNotes": "Kept manual because the Windows binary flow is SourceForge-oriented and was not verified against a stable official SHA-256 artifact in this pass.",
+      "secureBootNote": "Not boot media.",
+      "ventoyNotes": "Portable Windows tool; no Ventoy boot behavior.",
+      "fallbackRule": "Use smartmontools.org first, then only the official linked project files. Do not use mirrors or MD5-only evidence."
+    },
+    {
+      "name": "Wireshark Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Network\\DOWNLOAD - Wireshark.url",
+      "url": "https://www.wireshark.org/download.html",
+      "enabled": true,
+      "kind": "tool",
+      "family": "Network",
+      "licenseNote": "Free / open source (GPL).",
+      "sourceTrust": "official",
+      "notes": "Info shortcut: upstream page for the active managed autodownload Wireshark Windows x64 installer. The installer bundles Npcap; the technician accepts Npcap terms at install time."
+    },
+    {
+      "name": "PuTTY Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Network\\DOWNLOAD - PuTTY.url",
+      "url": "https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html",
+      "enabled": true,
+      "kind": "tool",
+      "family": "Network",
+      "licenseNote": "Free / open source (MIT).",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only: official PuTTY download page (Simon Tatham)."
+    },
+    {
+      "name": "WinSCP Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Network\\DOWNLOAD - WinSCP.url",
+      "url": "https://winscp.net/eng/download.php",
+      "enabled": true,
+      "kind": "tool",
+      "family": "Network",
+      "recommendedUse": "SFTP/SCP/FTP file transfer for technician workflows.",
+      "technicianNotes": "Kept manual because promotion would need a pinned installer or portable package plus vendor checksum/parser evidence; do not use advertising download buttons.",
+      "licenseNote": "Free / open source (GPL).",
+      "manualOnly": true,
+      "secureBootNote": "Not boot media.",
+      "sourceTrust": "official",
+      "ventoyNotes": "Windows application; no Ventoy boot behavior.",
+      "fallbackRule": "Use winscp.net only and verify the selected package manually. Do not automate redirect/latest links without checksum proof.",
+      "notes": "Manual only: official WinSCP download page."
+    },
+    {
+      "name": "KeePass Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Security\\DOWNLOAD - KeePass.url",
+      "url": "https://keepass.info/download.html",
+      "enabled": true,
+      "kind": "tool",
+      "family": "Security",
+      "licenseNote": "Free / open source (GPL).",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only: official KeePass page; avoid wrong SourceForge buttons and verify package/signature manually.",
+      "recommendedUse": "Password database access and recovery support for technician workflows.",
+      "technicianNotes": "Kept manual because the official Windows downloads are SourceForge-hosted and this pass did not verify downloaded bytes against a vendor SHA-256 source.",
+      "secureBootNote": "Not boot media.",
+      "ventoyNotes": "Portable app; no Ventoy boot behavior.",
+      "fallbackRule": "Use keepass.info and verify the selected package/signature manually. Do not automate SourceForge bytes without vendor hash agreement."
+    },
+    {
+      "name": "VeraCrypt Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Security\\DOWNLOAD - VeraCrypt.url",
+      "url": "https://www.veracrypt.fr/en/Downloads.html",
+      "enabled": true,
+      "kind": "tool",
+      "family": "Security",
+      "licenseNote": "Free / open source (Apache 2.0 + TrueCrypt 3.0).",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only: official VeraCrypt download page."
+    },
+    {
+      "name": "ClamWin / ClamAV Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\Security\\DOWNLOAD - ClamAV.url",
+      "url": "https://www.clamav.net/downloads",
+      "enabled": true,
+      "kind": "tool",
+      "family": "Security",
+      "licenseNote": "Free / open source (GPL).",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only: official ClamAV download page (Cisco-managed)."
+    },
+    {
+      "name": "Kaspersky Virus Removal Tool Info",
+      "type": "page",
+      "dest": "Tools\\Portable\\Security\\INFO - Kaspersky Virus Removal Tool.url",
+      "url": "https://www.kaspersky.com/downloads/free-virus-removal-tool",
+      "enabled": true,
+      "kind": "tool",
+      "family": "Security",
+      "licenseNote": "Free (Kaspersky terms - review local regulatory restrictions).",
+      "manualOnly": true,
+      "legacyWarning": "Vendor availability varies by jurisdiction. Confirm local policy before deploying.",
+      "sourceTrust": "official",
+      "notes": "Manual only: official Kaspersky free virus removal tool page. Confirm local jurisdictional rules."
+    },
+    {
+      "name": "System Informer (Process Hacker) Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\System\\DOWNLOAD - System Informer.url",
+      "url": "https://systeminformer.sourceforge.io/",
+      "enabled": true,
+      "kind": "tool",
+      "family": "System",
+      "licenseNote": "Free / open source (MIT).",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only: System Informer (formerly Process Hacker). Official project page."
+    },
+    {
+      "name": "NirLauncher Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\System\\DOWNLOAD - NirLauncher.url",
+      "url": "https://launcher.nirsoft.net/",
+      "enabled": true,
+      "kind": "tool",
+      "family": "System",
+      "licenseNote": "Free for personal use (NirSoft licence). Review vendor terms for commercial bundling.",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only: NirSoft NirLauncher bundle of small NirSoft utilities."
+    },
+    {
+      "name": "Notepad++ Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\System\\DOWNLOAD - Notepad++.url",
+      "url": "https://notepad-plus-plus.org/downloads/",
+      "enabled": true,
+      "kind": "tool",
+      "family": "System",
+      "licenseNote": "Free / open source (GPL).",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only: official Notepad++ download page."
+    },
+    {
+      "name": "Win32 Disk Imager Download Page",
+      "type": "page",
+      "dest": "Tools\\Portable\\USB\\DOWNLOAD - Win32 Disk Imager.url",
+      "url": "https://sourceforge.net/projects/win32diskimager/",
+      "enabled": true,
+      "kind": "tool",
+      "family": "USB",
+      "licenseNote": "Free / open source (GPL).",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual only: SourceForge project page for Win32 Disk Imager."
+    },
     {
       "name": "Angry IP Scanner 3.9.3 (Windows setup)",
       "type": "file",
@@ -421,7 +2387,26 @@
       "maintenanceRank": 10,
       "enabled": true,
       "archive": true,
-      "notes": "Active managed autodownload: official Angry IP Scanner Windows installer with bundled Java runtime. Checksum coverage comes from the official GitHub release asset digest."
+      "kind": "tool",
+      "family": "Network",
+      "architecture": "amd64",
+      "recommendedUse": "Fast LAN IP/port scanner with bundled JRE.",
+      "licenseNote": "Free / open source (GPL).",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official Angry IP Scanner Windows installer with bundled Java runtime. Checksum coverage comes from the official GitHub release asset digest.",
+      "freshness": {
+        "currentPinnedVersion": "3.9.3",
+        "latestKnownStableVersion": "3.9.3",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "github-asset-digest",
+        "upstreamReleaseType": "github-releases",
+        "lastKnownChecksumSource": "GitHub release asset digest endpoint (api.github.com)",
+        "updateRecommendation": "No upstream change observed; remain pinned."
+      }
     },
     {
       "name": "Advanced IP Scanner Download Page",
@@ -429,7 +2414,18 @@
       "dest": "Tools\\Portable\\Network\\DOWNLOAD - Advanced IP Scanner.url",
       "url": "https://www.advanced-ip-scanner.com/",
       "enabled": true,
-      "notes": "Review first: quick LAN scanner."
+      "kind": "tool",
+      "family": "Network",
+      "architecture": "amd64",
+      "recommendedUse": "Quick LAN host discovery in Windows environments.",
+      "technicianNotes": "Kept manual because this proprietary freeware download flow has not been verified with a stable machine-readable checksum and redistribution/licensing needs review.",
+      "licenseNote": "Freeware / proprietary; review vendor terms before bundling.",
+      "manualOnly": true,
+      "secureBootNote": "Not boot media.",
+      "sourceTrust": "official",
+      "ventoyNotes": "Windows application; no Ventoy boot behavior.",
+      "fallbackRule": "Use advanced-ip-scanner.com only. Prefer the managed Angry IP Scanner entry when automated checksum-verified scanning tooling is acceptable.",
+      "notes": "Manual only: quick LAN scanner."
     },
     {
       "name": "Angry IP Scanner Download Page",
@@ -439,7 +2435,6 @@
       "enabled": true,
       "notes": "Info shortcut: upstream page for the active managed autodownload Angry IP Scanner installer."
     },
-
     {
       "name": "Autoruns Download Page",
       "type": "page",
@@ -470,6 +2465,17 @@
       "dest": "Tools\\Portable\\System\\DOWNLOAD - 7-Zip.url",
       "url": "https://7-zip.org/",
       "enabled": true,
+      "kind": "tool",
+      "family": "System",
+      "architecture": "amd64",
+      "recommendedUse": "Archive extraction and compression for technician workflows.",
+      "technicianNotes": "Kept manual because the official page did not provide a clean machine-readable SHA-256 checksum source suitable for the managed resolver. Do not use third-party checksum pages.",
+      "licenseNote": "Free / open source (LGPL; unRAR restriction applies).",
+      "manualOnly": true,
+      "secureBootNote": "Not boot media.",
+      "sourceTrust": "official",
+      "ventoyNotes": "Windows application; no Ventoy boot behavior.",
+      "fallbackRule": "Use only 7-zip.org. Avoid lookalike domains and do not promote without official checksum evidence.",
       "notes": "Manual only: use the official 7-zip.org domain. Do not use lookalike domains."
     },
     {
@@ -478,6 +2484,17 @@
       "dest": "Tools\\Portable\\Network\\DOWNLOAD - Nmap.url",
       "url": "https://nmap.org/download.html",
       "enabled": true,
+      "kind": "tool",
+      "family": "Network",
+      "architecture": "amd64",
+      "recommendedUse": "Network discovery and port scanning with technician approval.",
+      "technicianNotes": "2026-05-21 recheck found official digest files, but the Windows digest is byte-grouped multiline prose and the installer carries Npcap licensing/driver implications. Keep manual until a narrow parser and redistribution policy are both approved.",
+      "licenseNote": "Nmap Public Source License; Windows installer includes or depends on Npcap terms.",
+      "manualOnly": true,
+      "secureBootNote": "Not boot media.",
+      "sourceTrust": "official",
+      "ventoyNotes": "Windows application; no Ventoy boot behavior.",
+      "fallbackRule": "Use nmap.org only and verify the installer digest/signature manually. Do not use forum, Reddit, or third-party hashes.",
       "notes": "Manual only: official Nmap installer page with signature/hash verification guidance and Npcap considerations."
     },
     {
@@ -525,7 +2542,26 @@
       "borderline": true,
       "enabled": true,
       "archive": true,
-      "notes": "Active managed autodownload: official NirSoft x64 portable zip."
+      "kind": "tool",
+      "family": "System",
+      "architecture": "amd64",
+      "recommendedUse": "Inspect Windows minidumps and BSOD crash details.",
+      "licenseNote": "Free for personal use (NirSoft licence). Review vendor terms for commercial bundling.",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official NirSoft x64 portable zip.",
+      "freshness": {
+        "currentPinnedVersion": "1.55",
+        "latestKnownStableVersion": "1.55",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "vendor-version-page",
+        "lastKnownChecksumSource": "Vendor version-history table on nirsoft.net",
+        "updateRecommendation": "No upstream change observed; remain pinned at 1.55."
+      }
     },
     {
       "name": "DriverStoreExplorer 1.0.26 (zip)",
@@ -540,7 +2576,26 @@
       "maintenanceRank": 9,
       "enabled": true,
       "archive": true,
-      "notes": "Active managed autodownload: official DriverStoreExplorer release ZIP from the project GitHub repository. Checksum coverage comes from the official GitHub release asset digest."
+      "kind": "tool",
+      "family": "System",
+      "architecture": "amd64",
+      "recommendedUse": "Inspect and remove stale entries from the Windows Driver Store.",
+      "licenseNote": "Free / open source (MIT).",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official DriverStoreExplorer release ZIP from the project GitHub repository. Checksum coverage comes from the official GitHub release asset digest.",
+      "freshness": {
+        "currentPinnedVersion": "1.0.26",
+        "latestKnownStableVersion": "1.0.26",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "github-asset-digest",
+        "upstreamReleaseType": "github-releases",
+        "lastKnownChecksumSource": "GitHub release asset digest endpoint (api.github.com)",
+        "updateRecommendation": "No upstream change observed; remain pinned."
+      }
     },
     {
       "name": "Everything Search Download Page",
@@ -548,7 +2603,18 @@
       "dest": "Tools\\Portable\\System\\DOWNLOAD - Everything Search.url",
       "url": "https://www.voidtools.com/",
       "enabled": true,
-      "notes": "Review first: fast file search tool."
+      "kind": "tool",
+      "family": "System",
+      "architecture": "amd64",
+      "recommendedUse": "Fast local file search for Windows support sessions.",
+      "technicianNotes": "Kept manual because this pass did not verify a stable version-pinned artifact with machine-readable checksum evidence.",
+      "licenseNote": "Freeware / proprietary (Voidtools terms).",
+      "manualOnly": true,
+      "secureBootNote": "Not boot media.",
+      "sourceTrust": "official",
+      "ventoyNotes": "Windows application; no Ventoy boot behavior.",
+      "fallbackRule": "Use voidtools.com only and select the correct installer/portable package manually. Do not automate latest redirects without checksum proof.",
+      "notes": "Manual only: fast file search tool."
     },
     {
       "name": "BlueScreenView Download Page",
@@ -566,7 +2632,6 @@
       "enabled": true,
       "notes": "Info shortcut: upstream page for the active managed autodownload DriverStoreExplorer release."
     },
-
     {
       "name": "AnyDesk Download Page",
       "type": "page",
@@ -588,7 +2653,26 @@
       "maintenanceRank": 11,
       "enabled": true,
       "archive": true,
-      "notes": "Active managed autodownload: official RustDesk Windows x64 executable. Pinned checksum refreshed from the official GitHub release asset digest."
+      "kind": "tool",
+      "family": "Remote",
+      "architecture": "amd64",
+      "recommendedUse": "Open-source remote desktop. Self-hostable; alternative to AnyDesk/TeamViewer.",
+      "licenseNote": "Free / open source (AGPLv3).",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official RustDesk Windows x64 executable. Pinned checksum refreshed from the official GitHub release asset digest.",
+      "freshness": {
+        "currentPinnedVersion": "1.4.6",
+        "latestKnownStableVersion": "1.4.6",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "github-asset-digest",
+        "upstreamReleaseType": "github-releases",
+        "lastKnownChecksumSource": "GitHub release asset digest endpoint (api.github.com)",
+        "updateRecommendation": "No upstream change observed; remain pinned."
+      }
     },
     {
       "name": "Malwarebytes AdwCleaner Download Page",
@@ -614,36 +2698,629 @@
       "enabled": true,
       "notes": "Info shortcut: upstream page for the active managed autodownload RustDesk client."
     },
-
     {
-      "name": "Rufus 4.13 Portable (x64)",
+      "name": "Rufus 4.14 Portable (x64)",
       "type": "file",
-      "dest": "Tools\\Portable\\USB\\rufus-4.13p.exe",
-      "url": "https://github.com/pbatard/rufus/releases/download/v4.13/rufus-4.13p.exe",
-      "sha256": "a314db019d608e3d9b2eda797ba5bbe4dfc91bcd621decd144a580080eb13b1b",
-      "sha256Url": "https://api.github.com/repos/pbatard/rufus/releases/assets/357534705",
+      "dest": "Tools\\Portable\\USB\\rufus-4.14p.exe",
+      "url": "https://github.com/pbatard/rufus/releases/download/v4.14/rufus-4.14p.exe",
+      "sha256": "9fcad316c82ba3d0c3130c9f43fb0fe147e9eb62e1bf830716a0bbb6c58d24ee",
+      "sha256Url": "https://api.github.com/repos/pbatard/rufus/releases/assets/409016154",
       "sourceType": "github-release",
       "fragilityLevel": "medium",
-      "fallbackRule": "Use the official Rufus site to confirm the matching GitHub release asset and refresh the asset digest. Demote if the official site stops pointing to a direct official asset.",
+      "fallbackRule": "Use rufus.ie to confirm the matching official GitHub release asset and refresh the GitHub asset digest. Demote if the official site stops pointing to the direct official asset.",
       "maintenanceRank": 2,
       "enabled": true,
       "archive": true,
-      "notes": "Active managed autodownload: official Rufus portable x64 executable linked from rufus.ie. Checksum coverage comes from the official GitHub release asset digest."
+      "kind": "tool",
+      "family": "USB",
+      "architecture": "amd64",
+      "recommendedUse": "Create bootable USB drives from ISO images on Windows.",
+      "licenseNote": "Free / open source (GPLv3).",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official Rufus portable x64 executable linked from rufus.ie.",
+      "freshness": {
+        "currentPinnedVersion": "4.14",
+        "latestKnownStableVersion": "4.14",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "github-asset-digest",
+        "upstreamReleaseType": "github-releases",
+        "lastKnownChecksumSource": "GitHub release asset digest endpoint (api.github.com)",
+        "updateRecommendation": "Pinned at verified stable 4.14 after official source/checksum review on 2026-05-21."
+      }
     },
     {
-      "name": "balenaEtcher 2.1.4 Setup (x64)",
+      "name": "balenaEtcher 2.1.6 Setup (x64)",
       "type": "file",
-      "dest": "Tools\\Portable\\USB\\balenaEtcher-2.1.4.Setup.exe",
-      "url": "https://github.com/balena-io/etcher/releases/download/v2.1.4/balenaEtcher-2.1.4.Setup.exe",
-      "sha256": "b75321f3f68c6f09332e97dca6b38744067826d114c04e6c05cbceff63631e62",
-      "sha256Url": "https://api.github.com/repos/balena-io/etcher/releases/assets/277395239",
+      "dest": "Tools\\Portable\\USB\\balenaEtcher-2.1.6.Setup.exe",
+      "url": "https://github.com/balena-io/etcher/releases/download/v2.1.6/balenaEtcher-2.1.6.Setup.exe",
+      "sha256": "78d1c45a55428e65ab2ac96e462ad6d77adbf7d1c0aa4b704b214bc00e1fcdfc",
+      "sha256Url": "https://api.github.com/repos/balena-io/etcher/releases/assets/419426564",
       "sourceType": "github-release",
       "fragilityLevel": "medium",
       "fallbackRule": "Use the matching official GitHub release asset and asset digest for the same version. Demote if the release asset disappears or the digest endpoint stops agreeing.",
       "maintenanceRank": 12,
       "enabled": true,
       "archive": true,
-      "notes": "Active managed autodownload: official balenaEtcher Windows installer."
+      "kind": "tool",
+      "family": "USB",
+      "architecture": "amd64",
+      "recommendedUse": "Cross-platform GUI for flashing OS images to SD/USB.",
+      "licenseNote": "Free / open source (Apache 2.0).",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official balenaEtcher Windows installer.",
+      "freshness": {
+        "currentPinnedVersion": "2.1.6",
+        "latestKnownStableVersion": "2.1.6",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "github-asset-digest",
+        "upstreamReleaseType": "github-releases",
+        "lastKnownChecksumSource": "GitHub release asset digest endpoint (api.github.com)",
+        "updateRecommendation": "Pinned at verified stable 2.1.6 after official source/checksum review on 2026-05-21."
+      }
+    },
+    {
+      "name": "Alpine Linux 3.23.4 Standard (x86_64)",
+      "type": "file",
+      "dest": "ISO\\Linux\\alpine-standard-3.23.4-x86_64.iso",
+      "url": "https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/x86_64/alpine-standard-3.23.4-x86_64.iso",
+      "sha256Url": "https://dl-cdn.alpinelinux.org/alpine/v3.23/releases/x86_64/alpine-standard-3.23.4-x86_64.iso.sha256",
+      "sourceType": "official-mirror",
+      "fragilityLevel": "medium",
+      "fallbackRule": "Use the official Alpine v3.23 release index and keep the per-file .sha256 companion as the checksum source. Demote if only the rolling latest-stable directory remains.",
+      "maintenanceRank": 17,
+      "enabled": true,
+      "archive": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Server",
+      "architecture": [
+        "amd64"
+      ],
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Tiny musl-libc Linux for containers / embedded / minimal servers.",
+      "technicianNotes": "Verified live with tools/Add-ManagedDownloadCandidate.ps1 on 2026-05-21. Vendor publishes a per-file .sha256 companion at the same path as the ISO; the hardened resolver fetches it filename-aware at update time. Bump the version + checksum URL together when v3.20.0 is retired upstream.",
+      "licenseNote": "Free / open source.",
+      "secureBootNote": "Secure Boot not officially signed; expect to disable Secure Boot for bare-metal boot.",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official Alpine Linux standard ISO with filename-aware per-file SHA-256 companion.",
+      "freshness": {
+        "currentPinnedVersion": "3.23.4",
+        "latestKnownStableVersion": "3.23.4",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "official-mirror-index",
+        "lastKnownChecksumSource": "Vendor per-file .iso.sha256 companion at dl-cdn.alpinelinux.org",
+        "updateRecommendation": "Pinned at verified stable 3.23.4 after official source/checksum review on 2026-05-21."
+      },
+      "sha256": "cfef39c7954f7c4447bcb321b9f4a1cef834536a321309d2c31275d9f2475a4e"
+    },
+    {
+      "name": "Notepad++ 8.9.6 Portable (x64)",
+      "type": "file",
+      "dest": "Tools\\Portable\\System\\npp.8.9.6.portable.x64.zip",
+      "url": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.9.6/npp.8.9.6.portable.x64.zip",
+      "sha256": "5528d2de7e44fcc676bb1a4d59d212c74b23f365b5db54f474058d6a68db4041",
+      "sha256Url": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.9.6/npp.8.9.6.checksums.sha256",
+      "sourceType": "github-release",
+      "fragilityLevel": "medium",
+      "fallbackRule": "Use the matching official Notepad++ GitHub release asset and the version-matched checksums.sha256 file. Demote if checksum coverage disappears or the portable x64 asset is renamed.",
+      "maintenanceRank": 18,
+      "enabled": true,
+      "archive": true,
+      "kind": "tool",
+      "family": "System",
+      "architecture": "amd64",
+      "recommendedUse": "Portable text and code editor for logs, scripts, and config files.",
+      "technicianNotes": "Verified live with tools/Add-ManagedDownloadCandidate.ps1 on 2026-05-21. GitHub release v8.9.6 publishes a version-matched npp.8.9.6.checksums.sha256 file; the pinned hash is the portable x64 ZIP line.",
+      "licenseNote": "Free / open source (GPLv3).",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official Notepad++ portable x64 ZIP with release checksum coverage.",
+      "freshness": {
+        "currentPinnedVersion": "8.9.6",
+        "latestKnownStableVersion": "8.9.6",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "github-releases",
+        "lastKnownChecksumSource": "GitHub release npp.8.9.6.checksums.sha256",
+        "updateRecommendation": "No upstream change observed; remain pinned."
+      }
+    },
+    {
+      "name": "System Informer 3.2.25011 Portable",
+      "type": "file",
+      "dest": "Tools\\Portable\\System\\systeminformer-3.2.25011-release-bin.zip",
+      "url": "https://github.com/winsiderss/systeminformer/releases/download/v3.2.25011.2103/systeminformer-3.2.25011-release-bin.zip",
+      "sha256": "7e72019361eec58479604597dbfcd911c6d23c45da22c0bedc2bc319ab5b331a",
+      "sourceType": "github-release",
+      "fragilityLevel": "medium",
+      "fallbackRule": "Use the official System Informer downloads page for the same version and the pinned GitHub release asset. Demote if the downloads page stops publishing SHA-256 hashes or the release asset changes.",
+      "maintenanceRank": 19,
+      "enabled": true,
+      "archive": true,
+      "kind": "tool",
+      "family": "System",
+      "architecture": "amd64",
+      "recommendedUse": "Advanced process, service, handle, network, and malware triage inspection.",
+      "technicianNotes": "Verified live on 2026-05-21 against the official System Informer downloads page. The GitHub release asset does not expose an API digest, so the pinned SHA-256 is taken from the upstream downloads page for the binaries ZIP.",
+      "licenseNote": "Free / open source (MIT).",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official System Informer release binaries ZIP with upstream-published SHA-256 evidence.",
+      "freshness": {
+        "currentPinnedVersion": "3.2.25011.2103",
+        "latestKnownStableVersion": "3.2.25011.2103",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "github-releases",
+        "lastKnownChecksumSource": "System Informer downloads page (operator-paste)",
+        "updateRecommendation": "No upstream change observed; remain pinned."
+      }
+    },
+    {
+      "name": "VeraCrypt 1.26.24 Setup (x64)",
+      "type": "file",
+      "dest": "Tools\\Portable\\Security\\VeraCrypt.Setup.1.26.24.exe",
+      "url": "https://github.com/veracrypt/VeraCrypt/releases/download/VeraCrypt_1.26.24/VeraCrypt.Setup.1.26.24.exe",
+      "sha256": "08b80ab6a6c4eca08e18096c9468fe0bd2e33fc23142730e59177e6fcd7c902d",
+      "sha256Url": "https://api.github.com/repos/veracrypt/VeraCrypt/releases/assets/259713771",
+      "sourceType": "github-release",
+      "fragilityLevel": "medium",
+      "fallbackRule": "Use the matching official VeraCrypt GitHub release asset and asset digest for the same version. Demote if the release asset disappears or the digest endpoint stops agreeing.",
+      "maintenanceRank": 20,
+      "enabled": true,
+      "archive": true,
+      "kind": "tool",
+      "family": "Security",
+      "architecture": "amd64",
+      "recommendedUse": "Disk/container encryption and recovery access for VeraCrypt volumes.",
+      "technicianNotes": "Verified live with tools/Add-ManagedDownloadCandidate.ps1 on 2026-05-21 after extending the checksum resolver to accept GitHub release asset digest JSON.",
+      "licenseNote": "Free / open source (Apache 2.0 + TrueCrypt License 3.0).",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official VeraCrypt Windows setup executable with GitHub release asset digest coverage.",
+      "freshness": {
+        "currentPinnedVersion": "1.26.24",
+        "latestKnownStableVersion": "1.26.24",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "github-asset-digest",
+        "upstreamReleaseType": "github-releases",
+        "lastKnownChecksumSource": "GitHub release asset digest endpoint (api.github.com)",
+        "updateRecommendation": "No upstream change observed; remain pinned."
+      }
+    },
+    {
+      "name": "PuTTY 0.83 64-bit Installer",
+      "type": "file",
+      "dest": "Tools\\Portable\\Network\\putty-64bit-0.83-installer.msi",
+      "url": "https://the.earth.li/~sgtatham/putty/0.83/w64/putty-64bit-0.83-installer.msi",
+      "sha256": "aa8e5036d973688f1e8622fbe9ab22e037346e0def0197bf5e7cdf37da4e223d",
+      "sha256Url": "https://the.earth.li/~sgtatham/putty/0.83/sha256sums",
+      "sourceType": "official-version-path",
+      "fragilityLevel": "low",
+      "fallbackRule": "Use the versioned PuTTY download directory and the matching sha256sums file. Demote if checksums move or the 64-bit installer is retired.",
+      "maintenanceRank": 21,
+      "enabled": true,
+      "archive": true,
+      "kind": "tool",
+      "family": "Network",
+      "architecture": "amd64",
+      "recommendedUse": "SSH, serial console, SCP/SFTP, and key utility toolkit for Windows.",
+      "technicianNotes": "Verified live with tools/Add-ManagedDownloadCandidate.ps1 on 2026-05-21. The checksum resolver targets the unique 64-bit installer filename; portable putty.zip was not promoted because the checksum file carries duplicate basenames for multiple architectures.",
+      "licenseNote": "Free / open source (MIT-style PuTTY licence).",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official PuTTY 64-bit MSI with versioned sha256sums coverage.",
+      "freshness": {
+        "currentPinnedVersion": "0.83",
+        "latestKnownStableVersion": "0.83",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "vendor-version-page",
+        "lastKnownChecksumSource": "chiark.greenend.org.uk versioned sha256sums",
+        "updateRecommendation": "No upstream change observed; remain pinned."
+      }
+    },
+    {
+      "name": "Wireshark 4.6.6 Win64 Installer",
+      "type": "file",
+      "dest": "Tools\\Portable\\Network\\Wireshark-4.6.6-x64.exe",
+      "url": "https://2.na.dl.wireshark.org/win64/Wireshark-4.6.6-x64.exe",
+      "sha256": "ab28d13695ace992307fb1aaea7144f977d5b6562acec1f465c9c0a9fa04190c",
+      "sha256Url": "https://www.wireshark.org/download/SIGNATURES-4.6.6.txt",
+      "sourceType": "official-version-path",
+      "fragilityLevel": "low",
+      "fallbackRule": "Use the official Wireshark Windows x64 installer for the same point release and the matching SIGNATURES-X.Y.Z.txt file. Demote if the SIGNATURES file format changes or stops carrying a BSD-format SHA256 line for the Win64 installer.",
+      "maintenanceRank": 22,
+      "enabled": true,
+      "archive": true,
+      "kind": "tool",
+      "family": "Network",
+      "architecture": "amd64",
+      "recommendedUse": "Packet capture and protocol analysis for network triage and incident response.",
+      "technicianNotes": "Promoted 2026-05-21 after live verification of vendor SIGNATURES-4.6.6.txt (signed with key 0xE6FEAEEA). The BSD-format SHA256 line `SHA256(Wireshark-4.6.6-x64.exe)=...` is resolved filename-aware at update time, and the pinned hash matches the vendor signature file. The installer bundles Npcap; the technician must accept the Npcap EULA at install time on the target machine. Bump the version, URL, and pinned SHA-256 together when the 4.6.x branch advances.",
+      "licenseNote": "Free / open source (GPL v2).",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official Wireshark Win64 installer with signed SIGNATURES file coverage.",
+      "freshness": {
+        "currentPinnedVersion": "4.6.6",
+        "latestKnownStableVersion": "4.6.6",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "vendor-version-page",
+        "lastKnownChecksumSource": "Vendor signed SIGNATURES-4.6.6.txt (key 0xE6FEAEEA)",
+        "updateRecommendation": "No upstream change observed; remain pinned."
+      }
+    },
+    {
+      "name": "Proxmox VE 9.2-1 ISO Installer",
+      "type": "file",
+      "dest": "ISO\\Linux\\proxmox-ve_9.2-1.iso",
+      "url": "https://enterprise.proxmox.com/iso/proxmox-ve_9.2-1.iso",
+      "sha256": "4e88fe416df9b527624a175f24c9aa07c714d3332afb1ee3dbf3879573ef2c6c",
+      "sourceType": "official-version-path",
+      "fragilityLevel": "low",
+      "fallbackRule": "Use the official Proxmox VE ISO download page and keep the published SHA256SUM. Demote if the ISO page stops exposing a version-pinned artifact and hash.",
+      "maintenanceRank": 23,
+      "enabled": true,
+      "archive": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Hypervisor",
+      "architecture": "amd64",
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Bare-metal KVM/LXC virtualization host installer.",
+      "technicianNotes": "Promoted 2026-05-21 from the official Proxmox VE ISO page. Free to use; paid subscription affects enterprise package repositories, not ISO download legality.",
+      "licenseNote": "Free / open source. Enterprise repository subscription optional.",
+      "secureBootNote": "Disable Secure Boot unless the target platform has a validated Proxmox Secure Boot path.",
+      "ventoyNotes": "Ventoy can boot the installer ISO; for stubborn servers use DD mode or vendor BMC virtual media.",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official version-pinned installer ISO with SHA-256 coverage.",
+      "freshness": {
+        "currentPinnedVersion": "9.2-1",
+        "latestKnownStableVersion": "9.2-1",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "vendor-version-page",
+        "lastKnownChecksumSource": "Official Proxmox VE ISO page SHA256SUM",
+        "updateRecommendation": "No upstream change observed after promotion; remain pinned at 9.2-1."
+      }
+    },
+    {
+      "name": "Ubuntu Server 24.04.4 LTS (amd64)",
+      "type": "file",
+      "dest": "ISO\\Linux\\ubuntu-24.04.4-live-server-amd64.iso",
+      "url": "https://releases.ubuntu.com/24.04/ubuntu-24.04.4-live-server-amd64.iso",
+      "sha256": "e907d92eeec9df64163a7e454cbc8d7755e8ddc7ed42f99dbc80c40f1a138433",
+      "sha256Url": "https://releases.ubuntu.com/24.04/SHA256SUMS",
+      "sourceType": "official-version-path",
+      "fragilityLevel": "low",
+      "fallbackRule": "Use the official Ubuntu 24.04 release directory and SHA256SUMS file for this exact point-release ISO. Demote if the point release is retired and no official checksum remains.",
+      "maintenanceRank": 24,
+      "enabled": true,
+      "archive": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Server",
+      "architecture": "amd64",
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "Canonical LTS server installer for general-purpose Linux servers.",
+      "technicianNotes": "Promoted 2026-05-21 after filename-aware resolver matched the official SHA256SUMS line for the server ISO.",
+      "licenseNote": "Free / open source (Canonical / Ubuntu archive terms).",
+      "secureBootNote": "Secure Boot supported on standard Ubuntu amd64 media.",
+      "ventoyNotes": "Ventoy boots Ubuntu Server ISOs directly on UEFI and BIOS systems.",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official version-pinned installer ISO with SHA-256 coverage.",
+      "freshness": {
+        "currentPinnedVersion": "24.04.4",
+        "latestKnownStableVersion": "24.04.4",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "vendor-version-page",
+        "lastKnownChecksumSource": "Official Ubuntu SHA256SUMS release file",
+        "updateRecommendation": "No upstream change observed after promotion; remain pinned at 24.04.4."
+      }
+    },
+    {
+      "name": "Debian GNU/Linux 13.5.0 netinst (amd64)",
+      "type": "file",
+      "dest": "ISO\\Linux\\debian-13.5.0-amd64-netinst.iso",
+      "url": "https://cdimage.debian.org/debian-cd/13.5.0/amd64/iso-cd/debian-13.5.0-amd64-netinst.iso",
+      "sha256": "95838884f5ea6c82421dfe6baaa5a639dbbe6756c1e380f9fe7a7cb0c1949d2a",
+      "sha256Url": "https://cdimage.debian.org/debian-cd/13.5.0/amd64/iso-cd/SHA256SUMS",
+      "sourceType": "official-version-path",
+      "fragilityLevel": "low",
+      "fallbackRule": "Use the Debian versioned cdimage directory and matching SHA256SUMS. Do not switch to current/ without repinning the version and hash.",
+      "maintenanceRank": 25,
+      "enabled": true,
+      "archive": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Server",
+      "architecture": "amd64",
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Minimal Debian network installer for servers and lean desktops.",
+      "technicianNotes": "Requires network during install. Promoted 2026-05-21 from Debian 13.5.0 versioned cdimage path with matching SHA256SUMS.",
+      "licenseNote": "Free / open source (Debian Project).",
+      "secureBootNote": "Secure Boot support depends on Debian shim/grub state and target firmware.",
+      "ventoyNotes": "Ventoy boots Debian netinst ISOs directly; keep network access available during install.",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official version-pinned installer ISO with SHA-256 coverage.",
+      "freshness": {
+        "currentPinnedVersion": "13.5.0",
+        "latestKnownStableVersion": "13.5.0",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "vendor-version-page",
+        "lastKnownChecksumSource": "Official Debian versioned SHA256SUMS file",
+        "updateRecommendation": "No upstream change observed after promotion; remain pinned at 13.5.0."
+      }
+    },
+    {
+      "name": "Fedora Server 44-1.7 DVD (x86_64)",
+      "type": "file",
+      "dest": "ISO\\Linux\\Fedora-Server-dvd-x86_64-44-1.7.iso",
+      "url": "https://download.fedoraproject.org/pub/fedora/linux/releases/44/Server/x86_64/iso/Fedora-Server-dvd-x86_64-44-1.7.iso",
+      "sha256": "85837793bfa36db6bc709b4cecd2ec116951b87d9c53c3d95eb2fac8dcf7cf1f",
+      "sha256Url": "https://download.fedoraproject.org/pub/fedora/linux/releases/44/Server/x86_64/iso/Fedora-Server-44-1.7-x86_64-CHECKSUM",
+      "sourceType": "official-mirror",
+      "fragilityLevel": "medium",
+      "fallbackRule": "Use Fedora release 44 Server x86_64 ISO directory and the signed CHECKSUM file. Demote if download.fedoraproject.org stops resolving to the pinned artifact.",
+      "maintenanceRank": 26,
+      "enabled": true,
+      "archive": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Server",
+      "architecture": "amd64",
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "Fedora Server installer for current Fedora-based server testing and deployments.",
+      "technicianNotes": "Promoted 2026-05-21 after BSD-format SHA256 line matched the official Fedora CHECKSUM file.",
+      "licenseNote": "Free / open source (Fedora Project).",
+      "secureBootNote": "Secure Boot supported on standard Fedora x86_64 media.",
+      "ventoyNotes": "Ventoy boots Fedora Server ISOs directly; use media check when troubleshooting.",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official version-pinned installer ISO with SHA-256 coverage.",
+      "freshness": {
+        "currentPinnedVersion": "44-1.7",
+        "latestKnownStableVersion": "44-1.7",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "official-mirror-index",
+        "lastKnownChecksumSource": "Official Fedora signed CHECKSUM file",
+        "updateRecommendation": "No upstream change observed after promotion; remain pinned at 44-1.7."
+      }
+    },
+    {
+      "name": "FreeBSD 15.0-RELEASE amd64 disc1 ISO",
+      "type": "file",
+      "dest": "ISO\\BSD\\FreeBSD-15.0-RELEASE-amd64-disc1.iso",
+      "url": "https://download.freebsd.org/releases/ISO-IMAGES/15.0/FreeBSD-15.0-RELEASE-amd64-disc1.iso",
+      "sha256": "cc73a14d4b1cfada880b78deb0b94ae0f439167418c32a6708f68f79563cb50c",
+      "sha256Url": "https://download.freebsd.org/releases/ISO-IMAGES/15.0/CHECKSUM.SHA256-FreeBSD-15.0-RELEASE-amd64",
+      "sourceType": "official-version-path",
+      "fragilityLevel": "low",
+      "fallbackRule": "Use the FreeBSD release ISO-IMAGES directory and architecture-specific CHECKSUM.SHA256 file. Demote if only snapshot/STABLE images are available.",
+      "maintenanceRank": 27,
+      "enabled": true,
+      "archive": true,
+      "kind": "os",
+      "family": "BSD",
+      "osCategory": "Server",
+      "architecture": "amd64",
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "FreeBSD installer ISO for BSD server/workstation installs and rescue use.",
+      "technicianNotes": "Promoted 2026-05-21 after the official FreeBSD CHECKSUM.SHA256 BSD-format line matched disc1.iso.",
+      "licenseNote": "Free / open source (BSD).",
+      "secureBootNote": "Secure Boot support is not the default path; expect to disable Secure Boot.",
+      "ventoyNotes": "Ventoy can boot FreeBSD ISO media on many systems; use memstick image manually if firmware refuses ISO boot.",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official version-pinned installer ISO with SHA-256 coverage.",
+      "freshness": {
+        "currentPinnedVersion": "15.0",
+        "latestKnownStableVersion": "15.0",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "vendor-version-page",
+        "lastKnownChecksumSource": "Official FreeBSD CHECKSUM.SHA256 file",
+        "updateRecommendation": "No upstream change observed after promotion; remain pinned at 15.0."
+      }
+    },
+    {
+      "name": "OpenBSD 7.9 amd64 install ISO",
+      "type": "file",
+      "dest": "ISO\\BSD\\install79.iso",
+      "url": "https://cdn.openbsd.org/pub/OpenBSD/7.9/amd64/install79.iso",
+      "sha256": "7a4a92e953618035097c796a90b54424a0f3ae775552e1e7d102cf8a5130449f",
+      "sha256Url": "https://cdn.openbsd.org/pub/OpenBSD/7.9/amd64/SHA256",
+      "sourceType": "official-mirror",
+      "fragilityLevel": "low",
+      "fallbackRule": "Use cdn.openbsd.org for the same release/architecture and the official SHA256 file. Demote if only snapshots are available.",
+      "maintenanceRank": 28,
+      "enabled": true,
+      "archive": true,
+      "kind": "os",
+      "family": "BSD",
+      "osCategory": "Server",
+      "architecture": "amd64",
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Security-focused BSD installer ISO for firewalls, bastions, and lab hosts.",
+      "technicianNotes": "Promoted 2026-05-21 after the official OpenBSD 7.9 SHA256 file matched install79.iso. OpenBSD 7.9 was released 2026-05-19.",
+      "licenseNote": "Free / open source (BSD/ISC).",
+      "secureBootNote": "Secure Boot is not the default OpenBSD install path; expect to disable Secure Boot.",
+      "ventoyNotes": "Ventoy may boot install79.iso; use the official install79.img manually if the target firmware needs a USB image.",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official version-pinned installer ISO with SHA-256 coverage.",
+      "freshness": {
+        "currentPinnedVersion": "7.9",
+        "latestKnownStableVersion": "7.9",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "official-mirror-index",
+        "lastKnownChecksumSource": "Official OpenBSD SHA256 file",
+        "updateRecommendation": "No upstream change observed after promotion; remain pinned at 7.9."
+      }
+    },
+    {
+      "name": "Rocky Linux 10.1 Minimal (x86_64)",
+      "type": "file",
+      "dest": "ISO\\Linux\\Rocky-10.1-x86_64-minimal.iso",
+      "url": "https://download.rockylinux.org/pub/rocky/10/isos/x86_64/Rocky-10.1-x86_64-minimal.iso",
+      "sha256": "5aafc2c86e606428cd7c5802b0d28c220f34c181a57eefff2cc6f65214714499",
+      "sha256Url": "https://download.rockylinux.org/pub/rocky/10/isos/x86_64/CHECKSUM",
+      "sourceType": "official-mirror",
+      "fragilityLevel": "medium",
+      "fallbackRule": "Use the official Rocky Linux 10 x86_64 ISO directory and CHECKSUM file. Do not use latest aliases unless the version and hash are repinned.",
+      "maintenanceRank": 29,
+      "enabled": true,
+      "archive": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Server",
+      "architecture": "amd64",
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "RHEL-compatible minimal installer for enterprise Linux labs and servers.",
+      "technicianNotes": "Promoted 2026-05-21 after the official Rocky CHECKSUM file matched the version-pinned 10.1 minimal ISO.",
+      "licenseNote": "Free / open source (Rocky Enterprise Software Foundation).",
+      "secureBootNote": "Secure Boot support follows Rocky/RHEL-compatible shim support on x86_64.",
+      "ventoyNotes": "Ventoy boots Rocky installer ISOs directly; use minimal ISO for faster technician downloads.",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official version-pinned installer ISO with SHA-256 coverage.",
+      "freshness": {
+        "currentPinnedVersion": "10.1",
+        "latestKnownStableVersion": "10.1",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "official-mirror-index",
+        "lastKnownChecksumSource": "Official Rocky Linux CHECKSUM file",
+        "updateRecommendation": "No upstream change observed after promotion; remain pinned at 10.1."
+      }
+    },
+    {
+      "name": "AlmaLinux 10.1 Minimal (x86_64)",
+      "type": "file",
+      "dest": "ISO\\Linux\\AlmaLinux-10.1-x86_64-minimal.iso",
+      "url": "https://repo.almalinux.org/almalinux/10/isos/x86_64/AlmaLinux-10.1-x86_64-minimal.iso",
+      "sha256": "049efd183a5a841dd432b3427eb6faa7deb3bf6c6bf2c63cbffa024b9c651725",
+      "sha256Url": "https://repo.almalinux.org/almalinux/10/isos/x86_64/CHECKSUM",
+      "sourceType": "official-mirror",
+      "fragilityLevel": "medium",
+      "fallbackRule": "Use the official AlmaLinux 10 x86_64 ISO directory and signed CHECKSUM file. Do not use latest aliases unless the version and hash are repinned.",
+      "maintenanceRank": 30,
+      "enabled": true,
+      "archive": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Server",
+      "architecture": "amd64",
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "RHEL-compatible minimal installer for enterprise Linux labs and servers.",
+      "technicianNotes": "Promoted 2026-05-21 after the official AlmaLinux signed CHECKSUM file matched the version-pinned 10.1 minimal ISO.",
+      "licenseNote": "Free / open source (AlmaLinux OS Foundation).",
+      "secureBootNote": "Secure Boot support follows AlmaLinux/RHEL-compatible shim support on x86_64.",
+      "ventoyNotes": "Ventoy boots AlmaLinux installer ISOs directly; use minimal ISO for faster technician downloads.",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official version-pinned installer ISO with SHA-256 coverage.",
+      "freshness": {
+        "currentPinnedVersion": "10.1",
+        "latestKnownStableVersion": "10.1",
+        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "official-mirror-index",
+        "lastKnownChecksumSource": "Official AlmaLinux signed CHECKSUM file",
+        "updateRecommendation": "No upstream change observed after promotion; remain pinned at 10.1."
+      }
     },
     {
       "name": "Ventoy Download Page",
@@ -669,14 +3346,24 @@
       "enabled": true,
       "notes": "Info shortcut: upstream page for the active managed autodownload balenaEtcher installer."
     },
-
     {
       "name": "DDU Download Page",
       "type": "page",
       "dest": "Tools\\Portable\\GPU\\DOWNLOAD - DDU (Display Driver Uninstaller).url",
       "url": "https://www.guru3d.com/download/display-driver-uninstaller-download/",
       "enabled": true,
-      "notes": "Review first: GPU driver cleanup utility."
+      "kind": "tool",
+      "family": "GPU",
+      "architecture": "amd64",
+      "recommendedUse": "GPU driver cleanup when normal vendor uninstallers fail.",
+      "technicianNotes": "Kept manual because the download page is mirror/ad-prone and this pass did not verify a direct official checksum-covered artifact. Use only when driver cleanup is actually needed.",
+      "licenseNote": "Freeware / proprietary; review Wagnardsoft/Guru3D terms before bundling.",
+      "manualOnly": true,
+      "secureBootNote": "Not boot media.",
+      "sourceTrust": "community",
+      "ventoyNotes": "Windows utility; no Ventoy boot behavior.",
+      "fallbackRule": "Use the official linked DDU/Guru3D page manually. Avoid advertising buttons, repacks, and third-party mirror-only files.",
+      "notes": "Manual only: GPU driver cleanup utility."
     },
     {
       "name": "NVCleanInstall Download Page",
@@ -684,9 +3371,19 @@
       "dest": "Tools\\Portable\\GPU\\DOWNLOAD - NVCleanInstall.url",
       "url": "https://www.techpowerup.com/download/techpowerup-nvcleanstall/",
       "enabled": true,
-      "notes": "Review first: custom NVIDIA driver installer."
+      "kind": "tool",
+      "family": "GPU",
+      "architecture": "amd64",
+      "recommendedUse": "Custom NVIDIA driver component selection for advanced support cases.",
+      "technicianNotes": "Kept manual because the vendor page has not been proven with a stable machine-readable checksum for a pinned artifact.",
+      "licenseNote": "Freeware / proprietary (TechPowerUp terms).",
+      "manualOnly": true,
+      "secureBootNote": "Not boot media.",
+      "sourceTrust": "official",
+      "ventoyNotes": "Windows utility; no Ventoy boot behavior.",
+      "fallbackRule": "Use techpowerup.com only and verify the selected version manually. Do not automate without vendor checksum evidence.",
+      "notes": "Manual only: custom NVIDIA driver installer."
     },
-
     {
       "name": "Realtek Audio Drivers",
       "type": "page",
@@ -766,6 +3463,752 @@
       "url": "https://www.intel.com/content/www/us/en/download/19351/intel-wireless-wi-fi-drivers-for-windows-10-and-windows-11.html",
       "enabled": true,
       "notes": "Review first: official Intel Wi-Fi driver page."
+    },
+    {
+      "name": "Apple macOS Download and Install Guide",
+      "type": "page",
+      "dest": "ISO\\macOS\\GUIDE - Apple macOS download and install.url",
+      "url": "https://support.apple.com/en-us/120280",
+      "enabled": true,
+      "categoryId": "macos",
+      "categoryDisplayName": "macOS installer workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": true,
+      "platform": "macOS",
+      "kind": "os",
+      "family": "macOS",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual workflow only: Apple official macOS download and install guide."
+    },
+    {
+      "name": "Create Bootable macOS Installer",
+      "type": "page",
+      "dest": "ISO\\macOS\\GUIDE - Create bootable macOS installer.url",
+      "url": "https://support.apple.com/en-us/101578",
+      "enabled": true,
+      "categoryId": "macos",
+      "categoryDisplayName": "macOS installer workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": true,
+      "platform": "macOS",
+      "kind": "os",
+      "family": "macOS",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual workflow only: Apple createinstallmedia guide. A compatible Mac may be required."
+    },
+    {
+      "name": "macOS Sequoia Manual Installer",
+      "type": "page",
+      "dest": "ISO\\macOS\\macOS-Manual-Installer-Drop\\Sequoia\\MANUAL INSTALLER REQUIRED - macOS Sequoia.url",
+      "url": "https://support.apple.com/en-us/120280",
+      "enabled": true,
+      "categoryId": "macos",
+      "categoryDisplayName": "macOS installer workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": true,
+      "platform": "macOS",
+      "kind": "os",
+      "family": "macOS",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual workflow only: use Apple's official download/recovery workflow and place user-supplied installer media in this folder."
+    },
+    {
+      "name": "macOS Sonoma Manual Installer",
+      "type": "page",
+      "dest": "ISO\\macOS\\macOS-Manual-Installer-Drop\\Sonoma\\MANUAL INSTALLER REQUIRED - macOS Sonoma.url",
+      "url": "https://support.apple.com/en-us/120280",
+      "enabled": true,
+      "categoryId": "macos",
+      "categoryDisplayName": "macOS installer workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": true,
+      "platform": "macOS",
+      "kind": "os",
+      "family": "macOS",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual workflow only: use Apple's official download/recovery workflow and place user-supplied installer media in this folder."
+    },
+    {
+      "name": "macOS Ventura Manual Installer",
+      "type": "page",
+      "dest": "ISO\\macOS\\macOS-Manual-Installer-Drop\\Ventura\\MANUAL INSTALLER REQUIRED - macOS Ventura.url",
+      "url": "https://support.apple.com/en-us/120280",
+      "enabled": true,
+      "categoryId": "macos",
+      "categoryDisplayName": "macOS installer workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": true,
+      "platform": "macOS",
+      "kind": "os",
+      "family": "macOS",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual workflow only: use Apple's official download/recovery workflow and place user-supplied installer media in this folder."
+    },
+    {
+      "name": "macOS Monterey Manual Installer",
+      "type": "page",
+      "dest": "ISO\\macOS\\macOS-Manual-Installer-Drop\\Monterey\\MANUAL INSTALLER REQUIRED - macOS Monterey.url",
+      "url": "https://support.apple.com/en-us/120280",
+      "enabled": true,
+      "categoryId": "macos",
+      "categoryDisplayName": "macOS installer workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": true,
+      "platform": "macOS",
+      "kind": "os",
+      "family": "macOS",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual workflow only: use Apple's official download/recovery workflow and place user-supplied installer media in this folder."
+    },
+    {
+      "name": "macOS Big Sur Manual Installer",
+      "type": "page",
+      "dest": "ISO\\macOS\\macOS-Manual-Installer-Drop\\Big Sur\\MANUAL INSTALLER REQUIRED - macOS Big Sur.url",
+      "url": "https://support.apple.com/en-us/120280",
+      "enabled": true,
+      "categoryId": "macos",
+      "categoryDisplayName": "macOS installer workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": true,
+      "platform": "macOS",
+      "kind": "os",
+      "family": "macOS",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual workflow only: use Apple's official download/recovery workflow and place user-supplied installer media in this folder."
+    },
+    {
+      "name": "Android Platform Tools adb fastboot",
+      "type": "page",
+      "dest": "Tools\\Android\\DOWNLOAD - Android Platform Tools adb fastboot.url",
+      "url": "https://developer.android.com/tools/releases/platform-tools",
+      "enabled": true,
+      "categoryId": "android",
+      "categoryDisplayName": "Android platform tools and firmware workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": false,
+      "platform": "Android",
+      "kind": "tool",
+      "family": "Android",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Official Android SDK Platform-Tools download page shortcut. The app does not auto-install adb/fastboot."
+    },
+    {
+      "name": "Google Pixel Factory Images",
+      "type": "page",
+      "dest": "ISO\\Android\\Android-Manual-Firmware-Drop\\Google Pixel\\DOWNLOAD - Google Pixel Factory Images.url",
+      "url": "https://developers.google.com/android/images",
+      "enabled": true,
+      "categoryId": "android",
+      "categoryDisplayName": "Android platform tools and firmware workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": true,
+      "platform": "Android",
+      "kind": "os",
+      "family": "Android",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Official Google Pixel factory image page. Firmware remains user-selected and device-specific."
+    },
+    {
+      "name": "Google Pixel OTA Images",
+      "type": "page",
+      "dest": "ISO\\Android\\Android-Manual-Firmware-Drop\\Google Pixel\\DOWNLOAD - Google Pixel OTA Images.url",
+      "url": "https://developers.google.com/android/ota",
+      "enabled": true,
+      "categoryId": "android",
+      "categoryDisplayName": "Android platform tools and firmware workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": true,
+      "platform": "Android",
+      "kind": "os",
+      "family": "Android",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Official Google Pixel OTA image page. Firmware remains user-selected and device-specific."
+    },
+    {
+      "name": "AOSP Source and Build Guide",
+      "type": "page",
+      "dest": "ISO\\Android\\GUIDE - AOSP source and build.url",
+      "url": "https://source.android.com/docs/setup/start",
+      "enabled": true,
+      "categoryId": "android",
+      "categoryDisplayName": "Android platform tools and firmware workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": false,
+      "platform": "Android",
+      "kind": "tool",
+      "family": "Android",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Official AOSP source/build documentation shortcut."
+    },
+    {
+      "name": "Samsung Manual Firmware",
+      "type": "page",
+      "dest": "ISO\\Android\\Android-Manual-Firmware-Drop\\Samsung\\MANUAL FIRMWARE REQUIRED - Samsung.url",
+      "url": "https://www.samsung.com/us/support/downloads/",
+      "enabled": true,
+      "categoryId": "android",
+      "categoryDisplayName": "Android platform tools and firmware workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": true,
+      "platform": "Android",
+      "kind": "os",
+      "family": "Android",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual workflow only: use official Samsung support/service workflows for model-specific firmware."
+    },
+    {
+      "name": "Motorola Manual Firmware",
+      "type": "page",
+      "dest": "ISO\\Android\\Android-Manual-Firmware-Drop\\Motorola\\MANUAL FIRMWARE REQUIRED - Motorola.url",
+      "url": "https://en-us.support.motorola.com/app/softwarefix",
+      "enabled": true,
+      "categoryId": "android",
+      "categoryDisplayName": "Android platform tools and firmware workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": true,
+      "platform": "Android",
+      "kind": "os",
+      "family": "Android",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual workflow only: use official Motorola support/service workflows for model-specific firmware."
+    },
+    {
+      "name": "OnePlus Manual Firmware",
+      "type": "page",
+      "dest": "ISO\\Android\\Android-Manual-Firmware-Drop\\OnePlus\\MANUAL FIRMWARE REQUIRED - OnePlus.url",
+      "url": "https://service.oneplus.com/us",
+      "enabled": true,
+      "categoryId": "android",
+      "categoryDisplayName": "Android platform tools and firmware workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": true,
+      "platform": "Android",
+      "kind": "os",
+      "family": "Android",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual workflow only: use official OnePlus support/service workflows for model-specific firmware."
+    },
+    {
+      "name": "Restore iPhone iPad Using Computer",
+      "type": "page",
+      "dest": "Tools\\Apple-Mobile\\GUIDE - Restore iPhone iPad using computer.url",
+      "url": "https://support.apple.com/guide/devices-windows/back-up-and-restore-your-device-mchla3c8ed03/windows",
+      "enabled": true,
+      "categoryId": "ios-ipados",
+      "categoryDisplayName": "iOS / iPadOS restore workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": true,
+      "platform": "Apple Mobile",
+      "kind": "tool",
+      "family": "iOS-iPadOS",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Official Apple Devices for Windows backup/restore workflow."
+    },
+    {
+      "name": "iPhone iPad Recovery Mode Restore",
+      "type": "page",
+      "dest": "Tools\\Apple-Mobile\\GUIDE - iPhone iPad recovery mode restore.url",
+      "url": "https://support.apple.com/en-us/118106",
+      "enabled": true,
+      "categoryId": "ios-ipados",
+      "categoryDisplayName": "iOS / iPadOS restore workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": true,
+      "platform": "Apple Mobile",
+      "kind": "tool",
+      "family": "iOS-iPadOS",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Official Apple recovery mode restore workflow."
+    },
+    {
+      "name": "Apple Configurator Restore Revive Guide",
+      "type": "page",
+      "dest": "Tools\\Apple-Mobile\\GUIDE - Apple Configurator restore and revive.url",
+      "url": "https://support.apple.com/guide/apple-configurator-mac/cad367dc4593/mac",
+      "enabled": true,
+      "categoryId": "ios-ipados",
+      "categoryDisplayName": "iOS / iPadOS restore workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": true,
+      "platform": "Apple Mobile",
+      "kind": "tool",
+      "family": "iOS-iPadOS",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Official Apple Configurator restore/revive workflow when applicable."
+    },
+    {
+      "name": "iPhone Manual IPSW",
+      "type": "page",
+      "dest": "ISO\\iOS-iPadOS\\iOS-Manual-IPSW-Drop\\iPhone\\MANUAL IPSW REQUIRED - iPhone.url",
+      "url": "https://support.apple.com/en-us/118106",
+      "enabled": true,
+      "categoryId": "ios-ipados",
+      "categoryDisplayName": "iOS / iPadOS restore workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": true,
+      "platform": "Apple Mobile",
+      "kind": "os",
+      "family": "iOS-iPadOS",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual workflow only: do not auto-download IPSW files from third-party indexes."
+    },
+    {
+      "name": "iPad Manual IPSW",
+      "type": "page",
+      "dest": "ISO\\iOS-iPadOS\\iOS-Manual-IPSW-Drop\\iPad\\MANUAL IPSW REQUIRED - iPad.url",
+      "url": "https://support.apple.com/en-us/118106",
+      "enabled": true,
+      "categoryId": "ios-ipados",
+      "categoryDisplayName": "iOS / iPadOS restore workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": true,
+      "platform": "Apple Mobile",
+      "kind": "os",
+      "family": "iOS-iPadOS",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual workflow only: do not auto-download IPSW files from third-party indexes."
+    },
+    {
+      "name": "iPod touch Manual IPSW",
+      "type": "page",
+      "dest": "ISO\\iOS-iPadOS\\iOS-Manual-IPSW-Drop\\iPod touch\\MANUAL IPSW REQUIRED - iPod touch.url",
+      "url": "https://support.apple.com/en-us/118106",
+      "enabled": true,
+      "categoryId": "ios-ipados",
+      "categoryDisplayName": "iOS / iPadOS restore workflow",
+      "defaultIncluded": false,
+      "requiresManualMedia": true,
+      "platform": "Apple Mobile",
+      "kind": "os",
+      "family": "iOS-iPadOS",
+      "manualOnly": true,
+      "sourceTrust": "official",
+      "notes": "Manual workflow only: do not auto-download IPSW files from third-party indexes."
     }
-  ]
+  ],
+  "extras": {
+    "seedDirectories": [
+      "ISO\\Windows\\Windows-Manual-ISO-Drop",
+      "ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows 11",
+      "ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows 10",
+      "ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows 8.1",
+      "ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows 8",
+      "ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows 7",
+      "ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows Vista",
+      "ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows XP",
+      "ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows 2000",
+      "ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows ME",
+      "ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows 98",
+      "ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows 95",
+      "ISO\\macOS",
+      "ISO\\macOS\\macOS-Manual-Installer-Drop",
+      "ISO\\macOS\\macOS-Manual-Installer-Drop\\Sequoia",
+      "ISO\\macOS\\macOS-Manual-Installer-Drop\\Sonoma",
+      "ISO\\macOS\\macOS-Manual-Installer-Drop\\Ventura",
+      "ISO\\macOS\\macOS-Manual-Installer-Drop\\Monterey",
+      "ISO\\macOS\\macOS-Manual-Installer-Drop\\Big Sur",
+      "ISO\\Android",
+      "ISO\\Android\\Android-Manual-Firmware-Drop",
+      "ISO\\Android\\Android-Manual-Firmware-Drop\\Google Pixel",
+      "ISO\\Android\\Android-Manual-Firmware-Drop\\Samsung",
+      "ISO\\Android\\Android-Manual-Firmware-Drop\\Motorola",
+      "ISO\\Android\\Android-Manual-Firmware-Drop\\OnePlus",
+      "Tools\\Android",
+      "ISO\\iOS-iPadOS",
+      "ISO\\iOS-iPadOS\\iOS-Manual-IPSW-Drop",
+      "ISO\\iOS-iPadOS\\iOS-Manual-IPSW-Drop\\iPhone",
+      "ISO\\iOS-iPadOS\\iOS-Manual-IPSW-Drop\\iPad",
+      "ISO\\iOS-iPadOS\\iOS-Manual-IPSW-Drop\\iPod touch",
+      "Tools\\Apple-Mobile"
+    ],
+    "readmes": [
+      {
+        "categoryId": "macos",
+        "categoryDisplayName": "macOS installer workflow",
+        "defaultIncluded": false,
+        "requiresManualMedia": true,
+        "platform": "macOS",
+        "dest": "ISO\\macOS\\README - macOS installer workflow.txt",
+        "body": [
+          "ForgerEMS - macOS installer workflow",
+          "====================================",
+          "",
+          "ForgerEMS does not bundle macOS installers and does not claim Windows can build every macOS installer.",
+          "Use Apple's official download, recovery, and createinstallmedia workflows only.",
+          "A compatible Mac may be required to download or create bootable macOS media.",
+          "",
+          "Manual installer tracking folders:",
+          "  macOS-Manual-Installer-Drop\\Sequoia\\",
+          "  macOS-Manual-Installer-Drop\\Sonoma\\",
+          "  macOS-Manual-Installer-Drop\\Ventura\\",
+          "  macOS-Manual-Installer-Drop\\Monterey\\",
+          "  macOS-Manual-Installer-Drop\\Big Sur\\",
+          "",
+          "Place user-supplied media such as installers, DMGs, or PKGs in the matching drop folder for tracking.",
+          "User-supplied media remains the technician's responsibility.",
+          "ForgerEMS does not redistribute Apple installers.",
+          "Do not use random internet ISO mirrors."
+        ]
+      },
+      {
+        "categoryId": "macos",
+        "categoryDisplayName": "macOS installer workflow",
+        "defaultIncluded": false,
+        "requiresManualMedia": true,
+        "platform": "macOS",
+        "dest": "ISO\\macOS\\macOS-Manual-Installer-Drop\\README.txt",
+        "body": [
+          "Drop user-supplied macOS installer media into the matching version folder.",
+          "",
+          "Use Apple official download/recovery/createinstallmedia workflows only.",
+          "A compatible Mac may be required.",
+          "User-supplied media remains the technician's responsibility.",
+          "ForgerEMS does not redistribute Apple installers.",
+          "Do not use random internet ISO mirrors."
+        ]
+      },
+      {
+        "categoryId": "android",
+        "categoryDisplayName": "Android platform tools and firmware workflow",
+        "defaultIncluded": false,
+        "requiresManualMedia": true,
+        "platform": "Android",
+        "dest": "ISO\\Android\\README - Android firmware workflow.txt",
+        "body": [
+          "ForgerEMS - Android firmware workflow",
+          "======================================",
+          "",
+          "Android firmware is device, model, bootloader, region, and carrier specific.",
+          "Flashing firmware can wipe data or brick devices.",
+          "Use official Google/Android/OEM sources where available.",
+          "Do not use random firmware mirrors.",
+          "Do not use random internet ISO mirrors.",
+          "ForgerEMS does not redistribute Android firmware.",
+          "",
+          "Manual firmware tracking folders:",
+          "  Android-Manual-Firmware-Drop\\Google Pixel\\",
+          "  Android-Manual-Firmware-Drop\\Samsung\\",
+          "  Android-Manual-Firmware-Drop\\Motorola\\",
+          "  Android-Manual-Firmware-Drop\\OnePlus\\",
+          "",
+          "Place user-supplied media or firmware packages in the matching folder for tracking."
+        ]
+      },
+      {
+        "categoryId": "android",
+        "categoryDisplayName": "Android platform tools and firmware workflow",
+        "defaultIncluded": false,
+        "requiresManualMedia": true,
+        "platform": "Android",
+        "dest": "Tools\\Android\\README - Android tools.txt",
+        "body": [
+          "ForgerEMS - Android tools",
+          "==========================",
+          "",
+          "Use the official Android Platform-Tools page for adb and fastboot.",
+          "Verify device model, bootloader state, and OEM unlock status before flashing.",
+          "User-supplied media and firmware remain the technician's responsibility.",
+          "ForgerEMS does not redistribute Android firmware.",
+          "Do not use random firmware mirrors.",
+          "Do not use random internet ISO mirrors."
+        ]
+      },
+      {
+        "categoryId": "ios-ipados",
+        "categoryDisplayName": "iOS / iPadOS restore workflow",
+        "defaultIncluded": false,
+        "requiresManualMedia": true,
+        "platform": "Apple Mobile",
+        "dest": "ISO\\iOS-iPadOS\\README - iOS iPadOS restore workflow.txt",
+        "body": [
+          "ForgerEMS - iOS / iPadOS restore workflow",
+          "==========================================",
+          "",
+          "Use Apple Devices, Finder, iTunes, or Apple Configurator official workflows.",
+          "IPSW files are user-supplied if a technician chooses to track them here.",
+          "Restores can erase devices.",
+          "Activation Lock and Apple ID ownership are outside ForgerEMS.",
+          "ForgerEMS does not redistribute IPSW files.",
+          "Do not auto-download IPSW files from third-party indexes.",
+          "Do not use random internet ISO mirrors."
+        ]
+      },
+      {
+        "categoryId": "ios-ipados",
+        "categoryDisplayName": "iOS / iPadOS restore workflow",
+        "defaultIncluded": false,
+        "requiresManualMedia": true,
+        "platform": "Apple Mobile",
+        "dest": "ISO\\iOS-iPadOS\\iOS-Manual-IPSW-Drop\\README.txt",
+        "body": [
+          "Drop user-supplied IPSW files into the matching iPhone, iPad, or iPod touch folder only when needed.",
+          "",
+          "Use Apple official restore workflows.",
+          "Restores can erase devices.",
+          "Activation Lock and Apple ID ownership are outside ForgerEMS.",
+          "User-supplied media remains the technician's responsibility.",
+          "ForgerEMS does not redistribute IPSW files.",
+          "Do not use random internet ISO mirrors."
+        ]
+      },
+      {
+        "dest": "ISO\\Windows\\README - Windows ISO workflow.txt",
+        "body": [
+          "ForgerEMS - Windows ISO Workflow",
+          "=================================",
+          "",
+          "Modern Windows (10, 11, Server)",
+          "  DOWNLOAD - Windows 10.url        Official Microsoft Windows 10 download page.",
+          "  DOWNLOAD - Windows 11.url        Official Microsoft Windows 11 download page.",
+          "  DOWNLOAD - Windows Server Eval.url   Microsoft Evaluation Center (Server 2025).",
+          "  INFO - Windows ADK + WinPE.url   Microsoft Learn ADK / WinPE reference.",
+          "",
+          "  - Microsoft Media Creation Tool may be required to materialize the ISO.",
+          "  - ISO availability depends on the Microsoft download flow.",
+          "  - Licensing still required.",
+          "  - Do not use third-party ISO mirrors.",
+          "",
+          "Manual ISO drop zones",
+          "  Drop your legally obtained ISO into the matching folder under:",
+          "    Windows-Manual-ISO-Drop\\Windows 11\\",
+          "    Windows-Manual-ISO-Drop\\Windows 10\\",
+          "    Windows-Manual-ISO-Drop\\Windows 8.1\\",
+          "    Windows-Manual-ISO-Drop\\Windows 8\\",
+          "    Windows-Manual-ISO-Drop\\Windows 7\\",
+          "    Windows-Manual-ISO-Drop\\Windows Vista\\",
+          "    Windows-Manual-ISO-Drop\\Windows XP\\",
+          "    Windows-Manual-ISO-Drop\\Windows 2000\\",
+          "    Windows-Manual-ISO-Drop\\Windows ME\\",
+          "    Windows-Manual-ISO-Drop\\Windows 98\\",
+          "    Windows-Manual-ISO-Drop\\Windows 95\\",
+          "",
+          "  One ISO per folder is enough. The folder name pins which version the ISO is for.",
+          "",
+          "Legacy Windows (8.1 and older)",
+          "  See ISO\\Windows-Legacy\\README - Legacy Windows media.txt for the legacy policy,",
+          "  firmware caveats, driver notes, and Ventoy compatibility guidance.",
+          "  ForgerEMS never auto-downloads legacy Windows ISOs.",
+          "",
+          "Security and licensing",
+          "  - Use original or client-owned, legally licensed media only.",
+          "  - Do not use random internet ISO mirrors.",
+          "  - Microsoft EULAs apply to all Windows media."
+        ]
+      },
+      {
+        "dest": "ISO\\Windows-Legacy\\README - Legacy Windows media.txt",
+        "body": [
+          "ForgerEMS - Legacy Windows media policy",
+          "========================================",
+          "",
+          "ForgerEMS cannot auto-download legacy Windows ISOs because Microsoft no longer",
+          "provides a public official ISO flow for them. Manual ISO required for:",
+          "",
+          "  Windows 8.1, Windows 8, Windows 7, Windows Vista, Windows XP,",
+          "  Windows 2000, Windows ME, Windows 98, Windows 95.",
+          "",
+          "Drop ISOs into ISO\\Windows\\Windows-Manual-ISO-Drop\\<version>\\.",
+          "",
+          "Rules",
+          "  - Use original or client-owned, legally licensed media only.",
+          "  - Do not use random internet ISO mirrors.",
+          "  - Microsoft EULA applies. Treat older Windows as unsupported by vendor.",
+          "  - Use only for recovery, retro systems, or isolated labs.",
+          "  - NEVER expose legacy Windows installs to the public internet.",
+          "",
+          "Firmware and Secure Boot",
+          "  - Windows 7 / 8 / 8.1: BIOS and UEFI both possible; Secure Boot may need to",
+          "    be disabled on modern firmware.",
+          "  - Windows Vista: BIOS preferred; Secure Boot unsupported.",
+          "  - XP / 2000 / ME / 98 / 95: legacy BIOS / CSM required; Secure Boot unsupported.",
+          "",
+          "Drivers and storage",
+          "  - XP / 2000 may need AHCI / SATA drivers loaded via F6 or slipstreamed; old",
+          "    install media often only sees IDE storage.",
+          "  - 9x (ME / 98 / 95) typically need IDE compatibility mode and a DOS boot disk.",
+          "  - USB boot support is limited on very old systems; an optical drive or VM may",
+          "    be required.",
+          "",
+          "Ventoy compatibility",
+          "  - Modern Windows 7 / 8.1 installers usually boot from Ventoy.",
+          "  - Older installers (XP and below) vary; expect to fall back to bare-metal",
+          "    install media or a VM.",
+          "  - For 9x installers, a DOS boot disk and legacy BIOS are typically required."
+        ]
+      },
+      {
+        "dest": "ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows 11\\README.txt",
+        "body": [
+          "Drop your legally obtained Windows 11 ISO into this folder.",
+          "",
+          "  - Microsoft Media Creation Tool can generate this ISO.",
+          "  - Use only client-owned or legally licensed media.",
+          "  - Do not use random internet ISO mirrors.",
+          "  - Microsoft EULA applies.",
+          "",
+          "See: ISO\\Windows\\README - Windows ISO workflow.txt"
+        ]
+      },
+      {
+        "dest": "ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows 10\\README.txt",
+        "body": [
+          "Drop your legally obtained Windows 10 ISO into this folder.",
+          "",
+          "  - Microsoft Media Creation Tool can generate this ISO.",
+          "  - Use only client-owned or legally licensed media.",
+          "  - Do not use random internet ISO mirrors.",
+          "  - Microsoft EULA applies.",
+          "",
+          "See: ISO\\Windows\\README - Windows ISO workflow.txt"
+        ]
+      },
+      {
+        "dest": "ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows 8.1\\README.txt",
+        "body": [
+          "Drop your legally obtained Windows 8.1 ISO into this folder.",
+          "",
+          "  - Unsupported by vendor (end of support 2023-01-10).",
+          "  - Use only client-owned or legally licensed retail/volume media.",
+          "  - Do not use random internet ISO mirrors.",
+          "  - Secure Boot may need to be disabled on modern firmware.",
+          "",
+          "See: ISO\\Windows-Legacy\\README - Legacy Windows media.txt"
+        ]
+      },
+      {
+        "dest": "ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows 8\\README.txt",
+        "body": [
+          "Drop your legally obtained Windows 8 ISO into this folder.",
+          "",
+          "  - Unsupported by vendor (end of support 2016-01-12).",
+          "  - Use only client-owned or legally licensed media.",
+          "  - Do not use random internet ISO mirrors.",
+          "  - Secure Boot may need to be disabled.",
+          "",
+          "See: ISO\\Windows-Legacy\\README - Legacy Windows media.txt"
+        ]
+      },
+      {
+        "dest": "ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows 7\\README.txt",
+        "body": [
+          "Drop your legally obtained Windows 7 ISO into this folder.",
+          "",
+          "  - Unsupported by vendor (end of support 2020-01-14; ESU ended 2023-01-10).",
+          "  - Use only client-owned or legally licensed retail/volume media.",
+          "  - Do not use random internet ISO mirrors.",
+          "  - May need USB 3.0 / NVMe drivers slipstreamed for modern hardware.",
+          "  - Secure Boot must be disabled.",
+          "",
+          "See: ISO\\Windows-Legacy\\README - Legacy Windows media.txt"
+        ]
+      },
+      {
+        "dest": "ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows Vista\\README.txt",
+        "body": [
+          "Drop your legally obtained Windows Vista ISO into this folder.",
+          "",
+          "  - Unsupported by vendor (end of support 2017-04-11).",
+          "  - Microsoft no longer hosts the ISO; use legally licensed retail/volume media.",
+          "  - Do not use random internet ISO mirrors.",
+          "  - Very limited modern driver coverage.",
+          "  - Secure Boot unsupported.",
+          "",
+          "See: ISO\\Windows-Legacy\\README - Legacy Windows media.txt"
+        ]
+      },
+      {
+        "dest": "ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows XP\\README.txt",
+        "body": [
+          "Drop your legally obtained Windows XP ISO into this folder.",
+          "",
+          "  - Unsupported by vendor (end of support 2014-04-08).",
+          "  - Use only client-owned or legally licensed retail/volume media.",
+          "  - Do not use random internet ISO mirrors.",
+          "  - AHCI / SATA drivers often need F6 floppy or slipstream. Disable XHCI / USB 3.",
+          "  - Legacy BIOS / CSM required. Secure Boot unsupported.",
+          "  - NEVER expose to the public internet.",
+          "",
+          "See: ISO\\Windows-Legacy\\README - Legacy Windows media.txt"
+        ]
+      },
+      {
+        "dest": "ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows 2000\\README.txt",
+        "body": [
+          "Drop your legally obtained Windows 2000 ISO into this folder.",
+          "",
+          "  - Unsupported by vendor (end of support 2010-07-13).",
+          "  - Use only client-owned or legally licensed retail/volume media.",
+          "  - Do not use random internet ISO mirrors.",
+          "  - Predates modern AHCI / SATA. Use IDE compatibility mode.",
+          "  - Legacy BIOS required. Secure Boot unsupported.",
+          "  - NEVER expose to network.",
+          "",
+          "See: ISO\\Windows-Legacy\\README - Legacy Windows media.txt"
+        ]
+      },
+      {
+        "dest": "ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows ME\\README.txt",
+        "body": [
+          "Drop your legally obtained Windows ME ISO into this folder.",
+          "",
+          "  - Unsupported by vendor (end of support 2006-07-11).",
+          "  - Use only client-owned or legally licensed retail media.",
+          "  - Do not use random internet ISO mirrors.",
+          "  - 9x kernel. Typically needs a DOS boot disk and legacy BIOS.",
+          "  - Secure Boot unsupported.",
+          "",
+          "See: ISO\\Windows-Legacy\\README - Legacy Windows media.txt"
+        ]
+      },
+      {
+        "dest": "ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows 98\\README.txt",
+        "body": [
+          "Drop your legally obtained Windows 98 ISO into this folder.",
+          "",
+          "  - Unsupported by vendor (end of support 2006-07-11).",
+          "  - Use only client-owned or legally licensed retail media.",
+          "  - Do not use random internet ISO mirrors.",
+          "  - DOS / 9x kernel. Requires a DOS boot disk and legacy BIOS.",
+          "  - Often paired with FreeDOS for legacy gaming setups.",
+          "  - Secure Boot unsupported.",
+          "",
+          "See: ISO\\Windows-Legacy\\README - Legacy Windows media.txt"
+        ]
+      },
+      {
+        "dest": "ISO\\Windows\\Windows-Manual-ISO-Drop\\Windows 95\\README.txt",
+        "body": [
+          "Drop your legally obtained Windows 95 ISO into this folder.",
+          "",
+          "  - Unsupported by vendor (end of support 2001-12-31).",
+          "  - Use only client-owned or legally licensed retail media.",
+          "  - Do not use random internet ISO mirrors.",
+          "  - Boot disk required for original install media.",
+          "  - Usually only viable inside a VM.",
+          "  - Secure Boot unsupported.",
+          "",
+          "See: ISO\\Windows-Legacy\\README - Legacy Windows media.txt"
+        ]
+      }
+    ]
+  }
 }

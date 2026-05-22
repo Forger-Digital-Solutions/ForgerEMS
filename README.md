@@ -22,7 +22,7 @@ This is **Public Preview / prerelease** software: behavior and packaging can cha
 
 | Feature | What it does |
 |--------|----------------|
-| **USB Builder** | Guided flows to verify, prepare, and update Ventoy-oriented USB maintenance media, with managed downloads and careful drive selection. |
+| **USB Builder** | Guided flows to verify, prepare, and update Ventoy-oriented USB maintenance media, with managed downloads and careful drive selection. The **USB Builder Profile** lets technicians enable or skip packs per run (Windows, Legacy Windows, Linux Rescue, Diagnostics, OEM Tools, macOS, Android, iOS / iPadOS). Core USB structure is required and cannot be turned off. macOS, Android, and iOS / iPadOS are off by default and treat all media as manual. Unchecking a pack only skips seeding/updating it — files already on the USB are never deleted. |
 | **USB Intelligence** | Measure write/read on a **safe removable** target, flag likely cached read samples honestly, map **which physical USB port** you used, and get practical guidance from benchmarks and topology hints (best-effort; varies by PC). Cache-suspected reads are treated as unverified and do not upgrade recommendation quality on their own. |
 | **System Intelligence** | Local scan summaries with Hardware X-Ray sensor coverage, health scoring, FlipValue, Best Use / Device Fit, and honest Unknown/NotExposed handling before repair or resale prep. |
 | **Diagnostics** | Unified health checklist, file/link safety helpers, and technician-oriented tools (including WSL-related helpers where applicable). |
@@ -66,6 +66,16 @@ Kyra Intelligence Network is the safe foundation for **local-first repair memory
 - Settings include **Kyra Intelligence** controls to keep local-only, use System Intelligence context, allow gateway research when configured, view what would be shared, export Kyra memory, and delete Kyra memory.
 
 ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the user explicitly enables a future sharing option. Realtime Kyra Gateway sends only sanitized request context needed to answer current-data questions. Provider API keys are stored server-side and are not included in the desktop app. Anonymous Community Intelligence sharing is optional and off by default.
+
+## Cross-platform toolkit packs (Windows-first)
+
+ForgerEMS is a Windows-first technician workbench. The macOS, Android, and iOS / iPadOS USB Builder packs are off by default. When a technician enables them, the catalog opens **official vendor pages** only:
+
+- **macOS**: Apple support / `createinstallmedia` / recovery workflow shortcuts. Installers, DMGs, and PKGs remain **user-supplied** — drop them into `ISO\macOS\macOS-Manual-Installer-Drop\<version>\`. A compatible Mac may be required. ForgerEMS does **not** redistribute Apple installers.
+- **Android**: official Android SDK Platform-Tools (adb / fastboot), Google Pixel factory / OTA images, AOSP documentation, and Samsung / Motorola / OnePlus support pages. OEM firmware is device, model, bootloader, region, and carrier specific and remains **user-supplied** — drop into `ISO\Android\Android-Manual-Firmware-Drop\<vendor>\`. Flashing the wrong firmware can wipe data or brick devices. ForgerEMS does **not** redistribute Android firmware and never uses random firmware mirrors.
+- **iOS / iPadOS**: Apple Devices for Windows, Finder / iTunes, recovery mode, and Apple Configurator restore workflows. IPSW files are **user-supplied** — drop into `ISO\iOS-iPadOS\iOS-Manual-IPSW-Drop\<device>\`. Restores can erase devices. Activation Lock and Apple ID ownership are outside ForgerEMS. ForgerEMS does **not** use third-party IPSW indexes.
+
+ForgerEMS never bypasses licenses, activation, DRM, account locks, or vendor authorization flows. Toolkit `.url` filenames use a fixed taxonomy: **AUTO DOWNLOAD / DOWNLOAD** (official, redistributable, machine-resolvable), **MANUAL DOWNLOAD** (official vendor page; user must choose / sign in / accept), **MANUAL MEDIA REQUIRED** (user supplies the ISO / installer / IPSW / firmware), **GUIDE** (official how-to), **INFO** (true reference material).
 
 ---
 

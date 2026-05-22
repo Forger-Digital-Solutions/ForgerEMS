@@ -113,6 +113,14 @@
             "type": "string",
             "minLength": 1
           },
+          "sha512": {
+            "type": "string",
+            "pattern": "^[A-Fa-f0-9]{128}$"
+          },
+          "sha512Url": {
+            "type": "string",
+            "minLength": 1
+          },
           "sourceType": {
             "type": "string",
             "enum": [
@@ -153,6 +161,184 @@
           },
           "notes": {
             "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "os",
+              "tool",
+              "driver-shortcut",
+              "runtime",
+              "browser"
+            ],
+            "description": "Catalog classification. 'os' marks operating system / installer media entries; 'tool' marks technician utilities. Optional and additive; legacy items without this field default to 'tool' for behavioural purposes."
+          },
+          "family": {
+            "type": "string",
+            "description": "OS family or tool family. Examples: Windows, Linux, BSD, Other-Unix, Hobby, Recovery, Server, Network-Appliance, Hypervisor, Forensic, Security, DOS."
+          },
+          "osCategory": {
+            "type": "string",
+            "description": "OS-only sub-category. Examples: Desktop, Server, Recovery, Forensic, Security, Legacy, Hobby, Live, Hypervisor."
+          },
+          "architecture": {
+            "description": "Architecture(s) the entry targets. Either a single token (e.g. 'amd64') or an array of tokens (e.g. ['amd64','arm64']). Common tokens: amd64, x86, arm64, armhf, i386.",
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1
+              }
+            ]
+          },
+          "bootMode": {
+            "description": "Boot firmware support. Common tokens: bios, uefi, secure-boot, secure-boot-not-supported, legacy-only. Multiple values allowed via an array.",
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1
+              }
+            ]
+          },
+          "recommendedUse": {
+            "type": "string",
+            "description": "Short technician-facing line describing when to reach for this catalog item."
+          },
+          "technicianNotes": {
+            "type": "string",
+            "description": "Longer technician note: gotchas, install caveats, hardware quirks."
+          },
+          "licenseNote": {
+            "type": "string",
+            "description": "Plain-English license note. Examples: 'Free / open source', 'Microsoft EULA', 'Paid - vendor licence required', 'Free for personal use', 'Discontinued / unsupported by vendor'."
+          },
+          "manualOnly": {
+            "type": "boolean",
+            "description": "True when the item must be obtained manually by the user. Redundant with 'type=page' but useful for explicit catalog filters."
+          },
+          "legacyWarning": {
+            "type": "string",
+            "description": "Plain-English warning shown for unsupported / end-of-life / hobby / lab-only catalog items."
+          },
+          "ventoyNotes": {
+            "type": "string",
+            "description": "Ventoy-specific compatibility note. Examples: 'Boot via legacy BIOS only', 'May require persistence file', 'Use ventoy.json plugin'."
+          },
+          "secureBootNote": {
+            "type": "string",
+            "description": "Secure Boot status note. Examples: 'Secure Boot supported', 'Secure Boot may need to be disabled', 'Unsigned bootloader - Secure Boot must be disabled'."
+          },
+          "sourceTrust": {
+            "type": "string",
+            "enum": [
+              "official",
+              "community",
+              "manual"
+            ],
+            "description": "Trust level of the upstream URL. 'official' = vendor/project page. 'community' = trusted community distribution. 'manual' = no automated provenance."
+          },
+          "freshness": {
+            "type": "object",
+            "description": "Catalog freshness intelligence. All fields are optional and informational. ForgerEMS never auto-upgrades based on this metadata; it only surfaces review actions for the technician. Missing or stale freshness data is treated as ManualReviewRequired by the audit helper.",
+            "properties": {
+              "currentPinnedVersion": {
+                "type": "string",
+                "description": "The pinned upstream version this catalog entry references (e.g., '4.6.6', '1.26.24', '24.04.4'). Should match the version embedded in 'url' and 'name'."
+              },
+              "latestKnownStableVersion": {
+                "type": "string",
+                "description": "The latest stable version observed at the last freshness audit. Never a beta/RC/nightly value."
+              },
+              "lastFreshnessAuditUtc": {
+                "type": "string",
+                "minLength": 1,
+                "description": "ISO-8601 UTC timestamp of the last freshness audit (e.g., '2026-05-21T00:00:00Z'). Stale timestamps trigger ManualReviewRequired."
+              },
+              "freshnessStatus": {
+                "type": "string",
+                "enum": [
+                  "UpToDate",
+                  "PatchUpdateAvailable",
+                  "MinorUpdateAvailable",
+                  "MajorUpdateAvailable",
+                  "ManualReviewRequired",
+                  "ChecksumVerificationRequired",
+                  "SourceChanged",
+                  "UpdateUnsafe",
+                  "LegacyPinned",
+                  "VendorWorkflowChanged"
+                ],
+                "description": "Classification result. 'ManualReviewRequired' is the safe default for any entry whose upstream could not be checked live."
+              },
+              "updateChannel": {
+                "type": "string",
+                "enum": [
+                  "stable",
+                  "LTS",
+                  "ESR",
+                  "manual-only",
+                  "legacy-pinned"
+                ],
+                "description": "Update channel the entry tracks. ForgerEMS does NOT support beta/nightly/RC channels by default."
+              },
+              "requiresManualReview": {
+                "type": "boolean",
+                "description": "True when an operator must inspect this entry before any version change."
+              },
+              "majorVersionBoundary": {
+                "type": "boolean",
+                "description": "True when latestKnownStableVersion crosses a major-version boundary above currentPinnedVersion. Major boundaries always require manual review."
+              },
+              "checksumVerificationMode": {
+                "type": "string",
+                "enum": [
+                  "sha256-pinned",
+                  "sha256url-only",
+                  "sha512-pinned",
+                  "sha512url-only",
+                  "github-asset-digest",
+                  "manual",
+                  "unverified"
+                ],
+                "description": "How the checksum is verified at download time."
+              },
+              "upstreamReleaseType": {
+                "type": "string",
+                "enum": [
+                  "github-releases",
+                  "vendor-version-page",
+                  "vendor-rss",
+                  "sourceforge-rss",
+                  "official-mirror-index",
+                  "manual"
+                ],
+                "description": "Shape of the upstream release discovery. 'manual' means a human must check the vendor."
+              },
+              "lastKnownChecksumSource": {
+                "type": "string",
+                "description": "Mirror or description of where the checksum was last fetched from (e.g. the sha256Url, a GitHub digest endpoint, or 'operator-paste from vendor SHA256SUMS')."
+              },
+              "updateRecommendation": {
+                "type": "string",
+                "description": "Short technician-facing recommendation. Plain English, not a directive: e.g. 'Review release notes before bumping' or 'Patch update is safe to promote in next batch'."
+              }
+            },
+            "additionalProperties": false
           }
         },
         "allOf": [
@@ -169,8 +355,17 @@
             },
             "then": {
               "not": {
-                "required": [
-                  "sha256Url"
+                "anyOf": [
+                  {
+                    "required": [
+                      "sha256Url"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "sha512Url"
+                    ]
+                  }
                 ]
               }
             }
@@ -197,11 +392,6 @@
                   {
                     "required": [
                       "fragilityLevel"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "fallbackRule"
                     ]
                   },
                   {

@@ -84,12 +84,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly string _copilotConfigPath;
     private readonly string _betaConfigPath;
     private readonly string _updateConfigPath;
+    private readonly string _usbBuilderProfileConfigPath;
     private readonly AppUpdateSettingsStore _updateSettingsStore;
+    private readonly UsbBuilderProfileSettingsStore _usbBuilderProfileSettingsStore;
     private readonly NetworkPulseSettingsStore _networkPulseSettingsStore;
     private readonly NetworkPulseViewModel _networkPulseViewModel;
     private readonly NetworkPulseService _networkPulseService;
     private readonly GitHubReleaseUpdateCheckService _updateCheckService;
     private AppUpdateSettings _appUpdateSettings = new();
+    private UsbBuilderProfileSettings _usbBuilderProfileSettings = new();
+    private bool _loadingUsbBuilderProfileSettings;
     private bool _updateCheckInProgress;
     private CancellationTokenSource? _updateCheckCancellation;
     private bool _updateDownloadInProgress;
@@ -174,6 +178,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _managedSummaryStatusText = "No snapshot";
     private string _managedDownloadPartialBannerText = string.Empty;
     private Visibility _managedDownloadRetryPanelVisibility = Visibility.Collapsed;
+    private string _usbBuilderProfileSummaryText = "This update will include: Core, Windows, Legacy Windows, Linux Rescue, Diagnostics, OEM Tools. macOS / Mobile folders are off.";
+    private string _usbBuilderProfileNoteText = "Unchecked packs are skipped for this run. Existing user-supplied files already on the USB are not deleted.";
     private string _logsText = string.Empty;
     private string _recentLogsText = "No log output yet.";
     private string _selectedLogLevelFilter = "All";
@@ -246,14 +252,30 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         "Manual Required means ForgerEMS cannot legally or safely auto-download this item (licensing, vendor gating, or verification limits). Use the provided link or instructions, place files where the manifest expects, then re-run Refresh Health.";
     private string _selectedToolkitFilter = "All";
     private string _selectedToolkitCategoryFilter = "All categories";
+    private string _selectedToolkitFamilyFilter = "All families";
+    private string _selectedToolkitArchitectureFilter = "All architectures";
+    private string _selectedToolkitBootModeFilter = "All boot modes";
+    private string _selectedToolkitSourceTrustFilter = "All source trust";
     private string _toolkitSearchText = string.Empty;
     private string _toolkitLastScanText = "Last scan: never";
     private string _toolkitClassificationSummaryText = string.Empty;
+    private string _toolkitRecommendedUseSummaryText = "Recommended-use groups: load toolkit health to build groups.";
+    private string _toolkitDownloadPlanSummaryText = "Download plan: no selected items.";
+    private string _toolkitDownloadPlanStorageText = "Storage: no selected items.";
+    private string _toolkitDownloadPlanValidationText = "Planning only. No downloads or USB writes start from selection.";
+    private string _selectedManagedDownloadExecutionText = "Selected downloads: idle.";
+    private string _selectedManagedDownloadSafetyText = "Selected downloads use Update-ForgerEMS with a selected-only manifest. Manual-only entries are instructions only.";
+    private bool _isSelectedManagedDownloadRunning;
+    private CancellationTokenSource? _selectedManagedDownloadCts;
+    private string _toolkitProfileNotes = string.Empty;
+    private string _selectedToolkitProfileName = "Windows Recovery USB";
     private ToolkitHealthItemView? _selectedToolkitHealthItem;
+    private DownloadQueueItem? _selectedDownloadPlanItem;
     private Brush _toolkitStatusBackground = RunningBackground;
     private Brush _toolkitStatusBorderBrush = RunningBorder;
     private Brush _toolkitStatusForeground = RunningForeground;
     private readonly List<ToolkitHealthItemView> _allToolkitHealthItems = [];
+    private readonly ToolkitWorkspaceProfileStore _toolkitProfileStore = new();
     private readonly ToolkitLinkVerifier _toolkitLinkVerifier = new();
     private CancellationTokenSource? _toolkitLinkVerifyCts;
     private ToolkitLinkVerificationSummaryForReadiness? _cachedLinkVerificationSummary;
@@ -421,7 +443,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _kyraMachineMemoryPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "kyra-machine-memory.json");
         _betaConfigPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "beta-settings.json");
         _updateConfigPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "update-settings.json");
+        _usbBuilderProfileConfigPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "usb-builder-profile.json");
         _updateSettingsStore = new AppUpdateSettingsStore(_updateConfigPath);
+        _usbBuilderProfileSettingsStore = new UsbBuilderProfileSettingsStore(_usbBuilderProfileConfigPath);
         _networkPulseSettingsStore = new NetworkPulseSettingsStore(
             Path.Combine(_appRuntimeService.RuntimeRoot, "config", "network-pulse-settings.json"));
         _networkPulseViewModel = new NetworkPulseViewModel(_networkPulseSettingsStore);
@@ -438,6 +462,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         LoadCopilotSettings();
         LoadBetaSettings();
         LoadUpdateSettings();
+        LoadUsbBuilderProfileSettings();
         RefreshDeepSensorModeSettingsProperties();
         _isLoadingDeepSensorModeSetting = false;
         _networkPulseService.Start();
@@ -448,6 +473,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         RevalidateManagedDownloadsCommand = new AsyncRelayCommand(RunRevalidateManagedDownloadsAsync, CanRunBackendOnlyActions);
         SetupUsbCommand = new AsyncRelayCommand(RunSetupUsbAsync, CanRunTargetedActions);
         UpdateUsbCommand = new AsyncRelayCommand(RunUpdateUsbAsync, CanRunTargetedActions);
+        SelectRecommendedUsbBuilderProfileCommand = new RelayCommand(SelectRecommendedUsbBuilderProfile, () => !IsBusy);
+        SelectAllUsbBuilderProfileCommand = new RelayCommand(SelectAllUsbBuilderProfile, () => !IsBusy);
+        ResetUsbBuilderProfileCommand = new RelayCommand(ResetUsbBuilderProfile, () => !IsBusy);
         RetryFailedManagedDownloadsCommand = new AsyncRelayCommand(RunRetryFailedManagedDownloadsAsync, CanRetryFailedManagedDownloads);
         RenameUsbCommand = new AsyncRelayCommand(RunRenameUsbAsync, CanRunTargetedActions);
         InstallOrUpdateVentoyCommand = new AsyncRelayCommand(RunInstallOrUpdateVentoyAsync, CanRunTargetedActions);
@@ -471,6 +499,25 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         OpenManualDownloadShortcutCommand = new RelayCommand(OpenManualDownloadShortcut, () => SelectedToolkitHealthItem is not null);
         CopySelectedToolkitExpectedPathCommand = new RelayCommand(CopySelectedToolkitExpectedPath, () => SelectedToolkitHealthItem is not null);
         CopySelectedToolkitDetectedPathCommand = new RelayCommand(CopySelectedToolkitDetectedPath, () => SelectedToolkitHealthItem is not null);
+        AddSelectedToolToDownloadPlanCommand = new RelayCommand(AddSelectedToolToDownloadPlan, () => SelectedToolkitHealthItem is not null);
+        RemoveSelectedToolFromDownloadPlanCommand = new RelayCommand(RemoveSelectedToolFromDownloadPlan, () => SelectedToolkitHealthItem is not null);
+        SelectVisibleToolkitItemsCommand = new RelayCommand(SelectVisibleToolkitItems, () => ToolkitHealthItems.Count > 0);
+        ClearToolkitDownloadPlanCommand = new RelayCommand(ClearToolkitDownloadPlan, () => ToolkitDownloadPlanItems.Count > 0);
+        ValidateToolkitDownloadPlanCommand = new RelayCommand(ValidateToolkitDownloadPlan, () => ToolkitDownloadPlanItems.Count > 0);
+        SaveToolkitProfileCommand = new RelayCommand(SaveToolkitProfile, () => ToolkitDownloadPlanItems.Count > 0);
+        LoadToolkitProfileCommand = new RelayCommand(LoadToolkitProfile, () => !string.IsNullOrWhiteSpace(SelectedToolkitProfileName));
+        ExportToolkitProfileCommand = new RelayCommand(ExportToolkitProfile, () => ToolkitDownloadPlanItems.Count > 0);
+        ImportToolkitProfileCommand = new RelayCommand(ImportToolkitProfile);
+        RemoveSelectedPlanItemCommand = new RelayCommand(RemoveSelectedPlanItem, () => SelectedDownloadPlanItem is not null);
+        MoveSelectedPlanItemUpCommand = new RelayCommand(() => MoveSelectedPlanItem(-1), () => SelectedDownloadPlanItem is not null);
+        MoveSelectedPlanItemDownCommand = new RelayCommand(() => MoveSelectedPlanItem(1), () => SelectedDownloadPlanItem is not null);
+        DownloadSelectedManagedItemsCommand = new AsyncRelayCommand(RunSelectedManagedDownloadsAsync, CanRunSelectedManagedDownloads);
+        CancelSelectedManagedDownloadsCommand = new RelayCommand(CancelSelectedManagedDownloads, () => IsSelectedManagedDownloadRunning);
+        RetryFailedSelectedManagedDownloadsCommand = new AsyncRelayCommand(RunRetryFailedManagedDownloadsAsync, CanRetryFailedManagedDownloads);
+        OpenToolkitDownloadFolderCommand = new RelayCommand(OpenToolkitDownloadFolder, () => SelectedUsbTarget is not null);
+        CopySelectedManualInstructionsCommand = new RelayCommand(CopySelectedManualInstructions, () => SelectedToolkitHealthItem is not null);
+        OpenSelectedVendorPageCommand = new RelayCommand(OpenManualDownloadShortcut, () => SelectedToolkitHealthItem is not null);
+        ApplyToolkitQuickFilterCommand = new RelayCommand<string>(ApplyToolkitQuickFilter);
         CopyLogsCommand = new RelayCommand(CopyLogs, () => !string.IsNullOrWhiteSpace(LogsText));
         ClearLogsCommand = new RelayCommand(ClearLogs, () => Logs.Count > 0);
         ShowAboutCommand = new RelayCommand(ShowAbout);
@@ -604,10 +651,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         RefreshDiagnosticsAuxiliaryText();
         RefreshEmbeddedWslDiagnosticsBindings();
         RefreshKyraQuickPromptVisibilities();
+        RefreshToolkitProfileOptions();
+        RefreshToolkitDownloadPlan();
         ScheduleBackgroundUpdateCheck();
     }
 
     public ObservableCollection<UsbTargetInfo> UsbTargets { get; } = [];
+
+    public ObservableCollection<UsbBuilderProfileOption> UsbBuilderProfileOptions { get; } = [];
 
     public ObservableCollection<LogLine> Logs { get; } = [];
 
@@ -616,6 +667,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public ObservableCollection<string> DiagnosticsActionCenterItems { get; } = [];
 
     public ObservableCollection<ToolkitHealthItemView> ToolkitHealthItems { get; } = [];
+
+    public ObservableCollection<DownloadQueueItem> ToolkitDownloadPlanItems { get; } = [];
+
+    public ObservableCollection<SelectedManagedDownloadQueueItem> SelectedManagedDownloadQueueItems { get; } = [];
+
+    public ObservableCollection<string> ToolkitProfileOptions { get; } = [];
 
     public ObservableCollection<CopilotChatMessage> CopilotMessages { get; } = [];
 
@@ -655,6 +712,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     [
         "All categories",
         "USB / Boot",
+        "Recovery",
+        "Security",
+        "Network",
+        "Legacy",
         "Disk / Storage",
         "Backup / Imaging",
         "Partitioning",
@@ -664,6 +725,48 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         "Linux / Rescue",
         "Security / Malware Cleanup",
         "Portable Apps"
+    ];
+
+    public IReadOnlyList<string> ToolkitFamilyFilterOptions { get; } =
+    [
+        "All families",
+        "Windows",
+        "Linux",
+        "BSD",
+        "DOS",
+        "Hobby",
+        "Recovery",
+        "Network",
+        "Security",
+        "Disk",
+        "USB"
+    ];
+
+    public IReadOnlyList<string> ToolkitArchitectureFilterOptions { get; } =
+    [
+        "All architectures",
+        "amd64",
+        "x86",
+        "arm64",
+        "i386",
+        "many"
+    ];
+
+    public IReadOnlyList<string> ToolkitBootModeFilterOptions { get; } =
+    [
+        "All boot modes",
+        "bios",
+        "uefi",
+        "secure-boot",
+        "uefi-csm"
+    ];
+
+    public IReadOnlyList<string> ToolkitSourceTrustFilterOptions { get; } =
+    [
+        "All source trust",
+        "official",
+        "community",
+        "manual"
     ];
 
     public IReadOnlyList<string> CopilotModeOptions { get; } = ["ForgerEMS Beta Gateway", "BYOK", "Local Only", "Offline Only", "Free API Pool", "Hybrid", "Online/API", "Ask First"];
@@ -679,6 +782,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public AsyncRelayCommand SetupUsbCommand { get; }
 
     public AsyncRelayCommand UpdateUsbCommand { get; }
+
+    public RelayCommand SelectRecommendedUsbBuilderProfileCommand { get; }
+
+    public RelayCommand SelectAllUsbBuilderProfileCommand { get; }
+
+    public RelayCommand ResetUsbBuilderProfileCommand { get; }
 
     public AsyncRelayCommand RetryFailedManagedDownloadsCommand { get; }
 
@@ -720,6 +829,25 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public RelayCommand OpenManualDownloadShortcutCommand { get; }
     public RelayCommand CopySelectedToolkitExpectedPathCommand { get; }
     public RelayCommand CopySelectedToolkitDetectedPathCommand { get; }
+    public RelayCommand AddSelectedToolToDownloadPlanCommand { get; }
+    public RelayCommand RemoveSelectedToolFromDownloadPlanCommand { get; }
+    public RelayCommand SelectVisibleToolkitItemsCommand { get; }
+    public RelayCommand ClearToolkitDownloadPlanCommand { get; }
+    public RelayCommand ValidateToolkitDownloadPlanCommand { get; }
+    public RelayCommand SaveToolkitProfileCommand { get; }
+    public RelayCommand LoadToolkitProfileCommand { get; }
+    public RelayCommand ExportToolkitProfileCommand { get; }
+    public RelayCommand ImportToolkitProfileCommand { get; }
+    public RelayCommand RemoveSelectedPlanItemCommand { get; }
+    public RelayCommand MoveSelectedPlanItemUpCommand { get; }
+    public RelayCommand MoveSelectedPlanItemDownCommand { get; }
+    public AsyncRelayCommand DownloadSelectedManagedItemsCommand { get; }
+    public RelayCommand CancelSelectedManagedDownloadsCommand { get; }
+    public AsyncRelayCommand RetryFailedSelectedManagedDownloadsCommand { get; }
+    public RelayCommand OpenToolkitDownloadFolderCommand { get; }
+    public RelayCommand CopySelectedManualInstructionsCommand { get; }
+    public RelayCommand OpenSelectedVendorPageCommand { get; }
+    public RelayCommand<string> ApplyToolkitQuickFilterCommand { get; }
 
     public RelayCommand CopyLogsCommand { get; }
 
@@ -1312,6 +1440,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         get => _managedDownloadRetryPanelVisibility;
         private set => SetProperty(ref _managedDownloadRetryPanelVisibility, value);
+    }
+
+    public string UsbBuilderProfileSummaryText
+    {
+        get => _usbBuilderProfileSummaryText;
+        private set => SetProperty(ref _usbBuilderProfileSummaryText, value);
+    }
+
+    public string UsbBuilderProfileNoteText
+    {
+        get => _usbBuilderProfileNoteText;
+        private set => SetProperty(ref _usbBuilderProfileNoteText, value);
     }
 
     public string TargetWarningText
@@ -2776,6 +2916,73 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _toolkitClassificationSummaryText, value);
     }
 
+    public string ToolkitRecommendedUseSummaryText
+    {
+        get => _toolkitRecommendedUseSummaryText;
+        private set => SetProperty(ref _toolkitRecommendedUseSummaryText, value);
+    }
+
+    public string ToolkitDownloadPlanSummaryText
+    {
+        get => _toolkitDownloadPlanSummaryText;
+        private set => SetProperty(ref _toolkitDownloadPlanSummaryText, value);
+    }
+
+    public string ToolkitDownloadPlanStorageText
+    {
+        get => _toolkitDownloadPlanStorageText;
+        private set => SetProperty(ref _toolkitDownloadPlanStorageText, value);
+    }
+
+    public string ToolkitDownloadPlanValidationText
+    {
+        get => _toolkitDownloadPlanValidationText;
+        private set => SetProperty(ref _toolkitDownloadPlanValidationText, value);
+    }
+
+    public string SelectedManagedDownloadExecutionText
+    {
+        get => _selectedManagedDownloadExecutionText;
+        private set => SetProperty(ref _selectedManagedDownloadExecutionText, value);
+    }
+
+    public string SelectedManagedDownloadSafetyText
+    {
+        get => _selectedManagedDownloadSafetyText;
+        private set => SetProperty(ref _selectedManagedDownloadSafetyText, value);
+    }
+
+    public bool IsSelectedManagedDownloadRunning
+    {
+        get => _isSelectedManagedDownloadRunning;
+        private set
+        {
+            if (SetProperty(ref _isSelectedManagedDownloadRunning, value))
+            {
+                DownloadSelectedManagedItemsCommand.RaiseCanExecuteChanged();
+                CancelSelectedManagedDownloadsCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public string ToolkitProfileNotes
+    {
+        get => _toolkitProfileNotes;
+        set => SetProperty(ref _toolkitProfileNotes, value);
+    }
+
+    public string SelectedToolkitProfileName
+    {
+        get => _selectedToolkitProfileName;
+        set
+        {
+            if (SetProperty(ref _selectedToolkitProfileName, value))
+            {
+                LoadToolkitProfileCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
     public string SelectedToolkitFilter
     {
         get => _selectedToolkitFilter;
@@ -2794,6 +3001,54 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (SetProperty(ref _selectedToolkitCategoryFilter, value))
+            {
+                ApplyToolkitFilter();
+            }
+        }
+    }
+
+    public string SelectedToolkitFamilyFilter
+    {
+        get => _selectedToolkitFamilyFilter;
+        set
+        {
+            if (SetProperty(ref _selectedToolkitFamilyFilter, value))
+            {
+                ApplyToolkitFilter();
+            }
+        }
+    }
+
+    public string SelectedToolkitArchitectureFilter
+    {
+        get => _selectedToolkitArchitectureFilter;
+        set
+        {
+            if (SetProperty(ref _selectedToolkitArchitectureFilter, value))
+            {
+                ApplyToolkitFilter();
+            }
+        }
+    }
+
+    public string SelectedToolkitBootModeFilter
+    {
+        get => _selectedToolkitBootModeFilter;
+        set
+        {
+            if (SetProperty(ref _selectedToolkitBootModeFilter, value))
+            {
+                ApplyToolkitFilter();
+            }
+        }
+    }
+
+    public string SelectedToolkitSourceTrustFilter
+    {
+        get => _selectedToolkitSourceTrustFilter;
+        set
+        {
+            if (SetProperty(ref _selectedToolkitSourceTrustFilter, value))
             {
                 ApplyToolkitFilter();
             }
@@ -2827,6 +3082,24 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 OpenManualDownloadShortcutCommand.RaiseCanExecuteChanged();
                 CopySelectedToolkitExpectedPathCommand.RaiseCanExecuteChanged();
                 CopySelectedToolkitDetectedPathCommand.RaiseCanExecuteChanged();
+                AddSelectedToolToDownloadPlanCommand.RaiseCanExecuteChanged();
+                RemoveSelectedToolFromDownloadPlanCommand.RaiseCanExecuteChanged();
+                CopySelectedManualInstructionsCommand.RaiseCanExecuteChanged();
+                OpenSelectedVendorPageCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public DownloadQueueItem? SelectedDownloadPlanItem
+    {
+        get => _selectedDownloadPlanItem;
+        set
+        {
+            if (SetProperty(ref _selectedDownloadPlanItem, value))
+            {
+                RemoveSelectedPlanItemCommand.RaiseCanExecuteChanged();
+                MoveSelectedPlanItemUpCommand.RaiseCanExecuteChanged();
+                MoveSelectedPlanItemDownCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -3377,6 +3650,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             arguments.Add(UsbOwnerName.Trim());
         }
 
+        arguments.Add("-IncludedCategories");
+        arguments.Add(string.Join(",", GetIncludedUsbBuilderCategoryArguments()));
         arguments.Add("-WaitForManagedDownloads");
 
         await RunScriptAsync(
@@ -3409,7 +3684,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var arguments = new System.Collections.Generic.List<string>
         {
             "-UsbRoot",
-            selectedUsbTarget.RootPath
+            selectedUsbTarget.RootPath,
+            "-IncludedCategories",
+            string.Join(",", GetIncludedUsbBuilderCategoryArguments())
         };
 
         await RunScriptAsync(
@@ -3422,6 +3699,226 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 Arguments = arguments,
                 ProgressItemName = "managed downloads"
             });
+    }
+
+    private bool CanRunSelectedManagedDownloads() =>
+        !IsBusy &&
+        !IsSelectedManagedDownloadRunning &&
+        _backendContext.IsAvailable &&
+        SelectedUsbTarget is not null &&
+        ToolkitDownloadPlanItems.Count > 0;
+
+    private async Task RunSelectedManagedDownloadsAsync()
+    {
+        if (!TryGetValidatedSelectedTarget("Download selected managed items", out var selectedUsbTarget))
+        {
+            return;
+        }
+
+        var manifestPath = ResolveManifestPath();
+        var selectedManifestPath = Path.Combine(
+            selectedUsbTarget.RootPath,
+            "_forgerems",
+            "selected-download-plan",
+            $"selected-managed-{DateTime.UtcNow:yyyyMMdd-HHmmss}.json");
+
+        SelectedManagedDownloadManifestResult selectedManifest;
+        try
+        {
+            selectedManifest = ToolkitWorkspacePlanner.BuildSelectedManagedManifest(
+                manifestPath,
+                selectedManifestPath,
+                _allToolkitHealthItems);
+        }
+        catch (Exception exception)
+        {
+            _userPromptService.ShowMessage("Selected downloads unavailable", exception.Message, MessageBoxImage.Error);
+            return;
+        }
+
+        RefreshSelectedManagedDownloadQueue(selectedManifest);
+        if (selectedManifest.ReadyCount == 0)
+        {
+            _userPromptService.ShowMessage(
+                "Selected downloads",
+                "No selected managed items are eligible for automation. Manual-only, disabled, legacy/lab, paid/manual, missing-checksum, and unsafe URL entries remain instructions only.",
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        var freeSpaceText = TryGetFreeSpaceText(selectedUsbTarget.RootPath, out var freeBytes);
+        var spaceWarning = freeBytes.HasValue &&
+                           selectedManifest.KnownBytes > 0 &&
+                           selectedManifest.KnownBytes > freeBytes.Value
+            ? Environment.NewLine + "WARNING: known selected size exceeds detected free space."
+            : selectedManifest.UnknownSizeCount > 0
+                ? Environment.NewLine + "WARNING: one or more selected downloads have unknown size."
+                : string.Empty;
+
+        var confirmation =
+            $"Managed downloads ready: {selectedManifest.ReadyCount}{Environment.NewLine}" +
+            $"Manual instructions only: {selectedManifest.ManualCount}{Environment.NewLine}" +
+            $"Blocked from automation: {selectedManifest.BlockedCount}{Environment.NewLine}" +
+            $"Estimated selected size: {selectedManifest.KnownSizeDisplay}{Environment.NewLine}" +
+            $"Unknown-size items: {selectedManifest.UnknownSizeCount}{Environment.NewLine}" +
+            $"Destination root: {selectedUsbTarget.RootPath}{Environment.NewLine}" +
+            $"Free space: {freeSpaceText}{Environment.NewLine}" +
+            $"Checksum policy: every managed item must verify through Update-ForgerEMS checksum gates.{Environment.NewLine}" +
+            $"Manual-only entries will not be downloaded.{Environment.NewLine}" +
+            $"No USB partitioning or Ventoy write action will run from this command.{spaceWarning}{Environment.NewLine}{Environment.NewLine}" +
+            "Start selected managed downloads?";
+
+        if (!_userPromptService.Confirm("Start selected downloads", confirmation))
+        {
+            SelectedManagedDownloadExecutionText = "Selected downloads: canceled before start.";
+            return;
+        }
+
+        _selectedManagedDownloadCts?.Dispose();
+        _selectedManagedDownloadCts = new CancellationTokenSource();
+        IsSelectedManagedDownloadRunning = true;
+        SelectedManagedDownloadExecutionText = $"Selected downloads running: {selectedManifest.ReadyCount} queued.";
+        SelectedManagedDownloadSafetyText = "Running selected managed items through Update-ForgerEMS with checksum validation. Manual items are skipped.";
+        MarkSelectedManagedDownloadQueueStatus(SelectedManagedDownloadQueueStatus.Downloading, "Downloading");
+
+        try
+        {
+            var result = await RunScriptAsync(
+                ScriptActionType.UpdateUsb,
+                new PowerShellRunRequest
+                {
+                    DisplayName = "Download selected managed items",
+                    WorkingDirectory = _backendContext.WorkingDirectory,
+                    ScriptPath = _backendContext.UpdateScriptPath,
+                    Arguments =
+                    [
+                        "-UsbRoot",
+                        selectedUsbTarget.RootPath,
+                        "-ManifestName",
+                        selectedManifest.ManifestPath
+                    ],
+                    ProgressItemName = "selected managed downloads"
+                },
+                cancellationToken: _selectedManagedDownloadCts.Token);
+
+            if (result?.Succeeded == true)
+            {
+                MarkSelectedManagedDownloadQueueStatus(SelectedManagedDownloadQueueStatus.Completed, "Completed");
+                SelectedManagedDownloadExecutionText = "Selected downloads: finished. Review the managed download result and toolkit health.";
+            }
+            else
+            {
+                MarkSelectedManagedDownloadQueueStatus(SelectedManagedDownloadQueueStatus.Failed, "Failed");
+                SelectedManagedDownloadExecutionText = "Selected downloads: failed or completed with blocked items. Review the managed download result.";
+            }
+
+            LoadToolkitHealthReport();
+        }
+        catch (OperationCanceledException)
+        {
+            SelectedManagedDownloadExecutionText = "Selected downloads: canceled.";
+            MarkSelectedManagedDownloadQueueCanceled();
+        }
+        finally
+        {
+            IsSelectedManagedDownloadRunning = false;
+            _selectedManagedDownloadCts?.Dispose();
+            _selectedManagedDownloadCts = null;
+        }
+    }
+
+    private void CancelSelectedManagedDownloads()
+    {
+        if (_selectedManagedDownloadCts is null || _selectedManagedDownloadCts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        _selectedManagedDownloadCts.Cancel();
+        SelectedManagedDownloadExecutionText = "Selected downloads: cancel requested.";
+    }
+
+    private void RefreshSelectedManagedDownloadQueue(SelectedManagedDownloadManifestResult result)
+    {
+        SelectedManagedDownloadQueueItems.Clear();
+        foreach (var item in result.QueueItems.Concat(result.ManualItems).Concat(result.BlockedItems))
+        {
+            SelectedManagedDownloadQueueItems.Add(item);
+        }
+
+        SelectedManagedDownloadExecutionText = $"Selected downloads: {result.SummaryText}";
+        SelectedManagedDownloadSafetyText =
+            "Ready items will run through Update-ForgerEMS. Manual, disabled, legacy/lab, paid/manual, missing-checksum, and unsafe URL items are skipped.";
+    }
+
+    private void MarkSelectedManagedDownloadQueueStatus(SelectedManagedDownloadQueueStatus status, string statusText)
+    {
+        var current = SelectedManagedDownloadQueueItems.ToArray();
+        SelectedManagedDownloadQueueItems.Clear();
+        foreach (var item in current)
+        {
+            var shouldUpdate = item.Status is SelectedManagedDownloadQueueStatus.Pending
+                or SelectedManagedDownloadQueueStatus.Downloading
+                or SelectedManagedDownloadQueueStatus.VerifyingChecksum;
+
+            SelectedManagedDownloadQueueItems.Add(new SelectedManagedDownloadQueueItem
+            {
+                EntryId = item.EntryId,
+                Name = item.Name,
+                Destination = item.Destination,
+                Url = item.Url,
+                Reason = item.Reason,
+                Status = shouldUpdate ? status : item.Status,
+                StatusText = shouldUpdate ? statusText : item.StatusText
+            });
+        }
+    }
+
+    private void MarkSelectedManagedDownloadQueueCanceled()
+    {
+        var current = SelectedManagedDownloadQueueItems.ToArray();
+        SelectedManagedDownloadQueueItems.Clear();
+        foreach (var item in current)
+        {
+            SelectedManagedDownloadQueueItems.Add(new SelectedManagedDownloadQueueItem
+            {
+                EntryId = item.EntryId,
+                Name = item.Name,
+                Destination = item.Destination,
+                Url = item.Url,
+                Reason = item.Reason,
+                Status = item.Status == SelectedManagedDownloadQueueStatus.Pending
+                    ? SelectedManagedDownloadQueueStatus.Canceled
+                    : item.Status,
+                StatusText = item.Status == SelectedManagedDownloadQueueStatus.Pending ? "Canceled" : item.StatusText
+            });
+        }
+    }
+
+    private static string TryGetFreeSpaceText(string rootPath, out long? freeBytes)
+    {
+        freeBytes = null;
+        try
+        {
+            var root = Path.GetPathRoot(Path.GetFullPath(rootPath));
+            if (string.IsNullOrWhiteSpace(root))
+            {
+                return "unavailable";
+            }
+
+            var drive = new DriveInfo(root);
+            if (!drive.IsReady)
+            {
+                return "target not ready";
+            }
+
+            freeBytes = drive.AvailableFreeSpace;
+            return FormatBytesForToolkit(drive.AvailableFreeSpace);
+        }
+        catch
+        {
+            return "unavailable";
+        }
     }
 
     private bool CanRetryFailedManagedDownloads() =>
@@ -5737,6 +6234,40 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         OpenFolder(GetRuntimeReportsDirectory(), "local reports", createIfMissing: true);
     }
 
+    private void OpenToolkitDownloadFolder()
+    {
+        if (SelectedUsbTarget is null)
+        {
+            return;
+        }
+
+        OpenFolder(Path.Combine(SelectedUsbTarget.RootPath, "_downloads"), "download folder", createIfMissing: true);
+    }
+
+    private void CopySelectedManualInstructions()
+    {
+        var item = SelectedToolkitHealthItem;
+        if (item is null)
+        {
+            return;
+        }
+
+        var lines = new List<string>
+        {
+            item.Tool,
+            $"Requirement: {item.CatalogStatusTag ?? item.TypeDisplay}",
+            $"Source: {FirstNonBlank(item.OfficialUrl, item.Url, "not provided")}",
+            $"Destination: {FirstNonBlank(item.ResolvedExpectedPath, item.ExpectedPath, "not reported")}",
+            $"Recommended use: {FirstNonBlank(item.RecommendedUse, item.Purpose, "not provided")}",
+            $"Secure Boot: {FirstNonBlank(item.SecureBootNote, "review vendor notes")}",
+            $"Ventoy: {FirstNonBlank(item.VentoyNotes, "review compatibility before field use")}",
+            $"Notes: {FirstNonBlank(item.TechnicianNotes, item.LegacyWarning, item.LicenseNote, "manual review required")}"
+        };
+
+        Clipboard.SetText(string.Join(Environment.NewLine, lines));
+        AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Copied manual item instructions.", LogSeverity.Success));
+    }
+
     private void OpenSelectedToolLocation()
     {
         var item = SelectedToolkitHealthItem;
@@ -6709,7 +7240,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         PowerShellRunRequest request,
         bool resetLogPane = true,
         bool appendLifecycleHeader = true,
-        Func<PowerShellRunResult, bool>? elevatedScanLikelyMissingOutput = null)
+        Func<PowerShellRunResult, bool>? elevatedScanLikelyMissingOutput = null,
+        CancellationToken cancellationToken = default)
     {
         if (!_backendContext.IsAvailable)
         {
@@ -6775,7 +7307,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             var phaseTimer = Stopwatch.StartNew();
             var effectiveRequest = WithOptionalManagedDownloadHeartbeat(request);
-            var runResult = await _powerShellRunnerService.RunAsync(effectiveRequest, AppendLog);
+            var runResult = await _powerShellRunnerService.RunAsync(effectiveRequest, AppendLog, cancellationToken);
             var runMs = phaseTimer.ElapsedMilliseconds;
             var likelyMissingElevatedOutput = elevatedScanLikelyMissingOutput?.Invoke(runResult) ?? false;
             var parsed = _scriptStatusParser.Parse(action, request.DisplayName, runResult, likelyMissingElevatedOutput);
@@ -6836,6 +7368,25 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(LastCommandExitCodeText));
 
             return parsed;
+        }
+        catch (OperationCanceledException)
+        {
+            AppendLog(new LogLine(DateTimeOffset.Now, $"{request.DisplayName} canceled.", LogSeverity.Warning));
+            AppendLifecycleFailure(request.DisplayName, "Canceled", null);
+            SetStatus(
+                $"{request.DisplayName} canceled",
+                "The running PowerShell process was canceled.",
+                WarningBackground,
+                WarningBorder,
+                WarningForeground);
+            _lastCommandFinishedAt = DateTimeOffset.Now;
+            _lastCommandExitCode = -2;
+            LastCommandStatusText = "Canceled";
+            LastCommandSummaryText = "Canceled";
+            OnPropertyChanged(nameof(LastCommandFinishedText));
+            OnPropertyChanged(nameof(LastCommandDurationText));
+            OnPropertyChanged(nameof(LastCommandExitCodeText));
+            throw;
         }
         catch (Exception exception)
         {
@@ -7084,6 +7635,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             ToolkitReadinessStrengthsText = "Top strengths: unavailable until toolkit report is generated.";
             ToolkitReadinessBlockersText = "Top blockers: toolkit report/log evidence not available.";
             ToolkitReadinessNextActionText = "Next action: run Refresh Health on the selected USB target.";
+            ToolkitHealthItems.Clear();
+            ClearAllToolkitHealthItems();
+            RefreshToolkitDownloadPlan();
             return;
         }
 
@@ -7111,7 +7665,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 ToolkitReadinessBlockersText = "Top blockers: readiness score is stale for this USB target.";
                 ToolkitReadinessNextActionText = "Next action: run Refresh Health for the currently selected target.";
                 ToolkitHealthItems.Clear();
-                _allToolkitHealthItems.Clear();
+                ClearAllToolkitHealthItems();
+                RefreshToolkitDownloadPlan();
                 return;
             }
 
@@ -7181,7 +7736,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                     });
             }
 
-            _allToolkitHealthItems.Clear();
+            ClearAllToolkitHealthItems();
             if (root.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
             {
                 foreach (var item in items.EnumerateArray())
@@ -7198,7 +7753,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                     var verification = GetJsonString(item, "verification", string.Empty);
                     var normalized = ToolkitDisplayClassification.BuildNormalizedLabel(status, type, verification);
                     var category = GetJsonString(item, "category", "General");
-                    _allToolkitHealthItems.Add(new ToolkitHealthItemView
+                    var view = new ToolkitHealthItemView
                     {
                         Tool = GetJsonString(item, "tool", "Unknown tool"),
                         Category = category,
@@ -7210,6 +7765,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                         MatchedPath = matchedPath,
                         Exists = exists,
                         SizeBytes = sizeBytes,
+                        EstimatedSizeBytes = GetOptionalJsonLong(item, "estimatedSizeBytes") ??
+                                             GetOptionalJsonLong(item, "sizeEstimateBytes"),
                         Url = GetJsonString(item, "url", string.Empty),
                         OfficialUrl = GetJsonString(item, "officialUrl", GetJsonString(item, "officialUri", GetJsonString(item, "url", string.Empty))),
                         Purpose = GetJsonString(item, "purpose", GetJsonString(item, "description", string.Empty)),
@@ -7222,8 +7779,29 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                         Version = GetJsonString(item, "version", "Unknown"),
                         Verification = verification,
                         Recommendation = GetJsonString(item, "recommendation", string.Empty),
-                        NormalizedCategoryLabel = normalized
-                    });
+                        NormalizedCategoryLabel = normalized,
+                        Kind = GetJsonString(item, "kind", string.Empty),
+                        Family = GetJsonString(item, "family", string.Empty),
+                        OsCategory = GetJsonString(item, "osCategory", string.Empty),
+                        Architecture = GetJsonString(item, "architecture", string.Empty),
+                        BootMode = GetJsonString(item, "bootMode", string.Empty),
+                        RecommendedUse = GetJsonString(item, "recommendedUse", string.Empty),
+                        TechnicianNotes = GetJsonString(item, "technicianNotes", string.Empty),
+                        LicenseNote = GetJsonString(item, "licenseNote", string.Empty),
+                        ManualOnly = GetJsonBool(item, "manualOnly"),
+                        LegacyWarning = GetJsonString(item, "legacyWarning", string.Empty),
+                        VentoyNotes = GetJsonString(item, "ventoyNotes", string.Empty),
+                        SecureBootNote = GetJsonString(item, "secureBootNote", string.Empty),
+                        SourceTrust = GetJsonString(item, "sourceTrust", string.Empty),
+                        CurrentPinnedVersion = GetJsonString(item, "currentPinnedVersion", string.Empty),
+                        LatestKnownStableVersion = GetJsonString(item, "latestKnownStableVersion", string.Empty),
+                        LastFreshnessAuditUtc = GetJsonString(item, "lastFreshnessAuditUtc", string.Empty),
+                        FreshnessStatus = GetJsonString(item, "freshnessStatus", string.Empty),
+                        ChecksumVerificationMode = GetJsonString(item, "checksumVerificationMode", string.Empty),
+                        UpdateRecommendation = GetJsonString(item, "updateRecommendation", string.Empty)
+                    };
+                    SubscribeToolkitItem(view);
+                    _allToolkitHealthItems.Add(view);
                 }
             }
 
@@ -7234,6 +7812,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             ToolkitClassificationSummaryText = summaryBuckets.Length == 0
                 ? "Toolkit classification: no items in the last report."
                 : "Toolkit classification — " + string.Join("; ", summaryBuckets);
+            RefreshToolkitRecommendedUseSummary();
             RefreshToolkitLinkVerificationUi(reportPath, reportTargetRoot);
             ApplyToolkitReadinessScore(
                 reportAvailable: true,
@@ -7244,6 +7823,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             SelectedToolkitHealthItem = _allToolkitHealthItems.FirstOrDefault();
             ApplyToolkitFilter();
+            RefreshToolkitDownloadPlan();
             ToolkitReportPathText = $"Report: {reportPath}";
             IntelligenceLogWriter.Append(
                 "toolkit-manager.log",
@@ -7283,6 +7863,320 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             SelectedToolkitHealthItem = ToolkitHealthItems.FirstOrDefault();
         }
+
+        SelectVisibleToolkitItemsCommand.RaiseCanExecuteChanged();
+    }
+
+    private void SubscribeToolkitItem(ToolkitHealthItemView item)
+    {
+        item.PropertyChanged += OnToolkitItemPropertyChanged;
+    }
+
+    private void ClearAllToolkitHealthItems()
+    {
+        foreach (var item in _allToolkitHealthItems)
+        {
+            item.PropertyChanged -= OnToolkitItemPropertyChanged;
+        }
+
+        _allToolkitHealthItems.Clear();
+    }
+
+    private void OnToolkitItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ToolkitHealthItemView.SelectedForDownload))
+        {
+            RefreshToolkitDownloadPlan();
+        }
+    }
+
+    private void RefreshToolkitDownloadPlan()
+    {
+        var selectedEntryId = SelectedDownloadPlanItem?.EntryId;
+        var plan = ToolkitWorkspacePlanner.BuildPlan(_allToolkitHealthItems);
+
+        ToolkitDownloadPlanItems.Clear();
+        foreach (var item in plan.Items)
+        {
+            ToolkitDownloadPlanItems.Add(item);
+        }
+
+        SelectedDownloadPlanItem = ToolkitDownloadPlanItems.FirstOrDefault(item =>
+            string.Equals(item.EntryId, selectedEntryId, StringComparison.OrdinalIgnoreCase));
+        ToolkitDownloadPlanSummaryText =
+            $"Download plan: {plan.Items.Count} item(s) | managed {plan.ManagedCount} | manual {plan.ManualCount} | checksums {plan.ChecksumAvailableCount}";
+        ToolkitDownloadPlanStorageText =
+            $"Storage: {plan.Storage.TotalDisplay} | {plan.Storage.CapacityWarningText}";
+        ToolkitDownloadPlanValidationText =
+            $"{plan.ValidationSummary} | {plan.ManualRequirementSummary} | {plan.SourceTrustSummary} | {plan.ArchitectureSummary} | {plan.VentoyCompatibilitySummary}";
+
+        ClearToolkitDownloadPlanCommand.RaiseCanExecuteChanged();
+        ValidateToolkitDownloadPlanCommand.RaiseCanExecuteChanged();
+        SaveToolkitProfileCommand.RaiseCanExecuteChanged();
+        ExportToolkitProfileCommand.RaiseCanExecuteChanged();
+        DownloadSelectedManagedItemsCommand.RaiseCanExecuteChanged();
+        RemoveSelectedPlanItemCommand.RaiseCanExecuteChanged();
+        MoveSelectedPlanItemUpCommand.RaiseCanExecuteChanged();
+        MoveSelectedPlanItemDownCommand.RaiseCanExecuteChanged();
+    }
+
+    private void RefreshToolkitRecommendedUseSummary()
+    {
+        var groups = _allToolkitHealthItems
+            .Select(GetToolkitWorkflowGroup)
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .GroupBy(static value => value, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(static group => group.Count())
+            .ThenBy(static group => group.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(static group => $"{group.Key}: {group.Count()}")
+            .ToArray();
+
+        ToolkitRecommendedUseSummaryText = groups.Length == 0
+            ? "Recommended-use groups: no catalog metadata in current report."
+            : "Recommended-use groups — " + string.Join("; ", groups);
+    }
+
+    private void RefreshToolkitProfileOptions()
+    {
+        ToolkitProfileOptions.Clear();
+        foreach (var profile in ToolkitWorkspaceProfileStore.GetBuiltInProfiles())
+        {
+            ToolkitProfileOptions.Add(profile.Name);
+        }
+
+        foreach (var profileName in _toolkitProfileStore.ListProfileNames())
+        {
+            if (!ToolkitProfileOptions.Contains(profileName, StringComparer.OrdinalIgnoreCase))
+            {
+                ToolkitProfileOptions.Add(profileName);
+            }
+        }
+    }
+
+    private void AddSelectedToolToDownloadPlan()
+    {
+        if (SelectedToolkitHealthItem is not null)
+        {
+            SelectedToolkitHealthItem.SelectedForDownload = true;
+        }
+    }
+
+    private void RemoveSelectedToolFromDownloadPlan()
+    {
+        if (SelectedToolkitHealthItem is not null)
+        {
+            SelectedToolkitHealthItem.SelectedForDownload = false;
+        }
+    }
+
+    private void SelectVisibleToolkitItems()
+    {
+        foreach (var item in ToolkitHealthItems)
+        {
+            item.SelectedForDownload = true;
+        }
+    }
+
+    private void ClearToolkitDownloadPlan()
+    {
+        foreach (var item in _allToolkitHealthItems)
+        {
+            item.SelectedForDownload = false;
+        }
+    }
+
+    private void ValidateToolkitDownloadPlan()
+    {
+        _userPromptService.ShowMessage(
+            "Download plan validation",
+            ToolkitDownloadPlanValidationText + Environment.NewLine + Environment.NewLine +
+            "This validation does not start downloads, fetch manual-only sources, delete files, or write USB partitions.",
+            MessageBoxImage.Information);
+    }
+
+    private void SaveToolkitProfile()
+    {
+        var name = _userPromptService.PromptText(
+            "Save workspace profile",
+            "Profile name",
+            string.IsNullOrWhiteSpace(SelectedToolkitProfileName) ? "Technician USB Profile" : SelectedToolkitProfileName);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return;
+        }
+
+        var profile = ToolkitWorkspacePlanner.BuildProfile(
+            name,
+            ToolkitProfileNotes,
+            _allToolkitHealthItems,
+            [SelectedToolkitCategoryFilter],
+            SplitProfileLabels(ToolkitProfileNotes));
+        var path = _toolkitProfileStore.Save(profile);
+        SelectedToolkitProfileName = profile.Name;
+        RefreshToolkitProfileOptions();
+        AppendLog(new LogLine(DateTimeOffset.Now, $"[OK] Workspace profile saved: {path}", LogSeverity.Success));
+    }
+
+    private void LoadToolkitProfile()
+    {
+        var builtIn = ToolkitWorkspaceProfileStore.GetBuiltInProfiles()
+            .FirstOrDefault(profile => profile.Name.Equals(SelectedToolkitProfileName, StringComparison.OrdinalIgnoreCase));
+        UsbWorkspaceProfile? profile = builtIn;
+        if (profile is null && _toolkitProfileStore.TryLoad(SelectedToolkitProfileName, out var loaded))
+        {
+            profile = loaded;
+        }
+
+        if (profile is null)
+        {
+            _userPromptService.ShowMessage("Load workspace profile", $"Profile was not found: {SelectedToolkitProfileName}", MessageBoxImage.Warning);
+            return;
+        }
+
+        if (profile.SelectedEntries.Count == 0 && profile.CategoryPreferences.Count > 0)
+        {
+            ApplyProfilePreferences(profile);
+        }
+        else
+        {
+            ToolkitWorkspacePlanner.ApplyProfile(_allToolkitHealthItems, profile);
+        }
+
+        ToolkitProfileNotes = profile.Notes;
+        RefreshToolkitDownloadPlan();
+    }
+
+    private void ExportToolkitProfile()
+    {
+        var dialog = new SaveFileDialog
+        {
+            Title = "Export workspace profile",
+            Filter = "ForgerEMS workspace profile (*.json)|*.json",
+            FileName = $"{SelectedToolkitProfileName}.json"
+        };
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        var profile = ToolkitWorkspacePlanner.BuildProfile(
+            SelectedToolkitProfileName,
+            ToolkitProfileNotes,
+            _allToolkitHealthItems,
+            [SelectedToolkitCategoryFilter],
+            SplitProfileLabels(ToolkitProfileNotes));
+        ToolkitWorkspaceProfileStore.Export(profile, dialog.FileName);
+        AppendLog(new LogLine(DateTimeOffset.Now, $"[OK] Workspace profile exported: {dialog.FileName}", LogSeverity.Success));
+    }
+
+    private void ImportToolkitProfile()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Import workspace profile",
+            Filter = "ForgerEMS workspace profile (*.json)|*.json|JSON files (*.json)|*.json"
+        };
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        var profile = _toolkitProfileStore.Import(dialog.FileName);
+        SelectedToolkitProfileName = profile.Name;
+        RefreshToolkitProfileOptions();
+        ToolkitWorkspacePlanner.ApplyProfile(_allToolkitHealthItems, profile);
+        ToolkitProfileNotes = profile.Notes;
+        RefreshToolkitDownloadPlan();
+    }
+
+    private void RemoveSelectedPlanItem()
+    {
+        if (SelectedDownloadPlanItem is null)
+        {
+            return;
+        }
+
+        var entryId = SelectedDownloadPlanItem.EntryId;
+        var item = _allToolkitHealthItems.FirstOrDefault(candidate =>
+            string.Equals(ToolkitWorkspacePlanner.GetSelectionId(candidate), entryId, StringComparison.OrdinalIgnoreCase));
+        if (item is not null)
+        {
+            item.SelectedForDownload = false;
+        }
+    }
+
+    private void MoveSelectedPlanItem(int direction)
+    {
+        if (SelectedDownloadPlanItem is null)
+        {
+            return;
+        }
+
+        var selectedId = SelectedDownloadPlanItem.EntryId;
+        var selectedIndex = _allToolkitHealthItems.FindIndex(item =>
+            string.Equals(ToolkitWorkspacePlanner.GetSelectionId(item), selectedId, StringComparison.OrdinalIgnoreCase));
+        if (selectedIndex < 0)
+        {
+            return;
+        }
+
+        var swapIndex = selectedIndex + direction;
+        while (swapIndex >= 0 && swapIndex < _allToolkitHealthItems.Count && !_allToolkitHealthItems[swapIndex].SelectedForDownload)
+        {
+            swapIndex += direction;
+        }
+
+        if (swapIndex < 0 || swapIndex >= _allToolkitHealthItems.Count)
+        {
+            return;
+        }
+
+        (_allToolkitHealthItems[selectedIndex], _allToolkitHealthItems[swapIndex]) = (_allToolkitHealthItems[swapIndex], _allToolkitHealthItems[selectedIndex]);
+        RefreshToolkitDownloadPlan();
+        SelectedDownloadPlanItem = ToolkitDownloadPlanItems.FirstOrDefault(item =>
+            string.Equals(item.EntryId, selectedId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void ApplyToolkitQuickFilter(string? token)
+    {
+        switch ((token ?? string.Empty).Trim().ToLowerInvariant())
+        {
+            case "secure-boot":
+                SelectedToolkitBootModeFilter = "secure-boot";
+                break;
+            case "old-bios":
+                SelectedToolkitBootModeFilter = "bios";
+                SelectedToolkitArchitectureFilter = "x86";
+                break;
+            case "recovery":
+                SelectedToolkitCategoryFilter = "Recovery";
+                break;
+            case "security":
+                SelectedToolkitCategoryFilter = "Security";
+                break;
+            case "network":
+                SelectedToolkitFamilyFilter = "Network";
+                break;
+            case "legacy":
+                SelectedToolkitCategoryFilter = "Legacy";
+                break;
+            case "managed":
+                SelectedToolkitFilter = "All";
+                SelectedToolkitSourceTrustFilter = "official";
+                break;
+            case "manual":
+                SelectedToolkitFilter = "Manual / Info";
+                break;
+            default:
+                SelectedToolkitFilter = "All";
+                SelectedToolkitCategoryFilter = "All categories";
+                SelectedToolkitFamilyFilter = "All families";
+                SelectedToolkitArchitectureFilter = "All architectures";
+                SelectedToolkitBootModeFilter = "All boot modes";
+                SelectedToolkitSourceTrustFilter = "All source trust";
+                ToolkitSearchText = string.Empty;
+                break;
+        }
     }
 
     private void InvalidateToolkitHealthForSelectionChange(string? previousRoot, string? newRoot)
@@ -7292,7 +8186,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        _allToolkitHealthItems.Clear();
+        ClearAllToolkitHealthItems();
         ToolkitHealthItems.Clear();
         ToolkitClassificationSummaryText = "Toolkit classification: refresh required for selected target.";
         ToolkitHealthVerdictText = "Toolkit health cache invalidated after USB target change. Click Refresh Toolkit.";
@@ -7305,6 +8199,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ToolkitReadinessNextActionText = "Next action: refresh toolkit health for current USB target.";
         _toolkitHealthAlignedWithSelection = false;
         ResetToolkitLinkVerificationUi();
+        RefreshToolkitDownloadPlan();
     }
 
     private bool ShouldShowToolkitItem(ToolkitHealthItemView item)
@@ -7336,9 +8231,29 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return false;
         }
 
+        if (!MatchesMetadataFilter(SelectedToolkitFamilyFilter, "All families", item.Family, item.OsCategory, item.Category))
+        {
+            return false;
+        }
+
+        if (!MatchesMetadataFilter(SelectedToolkitArchitectureFilter, "All architectures", item.Architecture))
+        {
+            return false;
+        }
+
+        if (!MatchesMetadataFilter(SelectedToolkitBootModeFilter, "All boot modes", item.BootMode, item.SecureBootNote))
+        {
+            return false;
+        }
+
+        if (!MatchesMetadataFilter(SelectedToolkitSourceTrustFilter, "All source trust", item.SourceTrust, item.CatalogStatusTag ?? string.Empty))
+        {
+            return false;
+        }
+
         if (!string.IsNullOrWhiteSpace(ToolkitSearchText))
         {
-            var haystack = $"{item.Tool} {item.Category} {item.StatusDisplayUi} {item.TypeDisplay} {item.ExpectedPath} {item.LocationDisplay} {item.VerificationDisplay} {item.Recommendation}";
+            var haystack = $"{item.Tool} {item.Category} {item.StatusDisplayUi} {item.TypeDisplay} {item.ExpectedPath} {item.LocationDisplay} {item.VerificationDisplay} {item.Recommendation} {item.Family} {item.OsCategory} {item.Architecture} {item.BootMode} {item.RecommendedUse} {item.TechnicianNotes} {item.SourceTrust}";
             if (!haystack.Contains(ToolkitSearchText, StringComparison.OrdinalIgnoreCase))
             {
                 return false;
@@ -7346,6 +8261,57 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         return true;
+    }
+
+    private void ApplyProfilePreferences(UsbWorkspaceProfile profile)
+    {
+        var labels = profile.CategoryPreferences
+            .Concat(profile.TechnicianLabels)
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .ToArray();
+
+        foreach (var item in _allToolkitHealthItems)
+        {
+            item.SelectedForDownload = labels.Any(label =>
+                item.Category.Contains(label, StringComparison.OrdinalIgnoreCase) ||
+                item.Family.Contains(label, StringComparison.OrdinalIgnoreCase) ||
+                item.OsCategory.Contains(label, StringComparison.OrdinalIgnoreCase) ||
+                item.RecommendedUse.Contains(label, StringComparison.OrdinalIgnoreCase) ||
+                item.BootMode.Contains(label, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    private static string[] SplitProfileLabels(string notes)
+    {
+        return (notes ?? string.Empty)
+            .Split([',', ';', '|', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(static value => value.Length > 1)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static string GetToolkitWorkflowGroup(ToolkitHealthItemView item)
+    {
+        var haystack = $"{item.Category} {item.Family} {item.OsCategory} {item.RecommendedUse} {item.TechnicianNotes}".ToLowerInvariant();
+        if (haystack.Contains("network", StringComparison.Ordinal)) return "Network troubleshooting kit";
+        if (haystack.Contains("security", StringComparison.Ordinal) || haystack.Contains("malware", StringComparison.Ordinal)) return "Malware cleanup USB";
+        if (haystack.Contains("legacy", StringComparison.Ordinal) || haystack.Contains("retro", StringComparison.Ordinal) || haystack.Contains("hobby", StringComparison.Ordinal)) return "Legacy retro lab setup";
+        if (haystack.Contains("windows", StringComparison.Ordinal) && haystack.Contains("recovery", StringComparison.Ordinal)) return "Windows recovery USB";
+        if (haystack.Contains("linux", StringComparison.Ordinal) && haystack.Contains("server", StringComparison.Ordinal)) return "Linux admin pack";
+        if (haystack.Contains("recovery", StringComparison.Ordinal) || haystack.Contains("rescue", StringComparison.Ordinal)) return "Offline-first recovery kit";
+        if (haystack.Contains("hypervisor", StringComparison.Ordinal) || haystack.Contains("vm", StringComparison.Ordinal) || haystack.Contains("sandbox", StringComparison.Ordinal)) return "VM/Sandbox toolkit";
+        return "Portable tech bench";
+    }
+
+    private static bool MatchesMetadataFilter(string selected, string allValue, params string[] values)
+    {
+        if (string.IsNullOrWhiteSpace(selected) || selected.Equals(allValue, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return values.Any(value => !string.IsNullOrWhiteSpace(value) &&
+                                   value.Contains(selected, StringComparison.OrdinalIgnoreCase));
     }
 
     private void ApplyToolkitReadinessScore(
@@ -9248,6 +10214,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         return 0L;
     }
 
+    private static long? GetOptionalJsonLong(JsonElement element, string propertyName)
+    {
+        var value = GetJsonLong(element, propertyName);
+        return value > 0 ? value : null;
+    }
+
     private static string FormatBytesForToolkit(long bytes)
     {
         if (bytes <= 0)
@@ -9266,6 +10238,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         return $"{value:0.#} {units[unitIndex]}";
     }
+
+    private static string FirstNonBlank(params string[] values) =>
+        values.FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
 
     private static double? GetJsonDouble(JsonElement element, string propertyName)
     {
@@ -11614,6 +12589,221 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ClearIgnoredAppUpdateVersionCommand.RaiseCanExecuteChanged();
     }
 
+    private void LoadUsbBuilderProfileSettings()
+    {
+        _loadingUsbBuilderProfileSettings = true;
+        try
+        {
+            _usbBuilderProfileSettings = _usbBuilderProfileSettingsStore.Load();
+            UsbBuilderProfileOptions.Clear();
+
+            var included = new HashSet<string>(
+                _usbBuilderProfileSettings.IncludedCategoryIds,
+                StringComparer.OrdinalIgnoreCase);
+
+            foreach (var option in CreateUsbBuilderProfileOptions())
+            {
+                option.IsIncluded = option.IsRequired || included.Contains(option.CategoryId);
+                option.PropertyChanged += OnUsbBuilderProfileOptionChanged;
+                UsbBuilderProfileOptions.Add(option);
+            }
+        }
+        finally
+        {
+            _loadingUsbBuilderProfileSettings = false;
+        }
+
+        PersistUsbBuilderProfileSettings();
+        RefreshUsbBuilderProfileSummary();
+    }
+
+    private static IReadOnlyList<UsbBuilderProfileOption> CreateUsbBuilderProfileOptions() =>
+    [
+        new()
+        {
+            CategoryId = "core",
+            DisplayName = "Core ForgerEMS USB structure",
+            Description = "Required folders, logs, docs, manifest, and Ventoy safety structure.",
+            Platform = "Core",
+            IsRequired = true,
+            DefaultIncluded = true
+        },
+        new()
+        {
+            CategoryId = "windows",
+            DisplayName = "Windows installers and recovery",
+            Description = "Official Microsoft Windows 10/11/Server links, WinPE/ADK guidance, and current Windows workflow folders.",
+            Platform = "Windows",
+            DefaultIncluded = true
+        },
+        new()
+        {
+            CategoryId = "legacy-windows",
+            DisplayName = "Legacy Windows manual media drop folders",
+            Description = "Unsupported Windows 8.1 and older tracking folders. ForgerEMS never downloads these ISOs.",
+            Platform = "Windows",
+            DefaultIncluded = true,
+            RequiresManualMedia = true
+        },
+        new()
+        {
+            CategoryId = "linux-rescue",
+            DisplayName = "Linux rescue and installer tools",
+            Description = "Linux rescue ISOs and installer/recovery workflows already managed by the catalog.",
+            Platform = "Linux",
+            DefaultIncluded = true
+        },
+        new()
+        {
+            CategoryId = "macos",
+            DisplayName = "macOS installer workflow",
+            Description = "Apple support links and manual drop folders for user-supplied installers, DMGs, or PKGs.",
+            Platform = "macOS",
+            RequiresManualMedia = true
+        },
+        new()
+        {
+            CategoryId = "android",
+            DisplayName = "Android platform tools and firmware workflow",
+            Description = "Official adb/fastboot, Pixel firmware links, AOSP docs, and manual OEM firmware drop folders.",
+            Platform = "Android",
+            RequiresManualMedia = true
+        },
+        new()
+        {
+            CategoryId = "ios-ipados",
+            DisplayName = "iOS / iPadOS restore workflow",
+            Description = "Apple restore/recovery workflow links and manual IPSW tracking folders.",
+            Platform = "Apple Mobile",
+            RequiresManualMedia = true
+        },
+        new()
+        {
+            CategoryId = "oem-tools",
+            DisplayName = "OEM recovery links and vendor tools",
+            Description = "Official vendor support, drivers, firmware, and recovery utility shortcuts.",
+            Platform = "OEM",
+            DefaultIncluded = true
+        },
+        new()
+        {
+            CategoryId = "diagnostics",
+            DisplayName = "Diagnostics and rescue utilities",
+            Description = "Disk, imaging, hardware, USB, network, security, and portable technician utilities.",
+            Platform = "Tools",
+            DefaultIncluded = true
+        }
+    ];
+
+    private void OnUsbBuilderProfileOptionChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (!string.Equals(e.PropertyName, nameof(UsbBuilderProfileOption.IsIncluded), StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (!_loadingUsbBuilderProfileSettings)
+        {
+            PersistUsbBuilderProfileSettings();
+        }
+
+        RefreshUsbBuilderProfileSummary();
+    }
+
+    private void PersistUsbBuilderProfileSettings()
+    {
+        _usbBuilderProfileSettings.IncludedCategoryIds = UsbBuilderProfileOptions
+            .Where(option => option.IsIncluded)
+            .Select(option => option.CategoryId)
+            .ToList();
+
+        try
+        {
+            _usbBuilderProfileSettingsStore.Save(_usbBuilderProfileSettings);
+        }
+        catch
+        {
+            // best effort; profile changes still apply in memory for this run
+        }
+    }
+
+    private void RefreshUsbBuilderProfileSummary()
+    {
+        var included = UsbBuilderProfileOptions
+            .Where(option => option.IsIncluded && !option.IsRequired)
+            .Select(option => option.DisplayName switch
+            {
+                "Windows installers and recovery" => "Windows",
+                "Legacy Windows manual media drop folders" => "Legacy Windows",
+                "Linux rescue and installer tools" => "Linux Rescue",
+                "macOS installer workflow" => "macOS",
+                "Android platform tools and firmware workflow" => "Android",
+                "iOS / iPadOS restore workflow" => "iOS / iPadOS",
+                "OEM recovery links and vendor tools" => "OEM Tools",
+                "Diagnostics and rescue utilities" => "Diagnostics",
+                _ => option.DisplayName
+            })
+            .ToList();
+
+        var off = UsbBuilderProfileOptions
+            .Where(option => !option.IsIncluded && !option.IsRequired)
+            .Select(option => option.DisplayName switch
+            {
+                "macOS installer workflow" => "macOS",
+                "Android platform tools and firmware workflow" => "Android",
+                "iOS / iPadOS restore workflow" => "iOS / iPadOS",
+                _ => option.DisplayName
+            })
+            .ToList();
+
+        var includedText = included.Count == 0 ? "Core only" : string.Join(", ", included);
+        var offText = off.Count == 0 ? "No optional packs are off." : $"{string.Join(" / ", off)} folders are off.";
+        UsbBuilderProfileSummaryText = $"This update will include: {includedText}. {offText}";
+        UsbBuilderProfileNoteText = "Unchecked means do not add/update/seed that pack this run. Existing user-supplied files already on the USB are left alone.";
+    }
+
+    private void SelectRecommendedUsbBuilderProfile()
+    {
+        ApplyUsbBuilderProfileSelection(option => option.IsRequired || option.DefaultIncluded);
+    }
+
+    private void SelectAllUsbBuilderProfile()
+    {
+        ApplyUsbBuilderProfileSelection(_ => true);
+    }
+
+    private void ResetUsbBuilderProfile()
+    {
+        ApplyUsbBuilderProfileSelection(option =>
+            UsbBuilderProfileSettingsStore.DefaultIncludedCategoryIds.Contains(option.CategoryId, StringComparer.OrdinalIgnoreCase));
+    }
+
+    private void ApplyUsbBuilderProfileSelection(Func<UsbBuilderProfileOption, bool> include)
+    {
+        _loadingUsbBuilderProfileSettings = true;
+        try
+        {
+            foreach (var option in UsbBuilderProfileOptions)
+            {
+                option.IsIncluded = option.IsRequired || include(option);
+            }
+        }
+        finally
+        {
+            _loadingUsbBuilderProfileSettings = false;
+        }
+
+        PersistUsbBuilderProfileSettings();
+        RefreshUsbBuilderProfileSummary();
+    }
+
+    private string[] GetIncludedUsbBuilderCategoryArguments() =>
+        UsbBuilderProfileOptions
+            .Where(option => option.IsIncluded)
+            .Select(option => option.CategoryId)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
     private void ScheduleBackgroundUpdateCheck()
     {
         if (!_appUpdateSettings.CheckAutomatically)
@@ -12645,6 +13835,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         RevalidateManagedDownloadsCommand.RaiseCanExecuteChanged();
         SetupUsbCommand.RaiseCanExecuteChanged();
         UpdateUsbCommand.RaiseCanExecuteChanged();
+        SelectRecommendedUsbBuilderProfileCommand.RaiseCanExecuteChanged();
+        SelectAllUsbBuilderProfileCommand.RaiseCanExecuteChanged();
+        ResetUsbBuilderProfileCommand.RaiseCanExecuteChanged();
         RetryFailedManagedDownloadsCommand.RaiseCanExecuteChanged();
         RenameUsbCommand.RaiseCanExecuteChanged();
         InstallOrUpdateVentoyCommand.RaiseCanExecuteChanged();
@@ -12661,6 +13854,23 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         OpenManualDownloadShortcutCommand.RaiseCanExecuteChanged();
         CopySelectedToolkitExpectedPathCommand.RaiseCanExecuteChanged();
         CopySelectedToolkitDetectedPathCommand.RaiseCanExecuteChanged();
+        AddSelectedToolToDownloadPlanCommand.RaiseCanExecuteChanged();
+        RemoveSelectedToolFromDownloadPlanCommand.RaiseCanExecuteChanged();
+        SelectVisibleToolkitItemsCommand.RaiseCanExecuteChanged();
+        ClearToolkitDownloadPlanCommand.RaiseCanExecuteChanged();
+        ValidateToolkitDownloadPlanCommand.RaiseCanExecuteChanged();
+        SaveToolkitProfileCommand.RaiseCanExecuteChanged();
+        LoadToolkitProfileCommand.RaiseCanExecuteChanged();
+        ExportToolkitProfileCommand.RaiseCanExecuteChanged();
+        RemoveSelectedPlanItemCommand.RaiseCanExecuteChanged();
+        MoveSelectedPlanItemUpCommand.RaiseCanExecuteChanged();
+        MoveSelectedPlanItemDownCommand.RaiseCanExecuteChanged();
+        DownloadSelectedManagedItemsCommand.RaiseCanExecuteChanged();
+        CancelSelectedManagedDownloadsCommand.RaiseCanExecuteChanged();
+        RetryFailedSelectedManagedDownloadsCommand.RaiseCanExecuteChanged();
+        OpenToolkitDownloadFolderCommand.RaiseCanExecuteChanged();
+        CopySelectedManualInstructionsCommand.RaiseCanExecuteChanged();
+        OpenSelectedVendorPageCommand.RaiseCanExecuteChanged();
         OpenUbuntuTerminalCommand.RaiseCanExecuteChanged();
         RefreshSafeTestingEnvironmentCommand.RaiseCanExecuteChanged();
         CheckWslInstalledCommand.RaiseCanExecuteChanged();

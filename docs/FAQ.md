@@ -138,6 +138,60 @@ If a related managed download is already installed and checksum-verified, a miss
 
 ---
 
+## What is the USB Builder Profile?
+
+The **USB Builder tab → USB Builder Profile** lets you pick which toolkit packs Setup USB and Update USB seed or refresh on the selected target. Each pack is one of:
+
+- **Core ForgerEMS USB structure** (required, cannot be turned off): the folders, logs, manifest, and Ventoy safety structure ForgerEMS needs to operate.
+- **Windows installers and recovery** (default on): official Microsoft Windows 10 / 11 / Server download shortcuts, ADK / WinPE references, and the modern Windows workflow folders.
+- **Legacy Windows manual media drop folders** (default on): tracking folders for Windows 8.1 and older. ForgerEMS never downloads legacy Windows ISOs.
+- **Linux rescue and installer tools** (default on): managed Linux rescue ISOs and installer/recovery workflows.
+- **Diagnostics and rescue utilities** (default on): disk, imaging, hardware, network, security, and portable technician utilities.
+- **OEM recovery links and vendor tools** (default on): official vendor support, driver, and recovery utility shortcuts.
+- **macOS installer workflow** (default off, manual media required).
+- **Android platform tools and firmware workflow** (default off, manual media required).
+- **iOS / iPadOS restore workflow** (default off, manual media required).
+
+Buttons: **Select recommended** restores the default set, **Select all** turns every pack on, **Reset to defaults** matches a fresh install. Your choice is saved per user at `%LOCALAPPDATA%\ForgerEMS\Runtime\config\usb-builder-profile.json`.
+
+Important behavior:
+
+- **Unchecking a pack only skips seeding/updating it on this run.**
+- **It does not delete files already on the USB.** Existing user-supplied media, drop folders, and prior toolkit content are left alone.
+- Core safety structure always runs even if everything else is off.
+
+---
+
+## Does ForgerEMS auto-download macOS, iOS / iPadOS, or Android media?
+
+**No.** ForgerEMS is Windows-first and does not redistribute or auto-download:
+
+- macOS installers, DMGs, or PKGs.
+- iOS / iPadOS IPSW files.
+- Android OEM firmware (Samsung, Motorola, OnePlus, etc.).
+
+What the mobile/macOS packs do provide:
+
+- **macOS**: shortcuts to Apple's official download, recovery, and `createinstallmedia` guides. A compatible Mac may be required. Drop user-supplied installer media into `ISO\macOS\macOS-Manual-Installer-Drop\<version>\` for tracking. ForgerEMS does not redistribute Apple installers.
+- **Android**: official download shortcuts for Android SDK Platform-Tools (adb / fastboot), Google Pixel factory / OTA images, and AOSP source/build documentation. Samsung, Motorola, and OnePlus open the official vendor support sites. Drop user-supplied firmware into `ISO\Android\Android-Manual-Firmware-Drop\<vendor>\`. Flashing the wrong firmware can wipe data or brick devices. ForgerEMS does not redistribute Android firmware.
+- **iOS / iPadOS**: shortcuts to Apple's official Apple Devices for Windows, Finder / iTunes, recovery mode, and Apple Configurator restore guides. IPSW files are user-supplied; drop them into `ISO\iOS-iPadOS\iOS-Manual-IPSW-Drop\<device>\`. Restores can erase devices. Activation Lock and Apple ID ownership are outside ForgerEMS. ForgerEMS does not use third-party IPSW indexes.
+
+ForgerEMS never bypasses licenses, activation, DRM, account locks, or vendor authorization flows.
+
+---
+
+## What do the toolkit action labels mean?
+
+Every catalog item uses one of these labels in its `.url` filename or display:
+
+- **DOWNLOAD** / **AUTO DOWNLOAD**: ForgerEMS can safely download or update this item from an official, redistributable, machine-resolvable source. Checksum verified when the upstream publishes one.
+- **MANUAL DOWNLOAD**: ForgerEMS opens an official vendor page; you must choose the variant, sign in, accept license terms, or pick the right device/model. ForgerEMS does not bypass that flow.
+- **MANUAL MEDIA REQUIRED** / **MANUAL ISO REQUIRED** / **MANUAL INSTALLER REQUIRED** / **MANUAL IPSW REQUIRED** / **MANUAL FIRMWARE REQUIRED**: you must supply the ISO, installer, IPSW, or firmware yourself. Used for legacy Windows, macOS installers, iOS / iPadOS IPSW, and OEM Android firmware. Drop your legally obtained file in the matching folder; ForgerEMS does not redistribute these.
+- **GUIDE**: official how-to instructions (Apple `createinstallmedia`, recovery mode, AOSP build guide, etc.).
+- **INFO**: true reference material — release notes, lifecycle pages, ADK references. Not a substitute for a missing download.
+
+---
+
 ## What does “Verify Links” do in Toolkit Manager?
 
 **Verify Links** asks ForgerEMS to contact official toolkit URLs using **safe HTTP metadata checks** — typically **HEAD**, with a **small ranged GET** fallback when some hosts block HEAD. The verifier records reachability, HTTP status (when available), redirect hosts, content-length hints when exposed, and compares those signals to your manifest/checksum columns **without fetching entire installers or ISOs** and **without executing anything it downloads**. Runs are **timeout-bounded** and **cancellable**, and work gracefully **offline** (results fall back to Unknown / Offline rather than pretending links were validated). Kyra can summarize the latest saved verification when it aligns with your toolkit-health report and USB scope.
