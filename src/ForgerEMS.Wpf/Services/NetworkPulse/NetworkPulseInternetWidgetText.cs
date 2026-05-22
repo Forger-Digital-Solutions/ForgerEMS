@@ -8,6 +8,15 @@ public static class NetworkPulseInternetWidgetText
 {
     public const string UploadNotTested = "not tested";
 
+    // Public surface labels — kept stable so XAML, brushes, and tests can reference them.
+    public const string SurfaceOnline = "Online";
+    public const string SurfaceChecksInconsistent = "Online — checks inconsistent";
+    public const string SurfaceLimited = "Limited";
+    public const string SurfaceOffline = "Offline";
+    public const string SurfaceMeasuring = "Measuring";
+    public const string SurfaceStale = "Stale";
+    public const string SurfaceUnknown = "Unknown";
+
     public static (string Line1, string Line2, string Line3) Build(
         bool userEnabled,
         bool showInHeader,
@@ -121,27 +130,27 @@ public static class NetworkPulseInternetWidgetText
     {
         if (s.Status == NetworkPulseStatus.Testing)
         {
-            return "Measuring";
+            return SurfaceMeasuring;
         }
 
         if (s.Status == NetworkPulseStatus.Limited)
         {
-            return "Limited";
+            return SurfaceLimited;
         }
 
         if (consecutiveHardFailures >= 6 && !s.InternetReachable && s.LatencyKind != NetworkPulseMeasurementKind.Measured)
         {
-            return "Offline";
+            return SurfaceOffline;
         }
 
         if (s.Status == NetworkPulseStatus.Offline && pingShow is null && downShow is null)
         {
-            return "Offline";
+            return SurfaceOffline;
         }
 
         if (s.Status == NetworkPulseStatus.Offline)
         {
-            return "Limited";
+            return SurfaceLimited;
         }
 
         var newestGood = MaxUtc(last.PingUtc, last.DownloadUtc, last.UploadUtc);
@@ -149,30 +158,45 @@ public static class NetworkPulseInternetWidgetText
 
         if (stale && (pingShow is > 0 || downShow is > 0))
         {
-            return "Stale";
+            return SurfaceStale;
+        }
+
+        // "Online — checks inconsistent": HTTPS verification probe failed this cycle, but ICMP /
+        // measured throughput / DNS still indicate the internet is usable. This is common with
+        // VPNs, custom DNS (Pi-hole, NextDNS), and content filters that block Microsoft NCSI.
+        // We surface a gentler label instead of "Limited" until ClassifyStatus promotes to Limited.
+        var probeMismatch = !s.InternetReachable &&
+                            s.Status is NetworkPulseStatus.Good or NetworkPulseStatus.Slow or NetworkPulseStatus.Unstable &&
+                            (s.LatencyKind == NetworkPulseMeasurementKind.Measured ||
+                             pingShow is > 0 ||
+                             downShow is > 0 ||
+                             s.DnsLookupMs is > 0);
+        if (probeMismatch)
+        {
+            return SurfaceChecksInconsistent;
         }
 
         if (!s.InternetReachable && (s.LatencyKind == NetworkPulseMeasurementKind.Measured || pingShow is > 0))
         {
-            return "Limited";
+            return SurfaceChecksInconsistent;
         }
 
         if (s.LatencyKind != NetworkPulseMeasurementKind.Measured && pingShow is null)
         {
-            return s.InternetReachable ? "Online" : consecutiveHardFailures >= 2 ? "Limited" : "Unknown";
+            return s.InternetReachable ? SurfaceOnline : consecutiveHardFailures >= 2 ? SurfaceLimited : SurfaceUnknown;
         }
 
         if (s.Status is NetworkPulseStatus.Unstable or NetworkPulseStatus.Unknown)
         {
-            return s.InternetReachable || pingShow is > 0 || downShow is > 0 ? "Online" : "Unknown";
+            return s.InternetReachable || pingShow is > 0 || downShow is > 0 ? SurfaceOnline : SurfaceUnknown;
         }
 
         if (s.Status is NetworkPulseStatus.Slow or NetworkPulseStatus.Good)
         {
-            return "Online";
+            return SurfaceOnline;
         }
 
-        return "Unknown";
+        return SurfaceUnknown;
     }
 
     private static bool IsSpeedFailure(NetworkPulseSnapshot s) =>
@@ -187,7 +211,7 @@ public static class NetworkPulseInternetWidgetText
         double? pingShow,
         double? downShow)
     {
-        if (surface == "Measuring")
+        if (surface == SurfaceMeasuring)
         {
             return "Measuring now";
         }
@@ -197,17 +221,25 @@ public static class NetworkPulseInternetWidgetText
             return $"{checkedPart} · Speed sample unavailable; internet probe succeeded.";
         }
 
-        if (surface == "Online" && pingShow is null && downShow is null)
+        if (surface == SurfaceOnline && pingShow is null && downShow is null)
         {
             return $"{checkedPart} · Internet online; latency/speed not measured this cycle.";
         }
 
-        if (surface == "Limited")
+        if (surface == SurfaceChecksInconsistent)
         {
-            return $"{checkedPart} · Route exists but DNS/HTTPS/captive probes are mixed or failing.";
+            // Soft, user-centred wording. Diagnostics detail (DNS/HTTPS/captive probe state) is
+            // still surfaced via the popup's Data sources / Diagnostics block.
+            return $"{checkedPart} · Internet appears usable; Windows verification checks didn't all match this cycle.";
         }
 
-        if (surface == "Stale")
+        if (surface == SurfaceLimited)
+        {
+            // Sustained failure — preserve diagnostic hint without dramatising it.
+            return $"{checkedPart} · Connection checks have failed for several cycles; some sites or services may be unreachable.";
+        }
+
+        if (surface == SurfaceStale)
         {
             return $"{checkedPart} · Last measurement is stale.";
         }

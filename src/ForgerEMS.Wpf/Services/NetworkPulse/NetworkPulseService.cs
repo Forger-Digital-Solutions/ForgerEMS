@@ -24,6 +24,10 @@ public sealed class NetworkPulseService : IDisposable
     private bool _disposed;
     private DateTimeOffset _lastSpeedProbeUtc = DateTimeOffset.MinValue;
     private int _consecutiveHardFailures;
+    // Tracks consecutive cycles where HTTPS verification probe failed while other usability evidence
+    // (ICMP / route / DNS / measured throughput) was present. Used to suppress an instant "Limited"
+    // downgrade on a single failed Microsoft/captive probe.
+    private int _httpsOnlyFailureStreak;
 
     public NetworkPulseService(
         NetworkPulseViewModel viewModel,
@@ -103,6 +107,7 @@ public sealed class NetworkPulseService : IDisposable
         if (!settings.Enabled)
         {
             _consecutiveHardFailures = 0;
+            _httpsOnlyFailureStreak = 0;
             _stabilizer.Reset();
             _lastGood.Clear();
             PostUi(NetworkPulseUiState.FromSnapshotNeutral(BuildDisabledSnapshot()));
@@ -113,6 +118,7 @@ public sealed class NetworkPulseService : IDisposable
         if (pause)
         {
             _consecutiveHardFailures = 0;
+            _httpsOnlyFailureStreak = 0;
             _stabilizer.Reset();
             PostUi(BuildUiState(settings, pausedSnapshot, smoothed: null, wifi: null, spark: null, reliability: NetworkPulseReliabilityTier.Unknown, reliabilityExplain: NetworkPulseReliabilityScorer.Explain(NetworkPulseReliabilityTier.Unknown, false, false, 0), now: DateTimeOffset.UtcNow));
             return;
@@ -137,6 +143,23 @@ public sealed class NetworkPulseService : IDisposable
         else
         {
             _consecutiveHardFailures = 0;
+        }
+
+        // HTTPS-only failure: verification probe failed (or captive content suspected) while other
+        // real usability signals are healthy. Tracked separately from hard failures so a single
+        // bad Microsoft probe does not flip the UI to "Limited" when the user can actually browse.
+        var httpsVerificationFailed = !reach || captiveSuspected;
+        var hasOtherUsabilityEvidence =
+            latency.AnyIcmpSuccess ||
+            dnsOk ||
+            (hasUsableRoute && !hardFail);
+        if (httpsVerificationFailed && hasOtherUsabilityEvidence)
+        {
+            _httpsOnlyFailureStreak++;
+        }
+        else
+        {
+            _httpsOnlyFailureStreak = 0;
         }
 
         var downloadKind = NetworkPulseMeasurementKind.Unavailable;
@@ -223,7 +246,14 @@ public sealed class NetworkPulseService : IDisposable
         var effectivePingMs = latency.IcmpMedianMs ?? fallbackHttpLatency;
         var latencyKind = effectivePingMs is > 0 ? NetworkPulseMeasurementKind.Measured : NetworkPulseMeasurementKind.Unavailable;
         var confidence = ClassifyConfidence(latency, downloadKind == NetworkPulseMeasurementKind.Measured);
-        var rawStatus = ClassifyStatus(hasUsableRoute, reach, dnsOk, latency, downloadMbps, latencyKind);
+        var rawStatus = ClassifyStatus(
+            hasUsableRoute,
+            reach,
+            dnsOk,
+            latency,
+            downloadMbps,
+            latencyKind,
+            _httpsOnlyFailureStreak);
         var smoothed = _stabilizer.Smooth(
             rawStatus,
             reach,
@@ -254,6 +284,7 @@ public sealed class NetworkPulseService : IDisposable
 
         var spark = NetworkPulseSparklineGeometryBuilder.BuildPingSparkline(smoothed.SparkPingNormalized, 120, 26);
 
+        var probeMismatchNote = (!reach || captiveSuspected) && hasOtherUsabilityEvidence;
         var notes =
             "Latency: ICMP to a public DNS hostname + optional default-gateway ping + DNS lookup timing (lookup may be cached). " +
             (!latency.AnyIcmpSuccess && fallbackHttpLatency is > 0
@@ -261,9 +292,17 @@ public sealed class NetworkPulseService : IDisposable
                 : string.Empty) +
             "Reachability: HTTPS GET to the Windows captive-portal probe host. " +
             (!adapter.HasUsableRoute ? "No active default route was reported by Windows networking APIs. " : adapter.RouteDetail + " ") +
-            (!dnsOk && reach ? "DNS lookup failed or timed out, but HTTPS reachability succeeded. " : string.Empty) +
-            (captiveSuspected ? "HTTPS probe returned unexpected content; captive portal or interception is suspected. " : string.Empty) +
-            (!reach && adapter.HasUsableRoute ? "HTTPS reachability failed while an active route exists. " : string.Empty) +
+            (!dnsOk && reach ? "DNS lookup did not return in time; HTTPS reachability still succeeded. " : string.Empty) +
+            (captiveSuspected
+                ? (probeMismatchNote
+                    ? "HTTPS verification probe returned unexpected content (common with VPNs, custom DNS, or content filters); other usability signals still indicate the internet is reachable. "
+                    : "HTTPS probe returned unexpected content; captive portal or interception is suspected. ")
+                : string.Empty) +
+            (!reach && !captiveSuspected && adapter.HasUsableRoute
+                ? (probeMismatchNote
+                    ? "Windows verification probe failed this cycle while ICMP, DNS, or throughput still indicate working internet — treated as a verification mismatch, not an outage. "
+                    : "HTTPS reachability failed while an active route exists. ")
+                : string.Empty) +
             (!string.IsNullOrWhiteSpace(httpReach.ErrorCategory) && (!reach || captiveSuspected) ? $"HTTPS probe category: {httpReach.ErrorCategory}. " : string.Empty) +
             (downloadKind == NetworkPulseMeasurementKind.Measured
                 ? "Download sample: short HTTPS fetch capped by Network Pulse mode (lightweight measured throughput, not a full speed test)."
@@ -346,7 +385,7 @@ public sealed class NetworkPulseService : IDisposable
             0);
 
         var smoothing =
-            "Header chip uses brief hold times so quick Wi‑Fi blips do not flash Offline. Instant classification is still shown in details.";
+            "Header chip uses brief hold times so quick Wi‑Fi blips or single failed verification probes don't flash an alarming label. Instant classification is still shown in details.";
         var clipboard = BuildClipboardSummaryLine(snapshot, reliability, sm.StatusChipText);
         var fresh = TimeSpan.FromSeconds(Math.Max(90, settings.RefreshIntervalSeconds * 4));
         var (w1, w2, w3) = NetworkPulseInternetWidgetText.Build(
@@ -501,7 +540,8 @@ public sealed class NetworkPulseService : IDisposable
             dnsSucceeded: latency.DnsLookupMs is > 0,
             latency,
             downloadMbps,
-            latencyKind);
+            latencyKind,
+            httpsOnlyFailureStreak: 0);
 
     internal static NetworkPulseStatus ClassifyStatusForTests(
         bool hasUsableRoute,
@@ -510,7 +550,22 @@ public sealed class NetworkPulseService : IDisposable
         LatencyMonitorResult latency,
         double? downloadMbps,
         NetworkPulseMeasurementKind latencyKind) =>
-        ClassifyStatus(hasUsableRoute, httpsReachable, dnsSucceeded, latency, downloadMbps, latencyKind);
+        ClassifyStatus(hasUsableRoute, httpsReachable, dnsSucceeded, latency, downloadMbps, latencyKind, httpsOnlyFailureStreak: 0);
+
+    internal static NetworkPulseStatus ClassifyStatusForTests(
+        bool hasUsableRoute,
+        bool httpsReachable,
+        bool dnsSucceeded,
+        LatencyMonitorResult latency,
+        double? downloadMbps,
+        NetworkPulseMeasurementKind latencyKind,
+        int httpsOnlyFailureStreak) =>
+        ClassifyStatus(hasUsableRoute, httpsReachable, dnsSucceeded, latency, downloadMbps, latencyKind, httpsOnlyFailureStreak);
+
+    // HTTPS verification probe failures must be sustained before they downgrade visible status.
+    // A single failed Microsoft NCSI / captive probe with healthy ICMP+route+throughput is not a
+    // user-visible outage — that is what HttpsOnlyLimitedThreshold enforces here.
+    private const int HttpsOnlyLimitedThreshold = 3;
 
     private static NetworkPulseStatus ClassifyStatus(
         bool hasUsableRoute,
@@ -518,18 +573,33 @@ public sealed class NetworkPulseService : IDisposable
         bool dnsSucceeded,
         LatencyMonitorResult latency,
         double? downloadMbps,
-        NetworkPulseMeasurementKind latencyKind)
+        NetworkPulseMeasurementKind latencyKind,
+        int httpsOnlyFailureStreak)
     {
         if (!hasUsableRoute && !httpsReachable && !dnsSucceeded && !latency.AnyIcmpSuccess)
         {
             return NetworkPulseStatus.Offline;
         }
 
+        var hasOtherUsabilityEvidence =
+            latency.AnyIcmpSuccess ||
+            dnsSucceeded ||
+            (downloadMbps is > 0 && latencyKind == NetworkPulseMeasurementKind.Measured);
+
         if (!httpsReachable)
         {
-            return hasUsableRoute || dnsSucceeded || latency.AnyIcmpSuccess
-                ? NetworkPulseStatus.Limited
-                : NetworkPulseStatus.Offline;
+            if (!hasOtherUsabilityEvidence)
+            {
+                return hasUsableRoute ? NetworkPulseStatus.Limited : NetworkPulseStatus.Offline;
+            }
+
+            // HTTPS-only failure with strong other usability signals: only downgrade to Limited
+            // once the failure has persisted for several cycles. Until then fall through to the
+            // latency-based classification — the user can browse, ping, and resolve names.
+            if (httpsOnlyFailureStreak >= HttpsOnlyLimitedThreshold)
+            {
+                return NetworkPulseStatus.Limited;
+            }
         }
 
         if (latency.AnyIcmpSuccess && (latency.PacketLossPercent >= 8 || (latency.JitterMs ?? 0) >= 80))

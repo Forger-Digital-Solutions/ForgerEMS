@@ -760,8 +760,13 @@ public sealed class NetworkPulseViewModel : ObservableObject
         return (dot >= 0 ? value[..dot] : value).Trim();
     }
 
-    private static SolidColorBrush BrushForSurface(string surface) =>
-        surface switch
+    // Two-part surfaces such as "Online — checks inconsistent" share their colour with the
+    // base ("Online" → green-ish). Map by checking the first word so future variations don't
+    // silently fall to the default neutral colour.
+    private static SolidColorBrush BrushForSurface(string surface)
+    {
+        var head = ExtractSurfaceHead(surface);
+        return head switch
         {
             "Online" => new SolidColorBrush(Color.FromRgb(134, 239, 172)),
             "Measuring" => new SolidColorBrush(Color.FromRgb(186, 230, 253)),
@@ -771,12 +776,43 @@ public sealed class NetworkPulseViewModel : ObservableObject
             "Disabled" => new SolidColorBrush(Color.FromRgb(203, 213, 225)),
             _ => new SolidColorBrush(Color.FromRgb(232, 244, 255))
         };
+    }
+
+    private static string ExtractSurfaceHead(string surface)
+    {
+        if (string.IsNullOrEmpty(surface))
+        {
+            return string.Empty;
+        }
+
+        // Match the part before an em-dash, en-dash, hyphen, or " (": "Online — checks inconsistent"
+        // and "Online (verification mismatch)" both map to "Online".
+        var separators = new[] { " — ", " – ", " - ", " (" };
+        foreach (var sep in separators)
+        {
+            var idx = surface.IndexOf(sep, StringComparison.Ordinal);
+            if (idx > 0)
+            {
+                return surface[..idx].Trim();
+            }
+        }
+
+        return surface.Trim();
+    }
 
     private static string ClassifyLastErrorCategory(NetworkPulseSnapshot s, string surface)
     {
         if (surface.Equals("Offline", StringComparison.OrdinalIgnoreCase))
         {
             return "NoUsableRouteOrProbe";
+        }
+
+        // "Online — checks inconsistent" is informational, not an error. Keep the technical
+        // category empty so error-banner consumers (clipboard, logs) do not over-react.
+        if (surface.StartsWith("Online", StringComparison.OrdinalIgnoreCase) &&
+            surface.Contains("checks", StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Empty;
         }
 
         if (surface.Equals("Limited", StringComparison.OrdinalIgnoreCase))

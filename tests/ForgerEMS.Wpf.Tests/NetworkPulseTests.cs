@@ -674,7 +674,10 @@ public sealed class NetworkPulseInternetWidgetTextTests
             new NetworkPulseLastKnownGood(),
             false, consecutiveHardFailures: 0, TimeSpan.FromMinutes(10), DateTimeOffset.UtcNow);
         Assert.Contains("Limited", l1, StringComparison.Ordinal);
-        Assert.Contains("DNS/HTTPS", l3, StringComparison.Ordinal);
+        // New softened wording — sustained Limited shows a calmer, user-facing reason without
+        // raw probe internals. Diagnostics block in the popup still carries technical detail.
+        Assert.Contains("failed for several cycles", l3, StringComparison.Ordinal);
+        Assert.DoesNotContain("mixed or failing", l3, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -992,5 +995,258 @@ public sealed class NetworkPulseInternetWidgetTextTests
         var second = s.Smooth(NetworkPulseStatus.Good, true, true, 20, 2, 0,
             null, null, NetworkPulseMeasurementKind.Unavailable, NetworkPulseMeasurementKind.Unavailable);
         Assert.Equal(emaAfterFirst, second.SmoothedDownMbps);
+    }
+}
+
+// New v1.2.1 UX hardening tests: HTTPS verification mismatch must not be presented as alarming
+// when ICMP / throughput / DNS still indicate the internet is usable. Includes VPN / custom-DNS
+// scenarios that previously over-triggered the "Limited" / "Fair" wording.
+public sealed class NetworkPulseHumanPriorityModelTests
+{
+    private static LatencyMonitorResult HealthyLatency(double ping = 18) =>
+        new(ping, JitterMs: 2, PacketLossPercent: 0, GatewayPingMs: 1, DnsLookupMs: 1, AnyIcmpSuccess: true);
+
+    [Fact]
+    public void ClassifyStatus_HttpsFailButIcmpAndThroughputOk_StaysGood_OnFirstCycle()
+    {
+        // VPN / custom-DNS / content-filter scenario: HTTPS verification probe fails this cycle,
+        // but ICMP works and a throughput sample exists. Status must NOT immediately downgrade.
+        var status = NetworkPulseService.ClassifyStatusForTests(
+            hasUsableRoute: true,
+            httpsReachable: false,
+            dnsSucceeded: true,
+            HealthyLatency(),
+            downloadMbps: 80,
+            latencyKind: NetworkPulseMeasurementKind.Measured,
+            httpsOnlyFailureStreak: 0);
+
+        Assert.Equal(NetworkPulseStatus.Good, status);
+    }
+
+    [Fact]
+    public void ClassifyStatus_HttpsFailButIcmpOk_DoesNotDowngradeBeforeStreakThreshold()
+    {
+        var status = NetworkPulseService.ClassifyStatusForTests(
+            hasUsableRoute: true,
+            httpsReachable: false,
+            dnsSucceeded: true,
+            HealthyLatency(),
+            downloadMbps: 80,
+            latencyKind: NetworkPulseMeasurementKind.Measured,
+            httpsOnlyFailureStreak: 2);
+
+        Assert.Equal(NetworkPulseStatus.Good, status);
+    }
+
+    [Fact]
+    public void ClassifyStatus_HttpsFailSustained_DowngradesToLimitedAtThreshold()
+    {
+        // Only after sustained HTTPS-only failure (>= 3 cycles) do we accept the Limited verdict.
+        var status = NetworkPulseService.ClassifyStatusForTests(
+            hasUsableRoute: true,
+            httpsReachable: false,
+            dnsSucceeded: true,
+            HealthyLatency(),
+            downloadMbps: 80,
+            latencyKind: NetworkPulseMeasurementKind.Measured,
+            httpsOnlyFailureStreak: 3);
+
+        Assert.Equal(NetworkPulseStatus.Limited, status);
+    }
+
+    [Fact]
+    public void ClassifyStatus_NoUsabilityEvidenceAtAll_IsLimitedImmediately()
+    {
+        // Route exists but nothing actually responds — even a single cycle is enough to call this
+        // Limited because there is no other usability evidence to lean on.
+        var dead = new LatencyMonitorResult(null, null, 0, null, null, AnyIcmpSuccess: false);
+        var status = NetworkPulseService.ClassifyStatusForTests(
+            hasUsableRoute: true,
+            httpsReachable: false,
+            dnsSucceeded: false,
+            dead,
+            downloadMbps: null,
+            latencyKind: NetworkPulseMeasurementKind.Unavailable,
+            httpsOnlyFailureStreak: 0);
+
+        Assert.Equal(NetworkPulseStatus.Limited, status);
+    }
+
+    [Fact]
+    public void Surface_HttpsFailWithIcmpOk_ShowsChecksInconsistent_NotLimited()
+    {
+        var snap = new NetworkPulseSnapshot(
+            NetworkPulseStatus.Good,
+            NetworkPulseConfidence.Medium,
+            InternetReachable: false,             // HTTPS probe failed
+            "Ethernet",
+            NetworkPulseConnectionKind.Ethernet,
+            null,
+            PingMs: 6,
+            JitterMs: 1,
+            PacketLossPercent: 0,
+            DownloadMbps: 31,
+            UploadMbps: null,
+            NetworkPulseMeasurementKind.Measured,
+            NetworkPulseMeasurementKind.Unavailable,
+            NetworkPulseMeasurementKind.Measured,
+            GatewayPingMs: 1,
+            DnsLookupMs: 1,
+            DateTimeOffset.UtcNow,
+            string.Empty,
+            "n",
+            "s");
+        var (l1, _, l3) = NetworkPulseInternetWidgetText.Build(
+            userEnabled: true,
+            showInHeader: true,
+            snap,
+            new NetworkPulseSmoothedHeadline(NetworkPulseStatus.Good, "Stable", 31, null, Array.Empty<double>(), 0, 0),
+            new NetworkPulseLastKnownGood(),
+            uploadProbesEnabled: false,
+            consecutiveHardFailures: 0,
+            TimeSpan.FromMinutes(10),
+            DateTimeOffset.UtcNow);
+
+        Assert.Contains("Online", l1, StringComparison.Ordinal);
+        Assert.DoesNotContain("Internet: Limited", l1, StringComparison.Ordinal);
+        Assert.Contains("checks", l1, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("verification checks", l3, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("mixed or failing", l3, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Reliability_HttpsFailWithLowLossAndCalmLatency_StaysGoodOrExcellent_NotFair()
+    {
+        // 6ms ping, 0% loss, ICMP works, HTTPS probe failed once — must NOT collapse to Fair.
+        var tier = NetworkPulseReliabilityScorer.Compute(
+            reach: false,
+            icmpOk: true,
+            pingMs: 6,
+            jitterMs: 1,
+            lossPercent: 0,
+            recentReachFailures: 1,
+            recentUnstableRawStreak: 0);
+
+        Assert.True(
+            tier is NetworkPulseReliabilityTier.Excellent or NetworkPulseReliabilityTier.Good,
+            $"Expected Excellent/Good but got {tier}");
+    }
+
+    [Fact]
+    public void Reliability_SustainedHardFailure_StillReportsPoor()
+    {
+        var tier = NetworkPulseReliabilityScorer.Compute(
+            reach: false,
+            icmpOk: false,
+            pingMs: null,
+            jitterMs: null,
+            lossPercent: 0,
+            recentReachFailures: 3,
+            recentUnstableRawStreak: 0);
+
+        Assert.Equal(NetworkPulseReliabilityTier.Poor, tier);
+    }
+
+    [Fact]
+    public void Reliability_TierLabel_RemapsFairToCalmerLanguage()
+    {
+        // Fair enum value is retained for stability, but the user-facing label is softer.
+        Assert.Equal("Usable", NetworkPulseReliabilityScorer.TierLabel(NetworkPulseReliabilityTier.Fair));
+        Assert.Equal("Degraded", NetworkPulseReliabilityScorer.TierLabel(NetworkPulseReliabilityTier.Poor));
+    }
+
+    [Fact]
+    public void Stabilizer_TransientLimitedAfterGood_HoldsPreviousChip()
+    {
+        var s = new NetworkPulseStabilizer();
+        _ = s.Smooth(NetworkPulseStatus.Good, reach: true, icmpOk: true, pingMs: 18, jitterMs: 2, lossPercent: 0,
+            downloadMbps: 80, uploadMbps: null, NetworkPulseMeasurementKind.Measured, NetworkPulseMeasurementKind.Unavailable);
+
+        // First Limited cycle while ICMP still works → must NOT flash the alarming chip.
+        var first = s.Smooth(NetworkPulseStatus.Limited, reach: false, icmpOk: true, pingMs: 18, jitterMs: 2, lossPercent: 0,
+            downloadMbps: 80, uploadMbps: null, NetworkPulseMeasurementKind.Measured, NetworkPulseMeasurementKind.Unavailable);
+
+        Assert.NotEqual("Limited", first.StatusChipText);
+    }
+
+    [Fact]
+    public void Stabilizer_SustainedLimited_EventuallyShowsLimitedChip()
+    {
+        var s = new NetworkPulseStabilizer();
+        _ = s.Smooth(NetworkPulseStatus.Good, true, true, 18, 2, 0, 80, null,
+            NetworkPulseMeasurementKind.Measured, NetworkPulseMeasurementKind.Unavailable);
+
+        NetworkPulseSmoothedHeadline last = default!;
+        for (var i = 0; i < 3; i++)
+        {
+            last = s.Smooth(NetworkPulseStatus.Limited, reach: false, icmpOk: true, pingMs: 18, jitterMs: 2,
+                lossPercent: 0, downloadMbps: 80, uploadMbps: null,
+                NetworkPulseMeasurementKind.Measured, NetworkPulseMeasurementKind.Unavailable);
+        }
+
+        Assert.Equal("Limited", last.StatusChipText);
+    }
+
+    [Fact]
+    public void Surface_CaptiveSuspectedWithHealthySignals_ShowsChecksInconsistent()
+    {
+        // captiveSuspected currently sets InternetReachable=false on the snapshot — same shape
+        // as a content-filter dropping the probe.
+        var snap = new NetworkPulseSnapshot(
+            NetworkPulseStatus.Good,
+            NetworkPulseConfidence.Medium,
+            InternetReachable: false,
+            "Wi-Fi",
+            NetworkPulseConnectionKind.WiFi,
+            null,
+            PingMs: 22,
+            JitterMs: 3,
+            PacketLossPercent: 0,
+            DownloadMbps: 45,
+            UploadMbps: null,
+            NetworkPulseMeasurementKind.Measured,
+            NetworkPulseMeasurementKind.Unavailable,
+            NetworkPulseMeasurementKind.Measured,
+            1, 1,
+            DateTimeOffset.UtcNow,
+            string.Empty,
+            "HTTPS verification probe returned unexpected content (common with VPNs, custom DNS, or content filters); other usability signals still indicate the internet is reachable.",
+            "s");
+
+        var (l1, _, _) = NetworkPulseInternetWidgetText.Build(
+            true, true, snap,
+            new NetworkPulseSmoothedHeadline(NetworkPulseStatus.Good, "Stable", 45, null, Array.Empty<double>(), 0, 0),
+            new NetworkPulseLastKnownGood(),
+            false, 0, TimeSpan.FromMinutes(10), DateTimeOffset.UtcNow);
+
+        Assert.Contains("Online", l1, StringComparison.Ordinal);
+        Assert.DoesNotContain("Internet: Limited", l1, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Surface_TrueOffline_StillReportsOffline()
+    {
+        // Regression guard: the softening must NOT mask a real outage.
+        var snap = new NetworkPulseSnapshot(
+            NetworkPulseStatus.Offline,
+            NetworkPulseConfidence.Low,
+            InternetReachable: false,
+            "—",
+            NetworkPulseConnectionKind.Unknown,
+            null, null, null, 0, null, null,
+            NetworkPulseMeasurementKind.Unavailable,
+            NetworkPulseMeasurementKind.Unavailable,
+            NetworkPulseMeasurementKind.Unavailable,
+            null, null,
+            DateTimeOffset.UtcNow,
+            string.Empty, "n", "s");
+
+        var (l1, _, _) = NetworkPulseInternetWidgetText.Build(
+            true, true, snap,
+            new NetworkPulseSmoothedHeadline(NetworkPulseStatus.Offline, "Offline", null, null, Array.Empty<double>(), 6, 0),
+            new NetworkPulseLastKnownGood(),
+            false, consecutiveHardFailures: 6, TimeSpan.FromMinutes(10), DateTimeOffset.UtcNow);
+
+        Assert.Contains("Offline", l1, StringComparison.Ordinal);
     }
 }
