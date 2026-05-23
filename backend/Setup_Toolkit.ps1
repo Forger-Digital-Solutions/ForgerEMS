@@ -99,6 +99,24 @@ $ProgressPreference = "SilentlyContinue"
 
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
 
+$runtimeHelperCandidates = @(
+    (Join-Path $PSScriptRoot "ForgerEMS.Runtime.ps1"),
+    (Join-Path $PSScriptRoot "backend\ForgerEMS.Runtime.ps1")
+) | Select-Object -Unique
+
+$runtimeHelperImported = $false
+foreach ($runtimeHelperCandidate in $runtimeHelperCandidates) {
+    if (Test-Path -LiteralPath $runtimeHelperCandidate) {
+        . $runtimeHelperCandidate
+        $runtimeHelperImported = $true
+        break
+    }
+}
+
+if (-not $runtimeHelperImported) {
+    throw "ForgerEMS runtime helper was not found. Checked: $($runtimeHelperCandidates -join '; ')"
+}
+
 $script:LogFile = $null
 
 function Write-Log {
@@ -1843,8 +1861,9 @@ $root = Resolve-UsbRoot -Drive $DriveLetter -Root $UsbRoot -NonInteractive:$NonI
 
 $versionInfo = Get-VentoyCoreVersionInfo
 
-$logDir = J $root "_logs"
+$logDir = Resolve-ForgerEMSUsbRawLogDirectory -Root $root
 Ensure-Folder -Path $logDir
+Ensure-Folder -Path (J $root "_logs")
 $script:LogFile = Join-Path $logDir ("setup_" + (Get-Date -Format "yyyyMMdd_HHmmss") + ".log")
 
 Write-Log ("Ventoy core: {0} {1} ({2})" -f $versionInfo.Name, $versionInfo.Version, $versionInfo.BuildTimestampUtc) "INFO"
@@ -2029,7 +2048,10 @@ Manual or partially managed:
 - Medicat.USB
 "@
 
-$readmePath = Join-Path $root "README.md"
+$supportRoot = (Get-ForgerEMSUsbInternalLayout -Root $root).SupportRoot
+Ensure-Folder -Path $supportRoot
+
+$readmePath = Join-Path $supportRoot "ForgerEMS-TechBench-README.md"
 $legacyReadmePath = Join-Path $root "README.txt"
 if ($PSCmdlet.ShouldProcess($readmePath, "Write README")) {
     Set-Content -LiteralPath $readmePath -Value $readme -Encoding UTF8
@@ -2095,7 +2117,7 @@ Core folders:
 - _docs
 "@
 
-$bootstrapNotesPath = Join-Path $root "_docs\ForgerEMS-Bootstrap-Notes.txt"
+$bootstrapNotesPath = Join-Path $supportRoot "ForgerEMS-Bootstrap-Notes.txt"
 if ($PSCmdlet.ShouldProcess($bootstrapNotesPath, "Write bootstrap notes")) {
     Set-Content -LiteralPath $bootstrapNotesPath -Value $bootstrapNotes -Encoding UTF8
     Write-Log "Bootstrap notes written: $bootstrapNotesPath" "OK"
@@ -2240,7 +2262,7 @@ foreach ($driverCategory in $driverCategoryNotes.Keys) {
     }
 }
 
-$downloadCatalogPath = Join-Path $root "_docs\ForgerEMS-Download-Catalog.txt"
+$downloadCatalogPath = Join-Path $supportRoot "ForgerEMS-Download-Catalog.txt"
 $downloadCatalog = Get-DownloadCatalogTextFromManifest -Root $root
 
 if ($PSCmdlet.ShouldProcess($downloadCatalogPath, "Write download catalog")) {
@@ -2251,7 +2273,7 @@ else {
     Write-Log "Would write download catalog: $downloadCatalogPath" "INFO"
 }
 
-$maintenanceGuidePath = Join-Path $root "_docs\ForgerEMS-Managed-Download-Maintenance.txt"
+$maintenanceGuidePath = Join-Path $supportRoot "ForgerEMS-Managed-Download-Maintenance.txt"
 $maintenanceGuide = Get-ManagedDownloadMaintenanceTextFromManifest -Root $root
 
 if ($PSCmdlet.ShouldProcess($maintenanceGuidePath, "Write managed download maintenance guide")) {
@@ -2262,7 +2284,7 @@ else {
     Write-Log "Would write managed download maintenance guide: $maintenanceGuidePath" "INFO"
 }
 
-$inventoryPath = Join-Path $root "_docs\ForgerEMS-Link-Inventory.csv"
+$inventoryPath = Join-Path $supportRoot "ForgerEMS-Link-Inventory.csv"
 
 $inventoryRows = @()
 
@@ -2285,12 +2307,12 @@ else {
 }
 
 if ($SeedManifest) {
-    $manifestPath = Resolve-RootChildPath -Root $root -RelativePath $ManifestName
+    $manifestPath = Resolve-ForgerEMSUsbManifestSeedPath -Root $root -ManifestName $ManifestName
     $bundledManifestPath = Get-BundledManifestTemplatePath
     Get-BundledManifestTemplate -Root $root | Out-Null
 
     if ((Test-Path -LiteralPath $manifestPath) -and -not $ForceManifestOverwrite) {
-        Write-Log "Manifest already exists, skipping seed: $manifestPath" "WARN"
+        Write-Log "Manifest already exists, skipping seed: $manifestPath" "INFO"
     }
     else {
         if ($PSCmdlet.ShouldProcess($manifestPath, "Write manifest JSON")) {
@@ -2328,7 +2350,7 @@ if (-not $LayoutOnly) {
             Write-Log "Managed download pass completed." "OK"
         }
         else {
-            $logsRoot = J $root "_logs"
+            $logsRoot = Resolve-ForgerEMSUsbRawLogDirectory -Root $root
             Write-Log "Starting managed download pass in background..." "INFO"
             try {
                 $launchInfo = Start-ManagedDownloadPassInBackground `
@@ -2379,9 +2401,8 @@ elseif ($WaitForManagedDownloads) {
     Write-Log "Next: install Ventoy, review any remaining placeholder/manual/review-first shortcuts, and rerun Update-ForgerEMS.ps1 later for refreshes." "OK"
 }
 else {
-    $rootLogsPath = J $root "_logs"
-    $rootDownloadsPath = J $root "_downloads"
-    Write-Log "Next: downloads are running in the background; watch $rootLogsPath and $rootDownloadsPath for activity." "OK"
+    $rootLogsPath = Resolve-ForgerEMSUsbRawLogDirectory -Root $root
+    Write-Log "Next: downloads are running in the background; watch $rootLogsPath for update_*.log activity." "OK"
     Write-Log "Next after downloads: install Ventoy if you have not already, review remaining placeholder/manual/review-first shortcuts, and rerun Update-ForgerEMS.ps1 later for refreshes." "OK"
 }
 if ($script:LogFile -and $WhatIfPreference) {

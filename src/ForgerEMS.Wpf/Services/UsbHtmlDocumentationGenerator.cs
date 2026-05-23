@@ -21,6 +21,8 @@ public sealed class UsbHtmlDocumentationRequest
 
 public sealed class UsbHtmlDocumentationGenerator
 {
+    private readonly UsbRootPolisher _usbRootPolisher = new();
+
     public IReadOnlyList<string> GenerateAll(UsbHtmlDocumentationRequest request)
     {
         var written = new List<string>();
@@ -30,17 +32,16 @@ public sealed class UsbHtmlDocumentationGenerator
         Directory.CreateDirectory(Path.Combine(root, "_logs"));
         Directory.CreateDirectory(Path.Combine(root, "_reports"));
 
+        _usbRootPolisher.Polish(root);
+
         WriteFile(Path.Combine(root, "README.html"), BuildDashboardHtml(request), written);
-        WriteFile(
-            Path.Combine(root, "START-HERE.html"),
-            "<!DOCTYPE html><html><head><meta charset=\"utf-8\"/><meta http-equiv=\"refresh\" content=\"0; url=README.html\"/><title>ForgerEMS USB</title></head><body><p><a href=\"README.html\">Open ForgerEMS USB dashboard</a></p></body></html>",
-            written);
         WriteFile(Path.Combine(root, "_docs", "start-here.html"), BuildStartHereHtml(request), written);
         WriteFile(Path.Combine(root, "_docs", "manual-media-guide.html"), BuildManualMediaGuideHtml(request), written);
         WriteFile(Path.Combine(root, "_docs", "latest-updates.html"), BuildLatestUpdatesHtml(root), written);
         WriteFile(Path.Combine(root, "_reports", "index.html"), BuildReportsIndexHtml(root), written);
         WriteFile(Path.Combine(root, "_logs", "index.html"), BuildLogsIndexHtml(root), written);
-        WriteFile(Path.Combine(root, "_docs", "forgerems-usb-dashboard.html"), BuildDashboardHtml(request), written);
+
+        _usbRootPolisher.Polish(root);
 
         return written;
     }
@@ -68,6 +69,7 @@ public sealed class UsbHtmlDocumentationGenerator
         sb.AppendLine(HtmlDocument.Open("ForgerEMS USB Dashboard"));
         sb.AppendLine("<header class=\"hero\">");
         sb.AppendLine("<h1>ForgerEMS Technician USB</h1>");
+        sb.AppendLine("<p class=\"lead\">Open this page first — your technician dashboard for this USB.</p>");
         sb.AppendLine($"<p class=\"muted\">Generated {UsbHtmlEscaper.Escape(DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss zzz"))} · App {UsbHtmlEscaper.Escape(request.AppVersion)}</p>");
         sb.AppendLine("</header>");
 
@@ -83,16 +85,14 @@ public sealed class UsbHtmlDocumentationGenerator
         sb.AppendLine("</section>");
 
         sb.AppendLine("<section><h2>Quick links</h2><ul class=\"links\">");
-        AppendLink(sb, "Start here", "_docs/start-here.html");
+        AppendLink(sb, "Start here checklist", "_docs/start-here.html");
         AppendLink(sb, "Manual media guide", "_docs/manual-media-guide.html");
         AppendLink(sb, "Latest updates", "_docs/latest-updates.html");
         AppendLink(sb, "ISO folder", "ISO/");
         AppendLink(sb, "Tools", "Tools/");
         AppendLink(sb, "Drivers", "Drivers/");
-        AppendLink(sb, "Docs", "_docs/");
-        AppendLink(sb, "Logs", "_logs/index.html");
-        AppendLink(sb, "Reports", "_reports/index.html");
-        AppendLink(sb, "Markdown README", "README.md");
+        AppendLink(sb, "Logs dashboard", "_logs/index.html");
+        AppendLink(sb, "Reports dashboard", "_reports/index.html");
         sb.AppendLine("</ul></section>");
 
         sb.AppendLine("<section><h2>Selected packs</h2><table><thead><tr><th>Pack</th><th>Status</th><th>Space</th></tr></thead><tbody>");
@@ -223,36 +223,110 @@ public sealed class UsbHtmlDocumentationGenerator
         sb.AppendLine(HtmlDocument.Open("ForgerEMS USB — Latest Updates"));
         sb.AppendLine("<h1>Latest updates</h1>");
 
-        var managed = Path.Combine(usbRoot, "ForgerEMS-managed-download-result.json");
+        var managed = UsbInternalLayout.ResolveManagedDownloadResultPath(usbRoot);
         if (File.Exists(managed))
         {
-            try
-            {
-                using var doc = JsonDocument.Parse(File.ReadAllText(managed));
-                sb.AppendLine("<pre class=\"code\">");
-                sb.AppendLine(UsbHtmlEscaper.Escape(JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true })));
-                sb.AppendLine("</pre>");
-                sb.AppendLine($"<p><a href=\"../ForgerEMS-managed-download-result.json\">Raw JSON</a></p>");
-            }
-            catch
-            {
-                sb.AppendLine("<p>Managed download result file is present but could not be parsed for display.</p>");
-            }
+            AppendManagedDownloadSummary(sb, managed, "../_forgerems/metadata/" + Path.GetFileName(managed));
         }
         else
         {
             sb.AppendLine("<p>No managed download result file found yet. Run Update USB from ForgerEMS.</p>");
         }
 
-        var manifest = Path.Combine(usbRoot, "ForgerEMS.updates");
+        var manifest = UsbInternalLayout.ResolveManifestPath(usbRoot);
         if (File.Exists(manifest))
         {
-            sb.AppendLine($"<p><a href=\"../ForgerEMS.updates\">Manifest</a> (ForgerEMS.updates)</p>");
+            sb.AppendLine("<h2>Manifest</h2>");
+            AppendManifestSummary(sb, manifest);
         }
 
         sb.AppendLine(HtmlDocument.Close());
         return sb.ToString();
     }
+
+    private static void AppendManagedDownloadSummary(StringBuilder sb, string jsonPath, string relativeLink)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(jsonPath));
+            var root = doc.RootElement;
+            sb.AppendLine("<table><tbody>");
+            AppendSummaryRow(sb, "Readiness", GetJsonString(root, "readiness"));
+            AppendSummaryRow(sb, "Started", GetJsonString(root, "startedAt"));
+            AppendSummaryRow(sb, "Completed", GetJsonString(root, "completedAt"));
+            AppendSummaryRow(sb, "Managed completed", GetJsonNumber(root, "managedCompleted"));
+            AppendSummaryRow(sb, "Managed failed", GetJsonNumber(root, "managedFailed"));
+            AppendSummaryRow(sb, "Manual/info shortcuts", GetJsonNumber(root, "manualInfoShortcuts"));
+            sb.AppendLine("</tbody></table>");
+
+            if (root.TryGetProperty("failedItems", out var failedItems) &&
+                failedItems.ValueKind == JsonValueKind.Array &&
+                failedItems.GetArrayLength() > 0)
+            {
+                sb.AppendLine("<h2>Failed managed items</h2><ul>");
+                foreach (var item in failedItems.EnumerateArray())
+                {
+                    var name = GetJsonString(item, "name");
+                    var reason = GetJsonString(item, "safeReason");
+                    sb.AppendLine($"<li><strong>{UsbHtmlEscaper.Escape(name)}</strong> — {UsbHtmlEscaper.Escape(reason)}</li>");
+                }
+
+                sb.AppendLine("</ul>");
+            }
+
+            sb.AppendLine($"<p class=\"muted\">Support raw JSON: <a href=\"{UsbHtmlEscaper.EscapeAttribute(relativeLink)}\">{UsbHtmlEscaper.Escape(Path.GetFileName(jsonPath))}</a></p>");
+        }
+        catch
+        {
+            sb.AppendLine("<p>Managed download result file is present but could not be parsed for display.</p>");
+        }
+    }
+
+    private static void AppendManifestSummary(StringBuilder sb, string manifestPath)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(manifestPath));
+            var root = doc.RootElement;
+            sb.AppendLine("<table><tbody>");
+            AppendSummaryRow(sb, "Core version", GetJsonString(root, "coreVersion"));
+            AppendSummaryRow(sb, "Build", GetJsonString(root, "buildTimestampUtc"));
+            AppendSummaryRow(sb, "Release", GetJsonString(root, "releaseType"));
+            if (root.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
+            {
+                AppendSummaryRow(sb, "Manifest items", items.GetArrayLength().ToString());
+            }
+
+            sb.AppendLine("</tbody></table>");
+        }
+        catch
+        {
+            sb.AppendLine("<p>Manifest file is present but could not be parsed for display.</p>");
+        }
+    }
+
+    private static void AppendSummaryRow(StringBuilder sb, string label, string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        sb.AppendLine("<tr>");
+        sb.AppendLine($"<th>{UsbHtmlEscaper.Escape(label)}</th>");
+        sb.AppendLine($"<td>{UsbHtmlEscaper.Escape(value)}</td>");
+        sb.AppendLine("</tr>");
+    }
+
+    private static string GetJsonString(JsonElement element, string propertyName) =>
+        element.TryGetProperty(propertyName, out var property) && property.ValueKind != JsonValueKind.Null
+            ? property.ToString()
+            : string.Empty;
+
+    private static string GetJsonNumber(JsonElement element, string propertyName) =>
+        element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.Number
+            ? property.GetRawText()
+            : string.Empty;
 
     private static string BuildLogsIndexHtml(string usbRoot)
     {
@@ -261,16 +335,62 @@ public sealed class UsbHtmlDocumentationGenerator
         sb.AppendLine("<h1>Logs</h1>");
         sb.AppendLine("<p class=\"note\">Logs may contain device paths and system details. They should not contain API keys or passwords. Review before sharing.</p>");
 
-        AppendFileListing(sb, Path.Combine(usbRoot, "_logs"), "../_logs/");
-        var managed = Path.Combine(usbRoot, "ForgerEMS-managed-download-result.json");
-        if (File.Exists(managed))
-        {
-            sb.AppendLine("<h2>Managed download summary</h2>");
-            sb.AppendLine($"<p><a href=\"../ForgerEMS-managed-download-result.json\">ForgerEMS-managed-download-result.json</a></p>");
-        }
+        AppendLatestRunSummary(sb, usbRoot);
+
+        var internalLogs = UsbInternalLayout.RawLogsDirectory(usbRoot);
+        sb.AppendLine("<h2>Recent setup/update logs</h2>");
+        AppendInternalFileListing(sb, internalLogs, "../_forgerems/logs/");
 
         sb.AppendLine(HtmlDocument.Close());
         return sb.ToString();
+    }
+
+    private static void AppendLatestRunSummary(StringBuilder sb, string usbRoot)
+    {
+        var internalLogs = UsbInternalLayout.RawLogsDirectory(usbRoot);
+        var latestSetup = FindLatestMatchingLog(internalLogs, "setup_");
+        var latestUpdate = FindLatestMatchingLog(internalLogs, "update_");
+
+        if (latestSetup is null && latestUpdate is null)
+        {
+            sb.AppendLine("<p>No setup or update logs found yet.</p>");
+            return;
+        }
+
+        sb.AppendLine("<table><thead><tr><th>Run</th><th>File</th><th>Updated</th></tr></thead><tbody>");
+        if (latestSetup is not null)
+        {
+            AppendLogSummaryRow(sb, "Latest setup", latestSetup, "../_forgerems/logs/");
+        }
+
+        if (latestUpdate is not null)
+        {
+            AppendLogSummaryRow(sb, "Latest update", latestUpdate, "../_forgerems/logs/");
+        }
+
+        sb.AppendLine("</tbody></table>");
+    }
+
+    private static FileInfo? FindLatestMatchingLog(string directory, string prefix)
+    {
+        if (!Directory.Exists(directory))
+        {
+            return null;
+        }
+
+        return Directory.EnumerateFiles(directory, prefix + "*.log")
+            .Select(path => new FileInfo(path))
+            .OrderByDescending(info => info.LastWriteTimeUtc)
+            .FirstOrDefault();
+    }
+
+    private static void AppendLogSummaryRow(StringBuilder sb, string label, FileInfo file, string linkPrefix)
+    {
+        sb.AppendLine("<tr>");
+        sb.AppendLine($"<td>{UsbHtmlEscaper.Escape(label)}</td>");
+        sb.AppendLine($"<td><a href=\"{UsbHtmlEscaper.EscapeAttribute(linkPrefix + file.Name)}\">{UsbHtmlEscaper.Escape(file.Name)}</a></td>");
+        sb.AppendLine($"<td>{UsbHtmlEscaper.Escape(file.LastWriteTimeUtc.ToString("yyyy-MM-dd HH:mm:ss"))} UTC</td>");
+        sb.AppendLine("</tr>");
     }
 
     private static string BuildReportsIndexHtml(string usbRoot)
@@ -278,13 +398,16 @@ public sealed class UsbHtmlDocumentationGenerator
         var sb = new StringBuilder();
         sb.AppendLine(HtmlDocument.Open("ForgerEMS USB — Reports"));
         sb.AppendLine("<h1>Reports</h1>");
-        sb.AppendLine("<p>Generated reports and raw exports. Open Markdown or JSON files in a text editor when needed.</p>");
-        AppendFileListing(sb, Path.Combine(usbRoot, "_reports"), "../_reports/");
+        sb.AppendLine("<p>Support exports and raw report files are kept behind this dashboard. Open text or JSON files only when troubleshooting.</p>");
+
+        var internalReports = UsbInternalLayout.RawReportsDirectory(usbRoot);
+        AppendInternalFileListing(sb, internalReports, "../_forgerems/reports/");
+
         sb.AppendLine(HtmlDocument.Close());
         return sb.ToString();
     }
 
-    private static void AppendFileListing(StringBuilder sb, string directory, string linkPrefix)
+    private static void AppendInternalFileListing(StringBuilder sb, string directory, string linkPrefix)
     {
         if (!Directory.Exists(directory))
         {
@@ -292,15 +415,20 @@ public sealed class UsbHtmlDocumentationGenerator
             return;
         }
 
+        var files = Directory.EnumerateFiles(directory)
+            .OrderByDescending(path => File.GetLastWriteTimeUtc(path))
+            .ToList();
+
+        if (files.Count == 0)
+        {
+            sb.AppendLine("<p>No files yet.</p>");
+            return;
+        }
+
         sb.AppendLine("<ul>");
-        foreach (var file in Directory.EnumerateFiles(directory).OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase))
+        foreach (var file in files)
         {
             var name = Path.GetFileName(file);
-            if (string.Equals(name, "index.html", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
             sb.AppendLine($"<li><a href=\"{UsbHtmlEscaper.EscapeAttribute(linkPrefix + name)}\">{UsbHtmlEscaper.Escape(name)}</a></li>");
         }
 
@@ -324,6 +452,7 @@ public sealed class UsbHtmlDocumentationGenerator
             a { color: #7dd3fc; }
             h1, h2 { color: #f8fafc; }
             .hero { border-bottom: 1px solid #334155; margin-bottom: 1.5rem; padding-bottom: 1rem; }
+            .lead { font-size: 1.05rem; color: #cbd5e1; }
             .muted { color: #94a3b8; font-size: 0.9rem; }
             .note { background: #1e293b; border-left: 4px solid #38bdf8; padding: 0.75rem 1rem; border-radius: 6px; }
             table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; }

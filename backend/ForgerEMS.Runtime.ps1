@@ -232,3 +232,90 @@ function Get-ForgerLastHashProvider {
 
     return $script:ForgerLastHashProvider
 }
+
+function Get-ForgerEMSUsbInternalLayout {
+    param([Parameter(Mandatory)][string]$Root)
+
+    $normalizedRoot = [IO.Path]::GetFullPath($Root).TrimEnd('\')
+    return [PSCustomObject]@{
+        Root           = $normalizedRoot
+        InternalRoot   = Join-Path $normalizedRoot "_forgerems"
+        MetadataRoot   = Join-Path $normalizedRoot "_forgerems\metadata"
+        RawLogsRoot    = Join-Path $normalizedRoot "_forgerems\logs"
+        RawReportsRoot = Join-Path $normalizedRoot "_forgerems\reports"
+        SupportRoot    = Join-Path $normalizedRoot "_forgerems\support"
+        CacheRoot      = Join-Path $normalizedRoot "_forgerems\cache"
+    }
+}
+
+function Ensure-ForgerEMSUsbInternalLayout {
+    param([Parameter(Mandatory)][string]$Root)
+
+    $layout = Get-ForgerEMSUsbInternalLayout -Root $Root
+    foreach ($path in @(
+        $layout.InternalRoot,
+        $layout.MetadataRoot,
+        $layout.RawLogsRoot,
+        $layout.RawReportsRoot,
+        $layout.SupportRoot,
+        $layout.CacheRoot
+    ) | Select-Object -Unique) {
+        if (-not (Test-Path -LiteralPath $path)) {
+            New-Item -ItemType Directory -Path $path -Force | Out-Null
+        }
+    }
+
+    return $layout
+}
+
+function Resolve-ForgerEMSUsbMetadataPath {
+    param(
+        [Parameter(Mandatory)][string]$Root,
+        [Parameter(Mandatory)][string]$FileName
+    )
+
+    $layout = Ensure-ForgerEMSUsbInternalLayout -Root $Root
+    return Join-Path $layout.MetadataRoot $FileName
+}
+
+function Resolve-ForgerEMSUsbManagedDownloadResultPath {
+    param([Parameter(Mandatory)][string]$Root)
+
+    $primary = Resolve-ForgerEMSUsbMetadataPath -Root $Root -FileName "ForgerEMS-managed-download-result.json"
+    if (Test-Path -LiteralPath $primary) {
+        return $primary
+    }
+
+    $legacy = Join-Path ([IO.Path]::GetFullPath($Root).TrimEnd('\')) "ForgerEMS-managed-download-result.json"
+    if (Test-Path -LiteralPath $legacy) {
+        return $legacy
+    }
+
+    return $primary
+}
+
+function Resolve-ForgerEMSUsbManifestSeedPath {
+    param(
+        [Parameter(Mandatory)][string]$Root,
+        [string]$ManifestName = "ForgerEMS.updates.json"
+    )
+
+    $primary = Resolve-ForgerEMSUsbMetadataPath -Root $Root -FileName $ManifestName
+    if (Test-Path -LiteralPath $primary) {
+        return $primary
+    }
+
+    $legacy = Join-Path ([IO.Path]::GetFullPath($Root).TrimEnd('\')) $ManifestName
+    if (Test-Path -LiteralPath $legacy) {
+        return $legacy
+    }
+
+    return $primary
+}
+
+function Resolve-ForgerEMSUsbRawLogDirectory {
+    param([Parameter(Mandatory)][string]$Root)
+
+    $layout = Ensure-ForgerEMSUsbInternalLayout -Root $Root
+    return $layout.RawLogsRoot
+}

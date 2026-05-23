@@ -75,9 +75,8 @@ public static class SupportBundleExporter
 
             if (!string.IsNullOrWhiteSpace(usbRootForManagedJson))
             {
-                var managed = Path.Combine(
-                    usbRootForManagedJson.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
-                    "ForgerEMS-managed-download-result.json");
+                var managed = UsbInternalLayout.ResolveManagedDownloadResultPath(
+                    usbRootForManagedJson.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
                 AddRedactedFileIfExists(zip, "usb/ForgerEMS-managed-download-result.json", managed);
             }
 

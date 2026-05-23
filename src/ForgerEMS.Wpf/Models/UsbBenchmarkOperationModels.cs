@@ -19,7 +19,10 @@ public enum UsbBenchmarkResultKind
     IoFailed = 7,
     ValidationFailed = 8,
     UnknownFailed = 9,
-    CancelledByHost = 10
+    CancelledByHost = 10,
+    CancelledByUsbAction = 11,
+    SkippedTargetSettling = 12,
+    CancelledDuringUsbRefresh = 13
 }
 
 /// <summary>Why cooperative cancellation fired (distinct from <see cref="UsbBenchmarkResultKind"/>).</summary>
@@ -149,6 +152,9 @@ public static class UsbBenchmarkUiMessages
                     ? "Benchmark failed: unknown error."
                     : $"Benchmark failed: {safeDetail}",
             UsbBenchmarkResultKind.CancelledByHost => "Benchmark stopped because the application closed.",
+            UsbBenchmarkResultKind.CancelledByUsbAction => "Benchmark stopped because another USB action started.",
+            UsbBenchmarkResultKind.SkippedTargetSettling => "Benchmark skipped while the USB target was settling.",
+            UsbBenchmarkResultKind.CancelledDuringUsbRefresh => "Benchmark cancelled during USB refresh.",
             UsbBenchmarkResultKind.Running => "Benchmark running…",
             UsbBenchmarkResultKind.NotStarted => "Benchmark not started.",
             _ => "Benchmark did not complete."

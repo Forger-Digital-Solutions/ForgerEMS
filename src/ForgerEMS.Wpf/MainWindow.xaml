@@ -1346,69 +1346,94 @@
         </Grid.RowDefinitions>
 
         <Border Grid.Row="0"
-                Margin="0,0,0,10"
-                Padding="12,8"
+                Margin="0,0,0,6"
+                Padding="10,6"
                 MinHeight="0"
                 Background="#E6090F18"
                 BorderBrush="#FF394659"
                 BorderThickness="1"
                 CornerRadius="8">
             <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" MinWidth="240" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <Border Width="34"
-                        Height="34"
-                        Margin="0,2,10,0"
-                        VerticalAlignment="Top"
-                        Background="#FF111827"
-                        BorderBrush="#FFCF8C5C"
-                        BorderThickness="1.2"
-                        CornerRadius="7"
-                        Grid.Row="0">
-                    <Image Margin="3"
-                           Source="Assets/ForgerEMS_Icon.png"
-                           Stretch="Uniform" />
-                </Border>
+                <StackPanel Grid.Column="0"
+                            VerticalAlignment="Top"
+                            HorizontalAlignment="Left">
+                    <StackPanel Orientation="Horizontal"
+                                VerticalAlignment="Top">
+                        <Border Width="32"
+                                Height="32"
+                                Margin="0,0,8,0"
+                                VerticalAlignment="Top"
+                                Background="#FF111827"
+                                BorderBrush="#FFCF8C5C"
+                                BorderThickness="1.2"
+                                CornerRadius="7">
+                            <Image Margin="3"
+                                   Source="Assets/ForgerEMS_Icon.png"
+                                   Stretch="Uniform" />
+                        </Border>
 
-                <TextBlock Grid.Column="1"
-                           Grid.Row="0"
-                           Margin="0,1,18,0"
-                           VerticalAlignment="Top"
-                           FontSize="21"
-                           FontFamily="Bahnschrift SemiCondensed"
-                           FontWeight="Bold"
-                           Foreground="{DynamicResource HeroTextBrush}"
-                           Text="ForgerEMS"
-                           TextWrapping="NoWrap" />
+                        <TextBlock Margin="0,0,12,0"
+                                   VerticalAlignment="Center"
+                                   FontSize="20"
+                                   FontFamily="Bahnschrift SemiCondensed"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource HeroTextBrush}"
+                                   Text="ForgerEMS"
+                                   TextWrapping="NoWrap" />
 
-                <TextBlock Grid.Column="2"
-                           Grid.Row="0"
-                           Margin="0,5,18,0"
-                           VerticalAlignment="Top"
-                           FontSize="13"
-                           FontWeight="SemiBold"
-                           Foreground="#FFD7DEE8"
-                           Text="{Binding SelectedItem.Header, ElementName=MainTabControl, TargetNullValue=USB Builder}"
-                           TextTrimming="CharacterEllipsis"
-                           TextWrapping="NoWrap" />
+                        <TextBlock Margin="0,1,0,0"
+                                   VerticalAlignment="Center"
+                                   FontSize="12.5"
+                                   FontWeight="SemiBold"
+                                   Foreground="#FFD7DEE8"
+                                   Text="{Binding SelectedItem.Header, ElementName=MainTabControl, TargetNullValue=USB Builder}"
+                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="NoWrap" />
+                    </StackPanel>
+
+                    <StackPanel x:Name="HeaderLeftSupportCopyGroup"
+                                Margin="0,1,12,0"
+                                HorizontalAlignment="Left">
+                        <TextBlock FontSize="10.5"
+                                   Foreground="#FFE8F0FF"
+                                   LineHeight="12"
+                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="NoWrap">
+                            <Run FontWeight="SemiBold" Text="Beta issue? Send logs/screenshots to " />
+                            <Hyperlink NavigateUri="{Binding SupportMailtoUri, Mode=OneWay}"
+                                       RequestNavigate="SupportMailto_OnRequestNavigate"
+                                       Foreground="#FFFFDAB8"
+                                       TextDecorations="Underline">
+                                <Run FontWeight="Bold"
+                                     Foreground="#FFFFDAB8"
+                                     Text="{Binding SupportEmailAddress, Mode=OneWay}" />
+                            </Hyperlink>
+                        </TextBlock>
+                        <TextBlock Margin="0,1,0,0"
+                                   FontSize="10"
+                                   Foreground="#99B8CCE8"
+                                   LineHeight="11"
+                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="NoWrap"
+                                   Text="{Binding SupportEmailDoNotSecretsText, Mode=OneWay}" />
+                        <TextBlock Margin="0,1,0,0"
+                                   FontSize="10.5"
+                                   Foreground="#CCF0F7FF"
+                                   FontStyle="Italic"
+                                   LineHeight="12"
+                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="NoWrap"
+                                   Text="{Binding PublicPreviewBannerText, Mode=OneWay}" />
+                    </StackPanel>
+                </StackPanel>
 
                 <Grid x:Name="HeaderRightStatusGrid"
-                      Grid.Row="0"
-                      Grid.Column="4"
-                      Grid.ColumnSpan="3"
-                      Grid.RowSpan="2"
+                      Grid.Column="1"
                       HorizontalAlignment="Right"
                       VerticalAlignment="Top"
                       MaxWidth="430">
@@ -1451,7 +1476,7 @@
 
                     <Border x:Name="NetworkPulseHeaderCompactIsland"
                             Grid.Row="1"
-                            Margin="0,3,0,0"
+                            Margin="0,2,0,0"
                             HorizontalAlignment="Right"
                             VerticalAlignment="Top"
                             MaxWidth="420"
@@ -1460,7 +1485,7 @@
                             BorderBrush="#55394659"
                             BorderThickness="1"
                             CornerRadius="4"
-                            Padding="6,3">
+                            Padding="5,2">
                         <Grid>
                             <Button x:Name="NetworkPulseFlyoutTarget"
                                     HorizontalContentAlignment="Stretch"
@@ -1712,43 +1737,6 @@
                         </Grid>
                     </Border>
                 </Grid>
-                <StackPanel x:Name="HeaderLeftSupportCopyGroup"
-                            Grid.Row="1"
-                            Grid.Column="0"
-                            Grid.ColumnSpan="3"
-                            Margin="44,-4,16,0"
-                            VerticalAlignment="Top">
-                    <TextBlock FontSize="11"
-                               Foreground="#FFE8F0FF"
-                               LineHeight="13"
-                               TextTrimming="CharacterEllipsis"
-                               TextWrapping="NoWrap">
-                        <Run FontWeight="SemiBold" Text="Beta issue? Send logs/screenshots to " />
-                        <Hyperlink NavigateUri="{Binding SupportMailtoUri, Mode=OneWay}"
-                                   RequestNavigate="SupportMailto_OnRequestNavigate"
-                                   Foreground="#FFFFDAB8"
-                                   TextDecorations="Underline">
-                            <Run FontWeight="Bold"
-                                 Foreground="#FFFFDAB8"
-                                 Text="{Binding SupportEmailAddress, Mode=OneWay}" />
-                        </Hyperlink>
-                    </TextBlock>
-                    <TextBlock Margin="0,2,0,0"
-                               FontSize="10.5"
-                               Foreground="#99B8CCE8"
-                               LineHeight="12"
-                               TextTrimming="CharacterEllipsis"
-                               TextWrapping="NoWrap"
-                               Text="{Binding SupportEmailDoNotSecretsText, Mode=OneWay}" />
-                    <TextBlock Margin="0,2,0,0"
-                               FontSize="11"
-                               Foreground="#CCF0F7FF"
-                               FontStyle="Italic"
-                               LineHeight="13"
-                               TextTrimming="CharacterEllipsis"
-                               TextWrapping="NoWrap"
-                               Text="{Binding PublicPreviewBannerText, Mode=OneWay}" />
-                </StackPanel>
             </Grid>
         </Border>
 
@@ -2425,12 +2413,6 @@
                     <GroupBox Header="Actions">
                         <StackPanel>
                             <WrapPanel Margin="0,0,0,2">
-                                <Button Style="{StaticResource ActionTileButtonStyle}" Command="{Binding VerifyCommand}">
-                                    <StackPanel>
-                                        <TextBlock FontSize="16" FontWeight="Bold" Text="✓ Verify" />
-                                        <TextBlock Margin="0,5,0,0" FontSize="11.5" Text="Run backend checks" />
-                                    </StackPanel>
-                                </Button>
                                 <Button Style="{StaticResource ActionTileButtonStyle}" Command="{Binding RevalidateManagedDownloadsCommand}">
                                     <StackPanel>
                                         <TextBlock FontSize="16" FontWeight="Bold" Text="↻ Revalidate" />
@@ -2591,55 +2573,35 @@
                                                Text="{Binding SystemIntelligenceWarningReasonText}"
                                                TextWrapping="Wrap" />
 
-                                    <WrapPanel Margin="0,0,0,10" ItemWidth="170">
-                                        <Button Width="160"
-                                                Margin="0,0,8,8"
-                                                Content="Run Standard Scan"
-                                                Command="{Binding RunSystemScanCommand}" />
-                                        <Button Width="160"
-                                                Margin="0,0,8,8"
-                                                Style="{StaticResource SecondaryButtonStyle}"
-                                                Content="Run Elevated Scan"
-                                                ToolTip="Asks Windows for administrator approval to extend hardware and security coverage. Standard Scan results remain available."
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" MinWidth="168" />
+                                            <ColumnDefinition Width="10" />
+                                            <ColumnDefinition Width="*" MinWidth="168" />
+                                            <ColumnDefinition Width="10" />
+                                            <ColumnDefinition Width="*" MinWidth="168" />
+                                        </Grid.ColumnDefinitions>
+                                        <Button Grid.Column="0"
+                                                HorizontalAlignment="Stretch"
+                                                Padding="16,10"
+                                                Content="Elevated Scan"
+                                                ToolTip="Run deeper System Intelligence scan with administrator permissions."
                                                 Command="{Binding RunElevatedSystemScanCommand}" />
-                                        <Button Width="170"
-                                                Margin="0,0,8,8"
+                                        <Button Grid.Column="2"
+                                                HorizontalAlignment="Stretch"
+                                                Padding="16,10"
                                                 Style="{StaticResource SecondaryButtonStyle}"
-                                                Content="Copy Admin Command"
-                                                ToolTip="Copy a PowerShell command to run the same scan in an elevated window."
-                                                Command="{Binding CopyElevatedScanAdminCommand}" />
-                                        <Button Width="190"
-                                                Margin="0,0,8,8"
-                                                Style="{StaticResource SecondaryButtonStyle}"
-                                                Content="Restart as Administrator"
-                                                ToolTip="Close ForgerEMS and relaunch with administrator rights."
-                                                Command="{Binding RestartAsAdministratorCommand}" />
-                                        <Button Width="160"
-                                                Margin="0,0,8,8"
-                                                Style="{StaticResource SecondaryButtonStyle}"
-                                                Content="Copy Quick Summary"
-                                                Command="{Binding CopySystemSummaryCommand}" />
-                                        <Button Width="160"
-                                                Margin="0,0,8,8"
-                                                Style="{StaticResource SecondaryButtonStyle}"
-                                                Content="Open JSON Report"
-                                                Command="{Binding OpenSystemJsonReportCommand}" />
-                                        <Button Width="170"
-                                                Margin="0,0,8,8"
-                                                Style="{StaticResource SecondaryButtonStyle}"
-                                                Content="Open Markdown Report"
-                                                Command="{Binding OpenSystemMarkdownReportCommand}" />
-                                        <Button Width="170"
-                                                Margin="0,0,8,8"
+                                                Content="Open Files"
+                                                ToolTip="Open the latest JSON report, Markdown report, or reports folder."
+                                                Command="{Binding OpenSystemIntelligenceFilesCommand}" />
+                                        <Button Grid.Column="4"
+                                                HorizontalAlignment="Stretch"
+                                                Padding="16,10"
                                                 Style="{StaticResource SecondaryButtonStyle}"
                                                 Content="Create Support Bundle"
+                                                ToolTip="Bundle logs and reports for support."
                                                 Command="{Binding ExportSupportBundleCommand}" />
-                                        <Button Width="120"
-                                                Margin="0,0,8,8"
-                                                Style="{StaticResource SecondaryButtonStyle}"
-                                                Content="Refresh Results"
-                                                Command="{Binding RefreshAllCommand}" />
-                                    </WrapPanel>
+                                    </Grid>
 
                                     <TextBlock Margin="0,0,0,4"
                                                FontSize="12"
@@ -2747,28 +2709,6 @@
                                                 <StackPanel>
                                                     <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Sensors / Hardware X-Ray" />
                                                     <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SystemIntelligenceHardwareXrayCardText}" TextWrapping="Wrap" />
-                                                    <StackPanel Margin="0,8,0,0" Orientation="Vertical">
-                                                        <Button Width="220"
-                                                                Margin="0,0,0,6"
-                                                                HorizontalAlignment="Left"
-                                                                Content="Run Elevated Scan"
-                                                                ToolTip="Asks Windows for administrator approval to extend hardware and security coverage. Standard Scan results remain available."
-                                                                Style="{StaticResource SecondaryButtonStyle}"
-                                                                Command="{Binding RunElevatedSystemScanCommand}" />
-                                                        <Button Width="220"
-                                                                Margin="0,0,0,6"
-                                                                HorizontalAlignment="Left"
-                                                                Content="Copy Admin Command"
-                                                                ToolTip="Copy a PowerShell command to run the same scan in an elevated window."
-                                                                Style="{StaticResource SecondaryButtonStyle}"
-                                                                Command="{Binding CopyElevatedScanAdminCommand}" />
-                                                        <Button Width="220"
-                                                                HorizontalAlignment="Left"
-                                                                Content="Restart as Administrator"
-                                                                ToolTip="Close ForgerEMS and relaunch with administrator rights."
-                                                                Style="{StaticResource SecondaryButtonStyle}"
-                                                                Command="{Binding RestartAsAdministratorCommand}" />
-                                                    </StackPanel>
                                                 </StackPanel>
                                             </Border>
                                         </StackPanel>
@@ -2820,26 +2760,15 @@
                                             <TextBlock FontSize="12"
                                                        Foreground="{DynamicResource PanelMutedTextBrush}"
                                                        Text="{Binding SystemIntelligenceReportPathText}" />
-                                            <TextBlock Margin="0,4,0,6"
+                                            <TextBlock Margin="0,4,0,0"
                                                        FontSize="12"
                                                        Foreground="{DynamicResource PanelMutedTextBrush}"
                                                        Text="{Binding SystemIntelligenceReportSafePathText}" />
-                                            <WrapPanel>
-                                                <Button Width="126"
-                                                        Margin="0,0,8,0"
-                                                        Style="{StaticResource SecondaryButtonStyle}"
-                                                        Content="Open Report"
-                                                        Command="{Binding OpenSystemJsonReportCommand}" />
-                                                <Button Width="148"
-                                                        Margin="0,0,8,0"
-                                                        Style="{StaticResource SecondaryButtonStyle}"
-                                                        Content="Open Reports Folder"
-                                                        Command="{Binding OpenSystemReportFolderCommand}" />
-                                                <Button Width="118"
-                                                        Style="{StaticResource SecondaryButtonStyle}"
-                                                        Content="Copy Safe Path"
-                                                        Command="{Binding CopySystemReportSafePathCommand}" />
-                                            </WrapPanel>
+                                            <TextBlock Margin="0,6,0,0"
+                                                       FontSize="12"
+                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                       Text="Use Open Files above for JSON, Markdown, and the reports folder."
+                                                       TextWrapping="Wrap" />
                                         </StackPanel>
                                     </Border>
                                 </StackPanel>
@@ -2851,11 +2780,10 @@
                         <StackPanel Margin="24,0,24,0" MaxWidth="1040" HorizontalAlignment="Left">
                             <GroupBox Header="Toolkit Manager">
                                 <StackPanel>
-                                    <Grid Margin="0,0,0,14">
+                                    <Grid Margin="0,0,0,10">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <Border Grid.Column="0"
                                                 Style="{StaticResource StatusPillBorderStyle}"
@@ -2870,7 +2798,7 @@
                                                        Foreground="{Binding ToolkitStatusForeground}"
                                                        Text="{Binding ToolkitStatusText}" />
                                         </Border>
-                                        <StackPanel Grid.Column="1" Margin="12,0,12,0">
+                                        <StackPanel Grid.Column="1" Margin="12,0,0,0">
                                             <TextBlock Foreground="{DynamicResource PanelTextBrush}"
                                                        FontWeight="SemiBold"
                                                        Text="{Binding ToolkitHealthVerdictText}"
@@ -2880,96 +2808,55 @@
                                                        Foreground="{DynamicResource PanelMutedTextBrush}"
                                                        Text="{Binding ToolkitLastScanText}" />
                                         </StackPanel>
-                                        <ComboBox Grid.Column="2"
-                                                  Width="320"
-                                                  ItemsSource="{Binding UsbTargets}"
-                                                  SelectedItem="{Binding SelectedUsbTarget}"
-                                                  IsEnabled="{Binding IsIdle}"
-                                                  Background="#F4F1EA"
-                                                  Foreground="#FF111111"
-                                                  ItemContainerStyle="{StaticResource UsbTargetComboItemStyle}">
-                                            <ComboBox.ItemTemplate>
-                                                <DataTemplate>
-                                                    <StackPanel>
-                                                        <TextBlock FontWeight="SemiBold"
-                                                                   Foreground="#FF111111"
-                                                                   Text="{Binding DisplayName}" />
-                                                        <TextBlock Margin="0,2,0,0"
-                                                                   FontSize="11.5"
-                                                                   Foreground="#FF4B5563"
-                                                                   Text="{Binding SelectionWarningDisplay}"
-                                                                   TextWrapping="Wrap" />
-                                                    </StackPanel>
-                                                </DataTemplate>
-                                            </ComboBox.ItemTemplate>
-                                        </ComboBox>
                                     </Grid>
 
-                                    <WrapPanel Margin="0,0,0,12">
-                                        <Button Style="{StaticResource ActionTileButtonStyle}"
-                                                Command="{Binding RefreshToolkitHealthCommand}">
-                                            <StackPanel>
-                                                <TextBlock FontSize="15" FontWeight="Bold" Text="↻ Refresh Health" />
-                                                <TextBlock Margin="0,5,0,0" FontSize="11.5" Text="Rescan selected target" />
-                                            </StackPanel>
-                                        </Button>
-                                        <Button Style="{StaticResource ActionTileButtonStyle}"
-                                                Command="{Binding UpdateToolkitCommand}">
-                                            <StackPanel>
-                                                <TextBlock FontSize="15" FontWeight="Bold" Text="⇩ Update Toolkit" />
-                                                <TextBlock Margin="0,5,0,0" FontSize="11.5" Text="Download managed tools" />
-                                            </StackPanel>
-                                        </Button>
-                                        <Button Style="{StaticResource ActionTileButtonStyle}"
-                                                Command="{Binding OpenToolkitUsbReportsCommand}">
-                                            <StackPanel>
-                                                <TextBlock FontSize="15" FontWeight="Bold" Text="▣ USB Reports" />
-                                                <TextBlock Margin="0,5,0,0" FontSize="11.5" Text="Open target reports" />
-                                            </StackPanel>
-                                        </Button>
-                                        <Button Style="{StaticResource ActionTileButtonStyle}"
-                                                Command="{Binding OpenToolkitLocalReportsCommand}">
-                                            <StackPanel>
-                                                <TextBlock FontSize="15" FontWeight="Bold" Text="⌂ Local Reports" />
-                                                <TextBlock Margin="0,5,0,0" FontSize="11.5" Text="Open runtime reports" />
-                                            </StackPanel>
-                                        </Button>
-                                        <Button Style="{StaticResource ActionTileButtonStyle}"
-                                                Command="{Binding RecheckSelectedToolCommand}">
-                                            <StackPanel>
-                                                <TextBlock FontSize="15" FontWeight="Bold" Text="◎ Recheck Tool" />
-                                                <TextBlock Margin="0,5,0,0" FontSize="11.5" Text="Refresh selected detail" />
-                                            </StackPanel>
-                                        </Button>
-                                        <Button Style="{StaticResource ActionTileButtonStyle}"
-                                                Command="{Binding OpenSelectedToolLocationCommand}">
-                                            <StackPanel>
-                                                <TextBlock FontSize="15" FontWeight="Bold" Text="⌕ Open Location" />
-                                                <TextBlock Margin="0,5,0,0" FontSize="11.5" Text="Show found folder" />
-                                            </StackPanel>
-                                        </Button>
-                                        <Button Style="{StaticResource ActionTileButtonStyle}"
-                                                Command="{Binding OpenManualDownloadShortcutCommand}">
-                                            <StackPanel>
-                                                <TextBlock FontSize="15" FontWeight="Bold" Text="↗ Manual Link" />
-                                                <TextBlock Margin="0,5,0,0" FontSize="11.5" Text="Open shortcut or URL" />
-                                            </StackPanel>
-                                        </Button>
-                                        <Button Style="{StaticResource ActionTileButtonStyle}"
-                                                Command="{Binding VerifyToolkitLinksCommand}">
-                                            <StackPanel>
-                                                <TextBlock FontSize="15" FontWeight="Bold" Text="Verify Links" />
-                                                <TextBlock Margin="0,5,0,0" FontSize="11.5" Text="HTTP metadata only (beta-safe)" />
-                                            </StackPanel>
-                                        </Button>
-                                        <Button Style="{StaticResource ActionTileButtonStyle}"
-                                                Command="{Binding CancelVerifyToolkitLinksCommand}">
-                                            <StackPanel>
-                                                <TextBlock FontSize="15" FontWeight="Bold" Text="Cancel verify" />
-                                                <TextBlock Margin="0,5,0,0" FontSize="11.5" Text="Stop in-flight probes" />
-                                            </StackPanel>
-                                        </Button>
-                                    </WrapPanel>
+                                    <Border Margin="0,0,0,10"
+                                            Padding="10,8"
+                                            Background="#B80A101A"
+                                            BorderBrush="{DynamicResource PanelBorderBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="8">
+                                        <StackPanel>
+                                            <TextBlock FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource PanelLabelBrush}"
+                                                       Text="{Binding ToolkitTargetChipText}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,4,0,0"
+                                                       FontSize="12"
+                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                       Text="{Binding ToolkitTargetHelperText}" />
+                                        </StackPanel>
+                                    </Border>
+
+                                    <Grid Margin="0,0,0,12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" MinWidth="168" />
+                                            <ColumnDefinition Width="10" />
+                                            <ColumnDefinition Width="*" MinWidth="168" />
+                                            <ColumnDefinition Width="10" />
+                                            <ColumnDefinition Width="*" MinWidth="168" />
+                                        </Grid.ColumnDefinitions>
+                                        <Button Grid.Column="0"
+                                                HorizontalAlignment="Stretch"
+                                                Padding="16,10"
+                                                Content="Refresh Health"
+                                                ToolTip="Rescan toolkit health for the USB target selected in USB Builder."
+                                                Command="{Binding RefreshToolkitHealthCommand}" />
+                                        <Button Grid.Column="2"
+                                                HorizontalAlignment="Stretch"
+                                                Padding="16,10"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Content="Open Reports"
+                                                ToolTip="Open USB reports on the target or local runtime reports."
+                                                Command="{Binding OpenToolkitReportsCommand}" />
+                                        <Button Grid.Column="4"
+                                                HorizontalAlignment="Stretch"
+                                                Padding="16,10"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Content="Open Toolkit Folder"
+                                                ToolTip="Open the USB toolkit root folder for the selected target."
+                                                Command="{Binding OpenToolkitFolderCommand}" />
+                                    </Grid>
 
                                     <TextBlock Margin="0,0,0,12"
                                                FontSize="12"
@@ -2987,17 +2874,6 @@
                                                Foreground="{DynamicResource PanelMutedTextBrush}"
                                                Text="{Binding ToolkitRecommendedUseSummaryText}"
                                                TextWrapping="Wrap" />
-
-                                    <WrapPanel Margin="0,0,0,12">
-                                        <Button Width="118" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Secure Boot" Command="{Binding ApplyToolkitQuickFilterCommand}" CommandParameter="secure-boot" />
-                                        <Button Width="118" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Old BIOS" Command="{Binding ApplyToolkitQuickFilterCommand}" CommandParameter="old-bios" />
-                                        <Button Width="118" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Recovery" Command="{Binding ApplyToolkitQuickFilterCommand}" CommandParameter="recovery" />
-                                        <Button Width="118" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Security" Command="{Binding ApplyToolkitQuickFilterCommand}" CommandParameter="security" />
-                                        <Button Width="118" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Network" Command="{Binding ApplyToolkitQuickFilterCommand}" CommandParameter="network" />
-                                        <Button Width="118" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Legacy/Lab" Command="{Binding ApplyToolkitQuickFilterCommand}" CommandParameter="legacy" />
-                                        <Button Width="118" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Manual" Command="{Binding ApplyToolkitQuickFilterCommand}" CommandParameter="manual" />
-                                        <Button Width="118" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Clear filters" Command="{Binding ApplyToolkitQuickFilterCommand}" CommandParameter="clear" />
-                                    </WrapPanel>
 
                                     <Border Margin="0,0,0,12"
                                             Padding="10"
@@ -3026,22 +2902,6 @@
                                                        TextWrapping="Wrap" />
                                         </StackPanel>
                                     </Border>
-
-                                    <TextBlock Margin="0,0,0,4"
-                                               FontSize="12"
-                                               Foreground="{DynamicResource PanelMutedTextBrush}"
-                                               Text="{Binding ToolkitLinkVerificationCountsText}"
-                                               TextWrapping="Wrap" />
-                                    <TextBlock Margin="0,0,0,4"
-                                               FontSize="12"
-                                               Foreground="{DynamicResource PanelMutedTextBrush}"
-                                               Text="{Binding ToolkitLinkVerificationLastRunText}"
-                                               TextWrapping="Wrap" />
-                                    <TextBlock Margin="0,0,0,12"
-                                               FontSize="12"
-                                               Foreground="{DynamicResource PanelMutedTextBrush}"
-                                               Text="{Binding ToolkitLinkVerificationExplanationText}"
-                                               TextWrapping="Wrap" />
 
                                     <TextBlock Margin="0,0,0,4"
                                                FontSize="12"
@@ -3153,15 +3013,10 @@
                                                       Style="{StaticResource ReadableComboBoxStyle}"
                                                       ItemContainerStyle="{StaticResource ReadableComboBoxItemStyle}" />
                                             <ComboBox Width="180"
-                                                      Margin="0,0,8,0"
                                                       ItemsSource="{Binding ToolkitSourceTrustFilterOptions}"
                                                       SelectedItem="{Binding SelectedToolkitSourceTrustFilter}"
                                                       Style="{StaticResource ReadableComboBoxStyle}"
                                                       ItemContainerStyle="{StaticResource ReadableComboBoxItemStyle}" />
-                                            <Button Width="136"
-                                                    Style="{StaticResource SecondaryButtonStyle}"
-                                                    Content="Select visible"
-                                                    Command="{Binding SelectVisibleToolkitItemsCommand}" />
                                         </StackPanel>
                                     </Grid>
 
@@ -3174,16 +3029,6 @@
                                               MinRowHeight="36"
                                               RowDetailsVisibilityMode="Collapsed">
                                         <DataGrid.Columns>
-                                            <DataGridTemplateColumn Header="Plan" Width="58">
-                                                <DataGridTemplateColumn.CellTemplate>
-                                                    <DataTemplate>
-                                                        <CheckBox HorizontalAlignment="Center"
-                                                                  VerticalAlignment="Center"
-                                                                  IsChecked="{Binding SelectedForDownload, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                                  ToolTip="Select for technician download plan" />
-                                                    </DataTemplate>
-                                                </DataGridTemplateColumn.CellTemplate>
-                                            </DataGridTemplateColumn>
                                             <DataGridTemplateColumn Header="Tool" Width="1.4*">
                                                 <DataGridTemplateColumn.CellTemplate>
                                                     <DataTemplate>
@@ -3317,151 +3162,6 @@
                                             Background="#B80A101A"
                                             BorderBrush="{DynamicResource PanelBorderBrush}"
                                             BorderThickness="1"
-                                            CornerRadius="8">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="1.35*" />
-                                                <ColumnDefinition Width="0.95*" />
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                                <TextBlock FontWeight="SemiBold"
-                                                           Foreground="{DynamicResource PanelLabelBrush}"
-                                                           Text="Download Plan" />
-                                                <TextBlock Margin="0,4,0,0"
-                                                           FontSize="12"
-                                                           Foreground="{DynamicResource PanelMutedTextBrush}"
-                                                           Text="{Binding ToolkitDownloadPlanSummaryText}"
-                                                           TextWrapping="Wrap" />
-                                                <TextBlock Margin="0,3,0,0"
-                                                           FontSize="12"
-                                                           Foreground="{DynamicResource PanelMutedTextBrush}"
-                                                           Text="{Binding ToolkitDownloadPlanStorageText}"
-                                                           TextWrapping="Wrap" />
-                                                <TextBlock Margin="0,3,0,8"
-                                                           FontSize="12"
-                                                           Foreground="{DynamicResource PanelMutedTextBrush}"
-                                                           Text="{Binding ToolkitDownloadPlanValidationText}"
-                                                           TextWrapping="Wrap" />
-                                                <DataGrid Height="160"
-                                                          AutoGenerateColumns="False"
-                                                          ItemsSource="{Binding ToolkitDownloadPlanItems}"
-                                                          SelectedItem="{Binding SelectedDownloadPlanItem, Mode=TwoWay}"
-                                                          HorizontalScrollBarVisibility="Disabled"
-                                                          VerticalScrollBarVisibility="Auto"
-                                                          MinRowHeight="30">
-                                                    <DataGrid.Columns>
-                                                        <DataGridTextColumn Header="#" Width="36" Binding="{Binding Priority}" />
-                                                        <DataGridTextColumn Header="Item" Width="1.6*" Binding="{Binding Tool}" />
-                                                        <DataGridTextColumn Header="Section" Width="1.05*" Binding="{Binding PlanSectionLabel}" />
-                                                        <DataGridTextColumn Header="Need" Width="1*" Binding="{Binding RequirementLabel}" />
-                                                        <DataGridTextColumn Header="Size" Width="0.75*" Binding="{Binding StorageLabel}" />
-                                                        <DataGridTextColumn Header="Checksum" Width="0.95*" Binding="{Binding ChecksumLabel}" />
-                                                        <DataGridTextColumn Header="Freshness" Width="0.95*" Binding="{Binding FreshnessLabel}" />
-                                                    </DataGrid.Columns>
-                                                </DataGrid>
-                                                <TextBlock Margin="0,6,0,0"
-                                                           FontSize="11"
-                                                           Foreground="{DynamicResource PanelMutedTextBrush}"
-                                                           Text="Ready to download | Manual required | Blocked / needs attention | Already present | Failed | Update available | Up to date | Managed download | Official source | Community source | Checksum verified | Checksum limited | Legacy/lab only | Paid/manual"
-                                                           TextWrapping="Wrap" />
-                                                <WrapPanel Margin="0,8,0,0">
-                                                    <Button Width="118" Margin="0,0,8,0" Style="{StaticResource SecondaryButtonStyle}" Content="Add selected" Command="{Binding AddSelectedToolToDownloadPlanCommand}" />
-                                                    <Button Width="118" Margin="0,0,8,0" Style="{StaticResource SecondaryButtonStyle}" Content="Remove" Command="{Binding RemoveSelectedPlanItemCommand}" />
-                                                    <Button Width="82" Margin="0,0,8,0" Style="{StaticResource SecondaryButtonStyle}" Content="Up" Command="{Binding MoveSelectedPlanItemUpCommand}" />
-                                                    <Button Width="82" Margin="0,0,8,0" Style="{StaticResource SecondaryButtonStyle}" Content="Down" Command="{Binding MoveSelectedPlanItemDownCommand}" />
-                                                    <Button Width="92" Margin="0,0,8,0" Style="{StaticResource SecondaryButtonStyle}" Content="Clear" Command="{Binding ClearToolkitDownloadPlanCommand}" />
-                                                    <Button Width="100" Style="{StaticResource SecondaryButtonStyle}" Content="Validate" Command="{Binding ValidateToolkitDownloadPlanCommand}" />
-                                                </WrapPanel>
-                                                <WrapPanel Margin="0,8,0,0">
-                                                    <Button Width="190"
-                                                            Margin="0,0,8,8"
-                                                            Style="{StaticResource SecondaryButtonStyle}"
-                                                            Content="Download selected managed"
-                                                            Command="{Binding DownloadSelectedManagedItemsCommand}" />
-                                                    <Button Width="118"
-                                                            Margin="0,0,8,8"
-                                                            Style="{StaticResource SecondaryButtonStyle}"
-                                                            Content="Cancel"
-                                                            Command="{Binding CancelSelectedManagedDownloadsCommand}" />
-                                                    <Button Width="118"
-                                                            Margin="0,0,8,8"
-                                                            Style="{StaticResource SecondaryButtonStyle}"
-                                                            Content="Retry failed"
-                                                            Command="{Binding RetryFailedSelectedManagedDownloadsCommand}" />
-                                                    <Button Width="136"
-                                                            Margin="0,0,8,8"
-                                                            Style="{StaticResource SecondaryButtonStyle}"
-                                                            Content="Downloads"
-                                                            Command="{Binding OpenToolkitDownloadFolderCommand}" />
-                                                    <Button Width="166"
-                                                            Margin="0,0,8,8"
-                                                            Style="{StaticResource SecondaryButtonStyle}"
-                                                            Content="Copy instructions"
-                                                            Command="{Binding CopySelectedManualInstructionsCommand}" />
-                                                    <Button Width="128"
-                                                            Margin="0,0,8,8"
-                                                            Style="{StaticResource SecondaryButtonStyle}"
-                                                            Content="Vendor page"
-                                                            Command="{Binding OpenSelectedVendorPageCommand}" />
-                                                    <Button Width="128"
-                                                            Margin="0,0,8,8"
-                                                            Style="{StaticResource SecondaryButtonStyle}"
-                                                            Content="Review update"
-                                                            ToolTip="Open the upstream release or vendor page. This does not auto-update the pinned manifest version."
-                                                            Command="{Binding OpenSelectedVendorPageCommand}" />
-                                                </WrapPanel>
-                                                <TextBlock Margin="0,2,0,0"
-                                                           FontSize="12"
-                                                           Foreground="{DynamicResource PanelMutedTextBrush}"
-                                                           Text="{Binding SelectedManagedDownloadExecutionText}"
-                                                           TextWrapping="Wrap" />
-                                                <TextBlock Margin="0,3,0,8"
-                                                           FontSize="12"
-                                                           Foreground="{DynamicResource PanelMutedTextBrush}"
-                                                           Text="{Binding SelectedManagedDownloadSafetyText}"
-                                                           TextWrapping="Wrap" />
-                                                <DataGrid Height="118"
-                                                          AutoGenerateColumns="False"
-                                                          ItemsSource="{Binding SelectedManagedDownloadQueueItems}"
-                                                          HorizontalScrollBarVisibility="Disabled"
-                                                          VerticalScrollBarVisibility="Auto"
-                                                          MinRowHeight="28">
-                                                    <DataGrid.Columns>
-                                                        <DataGridTextColumn Header="State" Width="0.9*" Binding="{Binding StatusText}" />
-                                                        <DataGridTextColumn Header="Item" Width="1.5*" Binding="{Binding Name}" />
-                                                        <DataGridTextColumn Header="Reason" Width="1.7*" Binding="{Binding Reason}" />
-                                                    </DataGrid.Columns>
-                                                </DataGrid>
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="1">
-                                                <TextBlock FontWeight="SemiBold"
-                                                           Foreground="{DynamicResource PanelLabelBrush}"
-                                                           Text="Workspace Profile" />
-                                                <ComboBox Margin="0,8,0,8"
-                                                          ItemsSource="{Binding ToolkitProfileOptions}"
-                                                          SelectedItem="{Binding SelectedToolkitProfileName}"
-                                                          Style="{StaticResource ReadableComboBoxStyle}"
-                                                          ItemContainerStyle="{StaticResource ReadableComboBoxItemStyle}" />
-                                                <TextBox Height="58"
-                                                         Margin="0,0,0,8"
-                                                         Text="{Binding ToolkitProfileNotes, UpdateSourceTrigger=PropertyChanged}"
-                                                         TextWrapping="Wrap"
-                                                         AcceptsReturn="True" />
-                                                <WrapPanel>
-                                                    <Button Width="92" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Load" Command="{Binding LoadToolkitProfileCommand}" />
-                                                    <Button Width="92" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Save" Command="{Binding SaveToolkitProfileCommand}" />
-                                                    <Button Width="92" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Export" Command="{Binding ExportToolkitProfileCommand}" />
-                                                    <Button Width="92" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Import" Command="{Binding ImportToolkitProfileCommand}" />
-                                                </WrapPanel>
-                                            </StackPanel>
-                                        </Grid>
-                                    </Border>
-
-                                    <Border Margin="0,12,0,0"
-                                            Padding="12"
-                                            Background="#B80A101A"
-                                            BorderBrush="{DynamicResource PanelBorderBrush}"
-                                            BorderThickness="1"
                                             CornerRadius="10">
                                         <StackPanel>
                                             <TextBlock FontWeight="SemiBold"
@@ -3506,7 +3206,13 @@
                                         </StackPanel>
                                     </Border>
 
-                                    <TextBlock Margin="0,10,0,0"
+                                    <TextBlock Margin="0,12,0,0"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource PanelMutedTextBrush}"
+                                               Text="{Binding ToolkitManagerFooterGuidanceText}"
+                                               TextWrapping="Wrap" />
+
+                                    <TextBlock Margin="0,8,0,0"
                                                FontSize="12"
                                                Foreground="{DynamicResource PanelMutedTextBrush}"
                                                Text="{Binding ToolkitReportPathText}"
@@ -4512,11 +4218,13 @@
               Panel.ZIndex="40"
               Visibility="Collapsed"
               Background="#B8000000">
-            <Border Width="960"
-                    MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Window}}"
+            <Border MinWidth="720"
+                    Width="960"
                     Height="640"
+                    MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Window}}"
                     MaxHeight="{Binding ActualHeight, RelativeSource={RelativeSource AncestorType=Window}}"
-                    Padding="18"
+                    Padding="20"
+                    Margin="24"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     Background="#F0080D14"
@@ -4526,67 +4234,69 @@
                 <DockPanel LastChildFill="True">
                     <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
                         <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
                             <TextBlock VerticalAlignment="Center"
                                        FontFamily="Bahnschrift SemiCondensed"
                                        FontSize="18"
                                        FontWeight="Bold"
                                        Foreground="#FFFFDAB8"
                                        Text="Full Logs" />
-                            <ComboBox Grid.Column="1"
-                                      Width="128"
-                                      Margin="12,0,0,0"
-                                      ItemsSource="{Binding LogLevelFilterOptions}"
-                                      SelectedItem="{Binding SelectedLogLevelFilter}"
-                                      Style="{StaticResource ReadableComboBoxStyle}"
-                                      ItemContainerStyle="{StaticResource ReadableComboBoxItemStyle}" />
-                            <CheckBox Grid.Column="2"
-                                      Margin="12,0"
-                                      VerticalAlignment="Center"
-                                      IsChecked="{Binding AutoScrollLogs}"
-                                      Content="Auto-scroll" />
-                            <Button Grid.Column="3"
-                                    MinWidth="92"
-                                    Margin="0,0,8,0"
-                                    Style="{StaticResource SecondaryButtonStyle}"
-                                    Content="Copy logs"
-                                    Command="{Binding CopyLogsCommand}" />
-                            <Button Grid.Column="4"
-                                    MinWidth="92"
-                                    Margin="0,0,8,0"
-                                    Style="{StaticResource SecondaryButtonStyle}"
-                                    Content="Clear logs"
-                                    Command="{Binding ClearLogsCommand}" />
-                            <Button Grid.Column="5"
-                                    MinWidth="86"
-                                    Margin="0"
+                            <Button HorizontalAlignment="Right"
+                                    MinWidth="96"
+                                    Padding="14,8"
                                     Style="{StaticResource FooterButtonStyle}"
                                     Content="Close"
                                     Click="OnCloseFullLogsClick" />
                         </Grid>
-                        <WrapPanel ItemHeight="34" ItemWidth="Auto">
-                            <Button Margin="0,0,8,8"
-                                    MinWidth="148"
-                                    Padding="10,6"
+
+                        <WrapPanel Margin="0,0,0,8">
+                            <ComboBox Width="132"
+                                      MinHeight="34"
+                                      Margin="0,0,10,8"
+                                      VerticalAlignment="Center"
+                                      ItemsSource="{Binding LogLevelFilterOptions}"
+                                      SelectedItem="{Binding SelectedLogLevelFilter}"
+                                      Style="{StaticResource ReadableComboBoxStyle}"
+                                      ItemContainerStyle="{StaticResource ReadableComboBoxItemStyle}" />
+                            <CheckBox MinHeight="34"
+                                      Margin="0,0,12,8"
+                                      VerticalAlignment="Center"
+                                      IsChecked="{Binding AutoScrollLogs}"
+                                      Content="Auto-scroll" />
+                            <Button MinWidth="108"
+                                    MinHeight="34"
+                                    Margin="0,0,8,8"
+                                    Padding="12,8"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Content="Copy logs"
+                                    Command="{Binding CopyLogsCommand}" />
+                            <Button MinWidth="108"
+                                    MinHeight="34"
+                                    Margin="0,0,8,8"
+                                    Padding="12,8"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Content="Clear logs"
+                                    Command="{Binding ClearLogsCommand}" />
+                        </WrapPanel>
+
+                        <WrapPanel>
+                            <Button MinWidth="168"
+                                    MinHeight="34"
+                                    Margin="0,0,8,8"
+                                    Padding="12,8"
                                     Style="{StaticResource FooterButtonStyle}"
                                     Content="Copy support email"
                                     Command="{Binding CopySupportEmailCommand}" />
-                            <Button Margin="0,0,8,8"
-                                    MinWidth="156"
-                                    Padding="10,6"
+                            <Button MinWidth="168"
+                                    MinHeight="34"
+                                    Margin="0,0,8,8"
+                                    Padding="12,8"
                                     Style="{StaticResource FooterButtonStyle}"
-                                    Content="Open support email…"
+                                    Content="Open support email"
                                     Command="{Binding OpenSupportEmailCommand}" />
-                            <Button Margin="0,0,8,8"
-                                    MinWidth="188"
-                                    Padding="10,6"
+                            <Button MinWidth="196"
+                                    MinHeight="34"
+                                    Margin="0,0,8,8"
+                                    Padding="12,8"
                                     Style="{StaticResource SecondaryButtonStyle}"
                                     Content="Copy beta report template"
                                     Command="{Binding CopyBetaReportTemplateCommand}" />

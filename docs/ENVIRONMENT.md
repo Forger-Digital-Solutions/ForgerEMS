@@ -56,7 +56,8 @@ Deep Sensor Mode has explicit consent precedence:
 | `FORGEREMS_GITHUB_REPO` | No | `ForgerEMS` | Update checker | GitHub repo for releases | Yes | Public repo segment. |
 | `FORGEREMS_UPDATE_CHANNEL` | No | release channel | Update UI/future narrowing | Update channel hint | Yes | Reserved; UI settings remain primary. |
 | `FORGEREMS_UPDATE_INCLUDE_PRERELEASE` | No | `true` | Update config | Include prerelease hint | Yes | Reserved; in-app toggle remains primary. |
-| `FORGEREMS_UPDATE_USER_AGENT` | No | `ForgerEMS` | GitHub HTTP client | User-Agent header | Yes | Do not include secrets. |
+| `FORGEREMS_UPDATE_USER_AGENT` | No | `ForgerEMS` | GitHub HTTP client | User-Agent override | Yes | When unset or left at the short default, the app sends `ForgerEMS/{version} (+https://github.com/{owner}/{repo})`. Do not include secrets. |
+| `FORGEREMS_GITHUB_TOKEN` | Optional secret | empty | GitHub HTTP client | Raises API rate limits for update checks | Never expose | Operator/dev only. PAT with **public_repo** read scope. Placeholders (`REPLACE_ME`, etc.) are ignored. Not required for public releases. |
 | `FORGEREMS_UPDATE_TIMEOUT_SECONDS` | No | `20` | GitHub HTTP client | Release list timeout | Yes | Clamped 5-120. |
 | `FORGEREMS_KYRA_MODE` | No | `hybrid` | Kyra config | Mode hint | Yes | Offline/local is available without keys. |
 | `FORGEREMS_KYRA_PROVIDER` | No | `offline` | Kyra config | Provider hint | Yes | Examples: `forgerems-gateway`, `offline`, `openai-compatible`, `lmstudio`, `ollama`. |

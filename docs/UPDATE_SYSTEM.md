@@ -89,6 +89,7 @@ Nothing in ForgerEMS **auto-installs** or **auto-runs** an update; downloads go 
 | No published ForgerEMS release / no stable release | No matching release for the selected channel, or only prereleases when **Stable only** is on. |
 | Network / timeout | Offline, DNS, firewall, or GitHub unreachable. |
 | Update source could not be reached | Often a 404 on the releases API (wrong repo, private repo, or path). |
+| Access denied / rate limited (403/429) | GitHub rejected the API call. Common causes: **missing or invalid User-Agent** (fixed in app builds that send `ForgerEMS/{version}` via `HttpClient.DefaultRequestHeaders.UserAgent`), **unauthenticated rate limit** (60 requests/hour per IP — wait and retry), corporate proxy blocking `api.github.com`, or a private/wrong repo. Operators may set optional `FORGEREMS_GITHUB_TOKEN` (PAT with **public_repo** read scope only) in the user environment to raise limits — never commit tokens. |
 | Recommended ZIP asset was not found | A release exists, but the expected ZIP naming was not found; still open the release page and pick assets manually if needed. |
 
 Always prefer **official release assets** over cloning main or downloading from unofficial mirrors.

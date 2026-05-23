@@ -324,5 +324,7 @@ public sealed class DriveValidationTests
         public void ShowMessage(string title, string message, System.Windows.MessageBoxImage image = System.Windows.MessageBoxImage.Information)
         {
         }
+
+        public int? PickOption(string title, string message, IReadOnlyList<string> options) => options.Count > 0 ? 0 : null;
     }
 }

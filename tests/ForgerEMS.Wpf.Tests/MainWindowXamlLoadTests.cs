@@ -24,12 +24,51 @@ public sealed class MainWindowXamlLoadTests
         var text = File.ReadAllText(xamlPath);
 
         Assert.Contains("Refresh USB Targets", text, StringComparison.Ordinal);
-        Assert.Contains("Run Standard Scan", text, StringComparison.Ordinal);
-        Assert.Contains("Refresh Results", text, StringComparison.Ordinal);
         Assert.Contains("Create Support Bundle", text, StringComparison.Ordinal);
         Assert.Contains("Copy Update Diagnostics", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Run Elevated Scan for more detail", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Copy update-check diagnostics (safe summary)", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainWindow_SystemIntelligenceTab_UsesThreePrimaryActionButtons()
+    {
+        var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
+        var text = File.ReadAllText(xamlPath);
+        var tabStart = text.IndexOf("<TabItem Header=\"◎  System Intelligence\">", StringComparison.Ordinal);
+        Assert.True(tabStart >= 0);
+        var tabEnd = text.IndexOf("<TabItem Header=\"▤  Toolkit Manager\">", tabStart, StringComparison.Ordinal);
+        Assert.True(tabEnd > tabStart);
+        var systemIntelligence = text[tabStart..tabEnd];
+
+        Assert.Contains("Content=\"Elevated Scan\"", systemIntelligence, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Open Files\"", systemIntelligence, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Create Support Bundle\"", systemIntelligence, StringComparison.Ordinal);
+        Assert.Contains("RunElevatedSystemScanCommand", systemIntelligence, StringComparison.Ordinal);
+        Assert.Contains("OpenSystemIntelligenceFilesCommand", systemIntelligence, StringComparison.Ordinal);
+        Assert.Contains("ExportSupportBundleCommand", systemIntelligence, StringComparison.Ordinal);
+        Assert.Contains("SystemIntelligenceScanModeHintText", systemIntelligence, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"Run Standard Scan\"", systemIntelligence, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"Run Elevated Scan\"", systemIntelligence, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"Restart as Administrator\"", systemIntelligence, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"Copy Quick Summary\"", systemIntelligence, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"Open JSON Report\"", systemIntelligence, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"Open Markdown Report\"", systemIntelligence, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"Refresh Results\"", systemIntelligence, StringComparison.Ordinal);
+        Assert.DoesNotContain("CopyElevatedScanAdminCommand", systemIntelligence, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainWindow_UsbBuilderActions_DoNotExposeVerifyBackendButton()
+    {
+        var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
+        var text = File.ReadAllText(xamlPath);
+
+        Assert.DoesNotContain("VerifyCommand", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Run backend checks", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("✓ Verify", text, StringComparison.Ordinal);
+        Assert.Contains("SetupUsbCommand", text, StringComparison.Ordinal);
+        Assert.Contains("UpdateUsbCommand", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -47,8 +86,9 @@ public sealed class MainWindowXamlLoadTests
         var flyout = text.IndexOf("NetworkPulseFlyoutTarget", StringComparison.Ordinal);
         Assert.True(rightGrid >= 0 && compactIsland > rightGrid && flyout > compactIsland);
 
-        Assert.Contains("Grid.Column=\"4\"", text, StringComparison.Ordinal);
-        Assert.Contains("Grid.ColumnSpan=\"3\"", text, StringComparison.Ordinal);
+        var rightOpenEnd = text.IndexOf('>', rightGrid);
+        var rightOpenTag = text[rightGrid..rightOpenEnd];
+        Assert.Contains("Grid.Column=\"1\"", rightOpenTag, StringComparison.Ordinal);
         Assert.Contains("InternetWidgetLine1", text, StringComparison.Ordinal);
         Assert.Contains("InternetWidgetLine2", text, StringComparison.Ordinal);
         Assert.Contains("NetworkPulse.InternetWidgetLine3", text, StringComparison.Ordinal);
@@ -66,11 +106,9 @@ public sealed class MainWindowXamlLoadTests
 
         var supportOpenEnd = text.IndexOf('>', supportStart);
         var supportOpenTag = text[supportStart..supportOpenEnd];
-        Assert.Contains("Grid.Row=\"1\"", supportOpenTag, StringComparison.Ordinal);
-        Assert.Contains("Grid.Column=\"0\"", supportOpenTag, StringComparison.Ordinal);
-        Assert.Contains("Grid.ColumnSpan=\"3\"", supportOpenTag, StringComparison.Ordinal);
+        Assert.Contains("HorizontalAlignment=\"Left\"", supportOpenTag, StringComparison.Ordinal);
         Assert.DoesNotContain("Grid.ColumnSpan=\"7\"", supportOpenTag, StringComparison.Ordinal);
-        Assert.Contains("VerticalAlignment=\"Top\"", supportOpenTag, StringComparison.Ordinal);
+        Assert.DoesNotContain("Grid.Row=\"1\"", supportOpenTag, StringComparison.Ordinal);
 
         var supportBlockEnd = text.IndexOf("</StackPanel>", supportStart, StringComparison.Ordinal);
         var supportBlock = text[supportStart..supportBlockEnd];
@@ -91,14 +129,15 @@ public sealed class MainWindowXamlLoadTests
         var rightOpenEnd = text.IndexOf('>', rightStart);
         var rightOpenTag = text[rightStart..rightOpenEnd];
         Assert.Contains("VerticalAlignment=\"Top\"", rightOpenTag, StringComparison.Ordinal);
-        Assert.Contains("Grid.RowSpan=\"2\"", rightOpenTag, StringComparison.Ordinal);
+        Assert.DoesNotContain("Grid.RowSpan=\"2\"", rightOpenTag, StringComparison.Ordinal);
         Assert.DoesNotContain("Grid.RowSpan=\"3\"", rightOpenTag, StringComparison.Ordinal);
 
         var headerStart = text.IndexOf("<Border Grid.Row=\"0\"", StringComparison.Ordinal);
         Assert.True(headerStart >= 0);
         var headerOpenEnd = text.IndexOf('>', headerStart);
         var headerOpenTag = text[headerStart..headerOpenEnd];
-        Assert.Contains("Padding=\"12,8\"", headerOpenTag, StringComparison.Ordinal);
+        Assert.Contains("Padding=\"10,6\"", headerOpenTag, StringComparison.Ordinal);
+        Assert.Contains("Margin=\"0,0,0,6\"", headerOpenTag, StringComparison.Ordinal);
         Assert.DoesNotContain("MinHeight=\"56\"", headerOpenTag, StringComparison.Ordinal);
         Assert.DoesNotContain("MinHeight=\"64\"", headerOpenTag, StringComparison.Ordinal);
         Assert.DoesNotContain("MinHeight=\"72\"", headerOpenTag, StringComparison.Ordinal);
@@ -117,10 +156,7 @@ public sealed class MainWindowXamlLoadTests
         Assert.DoesNotContain("MinHeight", header, StringComparison.Ordinal);
         Assert.DoesNotContain("MinWidth", header, StringComparison.Ordinal);
         Assert.DoesNotContain("Padding=\"10,8\"", header, StringComparison.Ordinal);
-        // MaxHeight="56" was removed — the widget auto-sizes so Line 2 is never clipped.
-        Assert.DoesNotContain("MaxHeight=\"56\"", header, StringComparison.Ordinal);
-        // Compact padding: enough for the third freshness line without bloating the header.
-        Assert.Contains("Padding=\"6,3\"", header, StringComparison.Ordinal);
+        Assert.Contains("Padding=\"5,2\"", header, StringComparison.Ordinal);
     }
 
     [Fact]

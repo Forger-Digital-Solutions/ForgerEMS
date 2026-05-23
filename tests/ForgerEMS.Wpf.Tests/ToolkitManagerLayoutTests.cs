@@ -7,17 +7,19 @@ public sealed class ToolkitManagerLayoutTests
     [Fact]
     public void ToolkitGrid_UsesReadableCompactColumns()
     {
-        var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
+        var xaml = ReadToolkitManagerSection();
 
         Assert.Contains("Header=\"Location\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Header=\"Action\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Header=\"Expected Path\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Header=\"Plan\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelectedForDownload", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
     public void ToolkitDetailPanel_HasFullPathAccessButtons()
     {
-        var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
+        var xaml = ReadToolkitManagerSection();
 
         Assert.Contains("Copy expected path", xaml, StringComparison.Ordinal);
         Assert.Contains("Copy detected path", xaml, StringComparison.Ordinal);
@@ -29,59 +31,68 @@ public sealed class ToolkitManagerLayoutTests
     [Fact]
     public void ToolkitGrid_ToolColumn_BindsCatalogStatusTagAndBadges()
     {
-        var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
+        var xaml = ReadToolkitManagerSection();
 
-        // Chip tag binding present.
         Assert.Contains("CatalogStatusTag", xaml, StringComparison.Ordinal);
-        // Badges subtitle binding present.
         Assert.Contains("CatalogBadgesDisplay", xaml, StringComparison.Ordinal);
         Assert.Contains("SafetyBadgesDisplay", xaml, StringComparison.Ordinal);
         Assert.Contains("FreshnessDetailDisplay", xaml, StringComparison.Ordinal);
-        // Chip and subtitle are gated on the binding being non-empty so legacy items
-        // (no catalog metadata) render unchanged.
         Assert.Contains("DataTrigger Binding=\"{Binding CatalogStatusTag}\" Value=\"\"", xaml, StringComparison.Ordinal);
         Assert.Contains("DataTrigger Binding=\"{Binding CatalogBadgesDisplay}\" Value=\"\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ToolkitManager_HasPlanningPanelAndProfileControls()
+    public void ToolkitManager_FocusesOnInspectionNotUsbBuilderWorkflows()
     {
-        var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
+        var xaml = ReadToolkitManagerSection();
 
-        Assert.Contains("SelectedForDownload", xaml, StringComparison.Ordinal);
-        Assert.Contains("ToolkitDownloadPlanItems", xaml, StringComparison.Ordinal);
-        Assert.Contains("ToolkitDownloadPlanStorageText", xaml, StringComparison.Ordinal);
-        Assert.Contains("ValidateToolkitDownloadPlanCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("ToolkitProfileOptions", xaml, StringComparison.Ordinal);
-        Assert.Contains("SaveToolkitProfileCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("LoadToolkitProfileCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("DownloadSelectedManagedItemsCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("CancelSelectedManagedDownloadsCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("SelectedManagedDownloadQueueItems", xaml, StringComparison.Ordinal);
-        Assert.Contains("CopySelectedManualInstructionsCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("OpenSelectedVendorPageCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("Review update", xaml, StringComparison.Ordinal);
-        Assert.Contains("PlanSectionLabel", xaml, StringComparison.Ordinal);
-        Assert.Contains("FreshnessLabel", xaml, StringComparison.Ordinal);
-        Assert.Contains("Ready to download", xaml, StringComparison.Ordinal);
-        Assert.Contains("Manual required", xaml, StringComparison.Ordinal);
-        Assert.Contains("Blocked / needs attention", xaml, StringComparison.Ordinal);
-        Assert.Contains("Checksum verified", xaml, StringComparison.Ordinal);
-        Assert.Contains("Checksum limited", xaml, StringComparison.Ordinal);
-        Assert.Contains("Managed download", xaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Refresh Health\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Open Reports\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Open Toolkit Folder\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("OpenToolkitReportsCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("OpenToolkitFolderCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("ToolkitTargetChipText", xaml, StringComparison.Ordinal);
+        Assert.Contains("ToolkitTargetHelperText", xaml, StringComparison.Ordinal);
+        Assert.Contains("ToolkitManagerFooterGuidanceText", xaml, StringComparison.Ordinal);
+        Assert.Contains("SelectedToolkitDetailText", xaml, StringComparison.Ordinal);
+
+        Assert.DoesNotContain("Download Plan", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Workspace Profile", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ToolkitDownloadPlanItems", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Download selected managed", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("UpdateToolkitCommand", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelectVisibleToolkitItemsCommand", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelectedItem=\"{Binding SelectedUsbTarget}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Advanced link diagnostics", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("VerifyToolkitLinksCommand", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ApplyToolkitQuickFilterCommand", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ToolkitLinkVerificationCountsText", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"Secure Boot\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"Clear filters\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ToolkitManager_HasMetadataFiltersAndQuickChips()
+    public void ToolkitManager_KeepsInventorySearchAndDropdownFilters()
     {
-        var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
+        var xaml = ReadToolkitManagerSection();
 
+        Assert.Contains("ToolkitSearchText", xaml, StringComparison.Ordinal);
+        Assert.Contains("ToolkitFilterOptions", xaml, StringComparison.Ordinal);
+        Assert.Contains("ToolkitCategoryFilterOptions", xaml, StringComparison.Ordinal);
         Assert.Contains("ToolkitFamilyFilterOptions", xaml, StringComparison.Ordinal);
         Assert.Contains("ToolkitArchitectureFilterOptions", xaml, StringComparison.Ordinal);
         Assert.Contains("ToolkitBootModeFilterOptions", xaml, StringComparison.Ordinal);
         Assert.Contains("ToolkitSourceTrustFilterOptions", xaml, StringComparison.Ordinal);
-        Assert.Contains("ApplyToolkitQuickFilterCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("SelectVisibleToolkitItemsCommand", xaml, StringComparison.Ordinal);
+    }
+
+    private static string ReadToolkitManagerSection()
+    {
+        var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
+        var tabStart = xaml.IndexOf("<TabItem Header=\"▤  Toolkit Manager\">", StringComparison.Ordinal);
+        Assert.True(tabStart >= 0);
+        var tabEnd = xaml.IndexOf("<TabItem Header=\"◇  Kyra (Beta)\">", tabStart, StringComparison.Ordinal);
+        Assert.True(tabEnd > tabStart);
+        return xaml[tabStart..tabEnd];
     }
 
     private static string FindRepoFile(params string[] segments)

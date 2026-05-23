@@ -272,27 +272,51 @@ public sealed class SystemIntelligenceCardSummaryTests
         Assert.Contains("Permission required: 1", text);
         Assert.Contains("Not exposed by firmware/driver: 1", text);
         Assert.Contains("Provider unavailable: 1", text);
-        Assert.Contains("Run Elevated Scan for more detail", text);
+        Assert.Contains("Elevated scan unlocks extra detail when needed.", text);
     }
 
     [Fact]
-    public void SystemIntelligenceLayout_ExposesElevatedScanAction()
+    public void SystemIntelligenceLayout_ExposesThreePrimaryActions()
     {
         var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
-        Assert.Contains("Run Elevated Scan", xaml, StringComparison.Ordinal);
-        Assert.Contains("Run Standard Scan", xaml, StringComparison.Ordinal);
-        Assert.Contains("Refresh Results", xaml, StringComparison.Ordinal);
-        Assert.Contains("Create Support Bundle", xaml, StringComparison.Ordinal);
-        Assert.Contains("RunElevatedSystemScanCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("CopyElevatedScanAdminCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("RestartAsAdministratorCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("Copy Quick Summary", xaml, StringComparison.Ordinal);
-        Assert.Contains("Open JSON Report", xaml, StringComparison.Ordinal);
-        Assert.Contains("Open Markdown Report", xaml, StringComparison.Ordinal);
-        Assert.Contains("Open Reports Folder", xaml, StringComparison.Ordinal);
-        Assert.Contains("Copy Safe Path", xaml, StringComparison.Ordinal);
-        Assert.Contains("SystemIntelligenceScanStatusText", xaml, StringComparison.Ordinal);
-        Assert.Contains("SystemIntelligenceHealthStatusText", xaml, StringComparison.Ordinal);
+        var tabStart = xaml.IndexOf("<TabItem Header=\"◎  System Intelligence\">", StringComparison.Ordinal);
+        Assert.True(tabStart >= 0);
+        var tabEnd = xaml.IndexOf("<TabItem Header=\"▤  Toolkit Manager\">", tabStart, StringComparison.Ordinal);
+        Assert.True(tabEnd > tabStart);
+        var systemIntelligence = xaml[tabStart..tabEnd];
+
+        Assert.Contains("HorizontalAlignment=\"Stretch\"", systemIntelligence, StringComparison.Ordinal);
+        Assert.Contains("MinWidth=\"168\"", systemIntelligence, StringComparison.Ordinal);
+        Assert.Contains("Elevated Scan", systemIntelligence, StringComparison.Ordinal);
+        Assert.Contains("Open Files", systemIntelligence, StringComparison.Ordinal);
+        Assert.Contains("Create Support Bundle", systemIntelligence, StringComparison.Ordinal);
+        Assert.Contains("RunElevatedSystemScanCommand", systemIntelligence, StringComparison.Ordinal);
+        Assert.Contains("OpenSystemIntelligenceFilesCommand", systemIntelligence, StringComparison.Ordinal);
+        Assert.Contains("SystemIntelligenceScanStatusText", systemIntelligence, StringComparison.Ordinal);
+        Assert.Contains("SystemIntelligenceHealthStatusText", systemIntelligence, StringComparison.Ordinal);
+        Assert.DoesNotContain("Run Standard Scan", systemIntelligence, StringComparison.Ordinal);
+        Assert.DoesNotContain("Refresh Results", systemIntelligence, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ElevatedScanHandoff_ClosesNonElevatedInstanceAfterUacRelaunch()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "ViewModels", "MainViewModel.cs"));
+        var handoff = source[source.IndexOf("RequestElevatedRelaunchAndRunScan", StringComparison.Ordinal)..];
+        Assert.Contains("Application.Current?.Shutdown();", handoff, StringComparison.Ordinal);
+        Assert.Contains("Closing this non-elevated window", handoff, StringComparison.Ordinal);
+        Assert.DoesNotContain("WindowState.Minimized", handoff, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OpenSystemIntelligenceFiles_UsesPickOptionPicker()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "ViewModels", "MainViewModel.cs"));
+        Assert.Contains("OpenSystemIntelligenceFiles()", source, StringComparison.Ordinal);
+        Assert.Contains("_userPromptService.PickOption(", source, StringComparison.Ordinal);
+        Assert.Contains("Latest JSON report", source, StringComparison.Ordinal);
+        Assert.Contains("Latest Markdown report", source, StringComparison.Ordinal);
+        Assert.Contains("Reports folder", source, StringComparison.Ordinal);
     }
 
     [Fact]

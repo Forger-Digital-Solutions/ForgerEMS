@@ -74,11 +74,22 @@ public sealed class UsbBuilderProfilePlannerAndHtmlTests
     }
 
     [Fact]
-    public void HtmlGenerator_WritesExpectedFilesAndPreservesRawReadme()
+    public void HtmlGenerator_WritesExpectedFilesAndPolishesUsbRoot()
     {
         using var temp = new TempFolder();
-        var rawReadme = Path.Combine(temp.Path, "README.md");
-        File.WriteAllText(rawReadme, "# Raw markdown stays");
+        var userReadme = Path.Combine(temp.Path, "README.md");
+        File.WriteAllText(userReadme, "# User-owned readme stays");
+
+        var legacyJson = Path.Combine(temp.Path, "ForgerEMS-managed-download-result.json");
+        File.WriteAllText(legacyJson, "{\"readiness\":\"READY\"}");
+
+        var visibleLog = Path.Combine(temp.Path, "_logs", "setup_20260101_120000.log");
+        Directory.CreateDirectory(Path.Combine(temp.Path, "_logs"));
+        File.WriteAllText(visibleLog, "legacy visible log");
+
+        File.WriteAllText(
+            Path.Combine(temp.Path, "START-HERE.html"),
+            "<!DOCTYPE html><html><head><meta http-equiv=\"refresh\" content=\"0; url=README.html\"/></head></html>");
 
         var options = UsbBuilderProfileCatalog.All
             .Select(d => UsbBuilderProfileOption.FromDefinition(d, d.DefaultIncluded))
@@ -96,12 +107,19 @@ public sealed class UsbBuilderProfilePlannerAndHtmlTests
         Assert.True(File.Exists(Path.Combine(temp.Path, "_docs", "manual-media-guide.html")));
         Assert.True(File.Exists(Path.Combine(temp.Path, "_logs", "index.html")));
         Assert.True(File.Exists(Path.Combine(temp.Path, "_reports", "index.html")));
-        Assert.Equal("# Raw markdown stays", File.ReadAllText(rawReadme));
+        Assert.False(File.Exists(Path.Combine(temp.Path, "START-HERE.html")));
+        Assert.False(File.Exists(Path.Combine(temp.Path, "_docs", "forgerems-usb-dashboard.html")));
+        Assert.Equal("# User-owned readme stays", File.ReadAllText(userReadme));
+        Assert.False(File.Exists(legacyJson));
+        Assert.True(File.Exists(Path.Combine(temp.Path, "_forgerems", "metadata", "ForgerEMS-managed-download-result.json")));
+        Assert.False(File.Exists(visibleLog));
+        Assert.True(File.Exists(Path.Combine(temp.Path, "_forgerems", "logs", "setup_20260101_120000.log")));
 
         var dashboard = File.ReadAllText(Path.Combine(temp.Path, "README.html"));
         Assert.Contains("ForgerEMS Technician USB", dashboard, StringComparison.Ordinal);
         Assert.Contains("Windows", dashboard, StringComparison.Ordinal);
         Assert.Contains("Estimated space", dashboard, StringComparison.Ordinal);
+        Assert.DoesNotContain("Markdown README", dashboard, StringComparison.OrdinalIgnoreCase);
 
         var guide = File.ReadAllText(Path.Combine(temp.Path, "_docs", "manual-media-guide.html"));
         Assert.Contains("guided", guide, StringComparison.OrdinalIgnoreCase);

@@ -1516,11 +1516,10 @@ if (-not $RevalidateManagedDownloads) {
         )
 
         foreach ($expectedRelativePath in @(
-            "README.md",
-            "ForgerEMS.updates.json",
-            "_docs\ForgerEMS-Download-Catalog.txt",
-            "_docs\ForgerEMS-Managed-Download-Maintenance.txt",
-            "_docs\ForgerEMS-Link-Inventory.csv",
+            "_forgerems\metadata\ForgerEMS.updates.json",
+            "_forgerems\support\ForgerEMS-Download-Catalog.txt",
+            "_forgerems\support\ForgerEMS-Managed-Download-Maintenance.txt",
+            "_forgerems\support\ForgerEMS-Link-Inventory.csv",
             "Drivers\README.txt",
             "MediCat.USB\DOWNLOAD - MediCat.url",
             "ISO\Linux\DOWNLOAD - Fedora Workstation.url",
@@ -1535,10 +1534,13 @@ if (-not $RevalidateManagedDownloads) {
             "IfScriptFails(ManualSetup)",
             "ForgerTools",
             "README.txt",
+            "README.md",
+            "START-HERE.html",
+            "ForgerEMS.updates.json",
+            "ForgerEMS-managed-download-result.json",
             "Docs",
             "_archive",
-            "_downloads",
-            "_reports"
+            "_downloads"
         ) + $suppressedShortcutRelativePaths) {
             $unexpectedPath = Join-Path $root $unexpectedRelativePath
             Assert-Condition -Condition (-not (Test-Path -LiteralPath $unexpectedPath)) -Message "Legacy layout artifact should not be created: $unexpectedPath"
@@ -1627,10 +1629,13 @@ if (-not $RevalidateManagedDownloads) {
 
         Set-Content -LiteralPath $manifestUnderTestPath -Value $manifestContent -Encoding UTF8
 
+        # Use the absolute USB-local manifest path so this regression does not load the bundled
+        # production catalog (which would trigger live managed-download work and time out).
         $result = Invoke-PublicScript `
             -ScriptPath $updateScript `
-            -Arguments @("-UsbRoot", $root, "-ManifestName", "ForgerEMS.updates.json") `
-            -LogPath (Join-Path $runRoot "updater-cleans-active-managed-shadow-placeholder.log")
+            -Arguments @("-UsbRoot", $root, "-ManifestName", $manifestUnderTestPath) `
+            -LogPath (Join-Path $runRoot "updater-cleans-active-managed-shadow-placeholder.log") `
+            -TimeoutSec 60
 
         Assert-Condition -Condition ($result.ExitCode -eq 0) -Message "Updater did not complete successfully when the managed payload was already verified."
         Assert-Condition -Condition (Test-Path -LiteralPath $payloadPath) -Message "Verified managed payload should remain in place."

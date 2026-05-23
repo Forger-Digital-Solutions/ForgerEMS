@@ -61,7 +61,7 @@ public static class UsbBuilderProfileCatalog
             UsbBuilderPackDownloadMode.Required,
             UsbBuilderProfileSpaceEstimate.Range(40 * Mb, 120 * Mb, 400 * Mb, UsbBuilderPackSizeConfidence.Known, "structure and docs"),
             "Core structure is created by ForgerEMS; no user ISOs are required.",
-            ["_docs", "_logs", "_reports", "_downloads", "_archive"]);
+            ["_docs", "_logs", "_reports"]);
 
         yield return new(
             "windows",

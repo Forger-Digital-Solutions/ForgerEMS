@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using VentoyToolkitSetup.Wpf.Configuration;
+using VentoyToolkitSetup.Wpf.Infrastructure;
 
 namespace VentoyToolkitSetup.Wpf.Services;
 
@@ -39,6 +41,7 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
         {
             _httpClient = httpClient;
             _ownsClient = false;
+            ConfigureGitHubApiClient(_httpClient);
             return;
         }
 
@@ -47,15 +50,40 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
         {
             Timeout = TimeSpan.FromSeconds(timeoutSeconds <= 0 ? 25 : timeoutSeconds)
         };
-        var ua = ForgerEmsEnvironmentConfiguration.UpdateUserAgent;
-        if (string.IsNullOrWhiteSpace(ua))
+        ConfigureGitHubApiClient(_httpClient);
+        _ownsClient = true;
+    }
+
+    /// <summary>GitHub requires a valid User-Agent on every REST request; use <see cref="HttpRequestHeaders.UserAgent"/> (not TryAddWithoutValidation).</summary>
+    internal static void ConfigureGitHubApiClient(HttpClient client)
+    {
+        client.DefaultRequestHeaders.Accept.Clear();
+        client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+        client.DefaultRequestHeaders.Remove("X-GitHub-Api-Version");
+        client.DefaultRequestHeaders.TryAddWithoutValidation("X-GitHub-Api-Version", "2022-11-28");
+
+        client.DefaultRequestHeaders.UserAgent.Clear();
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(ResolveUpdateUserAgent());
+
+        var token = ForgerEmsEnvironmentConfiguration.GitHubApiToken;
+        client.DefaultRequestHeaders.Authorization = string.IsNullOrWhiteSpace(token)
+            ? null
+            : new AuthenticationHeaderValue("Bearer", token);
+    }
+
+    /// <summary>Builds the update-check User-Agent (env override or versioned default with repo contact URL).</summary>
+    public static string ResolveUpdateUserAgent()
+    {
+        var configured = ForgerEmsEnvironmentConfiguration.UpdateUserAgent;
+        if (!string.IsNullOrWhiteSpace(configured) &&
+            !configured.Equals(UpdateCheckUserAgent, StringComparison.OrdinalIgnoreCase))
         {
-            ua = UpdateCheckUserAgent;
+            return configured.Trim();
         }
 
-        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", ua);
-        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/vnd.github+json");
-        _ownsClient = true;
+        var owner = SanitizeGitHubPathSegment(ForgerEmsEnvironmentConfiguration.GitHubOwner, DefaultOwner);
+        var repo = SanitizeGitHubPathSegment(ForgerEmsEnvironmentConfiguration.GitHubRepo, DefaultRepo);
+        return $"{UpdateCheckUserAgent}/{AppReleaseInfo.Version} (+https://github.com/{owner}/{repo})";
     }
 
     public async Task<UpdateCheckResult> CheckForNewerReleaseAsync(
@@ -649,7 +677,7 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
                 Outcome = UpdateCheckOutcome.Failed,
                 FailureKind = UpdateCheckFailureKind.AccessDeniedOrRateLimited,
                 ErrorMessage = rateLimited
-                    ? "GitHub rate-limited this device. Wait a few minutes or try again on a different network."
+                    ? "GitHub API rate limit reached (temporary). Installed version is unchanged. Try again in a few minutes from Settings → App updates."
                     : "GitHub denied access (403). The repo may be private or blocked from this network.",
                 DiagnosticDetail = $"HTTP {code}: {body}"
             };
@@ -662,7 +690,7 @@ public sealed class GitHubReleaseUpdateCheckService : IUpdateCheckService, IDisp
                 Succeeded = false,
                 Outcome = UpdateCheckOutcome.Failed,
                 FailureKind = UpdateCheckFailureKind.AccessDeniedOrRateLimited,
-                ErrorMessage = "GitHub rate limit exceeded. Retry later.",
+                ErrorMessage = "GitHub API rate limit reached (temporary). Installed version is unchanged. Try again in a few minutes from Settings → App updates.",
                 DiagnosticDetail = $"HTTP {code}: {body}"
             };
         }

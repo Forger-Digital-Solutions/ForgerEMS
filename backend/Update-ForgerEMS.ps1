@@ -281,7 +281,7 @@ function Write-ForgerEmsManagedDownloadResultJson {
         retryFailedModeActive  = ($null -ne $script:RetryManagedDestinations)
     }
 
-    $path = Join-Path $RootPath "ForgerEMS-managed-download-result.json"
+    $path = Resolve-ForgerEMSUsbMetadataPath -Root $RootPath -FileName "ForgerEMS-managed-download-result.json"
     if ($WhatIfPreference) {
         Write-Log "WhatIf: skipping managed download result JSON: $path" "INFO"
         return
@@ -1682,6 +1682,8 @@ function Resolve-ManifestPath {
         $candidates += [IO.Path]::GetFullPath((Join-Path $PSScriptRoot $ManifestSpecifier))
         $candidates += [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ("manifests\" + $ManifestSpecifier)))
         $candidates += [IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $PSScriptRoot) ("manifests\" + $ManifestSpecifier)))
+        $metadataRelative = Join-Path "_forgerems/metadata" $ManifestSpecifier
+        $candidates += Resolve-RootChildPath -Root $Root -RelativePath $metadataRelative
         $candidates += Resolve-RootChildPath -Root $Root -RelativePath $ManifestSpecifier
     }
 
@@ -2031,7 +2033,7 @@ Invoke-TimedReleasePhase -Name "Manifest contract validation" -ScriptBlock {
 }
 
 if ($RetryFailedManagedDownloads) {
-    $priorResultPath = Join-Path $root "ForgerEMS-managed-download-result.json"
+    $priorResultPath = Resolve-ForgerEMSUsbManagedDownloadResultPath -Root $root
     if (-not (Test-Path -LiteralPath $priorResultPath)) {
         throw "RetryFailedManagedDownloads requires prior result file: $priorResultPath"
     }
@@ -2051,17 +2053,14 @@ if ($RetryFailedManagedDownloads) {
 
 $dlDir     = Resolve-RootChildPath -Root $root -RelativePath ($(if ($manifest.settings.downloadFolder) { [string]$manifest.settings.downloadFolder } else { "_downloads" }))
 $arcDir    = Resolve-RootChildPath -Root $root -RelativePath ($(if ($manifest.settings.archiveFolder)  { [string]$manifest.settings.archiveFolder }  else { "_archive" }))
-$logDir    = Resolve-RootChildPath -Root $root -RelativePath ($(if ($manifest.settings.logFolder)      { [string]$manifest.settings.logFolder }      else { "_logs" }))
+$logDir    = Resolve-ForgerEMSUsbRawLogDirectory -Root $root
 $timeout   = [int]($(if ($manifest.settings.timeoutSec) { $manifest.settings.timeoutSec } else { 180 }))
 $userAgent = $(if ($manifest.settings.userAgent) { [string]$manifest.settings.userAgent } else { "ForgerEMS-Updater/3.1" })
 $maxKeep   = [int]($(if ($manifest.settings.maxArchivePerItem) { $manifest.settings.maxArchivePerItem } else { 3 }))
 $retries   = [int]($(if ($manifest.settings.retryCount) { $manifest.settings.retryCount } else { 3 }))
 
-Ensure-Dir -Path $dlDir
 Ensure-Dir -Path $logDir
-if (-not $NoArchive) {
-    Ensure-Dir -Path $arcDir
-}
+Ensure-Dir -Path (Resolve-RootChildPath -Root $root -RelativePath "_logs")
 
 $script:LogFile = Join-Path $logDir ("update_" + (Get-Date -Format "yyyyMMdd_HHmmss") + ".log")
 
@@ -2500,6 +2499,7 @@ foreach ($item in $orderedItems) {
     }
 
     $tmpName = Safe-FileName -Text $name
+    Ensure-Dir -Path $dlDir
     $tmpPath = Join-Path $dlDir ($tmpName + ".download")
     $downloadResult = $null
 
@@ -2638,7 +2638,7 @@ Write-Log ("Items downloaded: $($script:Summary.Downloaded)") "OK"
 Write-Log ("Items already up to date: $($script:Summary.UpToDateSkipped)") "OK"
 Write-Log ("Shortcuts updated: $($script:Summary.Shortcut)") "OK"
 Write-Log ("Failures: $($script:Summary.Failed)") $(if ($script:Summary.Failed -gt 0) { "WARN" } else { "OK" })
-Write-Log ("Warnings: $($script:Summary.WarnEvents)") $(if ($script:Summary.WarnEvents -gt 0) { "WARN" } else { "OK" })
+Write-Log ("Warnings: $($script:Summary.WarnEvents)") "INFO"
 $actionUsbReadiness = if ($script:Summary.Failed -eq 0) {
     "READY"
 }
@@ -2711,6 +2711,17 @@ if ($finalFailureMessage) {
 Write-ProgressLog ("summary written: readiness={0} failed={1} warnings={2}" -f `
     $managedResultReadiness, $script:Summary.Failed, $script:Summary.WarnEvents)
 Write-ForgerEmsManagedDownloadResultJson -RootPath $root -Readiness $managedResultReadiness
+
+try {
+    $usbManifestCopy = Resolve-ForgerEMSUsbMetadataPath -Root $root -FileName "ForgerEMS.updates.json"
+    if ($PSCmdlet.ShouldProcess($usbManifestCopy, "Refresh USB manifest metadata copy")) {
+        Copy-Item -LiteralPath $manifestPath -Destination $usbManifestCopy -Force
+        Write-Log "USB manifest metadata refreshed: $usbManifestCopy" "OK"
+    }
+}
+catch {
+    Write-Log ("Could not refresh USB manifest metadata copy: {0}" -f $_.Exception.Message) "INFO"
+}
 
 if ($finalFailureMessage) {
     throw $finalFailureMessage
