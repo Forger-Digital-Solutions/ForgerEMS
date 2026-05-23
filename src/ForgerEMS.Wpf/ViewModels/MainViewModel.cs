@@ -98,6 +98,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private AppUpdateSettings _appUpdateSettings = new();
     private UsbBuilderProfileSettings _usbBuilderProfileSettings = new();
     private bool _loadingUsbBuilderProfileSettings;
+    private readonly UsbBuilderProfileMediaScanner _usbBuilderProfileMediaScanner = new();
+    private readonly UsbHtmlDocumentationGenerator _usbHtmlDocumentationGenerator = new();
+    private CancellationTokenSource? _usbBuilderProfileMediaScanCts;
     private bool _updateCheckInProgress;
     private CancellationTokenSource? _updateCheckCancellation;
     private bool _updateDownloadInProgress;
@@ -592,6 +595,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             new RelayCommand(CancelActiveUsbBenchmark, IsAnyUsbBenchmarkActive);
         RunDriveValidatorCommand = new AsyncRelayCommand(RunDriveValidatorAsync, CanRunDriveValidator);
         CancelDriveValidatorCommand = new RelayCommand(CancelDriveValidator, () => _driveValidationCts is { Token.IsCancellationRequested: false });
+        OpenDriveValidatorWizardCommand = new RelayCommand(OpenDriveValidatorWizard);
         AskCopilotWarningCommand = new AsyncRelayCommand(() => AskCopilotAsync("/warning"), () => !IsCopilotGenerating);
         AskCopilotListingCommand = new AsyncRelayCommand(() => AskCopilotAsync("/listing facebook"), () => !IsCopilotGenerating);
         AskCopilotLiveToolsCommand = new AsyncRelayCommand(() => AskCopilotAsync("/provider"), () => !IsCopilotGenerating);
@@ -959,6 +963,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public RelayCommand CancelDriveValidatorCommand { get; }
 
+    public RelayCommand OpenDriveValidatorWizardCommand { get; }
+
     public AsyncRelayCommand AskCopilotWarningCommand { get; }
 
     public AsyncRelayCommand AskCopilotListingCommand { get; }
@@ -1101,6 +1107,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             RefreshUsbIntelligenceFromDisk();
             RefreshManagedDownloadRunArtifactFromSelectedUsb();
             RefreshDriveValidatorPanel();
+            ScheduleUsbBuilderProfileMediaScan();
+            RefreshUsbBuilderProfileSummary();
         }
     }
 
@@ -7377,6 +7385,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 AppendLifecycleComplete(request.DisplayName, startedAt);
                 _lastCommandExitCode = 0;
                 LastCommandStatusText = parsed.HasWarnings ? "Completed with warnings" : "Completed";
+                if (action is ScriptActionType.SetupUsb or ScriptActionType.UpdateUsb)
+                {
+                    await TryGenerateUsbHtmlDocumentationAsync(request.DisplayName).ConfigureAwait(true);
+                }
             }
             else
             {
@@ -12693,6 +12705,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             foreach (var option in CreateUsbBuilderProfileOptions())
             {
                 option.IsIncluded = option.IsRequired || included.Contains(option.CategoryId);
+                option.RefreshPackStatus();
                 option.PropertyChanged += OnUsbBuilderProfileOptionChanged;
                 UsbBuilderProfileOptions.Add(option);
             }
@@ -12703,86 +12716,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
 
         PersistUsbBuilderProfileSettings();
+        ScheduleUsbBuilderProfileMediaScan();
         RefreshUsbBuilderProfileSummary();
     }
 
     private static IReadOnlyList<UsbBuilderProfileOption> CreateUsbBuilderProfileOptions() =>
-    [
-        new()
-        {
-            CategoryId = "core",
-            DisplayName = "Core ForgerEMS USB structure",
-            Description = "Required folders, logs, docs, manifest, and Ventoy safety structure.",
-            Platform = "Core",
-            IsRequired = true,
-            DefaultIncluded = true
-        },
-        new()
-        {
-            CategoryId = "windows",
-            DisplayName = "Windows installers and recovery",
-            Description = "Official Microsoft Windows 10/11/Server links, WinPE/ADK guidance, and current Windows workflow folders.",
-            Platform = "Windows",
-            DefaultIncluded = true
-        },
-        new()
-        {
-            CategoryId = "legacy-windows",
-            DisplayName = "Legacy Windows manual media drop folders",
-            Description = "Unsupported Windows 8.1 and older tracking folders. ForgerEMS never downloads these ISOs.",
-            Platform = "Windows",
-            DefaultIncluded = true,
-            RequiresManualMedia = true
-        },
-        new()
-        {
-            CategoryId = "linux-rescue",
-            DisplayName = "Linux rescue and installer tools",
-            Description = "Linux rescue ISOs and installer/recovery workflows already managed by the catalog.",
-            Platform = "Linux",
-            DefaultIncluded = true
-        },
-        new()
-        {
-            CategoryId = "macos",
-            DisplayName = "macOS installer workflow",
-            Description = "Apple support links and manual drop folders for user-supplied installers, DMGs, or PKGs.",
-            Platform = "macOS",
-            RequiresManualMedia = true
-        },
-        new()
-        {
-            CategoryId = "android",
-            DisplayName = "Android platform tools and firmware workflow",
-            Description = "Official adb/fastboot, Pixel firmware links, AOSP docs, and manual OEM firmware drop folders.",
-            Platform = "Android",
-            RequiresManualMedia = true
-        },
-        new()
-        {
-            CategoryId = "ios-ipados",
-            DisplayName = "iOS / iPadOS restore workflow",
-            Description = "Apple restore/recovery workflow links and manual IPSW tracking folders.",
-            Platform = "Apple Mobile",
-            RequiresManualMedia = true
-        },
-        new()
-        {
-            CategoryId = "oem-tools",
-            DisplayName = "OEM recovery links and vendor tools",
-            Description = "Official vendor support, drivers, firmware, and recovery utility shortcuts.",
-            Platform = "OEM",
-            DefaultIncluded = true
-        },
-        new()
-        {
-            CategoryId = "diagnostics",
-            DisplayName = "Diagnostics and rescue utilities",
-            Description = "Disk, imaging, hardware, USB, network, security, and portable technician utilities.",
-            Platform = "Tools",
-            DefaultIncluded = true
-        }
-    ];
+        UsbBuilderProfileCatalog.All
+            .Select(definition => UsbBuilderProfileOption.FromDefinition(definition, definition.DefaultIncluded))
+            .ToList();
 
     private void OnUsbBuilderProfileOptionChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -12819,36 +12760,116 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private void RefreshUsbBuilderProfileSummary()
     {
         var included = UsbBuilderProfileOptions
-            .Where(option => option.IsIncluded && !option.IsRequired)
-            .Select(option => option.DisplayName switch
-            {
-                "Windows installers and recovery" => "Windows",
-                "Legacy Windows manual media drop folders" => "Legacy Windows",
-                "Linux rescue and installer tools" => "Linux Rescue",
-                "macOS installer workflow" => "macOS",
-                "Android platform tools and firmware workflow" => "Android",
-                "iOS / iPadOS restore workflow" => "iOS / iPadOS",
-                "OEM recovery links and vendor tools" => "OEM Tools",
-                "Diagnostics and rescue utilities" => "Diagnostics",
-                _ => option.DisplayName
-            })
+            .Where(option => option.IsIncluded)
+            .Select(option => UsbBuilderProfileCatalog.GetSummaryLabel(option.CategoryId))
             .ToList();
 
         var off = UsbBuilderProfileOptions
             .Where(option => !option.IsIncluded && !option.IsRequired)
-            .Select(option => option.DisplayName switch
-            {
-                "macOS installer workflow" => "macOS",
-                "Android platform tools and firmware workflow" => "Android",
-                "iOS / iPadOS restore workflow" => "iOS / iPadOS",
-                _ => option.DisplayName
-            })
+            .Select(option => UsbBuilderProfileCatalog.GetSummaryLabel(option.CategoryId))
             .ToList();
 
+        var totals = UsbBuilderProfileEstimateCalculator.CalculateTotals(
+            UsbBuilderProfileOptions,
+            SelectedUsbTarget?.FreeBytes);
+
         var includedText = included.Count == 0 ? "Core only" : string.Join(", ", included);
-        var offText = off.Count == 0 ? "No optional packs are off." : $"{string.Join(" / ", off)} folders are off.";
-        UsbBuilderProfileSummaryText = $"This update will include: {includedText}. {offText}";
-        UsbBuilderProfileNoteText = "Unchecked means do not add/update/seed that pack this run. Existing user-supplied files already on the USB are left alone.";
+        var spaceLine = $"Estimated space: {totals.TypicalRangeDisplay} typical ({totals.MinimumDisplay} minimum) before user-supplied media.";
+        var freeLine = SelectedUsbTarget?.FreeBytes > 0
+            ? $"USB free space: {SelectedUsbTarget.DisplayFreeBytes}."
+            : "USB free space: select a target to detect.";
+
+        UsbBuilderProfileSummaryText =
+            $"This profile includes {totals.SelectedPackCount} pack(s): {includedText}. {spaceLine} {freeLine} " +
+            $"{totals.UserSuppliedPackCount} pack(s) need user-supplied or guided official downloads; {totals.AutoOrGuidedPackCount} can auto-download or use guided official sources.";
+
+        var offText = off.Count == 0
+            ? "All optional packs are selected."
+            : $"Off this run (not seeded/updated): {string.Join(", ", off)}.";
+
+        UsbBuilderProfileNoteText =
+            $"{offText} Unchecked means do not add/update/seed that pack this run. Existing user-supplied files on the USB are left alone. " +
+            (string.IsNullOrWhiteSpace(totals.OptionalNote) ? string.Empty : totals.OptionalNote);
+    }
+
+    private void ScheduleUsbBuilderProfileMediaScan()
+    {
+        _usbBuilderProfileMediaScanCts?.Cancel();
+        _usbBuilderProfileMediaScanCts?.Dispose();
+        _usbBuilderProfileMediaScanCts = new CancellationTokenSource();
+        var token = _usbBuilderProfileMediaScanCts.Token;
+        _ = RefreshUsbBuilderProfileMediaScanAsync(token);
+    }
+
+    private async Task RefreshUsbBuilderProfileMediaScanAsync(CancellationToken cancellationToken)
+    {
+        var root = SelectedUsbTarget?.RootPath;
+        if (string.IsNullOrWhiteSpace(root))
+        {
+            foreach (var option in UsbBuilderProfileOptions)
+            {
+                option.ApplyMediaScan(null);
+            }
+
+            RefreshUsbBuilderProfileSummary();
+            return;
+        }
+
+        try
+        {
+            var categoryIds = UsbBuilderProfileOptions.Select(o => o.CategoryId).ToArray();
+            var results = await _usbBuilderProfileMediaScanner.ScanAsync(root, categoryIds, cancellationToken)
+                .ConfigureAwait(true);
+            foreach (var option in UsbBuilderProfileOptions)
+            {
+                results.TryGetValue(option.CategoryId, out var result);
+                option.ApplyMediaScan(result);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch
+        {
+            // best effort scan
+        }
+
+        RefreshUsbBuilderProfileSummary();
+    }
+
+    private async Task TryGenerateUsbHtmlDocumentationAsync(string actionName)
+    {
+        var root = SelectedUsbTarget?.RootPath;
+        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+        {
+            return;
+        }
+
+        try
+        {
+            await RefreshUsbBuilderProfileMediaScanAsync(CancellationToken.None).ConfigureAwait(true);
+            var written = _usbHtmlDocumentationGenerator.GenerateAll(new UsbHtmlDocumentationRequest
+            {
+                UsbRoot = root,
+                ProfileOptions = UsbBuilderProfileOptions.ToList(),
+                UsbFreeBytes = SelectedUsbTarget?.FreeBytes,
+                AppVersion = AppVersionText,
+                SupportEmail = SupportEmailAddress
+            });
+
+            AppendLog(new LogLine(
+                DateTimeOffset.Now,
+                $"[OK] USB HTML docs generated ({written.Count} files) after {actionName}. Open README.html on the USB.",
+                LogSeverity.Info));
+        }
+        catch (Exception ex)
+        {
+            AppendLog(new LogLine(
+                DateTimeOffset.Now,
+                $"[WARN] USB HTML documentation generation failed: {ex.Message}",
+                LogSeverity.Warning));
+        }
     }
 
     private void SelectRecommendedUsbBuilderProfile()

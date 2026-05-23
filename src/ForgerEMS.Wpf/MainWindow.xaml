@@ -2142,13 +2142,14 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Border Width="318"
-                                                MinHeight="132"
+                                                MinHeight="118"
                                                 Margin="0,0,10,10"
                                                 Padding="12"
                                                 Background="#B80A101A"
                                                 BorderBrush="{DynamicResource PanelBorderBrush}"
                                                 BorderThickness="1"
-                                                CornerRadius="8">
+                                                CornerRadius="8"
+                                                ToolTip="{Binding DetailTooltipText}">
                                             <StackPanel>
                                                 <CheckBox IsChecked="{Binding IsIncluded, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                                           IsEnabled="{Binding CanToggle}">
@@ -2157,22 +2158,61 @@
                                                                Text="{Binding DisplayName}"
                                                                TextWrapping="Wrap" />
                                                 </CheckBox>
-                                                <TextBlock Margin="22,6,0,0"
-                                                           FontSize="11.5"
-                                                           Foreground="{DynamicResource PanelTextBrush}"
-                                                           Text="{Binding Description}"
+                                                <TextBlock Margin="22,4,0,0"
+                                                           FontSize="11"
+                                                           Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                           Text="{Binding ShortDescription}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           MaxHeight="34"
                                                            TextWrapping="Wrap" />
-                                                <DockPanel Margin="22,8,0,0">
-                                                    <TextBlock DockPanel.Dock="Left"
-                                                               FontSize="11"
-                                                               FontWeight="SemiBold"
-                                                               Foreground="{DynamicResource PanelMutedTextBrush}"
-                                                               Text="{Binding Platform}" />
-                                                    <TextBlock Margin="10,0,0,0"
-                                                               FontSize="11"
-                                                               Foreground="#FFFFC56D"
-                                                               Text="{Binding StatusText}" />
-                                                </DockPanel>
+                                                <WrapPanel Margin="22,8,0,0">
+                                                    <Border Margin="0,0,6,4"
+                                                            Padding="6,2"
+                                                            Background="#332563EB"
+                                                            BorderBrush="#FF3B82F6"
+                                                            BorderThickness="1"
+                                                            CornerRadius="6">
+                                                        <TextBlock FontSize="10"
+                                                                   FontWeight="SemiBold"
+                                                                   Foreground="#FF93C5FD"
+                                                                   Text="{Binding StatusChipText}" />
+                                                    </Border>
+                                                    <Border Margin="0,0,6,4"
+                                                            Padding="6,2"
+                                                            Background="#33165F46"
+                                                            BorderBrush="#FF22C55E"
+                                                            BorderThickness="1"
+                                                            CornerRadius="6">
+                                                        <TextBlock FontSize="10"
+                                                                   Foreground="#FF86EFAC"
+                                                                   Text="{Binding SpaceChipText}" />
+                                                    </Border>
+                                                    <Border Margin="0,0,6,4"
+                                                            Padding="6,2"
+                                                            Background="#33451A03"
+                                                            BorderBrush="#FFF59E0B"
+                                                            BorderThickness="1"
+                                                            CornerRadius="6">
+                                                        <TextBlock FontSize="10"
+                                                                   Foreground="#FFFCD34D"
+                                                                   Text="{Binding AcquisitionChipText}" />
+                                                    </Border>
+                                                    <Border Margin="0,0,6,4"
+                                                            Padding="6,2"
+                                                            Background="#3322362F"
+                                                            BorderBrush="#FF64748B"
+                                                            BorderThickness="1"
+                                                            CornerRadius="6"
+                                                            Visibility="{Binding HasDetectedMediaChip, Converter={StaticResource BoolToVis}}">
+                                                        <TextBlock FontSize="10"
+                                                                   Foreground="#FFCBD5E1"
+                                                                   Text="{Binding DetectedMediaChipText}" />
+                                                    </Border>
+                                                </WrapPanel>
+                                                <TextBlock Margin="22,2,0,0"
+                                                           FontSize="10.5"
+                                                           Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                           Text="{Binding Platform}" />
                                             </StackPanel>
                                         </Border>
                                     </DataTemplate>
@@ -2218,30 +2258,41 @@
                         </StackPanel>
                     </GroupBox>
 
-                    <GroupBox Header="USB Intelligence Pro">
+                    <!--
+                        Compact USB Intelligence Pro summary card. Heavy actions (Run USB
+                        Benchmark, port mapping capture/detect/save, legacy advanced expander)
+                        intentionally moved out of the USB Builder tab into the USB Mapping
+                        Wizard. ViewModel benchmark/mapping commands remain available so
+                        wizards and tests can still reach them.
+                    -->
+                    <GroupBox x:Name="UsbBuilderUsbIntelligenceCompactCard" Header="USB Intelligence Pro">
                         <StackPanel>
-                            <TextBlock Margin="0,0,0,8"
-                                       FontSize="11"
-                                       FontStyle="Italic"
-                                       Foreground="{DynamicResource PanelMutedTextBrush}"
-                                       Text="{Binding UsbIntelligenceProPreviewBadge}"
-                                       TextWrapping="Wrap" />
-                            <TextBlock Margin="0,0,0,8"
-                                       FontSize="12"
-                                       Foreground="{DynamicResource PanelTextBrush}"
-                                       Text="{Binding UsbIntelligenceGuidanceIntro}"
-                                       TextWrapping="Wrap" />
-                            <Border Margin="0,0,0,10"
-                                    Padding="10,8"
-                                    Background="#B80A101A"
-                                    BorderBrush="{DynamicResource PanelBorderBrush}"
-                                    BorderThickness="1"
-                                    CornerRadius="8">
-                                <TextBlock FontSize="11.5"
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0"
+                                           FontSize="11"
+                                           FontStyle="Italic"
                                            Foreground="{DynamicResource PanelMutedTextBrush}"
-                                           Text="{Binding UsbIntelligenceWorkflowHelp}"
+                                           Text="{Binding UsbIntelligenceProPreviewBadge}"
                                            TextWrapping="Wrap" />
-                            </Border>
+                                <Border Grid.Column="1"
+                                        Padding="8,3"
+                                        VerticalAlignment="Center"
+                                        Background="#33334155"
+                                        BorderBrush="{DynamicResource PanelBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="10">
+                                    <TextBlock FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource PanelTextBrush}">
+                                        <Run Text="Confidence: " />
+                                        <Run Text="{Binding UsbIntelligenceConfidenceScoreDisplay, Mode=OneWay}" />
+                                    </TextBlock>
+                                </Border>
+                            </Grid>
                             <Grid Margin="0,0,0,10">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
@@ -2253,107 +2304,65 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
-                                <TextBlock Grid.Row="0" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Selected target" />
-                                <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligencePanelTargetDisplay}" TextWrapping="Wrap" />
-                                <TextBlock Grid.Row="1" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Detected class" />
-                                <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceDetectedClassDisplay}" />
-                                <TextBlock Grid.Row="2" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Benchmark" />
-                                <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceBenchmarkReadWriteDisplay}" TextWrapping="Wrap" />
-                                <TextBlock Grid.Row="3" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Recommendation" />
-                                <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceRecommendationQualityDisplay}" />
-                                <TextBlock Grid.Row="4" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Confidence" />
-                                <TextBlock Grid.Row="4" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceConfidenceScoreDisplay}" />
-                                <TextBlock Grid.Row="5" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Confidence detail" />
-                                <TextBlock Grid.Row="5" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceConfidenceReasonDisplay}" TextWrapping="Wrap" />
-                                <TextBlock Grid.Row="6" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Last benchmark" />
-                                <TextBlock Grid.Row="6" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceLastBenchmarkTimeDisplay}" />
-                                <TextBlock Grid.Row="7" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Best port" />
-                                <TextBlock Grid.Row="7" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceBestKnownPortDisplay}" TextWrapping="Wrap" />
-                                <TextBlock Grid.Row="8" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Benchmark age" />
-                                <TextBlock Grid.Row="8" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceBenchmarkAgeDisplay}" TextWrapping="Wrap" />
-                                <TextBlock Grid.Row="9" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Benchmark tip" />
-                                <TextBlock Grid.Row="9" Grid.Column="1" Margin="0,0,0,6" Foreground="#FF92400E" Text="{Binding UsbIntelligenceRunBenchmarkHintDisplay}" TextWrapping="Wrap" />
-                                <TextBlock Grid.Row="10" Margin="0,0,12,0" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Mapped port label" />
-                                <TextBlock Grid.Row="10" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceMappingLabelDisplay}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="0" Margin="0,0,12,4" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Target" />
+                                <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,0,0,4" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligencePanelTargetDisplay}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="1" Margin="0,0,12,4" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Class" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,0,0,4" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceDetectedClassDisplay}" />
+                                <TextBlock Grid.Row="2" Margin="0,0,12,4" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Speed" />
+                                <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,0,0,4" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceBenchmarkReadWriteDisplay}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="3" Margin="0,0,12,4" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Port" />
+                                <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,0,0,4" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceMappingLabelDisplay}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="4" Margin="0,0,12,0" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Recommendation" />
+                                <TextBlock Grid.Row="4" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceRecommendationQualityDisplay}" />
                             </Grid>
                             <TextBlock Margin="0,0,0,8"
-                                       FontSize="12"
-                                       Foreground="{DynamicResource PanelTextBrush}"
-                                       Text="{Binding UsbIntelligenceBuilderHintText}"
+                                       FontSize="11.5"
+                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                       Text="Run benchmarks and port mapping from the wizard."
                                        TextWrapping="Wrap" />
-                            <WrapPanel Margin="0,0,0,8">
-                                <Button Margin="0,0,8,4"
-                                        Padding="10,6"
-                                        Style="{StaticResource SecondaryButtonStyle}"
-                                        Content="Run USB Benchmark"
-                                        Command="{Binding RunUsbIntelligenceBenchmarkCommand}" />
-                                <Button Margin="0,0,8,4"
-                                        Padding="10,6"
-                                        Style="{StaticResource SecondaryButtonStyle}"
-                                        Content="Cancel Benchmark"
-                                        Command="{Binding CancelUsbIntelligenceBenchmarkCommand}" />
-                                <Button Margin="0,0,8,4"
-                                        Padding="10,6"
-                                        Style="{StaticResource SecondaryButtonStyle}"
-                                        Content="Open USB Mapping Wizard"
-                                        Command="{Binding OpenUsbMappingWizardCommand}" />
-                            </WrapPanel>
-                            <Expander Margin="0,0,0,8"
-                                      Foreground="{DynamicResource PanelMutedTextBrush}"
-                                      Header="Advanced: inline port mapping (legacy)">
-                                <StackPanel Margin="0,8,0,0">
-                                    <WrapPanel Margin="0,0,0,8">
-                                        <Button Margin="0,0,8,4"
-                                                Padding="10,6"
-                                                Style="{StaticResource SecondaryButtonStyle}"
-                                                Content="Start USB Mapping"
-                                                Command="{Binding StartUsbPortMappingWorkflowCommand}" />
-                                    </WrapPanel>
-                                    <TextBlock Margin="0,0,0,6"
-                                               FontSize="11.5"
-                                               Foreground="{DynamicResource PanelMutedTextBrush}"
-                                               Text="{Binding UsbMappingWorkflowStatus}"
-                                               TextWrapping="Wrap" />
-                                    <WrapPanel Margin="0,0,0,8">
-                                        <Button Margin="0,0,8,4"
-                                                Padding="10,4"
-                                                Content="Capture Current Port"
-                                                Command="{Binding CaptureUsbMappingBeforeCommand}" />
-                                        <Button Margin="0,0,8,4"
-                                                Padding="10,4"
-                                                Content="Detect Port Change"
-                                                Command="{Binding CaptureUsbMappingAfterCommand}" />
-                                    </WrapPanel>
-                                    <DockPanel Margin="0,0,0,4">
-                                        <Button DockPanel.Dock="Right"
-                                                Margin="8,0,0,0"
-                                                Padding="10,4"
-                                                Content="Save Port Label"
-                                                Command="{Binding SaveUsbMappingLabelCommand}" />
-                                        <TextBox MinHeight="28"
-                                                 VerticalContentAlignment="Center"
-                                                 Text="{Binding UsbMappingLabelDraft, UpdateSourceTrigger=PropertyChanged}"
-                                                 ToolTip="Short label for this physical port (e.g. Rear Blue USB 3)" />
-                                    </DockPanel>
-                                </StackPanel>
-                            </Expander>
+                            <Button HorizontalAlignment="Left"
+                                    Padding="12,6"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Content="Open USB Mapping Wizard"
+                                    Command="{Binding OpenUsbMappingWizardCommand}" />
                         </StackPanel>
                     </GroupBox>
 
-                    <GroupBox Header="Drive Validator">
+                    <!--
+                        Compact Drive Validator summary card. Heavy actions (validation mode
+                        dropdown, Start/Cancel buttons, inline progress, evidence expander,
+                        and detailed selected-target spec block) intentionally moved out of
+                        the USB Builder tab into Drive Validator Wizard. Inline validator
+                        commands remain on the ViewModel so the wizard and tests can still
+                        reach them, but the main tab no longer runs validation in-place.
+                    -->
+                    <GroupBox x:Name="UsbBuilderDriveValidatorCompactCard" Header="Drive Validator">
                         <StackPanel>
-                            <TextBlock Margin="0,0,0,8"
-                                       FontSize="12"
-                                       Foreground="{DynamicResource PanelTextBrush}"
-                                       Text="{Binding DriveValidatorIntro}"
-                                       TextWrapping="Wrap" />
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0"
+                                           VerticalAlignment="Center"
+                                           FontSize="12"
+                                           Foreground="{DynamicResource PanelMutedTextBrush}"
+                                           Text="Drive validation runs in the wizard."
+                                           TextWrapping="Wrap" />
+                                <Border Grid.Column="1"
+                                        Padding="8,3"
+                                        VerticalAlignment="Center"
+                                        Background="#33334155"
+                                        BorderBrush="{DynamicResource PanelBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="10">
+                                    <TextBlock FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource PanelTextBrush}"
+                                               Text="{Binding DriveValidatorQuickSummary, Mode=OneWay}" />
+                                </Border>
+                            </Grid>
                             <Grid Margin="0,0,0,10">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
@@ -2363,75 +2372,23 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
-                                <TextBlock Grid.Row="0" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Selected target" />
-                                <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding DriveValidatorTargetDisplay}" TextWrapping="Wrap" />
-                                <TextBlock Grid.Row="1" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Reported capacity" />
-                                <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding DriveValidatorCapacityDisplay}" />
-                                <TextBlock Grid.Row="2" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="File system / free" />
-                                <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding DriveValidatorFileSystemDisplay}" />
-                                <TextBlock Grid.Row="3" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Free space" />
-                                <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding DriveValidatorFreeSpaceDisplay}" />
-                                <TextBlock Grid.Row="4" Margin="0,0,12,6" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Bus / port" />
-                                <TextBlock Grid.Row="4" Grid.Column="1" Margin="0,0,0,6" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding DriveValidatorBusPortDisplay}" TextWrapping="Wrap" />
-                                <TextBlock Grid.Row="5" Margin="0,0,12,0" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Validation mode" />
-                                <ComboBox Grid.Row="5"
-                                          Grid.Column="1"
-                                          SelectedIndex="{Binding DriveValidatorModeIndex, Mode=TwoWay}"
-                                          MinWidth="220">
-                                    <ComboBoxItem Content="Quick Safe Check" />
-                                    <ComboBoxItem Content="Sampled Capacity Check" />
-                                    <ComboBoxItem Content="Full Free-Space Validation" />
-                                </ComboBox>
+                                <TextBlock Grid.Row="0" Margin="0,0,12,4" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Target" />
+                                <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,0,0,4" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding DriveValidatorTargetDisplay}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="1" Margin="0,0,12,4" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Last check" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,0,0,4" Foreground="{DynamicResource PanelTextBrush}">
+                                    <Run Text="{Binding DriveValidatorLastStatusDisplay, Mode=OneWay}" />
+                                    <Run Text=" · " />
+                                    <Run Text="{Binding DriveValidatorLastValidationAgeDisplay, Mode=OneWay}" />
+                                </TextBlock>
+                                <TextBlock Grid.Row="2" Margin="0,0,12,0" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Result" />
+                                <TextBlock Grid.Row="2" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding DriveValidatorResultSummary, Mode=OneWay}" TextWrapping="Wrap" />
                             </Grid>
-                            <WrapPanel Margin="0,0,0,8">
-                                <Button Margin="0,0,8,4"
-                                        Padding="10,6"
-                                        Style="{StaticResource SecondaryButtonStyle}"
-                                        Content="Start validation"
-                                        Command="{Binding RunDriveValidatorCommand}" />
-                                <Button Margin="0,0,8,4"
-                                        Padding="10,6"
-                                        Style="{StaticResource SecondaryButtonStyle}"
-                                        Content="Cancel"
-                                        Command="{Binding CancelDriveValidatorCommand}" />
-                            </WrapPanel>
-                            <TextBlock Margin="0,0,0,4"
-                                       FontSize="11.5"
-                                       Foreground="{DynamicResource PanelMutedTextBrush}"
-                                       Text="{Binding DriveValidatorPhaseDisplay}"
-                                       TextWrapping="Wrap" />
-                            <ProgressBar Height="6"
-                                         Margin="0,0,0,8"
-                                         Maximum="100"
-                                         Value="{Binding DriveValidatorProgressValue, Mode=OneWay}" />
-                            <TextBlock Margin="0,0,0,8"
-                                       FontSize="11"
-                                       Foreground="{DynamicResource PanelMutedTextBrush}"
-                                       Text="{Binding DriveValidatorProgressDisplay}" />
-                            <Border Margin="0,0,0,8"
-                                    Padding="10,8"
-                                    Background="#B80A101A"
-                                    BorderBrush="{DynamicResource PanelBorderBrush}"
-                                    BorderThickness="1"
-                                    CornerRadius="8">
-                                <TextBlock FontWeight="SemiBold"
-                                           Foreground="{DynamicResource PanelTextBrush}"
-                                           Text="{Binding DriveValidatorResultSummary}"
-                                           TextWrapping="Wrap" />
-                            </Border>
-                            <Expander Header="Evidence / details"
-                                      Foreground="{DynamicResource PanelMutedTextBrush}">
-                                <TextBlock Margin="0,8,0,0"
-                                           FontFamily="Consolas"
-                                           FontSize="11"
-                                           Foreground="{DynamicResource PanelMutedTextBrush}"
-                                           Text="{Binding DriveValidatorEvidenceDisplay}"
-                                           TextWrapping="Wrap" />
-                            </Expander>
+                            <Button HorizontalAlignment="Left"
+                                    Padding="12,6"
+                                    Style="{StaticResource SecondaryButtonStyle}"
+                                    Content="Open Drive Validator"
+                                    Command="{Binding OpenDriveValidatorWizardCommand}" />
                         </StackPanel>
                     </GroupBox>
 

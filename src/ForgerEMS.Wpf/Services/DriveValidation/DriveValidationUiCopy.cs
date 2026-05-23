@@ -58,4 +58,45 @@ public static class DriveValidationUiCopy
             DriveValidationPortStatus.FailedValidation => "Drive validation: failed",
             _ => status.ToString()
         };
+
+    /// <summary>
+    /// Returns the final, user-facing phase line that replaces the live "CleaningUp…" text
+    /// once a Drive Validator run has produced a terminal result. The progress bar/text must
+    /// not stay on the last in-flight phase after the result is already known.
+    /// </summary>
+    public static string TerminalPhaseDisplay(DriveValidationStatus status) =>
+        status switch
+        {
+            DriveValidationStatus.Passed => "Validation complete.",
+            DriveValidationStatus.PassedWithWarnings => "Validation complete with warnings.",
+            DriveValidationStatus.Failed => "Validation failed.",
+            DriveValidationStatus.Cancelled => "Validation cancelled.",
+            DriveValidationStatus.CleanupWarning => "Validation complete — cleanup warning.",
+            DriveValidationStatus.UnsafeTargetBlocked => "Validation blocked — unsafe target.",
+            DriveValidationStatus.InsufficientFreeSpace => "Validation blocked — insufficient free space.",
+            DriveValidationStatus.NotRun => "—",
+            DriveValidationStatus.Running => "Running…",
+            _ => StatusDisplay(status)
+        };
+
+    public static string TerminalProgressDisplay(DriveValidationStatus status, int regionsCompleted, int regionsPlanned)
+    {
+        var verdict = status switch
+        {
+            DriveValidationStatus.Passed => "Passed",
+            DriveValidationStatus.PassedWithWarnings => "Passed with warnings",
+            DriveValidationStatus.Failed => "Failed",
+            DriveValidationStatus.Cancelled => "Cancelled",
+            DriveValidationStatus.CleanupWarning => "Passed — cleanup warning",
+            DriveValidationStatus.UnsafeTargetBlocked => "Blocked",
+            DriveValidationStatus.InsufficientFreeSpace => "Blocked",
+            DriveValidationStatus.NotRun => "Not run",
+            DriveValidationStatus.Running => "Running",
+            _ => status.ToString()
+        };
+
+        return regionsPlanned > 0
+            ? $"{regionsCompleted}/{regionsPlanned} · {verdict}"
+            : verdict;
+    }
 }

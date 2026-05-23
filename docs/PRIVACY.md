@@ -170,11 +170,12 @@ ForgerEMS is Windows-first. The macOS, Android, and iOS / iPadOS USB Builder pac
 
 ## Drive Validator
 
-The optional **Drive Validator** tool in the USB Builder area writes temporary ForgerEMS test files into the free space of a selected removable USB target so it can read them back and look for verification errors or suspicious capacity behavior.
+The optional **Drive Validator** tool, opened from the USB Builder tab as the **Drive Validator Wizard**, writes temporary ForgerEMS test files into the free space of a selected removable USB target so it can read them back and look for verification errors, aliasing, short reads/writes, or suspicious capacity behavior. The wizard's media-integrity map is computed in-memory and never reads or transmits the contents of your existing files.
 
 - Safe modes create files **only** inside a `.forgerems-drive-validator` folder on the chosen USB target and remove them afterward. They do **not** read your existing files, do **not** delete user data, and do **not** format the drive.
-- Cached results are written to `%LOCALAPPDATA%\ForgerEMS\Runtime\cache\drive-validation-results.json` and contain: target volume root, drive model, file system, label, total/free-space sizes at the time of the run, a best-effort volume serial, a composite identity fingerprint, and the run's evidence summary (sample count, bytes written/verified, write/read speed, mismatch and alias-flag counters, and the cleanup status string). The cached file does **not** include the contents of user files, and it does **not** include API keys, tokens, passwords, or product keys.
+- Cached results are written to `%LOCALAPPDATA%\ForgerEMS\Runtime\cache\drive-validation-results.json` and contain: target volume root, drive model, file system, label, total/free-space sizes at the time of the run, a best-effort volume serial, a composite identity fingerprint, and the run's evidence summary (region/sample count, bytes written/verified, write/read speed, mismatch / alias-flag / I/O-error counters, per-region map summary, and the cleanup status string). The cached file does **not** include the contents of user files, and it does **not** include API keys, tokens, passwords, or product keys.
 - The cache is keyed by a composite identity (root path + best-effort volume serial + drive model + reported size + label) so a different drive that mounts on the same letter is **not** treated as already validated. Entries older than 30 days are ignored.
+- The wizard's region/tile data and signatures are deterministic ForgerEMS markers — they do not contain user data. The wizard does not upload validation results anywhere; the Copy summary action writes a plain-text technician report to the local clipboard only.
 - Drive Validator results may be summarized in support bundles when you choose to export one. Review the bundle before sharing.
 
 ---

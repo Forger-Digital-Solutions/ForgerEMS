@@ -33,13 +33,15 @@ You are responsible for selecting the correct **USB**, **volume**, and **partiti
 
 ## Drive Validator
 
-ForgerEMS includes a **Drive Validator** tool in the USB Builder area. It is provided to help technicians flag suspicious media before they trust it for toolkit work.
+ForgerEMS includes a **Drive Validator** tool, surfaced as the **Drive Validator Wizard** from the USB Builder tab. It is provided to help technicians flag suspicious media before they trust it for toolkit work.
 
 - **Safe modes (Quick Safe Check, Sampled Capacity Check, Full Free-Space Validation)** write temporary ForgerEMS test files into the **free space** of the selected removable USB target and read them back. They **do not format** the drive, **do not delete** existing user files, and only create or remove files inside a `.forgerems-drive-validator` folder on the target.
-- Drive Validator **does not certify** a drive is genuine, original, healthy, or fit for any specific use. A passing result means **no issues were found in sampled validation** — sophisticated fake-capacity media can still evade a small sample. **Full Free-Space Validation** offers stronger evidence but is slow and produces heavy writes on the USB.
+- Drive Validator operates at the **file-system level**. It **cannot directly inspect NAND chips** through normal Windows file I/O. It **does not certify** a drive is genuine, original, healthy, or fit for any specific use. A passing result is **advisory evidence for a technician**, not a 100% authenticity certificate. Sophisticated fake-capacity media can still evade a small sample.
+- The wizard can detect many fake-capacity, aliasing, failing-media, short-read/write, zero/0xFF readback, and per-region I/O error patterns. **Full Free-Space Validation** is the **strongest non-destructive mode** but is slow, produces heavy writes, and requires an explicit acknowledgement checkbox before it can start.
 - **Destructive Full Media mode** is **not available in this build**. If it is ever enabled in a future build, it will require an explicit typed confirmation and will erase the entire drive.
 - ForgerEMS does **not** run Drive Validator against the Windows OS drive, system / boot / EFI / recovery / VTOYEFI partitions, BitLocker-encrypted volumes, or internal fixed disks by default.
-- Drive Validator results are **advisory evidence for a technician**, not a warranty, conformance test, or replacement for vendor diagnostics. **Back up important data** before any storage validation. ForgerEMS is **not responsible** for failing media, data loss, or any destructive action the user explicitly confirms.
+- A drive that **fails** Drive Validator **should not be trusted for a ForgerEMS / Ventoy toolkit**. Consider replacing the drive.
+- Drive Validator results are **advisory evidence for a technician**, not a warranty, conformance test, or replacement for vendor diagnostics. **Back up important data** before any heavy validation. ForgerEMS is **not responsible** for failing media, data loss, or any destructive action the user explicitly confirms.
 
 ---
 

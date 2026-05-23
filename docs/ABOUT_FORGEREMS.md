@@ -15,7 +15,7 @@ ForgerEMS is a **Windows desktop technician workbench** centered on **USB toolki
 ## What is included
 
 - **USB Builder** for safer Ventoy-oriented USB toolkit preparation and maintenance, with a **USB Builder Profile** that lets technicians pick which packs (Windows, Legacy Windows, Linux Rescue, Diagnostics, OEM Tools, macOS, Android, iOS / iPadOS) get seeded or refreshed. Core ForgerEMS USB structure is always required; macOS, Android, and iOS / iPadOS are off by default and treat all media as manual
-- **Drive Validator** for non-destructive sampled writes/reads against a removable USB's free space to flag suspicious capacity or failing media before building a toolkit on it. Results are advisory evidence, not a certification
+- **Drive Validator** (opens as the **Drive Validator Wizard** from the USB Builder tab) for wizard-style, non-destructive sampled writes/reads against a removable USB's free space with a live media-integrity tile map. Quick / Sampled / Full Free-Space modes flag suspicious capacity, aliasing, short reads/writes, I/O errors, or failing regions before you build a toolkit on the drive. Safe modes do not format and do not delete user files. Results are advisory evidence, not a certification, and they cannot directly inspect NAND. Destructive Full Media validation is not available in this build
 - **Toolkit Manager** for manifest-driven managed/manual tool health
 - **System Intelligence** for local hardware, health, network, storage, security, and resale-oriented summaries
 - **Hardware X-Ray** for detected hardware and available sensor coverage

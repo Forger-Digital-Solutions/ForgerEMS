@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace VentoyToolkitSetup.Wpf.Models;
 
@@ -126,6 +127,14 @@ public sealed record DriveValidationEvidence
 
     /// <summary>Confidence of the cached identity (Strong = volume serial present; Partial = identifiers but no serial; Weak = root-path only).</summary>
     public string IdentityConfidence { get; init; } = string.Empty;
+
+    /// <summary>Per-region map snapshot (empty for legacy/cached results without region tracking).</summary>
+    public IReadOnlyList<DriveValidationRegion> Regions { get; init; } = Array.Empty<DriveValidationRegion>();
+
+    public DriveValidationMapSummary MapSummary { get; init; } = new();
+
+    /// <summary>Set when at least one region read MBps is significantly slower than the median — promotes Passed → PassedWithWarnings.</summary>
+    public bool SpeedCollapseSuspected { get; init; }
 }
 
 public sealed class DriveValidationResult
@@ -204,6 +213,12 @@ public sealed class DriveValidationProgress
     public int SampleCount { get; init; }
 
     public double ProgressFraction { get; init; }
+
+    /// <summary>Optional region snapshot at this progress tick (region map UI). Null until the run starts.</summary>
+    public DriveValidationMap? MapSnapshot { get; init; }
+
+    /// <summary>Index of the region whose status just changed (or -1 for phase-only events).</summary>
+    public int ChangedRegionIndex { get; init; } = -1;
 }
 
 public sealed class DriveValidationPlan
@@ -213,4 +228,180 @@ public sealed class DriveValidationPlan
     public long ReservedBytes { get; init; }
 
     public string? BlockReason { get; init; }
+}
+
+/// <summary>
+/// Per-region status surfaced to the future region-map tile UI. Region == one sample location in
+/// the validation plan. Statuses progress NotTested → Planned → Writing → Flushing → Verifying →
+/// (Passed | Warning | Mismatch | AliasSuspected | IoError | Cancelled). Each region keeps its own
+/// evidence (timings, observed signature, error reason) so the result panel can describe exactly
+/// which region misbehaved instead of only an aggregate count.
+/// </summary>
+public enum DriveValidationRegionStatus
+{
+    NotTested = 0,
+    Planned = 1,
+    Writing = 2,
+    Flushing = 3,
+    Verifying = 4,
+    Passed = 5,
+    Warning = 6,
+    Mismatch = 7,
+    AliasSuspected = 8,
+    IoError = 9,
+    Cancelled = 10
+}
+
+public enum DriveValidationRegionSeverity
+{
+    Info = 0,
+    Warning = 1,
+    Error = 2
+}
+
+/// <summary>
+/// Mutable region record. The validator service builds a list of these from the plan, transitions
+/// statuses as work happens, and snapshots them into <see cref="DriveValidationEvidence.Regions"/>
+/// when a terminal result is produced. The tile UI binds to the snapshot, not the live list.
+/// </summary>
+public sealed class DriveValidationRegion
+{
+    public int Index { get; init; }
+
+    public long LogicalOffsetHint { get; init; }
+
+    public long PlannedBytes { get; init; }
+
+    public long BytesWritten { get; set; }
+
+    public long BytesVerified { get; set; }
+
+    public long WriteMs { get; set; }
+
+    public long ReadMs { get; set; }
+
+    public double WriteMBps { get; set; }
+
+    public double ReadMBps { get; set; }
+
+    public string ExpectedSignatureHash { get; init; } = string.Empty;
+
+    public string ObservedSignatureHash { get; set; } = string.Empty;
+
+    public DriveValidationRegionStatus Status { get; set; } = DriveValidationRegionStatus.Planned;
+
+    public DriveValidationRegionSeverity Severity { get; set; } = DriveValidationRegionSeverity.Info;
+
+    public string ErrorMessage { get; set; } = string.Empty;
+
+    public string WarningReason { get; set; } = string.Empty;
+
+    public DriveValidationRegion Snapshot() => new()
+    {
+        Index = Index,
+        LogicalOffsetHint = LogicalOffsetHint,
+        PlannedBytes = PlannedBytes,
+        BytesWritten = BytesWritten,
+        BytesVerified = BytesVerified,
+        WriteMs = WriteMs,
+        ReadMs = ReadMs,
+        WriteMBps = WriteMBps,
+        ReadMBps = ReadMBps,
+        ExpectedSignatureHash = ExpectedSignatureHash,
+        ObservedSignatureHash = ObservedSignatureHash,
+        Status = Status,
+        Severity = Severity,
+        ErrorMessage = ErrorMessage,
+        WarningReason = WarningReason
+    };
+}
+
+public sealed class DriveValidationMap
+{
+    public IReadOnlyList<DriveValidationRegion> Regions { get; init; } = Array.Empty<DriveValidationRegion>();
+
+    public DriveValidationMapSummary Summary { get; init; } = new();
+
+    public static DriveValidationMap Snapshot(IReadOnlyList<DriveValidationRegion> live) =>
+        new()
+        {
+            Regions = live.Select(r => r.Snapshot()).ToList(),
+            Summary = DriveValidationMapSummary.FromRegions(live)
+        };
+}
+
+public sealed class DriveValidationMapSummary
+{
+    public int Planned { get; init; }
+
+    public int Tested { get; init; }
+
+    public int Passed { get; init; }
+
+    public int Warning { get; init; }
+
+    public int Mismatch { get; init; }
+
+    public int AliasSuspected { get; init; }
+
+    public int IoError { get; init; }
+
+    public int Cancelled { get; init; }
+
+    public double FastestReadMBps { get; init; }
+
+    public double SlowestReadMBps { get; init; }
+
+    public static DriveValidationMapSummary FromRegions(IReadOnlyList<DriveValidationRegion> regions)
+    {
+        if (regions.Count == 0)
+        {
+            return new DriveValidationMapSummary();
+        }
+
+        var tested = 0;
+        var passed = 0;
+        var warning = 0;
+        var mismatch = 0;
+        var alias = 0;
+        var ioErr = 0;
+        var cancelled = 0;
+        var fastest = 0.0;
+        var slowest = double.MaxValue;
+        var anySpeed = false;
+
+        foreach (var r in regions)
+        {
+            switch (r.Status)
+            {
+                case DriveValidationRegionStatus.Passed: tested++; passed++; break;
+                case DriveValidationRegionStatus.Warning: tested++; warning++; break;
+                case DriveValidationRegionStatus.Mismatch: tested++; mismatch++; break;
+                case DriveValidationRegionStatus.AliasSuspected: tested++; alias++; break;
+                case DriveValidationRegionStatus.IoError: tested++; ioErr++; break;
+                case DriveValidationRegionStatus.Cancelled: cancelled++; break;
+            }
+
+            if (r.ReadMBps > 0)
+            {
+                anySpeed = true;
+                if (r.ReadMBps > fastest) fastest = r.ReadMBps;
+                if (r.ReadMBps < slowest) slowest = r.ReadMBps;
+            }
+        }
+
+        return new DriveValidationMapSummary
+        {
+            Planned = regions.Count,
+            Tested = tested,
+            Passed = passed,
+            Warning = warning,
+            Mismatch = mismatch,
+            AliasSuspected = alias,
+            IoError = ioErr,
+            Cancelled = cancelled,
+            FastestReadMBps = anySpeed ? fastest : 0,
+            SlowestReadMBps = anySpeed ? slowest : 0
+        };
+    }
 }

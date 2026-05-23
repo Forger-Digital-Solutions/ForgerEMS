@@ -254,24 +254,19 @@ public sealed class MainWindowXamlLoadTests
     }
 
     [Fact]
-    public void MainWindow_DriveValidatorProgressBar_IsBoundOneWay()
+    public void MainWindow_DriveValidatorProgressBar_IsRemovedFromUsbBuilderTab()
     {
-        // RangeBase.Value (ProgressBar.Value, Slider.Value, …) binds TwoWay by default. Binding it to a
-        // read-only ViewModel property (e.g. `private set`) causes WPF to throw at app startup with:
-        //   "A TwoWay or OneWayToSource binding cannot work on the read-only property
-        //    'DriveValidatorProgressValue' of type '…MainViewModel'."
-        // The DriveValidatorProgressValue setter is intentionally private (display-only progress state),
-        // so the XAML binding MUST set Mode=OneWay. This test fails if anyone reverts that.
+        // The Drive Validator card on the USB Builder tab is now a compact summary only — the
+        // inline ProgressBar bound to DriveValidatorProgressValue was moved into the Drive
+        // Validator Wizard (where the validation actually runs). This test guards against the
+        // inline progress bar being reintroduced into the main tab; the wizard's own
+        // RunningProgressValue ProgressBar lives in DriveValidatorWizardWindow.xaml and is
+        // unaffected.
         var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
         var text = File.ReadAllText(xamlPath);
 
-        Assert.Contains("DriveValidatorProgressValue", text, StringComparison.Ordinal);
         Assert.DoesNotContain(
-            "Value=\"{Binding DriveValidatorProgressValue}\"",
-            text,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "Value=\"{Binding DriveValidatorProgressValue, Mode=OneWay}\"",
+            "{Binding DriveValidatorProgressValue",
             text,
             StringComparison.Ordinal);
     }
@@ -342,6 +337,111 @@ public sealed class MainWindowXamlLoadTests
                 setter is null || !setter.IsPublic,
                 $"{name} should not expose a public setter; UI bindings to it must use Mode=OneWay.");
         }
+    }
+
+    [Fact]
+    public void UsbBuilder_DriveValidatorCard_IsCompactAndDelegatesToWizard()
+    {
+        // The Drive Validator card on the USB Builder tab is intentionally compact: header
+        // + status pill, target / last check / result key-value lines, and a single
+        // "Open Drive Validator" button. Validation mode dropdown, Start/Cancel buttons,
+        // inline ProgressBar, phase text, and evidence expander were moved into the Drive
+        // Validator Wizard. This test fails if anyone reintroduces those heavy controls.
+        var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
+        var text = File.ReadAllText(xamlPath);
+
+        var cardStart = text.IndexOf("UsbBuilderDriveValidatorCompactCard", StringComparison.Ordinal);
+        Assert.True(cardStart >= 0, "Compact Drive Validator card (x:Name) must exist in MainWindow.xaml.");
+        var cardEnd = text.IndexOf("</GroupBox>", cardStart, StringComparison.Ordinal);
+        Assert.True(cardEnd > cardStart);
+        var card = text[cardStart..cardEnd];
+
+        // Compact summary bindings.
+        Assert.Contains("DriveValidatorQuickSummary", card, StringComparison.Ordinal);
+        Assert.Contains("DriveValidatorLastStatusDisplay", card, StringComparison.Ordinal);
+        Assert.Contains("DriveValidatorLastValidationAgeDisplay", card, StringComparison.Ordinal);
+        Assert.Contains("DriveValidatorTargetDisplay", card, StringComparison.Ordinal);
+        Assert.Contains("DriveValidatorResultSummary", card, StringComparison.Ordinal);
+
+        // Single primary action: opens the wizard.
+        Assert.Contains("Open Drive Validator", card, StringComparison.Ordinal);
+        Assert.Contains("OpenDriveValidatorWizardCommand", card, StringComparison.Ordinal);
+
+        // Heavy controls must NOT live inline in the USB Builder card any more.
+        Assert.DoesNotContain("RunDriveValidatorCommand", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("CancelDriveValidatorCommand", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("DriveValidatorModeIndex", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("DriveValidatorProgressValue", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("DriveValidatorEvidenceDisplay", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("DriveValidatorPhaseDisplay", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("Start validation", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("Quick Safe Check", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("Sampled Capacity Check", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("Full Free-Space Validation", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("Evidence / details", card, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UsbBuilder_UsbIntelligenceCard_IsCompactAndDelegatesToMappingWizard()
+    {
+        // The USB Intelligence Pro card on the USB Builder tab is intentionally compact:
+        // header + confidence pill, target / class / speed / port / recommendation lines,
+        // and a single "Open USB Mapping Wizard" button. Run/Cancel benchmark buttons,
+        // the legacy advanced inline port-mapping expander, the workflow help box, and the
+        // confidence detail paragraph were moved into the wizard.
+        var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
+        var text = File.ReadAllText(xamlPath);
+
+        var cardStart = text.IndexOf("UsbBuilderUsbIntelligenceCompactCard", StringComparison.Ordinal);
+        Assert.True(cardStart >= 0, "Compact USB Intelligence card (x:Name) must exist in MainWindow.xaml.");
+        var cardEnd = text.IndexOf("</GroupBox>", cardStart, StringComparison.Ordinal);
+        Assert.True(cardEnd > cardStart);
+        var card = text[cardStart..cardEnd];
+
+        // Compact summary bindings.
+        Assert.Contains("UsbIntelligencePanelTargetDisplay", card, StringComparison.Ordinal);
+        Assert.Contains("UsbIntelligenceDetectedClassDisplay", card, StringComparison.Ordinal);
+        Assert.Contains("UsbIntelligenceBenchmarkReadWriteDisplay", card, StringComparison.Ordinal);
+        Assert.Contains("UsbIntelligenceConfidenceScoreDisplay", card, StringComparison.Ordinal);
+        Assert.Contains("UsbIntelligenceRecommendationQualityDisplay", card, StringComparison.Ordinal);
+        Assert.Contains("UsbIntelligenceMappingLabelDisplay", card, StringComparison.Ordinal);
+
+        // Single primary action: opens the wizard.
+        Assert.Contains("Open USB Mapping Wizard", card, StringComparison.Ordinal);
+        Assert.Contains("OpenUsbMappingWizardCommand", card, StringComparison.Ordinal);
+
+        // Heavy controls must NOT live inline in the USB Builder card any more.
+        Assert.DoesNotContain("RunUsbIntelligenceBenchmarkCommand", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("CancelUsbIntelligenceBenchmarkCommand", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("StartUsbPortMappingWorkflowCommand", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("CaptureUsbMappingBeforeCommand", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("CaptureUsbMappingAfterCommand", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("SaveUsbMappingLabelCommand", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("UsbMappingLabelDraft", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("Run USB Benchmark", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("Cancel Benchmark", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("Advanced: inline port mapping", card, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UsbBuilder_CardsRemainBounded_NoLargeInlineExpanders()
+    {
+        // The USB Builder cards must stay compact — neither the Drive Validator nor the USB
+        // Intelligence card should contain an <Expander> (those belonged to the old heavy
+        // inline layout and force users to scroll past large technical blocks to reach the
+        // Ventoy and build controls below).
+        var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
+        var text = File.ReadAllText(xamlPath);
+
+        var dvStart = text.IndexOf("UsbBuilderDriveValidatorCompactCard", StringComparison.Ordinal);
+        var dvEnd = text.IndexOf("</GroupBox>", dvStart, StringComparison.Ordinal);
+        var dv = text[dvStart..dvEnd];
+        Assert.DoesNotContain("<Expander", dv, StringComparison.Ordinal);
+
+        var uiStart = text.IndexOf("UsbBuilderUsbIntelligenceCompactCard", StringComparison.Ordinal);
+        var uiEnd = text.IndexOf("</GroupBox>", uiStart, StringComparison.Ordinal);
+        var ui = text[uiStart..uiEnd];
+        Assert.DoesNotContain("<Expander", ui, StringComparison.Ordinal);
     }
 
     [Fact]

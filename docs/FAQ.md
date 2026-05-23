@@ -333,14 +333,21 @@ Email **ForgerDigitalSolutions@outlook.com** with app version, Windows version, 
 
 ## What is Drive Validator?
 
-**Drive Validator** (USB Builder tab) writes **temporary ForgerEMS test files** into **free space** on a selected removable USB target, reads them back, and checks for verification errors or suspicious capacity behavior. It does **not** format the drive and does **not** delete your existing files — only files under `.forgerems-drive-validator` are created and removed afterward.
+**Drive Validator** (USB Builder tab → **Open Drive Validator** opens the Drive Validator Wizard) writes **temporary ForgerEMS test files** into **free space** on a selected removable USB target, reads them back, and checks for verification errors or suspicious capacity behavior. It does **not** format the drive and does **not** delete your existing files — only files under `.forgerems-drive-validator` are created and removed afterward.
 
+- The **Drive Validator Wizard** walks you through **Select target → Choose mode → Safety review → Running → Results** with a live **media integrity map** of region tiles. The compact card on the USB Builder tab is the entry point and shows the last validation status/age for the selected drive.
 - **Quick Safe Check** and **Sampled Capacity Check** use bounded writes spread across free space. A passing result is reported as **"No issues found in sampled validation"** — it does **not** prove the drive is genuine, healthy, or fit for any specific use. Sophisticated fake-capacity media can still evade a small sample.
-- **Full Free-Space Validation** is stronger evidence (it writes across the available free-space budget) but is **slow** and causes **heavy USB writes**. Even a clean Full Free-Space pass is evidence of correct file-system-visible behavior, not a sector-level guarantee.
-- **Destructive Full Media validation** is **not available in this build**. If it is ever enabled later, it will require typing an exact confirmation phrase and will erase the entire drive.
+- **Full Free-Space Validation** is the **strongest non-destructive mode** (it writes across the available free-space budget). It is **slow**, causes **heavy USB writes**, and requires an explicit acknowledgement checkbox in the wizard. Even a clean Full Free-Space pass is evidence of correct file-system-visible behavior, **not** a sector-level guarantee.
+- **Destructive Full Media validation** is **not available in this build**. The wizard surfaces it as "not available". If it is ever enabled later, it will require typing an exact confirmation phrase and will erase the entire drive.
+- Drive Validator cannot **directly inspect NAND chips** through normal Windows file I/O. Safe modes operate at the file-system level. They can detect many fake-capacity, aliasing, failing-media, short-read/write, and I/O-error patterns — but a passing result is advisory evidence, **not** a 100% authenticity certificate.
 - Drive Validator **refuses to run** against the Windows OS drive, system / boot / EFI / VTOYEFI / recovery partitions, BitLocker-encrypted volumes, and internal fixed disks. The existing USB Builder hard safety blocks still apply.
-- Drive Validator results are **advisory evidence for a technician**. They are not a warranty, certification, or replacement for vendor diagnostics. **Back up** important data before any storage validation, and ForgerEMS is **not responsible** for failing media or any destructive action you explicitly confirm.
+- A **failed drive should not be trusted for a ForgerEMS/Ventoy toolkit**. The wizard's results step explains the recommended next step (Sampled / Full Free-Space, or consider replacing the drive).
+- Drive Validator results are **advisory evidence for a technician**. They are not a warranty, certification, or replacement for vendor diagnostics. **Back up** important data before any heavy validation, and ForgerEMS is **not responsible** for failing media or any destructive action you explicitly confirm.
 - Cached results are keyed by a composite identity (root path + best-effort volume serial + drive model + size + label) so a different drive that mounts on the same letter is **not** treated as already validated. Entries older than 30 days expire.
+
+### How is Drive Validator different from Speed Benchmark?
+
+**Speed Benchmark** measures throughput; some of its reads may be served from OS cache, so a fast number does not prove the drive can faithfully return what was written. **Drive Validator** writes unique deterministic signatures into bounded regions and verifies the *content* on read-back, looking for mismatches, aliasing, zero/0xFF fills, short reads/writes, and per-region speed collapse. A fast drive can still fail validation. A slow drive can still be valid but may not be ideal for a technician toolkit.
 
 ---
 

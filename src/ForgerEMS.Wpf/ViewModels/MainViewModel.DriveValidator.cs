@@ -7,6 +7,8 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
+using VentoyToolkitSetup.Wpf;
 using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services.DriveValidation;
 using VentoyToolkitSetup.Wpf.Services.Intelligence;
@@ -30,6 +32,10 @@ public sealed partial class MainViewModel
     private string _driveValidatorEvidenceDisplay = string.Empty;
     private string _driveValidatorBuilderWarningText = string.Empty;
     private double _driveValidatorProgressValue;
+    private bool _isDriveValidatorRunning;
+    private string _driveValidatorLastStatusDisplay = "Not validated";
+    private string _driveValidatorLastValidationAgeDisplay = "—";
+    private string _driveValidatorQuickSummary = "Not validated";
 
     public int DriveValidatorModeIndex
     {
@@ -132,6 +138,30 @@ public sealed partial class MainViewModel
 
     public bool HasDriveValidatorBuilderWarning => !string.IsNullOrWhiteSpace(DriveValidatorBuilderWarningText);
 
+    public bool IsDriveValidatorRunning
+    {
+        get => _isDriveValidatorRunning;
+        private set => SetProperty(ref _isDriveValidatorRunning, value);
+    }
+
+    public string DriveValidatorLastStatusDisplay
+    {
+        get => _driveValidatorLastStatusDisplay;
+        private set => SetProperty(ref _driveValidatorLastStatusDisplay, value);
+    }
+
+    public string DriveValidatorLastValidationAgeDisplay
+    {
+        get => _driveValidatorLastValidationAgeDisplay;
+        private set => SetProperty(ref _driveValidatorLastValidationAgeDisplay, value);
+    }
+
+    public string DriveValidatorQuickSummary
+    {
+        get => _driveValidatorQuickSummary;
+        private set => SetProperty(ref _driveValidatorQuickSummary, value);
+    }
+
     private DriveValidationMode ResolveDriveValidatorMode() =>
         _driveValidatorModeIndex switch
         {
@@ -181,6 +211,10 @@ public sealed partial class MainViewModel
         _driveValidationCts?.Cancel();
         _driveValidationCts = new CancellationTokenSource();
         var token = _driveValidationCts.Token;
+        IsDriveValidatorRunning = true;
+        DriveValidatorPhaseDisplay = "Starting validation…";
+        DriveValidatorProgressDisplay = "—";
+        DriveValidatorProgressValue = 0;
         RunDriveValidatorCommand.RaiseCanExecuteChanged();
         CancelDriveValidatorCommand.RaiseCanExecuteChanged();
 
@@ -230,6 +264,7 @@ public sealed partial class MainViewModel
         {
             _driveValidationCts?.Dispose();
             _driveValidationCts = null;
+            IsDriveValidatorRunning = false;
             RunDriveValidatorCommand.RaiseCanExecuteChanged();
             CancelDriveValidatorCommand.RaiseCanExecuteChanged();
         }
@@ -240,6 +275,67 @@ public sealed partial class MainViewModel
         _driveValidationCts?.Cancel();
         DriveValidatorPhaseDisplay = "Cancelling…";
         CancelDriveValidatorCommand.RaiseCanExecuteChanged();
+    }
+
+    private void OpenDriveValidatorWizard()
+    {
+        var vm = new DriveValidatorWizardViewModel(
+            getTargets: () => UsbTargets.ToList(),
+            safetyEvaluator: target =>
+            {
+                var ok = DriveValidationTargetSafety.IsSafeToStart(
+                    target, new DriveValidationOptions(), out var reason);
+                return (ok, reason);
+            },
+            runValidationAsync: (target, options, portHint, onProgress, ct) =>
+                _driveValidationService.RunAsync(target, options, portHint, onProgress, ct),
+            lastValidationLookup: target => GetDriveValidationResultForTarget(target),
+            portLabelLookup: _ => UsbIntelligenceMappingLabelDisplay is "—" or "" ? string.Empty : UsbIntelligenceMappingLabelDisplay,
+            confirmHeavyMode: (title, message) => _userPromptService.Confirm(title, message),
+            appendLog: (message, severity) => AppendLog(new LogLine(DateTimeOffset.Now, message, severity, isErrorStream: severity == LogSeverity.Error)),
+            preferredTarget: SelectedUsbTarget);
+
+        // When the wizard finishes a validation, route the result back through the same caching
+        // and port-profile sync the inline panel uses so the compact USB Builder summary card
+        // updates immediately.
+        vm.ValidationCompleted += (_, result) =>
+        {
+            var resolvedTarget = SelectedUsbTarget;
+            if (resolvedTarget is null && !string.IsNullOrWhiteSpace(result.TargetRootPath))
+            {
+                resolvedTarget = UsbTargets.FirstOrDefault(t =>
+                    string.Equals(t.RootPath, result.TargetRootPath, StringComparison.OrdinalIgnoreCase));
+            }
+            if (resolvedTarget is null)
+            {
+                return;
+            }
+
+            var stamped = EnsureIdentityCaptured(result, resolvedTarget);
+            PersistDriveValidationResult(stamped);
+            ApplyDriveValidationResultToUi(stamped);
+            SyncDriveValidationToPortProfile(stamped, resolvedTarget);
+            AppendDriveValidationLog(stamped);
+            RefreshDriveValidatorPanel();
+            UpdateTargetWarnings();
+        };
+
+        vm.OpenUsbMappingWizardRequested += (_, _) =>
+        {
+            if (OpenUsbMappingWizardCommand.CanExecute(null))
+            {
+                OpenUsbMappingWizardCommand.Execute(null);
+            }
+        };
+
+        var win = new DriveValidatorWizardWindow(vm);
+        if (Application.Current?.MainWindow is { } owner && !ReferenceEquals(owner, win))
+        {
+            win.Owner = owner;
+        }
+
+        AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Drive Validator Wizard opened.", LogSeverity.Info));
+        win.ShowDialog();
     }
 
     private void RefreshDriveValidatorPanel()
@@ -254,6 +350,9 @@ public sealed partial class MainViewModel
             DriveValidatorResultSummary = "Select a USB target to validate.";
             DriveValidatorEvidenceDisplay = string.Empty;
             DriveValidatorBuilderWarningText = string.Empty;
+            DriveValidatorLastStatusDisplay = "Not validated";
+            DriveValidatorLastValidationAgeDisplay = "—";
+            DriveValidatorQuickSummary = "Not validated";
             RunDriveValidatorCommand.RaiseCanExecuteChanged();
             return;
         }
@@ -276,6 +375,13 @@ public sealed partial class MainViewModel
             DriveValidatorResultSummary = "Not validated yet for this target.";
             DriveValidatorEvidenceDisplay = string.Empty;
             DriveValidatorBuilderWarningText = DriveValidationUiCopy.NotValidatedBuilderHint;
+            DriveValidatorLastStatusDisplay = "Not validated";
+            DriveValidatorLastValidationAgeDisplay = "—";
+            DriveValidatorQuickSummary = "Not validated";
+            // Make sure stale progress text from a previous target doesn't follow the new selection.
+            DriveValidatorPhaseDisplay = "—";
+            DriveValidatorProgressDisplay = "—";
+            DriveValidatorProgressValue = 0;
         }
 
         RunDriveValidatorCommand.RaiseCanExecuteChanged();
@@ -294,6 +400,52 @@ public sealed partial class MainViewModel
             DriveValidationStatus.NotRun => DriveValidationUiCopy.NotValidatedBuilderHint,
             _ => string.Empty
         };
+
+        // Final-state UI: the service's last progress event is always an in-flight phase like
+        // CleaningUp (~92%) — without this assignment the panel stays stuck on that text/bar
+        // forever even though the result is already known. See Dev Smoke 2026-05-23.
+        DriveValidatorPhaseDisplay = DriveValidationUiCopy.TerminalPhaseDisplay(result.Status);
+        DriveValidatorProgressDisplay = DriveValidationUiCopy.TerminalProgressDisplay(
+            result.Status,
+            result.Evidence.SamplesVerified,
+            result.Evidence.SamplesPlanned);
+        DriveValidatorProgressValue = result.Status switch
+        {
+            DriveValidationStatus.Passed
+                or DriveValidationStatus.PassedWithWarnings
+                or DriveValidationStatus.Failed
+                or DriveValidationStatus.CleanupWarning => 100,
+            DriveValidationStatus.Cancelled
+                or DriveValidationStatus.UnsafeTargetBlocked
+                or DriveValidationStatus.InsufficientFreeSpace => 0,
+            _ => DriveValidatorProgressValue
+        };
+
+        DriveValidatorLastStatusDisplay = DriveValidationUiCopy.StatusDisplay(result.Status);
+        DriveValidatorLastValidationAgeDisplay = FormatValidationAge(result.CompletedAtUtc);
+        DriveValidatorQuickSummary = result.Status switch
+        {
+            DriveValidationStatus.Passed => "Passed",
+            DriveValidationStatus.PassedWithWarnings => "Warning",
+            DriveValidationStatus.CleanupWarning => "Warning",
+            DriveValidationStatus.Failed => "Failed",
+            DriveValidationStatus.Cancelled => "Cancelled",
+            _ => "Not validated"
+        };
+    }
+
+    private static string FormatValidationAge(DateTimeOffset? completedAtUtc)
+    {
+        if (!completedAtUtc.HasValue)
+        {
+            return "—";
+        }
+
+        var age = DateTimeOffset.UtcNow - completedAtUtc.Value;
+        if (age.TotalSeconds < 60) return "just now";
+        if (age.TotalMinutes < 60) return $"{(int)age.TotalMinutes} min ago";
+        if (age.TotalHours < 24) return $"{(int)age.TotalHours} h ago";
+        return $"{(int)age.TotalDays} d ago";
     }
 
     private static string FormatDriveValidationEvidence(DriveValidationResult result)
