@@ -10747,6 +10747,65 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
+        // Cache-pollution guard: a re-run that comes back as cache-suspected must NEVER overwrite a
+        // previously verified believable read in the UI. The earlier result is in our verified-history
+        // dictionary because `ShouldPersistSuccessfulHistory` only stores non-cache-suspected runs.
+        // Keep the verified read display + speed surfaced; the cache-suspected raw sample stays in the
+        // result.Details / AccuracyWarning for the operator to inspect, but does not become the user-
+        // facing read number.
+        if (result.IsReadCacheSuspected && result.Succeeded &&
+            _benchmarkResultsByRoot.TryGetValue(GetBenchmarkCacheKey(target.RootPath), out var prior) &&
+            prior.ShouldPersistSuccessfulHistory && prior.VerifiedReadMbps is { } priorRead && priorRead > 0)
+        {
+            var rawSampleNote = result.RawReadMbps is { } raw && raw > 0
+                ? $" (re-read sample {raw:0.0} MB/s discarded as cache-suspected)"
+                : " (re-read discarded as cache-suspected)";
+
+            result = new UsbBenchmarkResult
+            {
+                RunId = result.RunId,
+                Succeeded = result.Succeeded,
+                Status = result.Status,
+                Summary = result.Summary,
+                Details = result.Details + Environment.NewLine + "Preserving last believable read: " + prior.ReadSpeedDisplay + rawSampleNote,
+                WriteSpeedDisplay = result.WriteSpeedDisplay,
+                ReadSpeedDisplay = prior.ReadSpeedDisplay + " (last verified)",
+                TestSizeMb = result.TestSizeMb,
+                LastTestedAt = result.LastTestedAt,
+                Classification = result.Classification,
+                WriteSpeedMBps = result.WriteSpeedMBps,
+                ReadSpeedMBps = priorRead,
+                VerifiedWriteMbps = result.VerifiedWriteMbps,
+                VerifiedReadMbps = priorRead,
+                RawReadMbps = result.RawReadMbps,
+                IsReadCacheSuspected = true,
+                ReadVerificationStatus = "Verified earlier; latest sample was cache-suspected.",
+                BenchmarkDurationMs = result.BenchmarkDurationMs,
+                IntelligenceMeasurementClass = prior.IntelligenceMeasurementClass,
+                IntelligenceConfidenceScore = Math.Min(result.IntelligenceConfidenceScore, prior.IntelligenceConfidenceScore),
+                ResultKind = result.ResultKind,
+                CancellationSource = result.CancellationSource,
+                StartedAtUtc = result.StartedAtUtc,
+                CompletedAtUtc = result.CompletedAtUtc,
+                ActualBytesWritten = result.ActualBytesWritten,
+                ActualBytesRead = result.ActualBytesRead,
+                WriteElapsedMs = result.WriteElapsedMs,
+                ReadElapsedMs = result.ReadElapsedMs,
+                ReadLikelyCached = result.ReadLikelyCached,
+                ReadIsEstimate = result.ReadIsEstimate,
+                BenchmarkConfidence = "Read verification needed (using last verified)",
+                AccuracyWarning = result.AccuracyWarning,
+                TargetTopologyFingerprint = result.TargetTopologyFingerprint,
+                UiSummaryLine = result.UiSummaryLine
+            };
+
+            AppendLog(new LogLine(
+                DateTimeOffset.Now,
+                $"[INFO] USB benchmark re-read was cache-suspected — keeping last believable read {prior.ReadSpeedDisplay}.",
+                LogSeverity.Info,
+                channel: LiveLogChannel.Diagnostics));
+        }
+
         if (result.ShouldPersistSuccessfulHistory)
         {
             _benchmarkResultsByRoot[GetBenchmarkCacheKey(target.RootPath)] = result;

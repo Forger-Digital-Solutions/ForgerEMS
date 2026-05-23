@@ -12,6 +12,15 @@ public static class DriveValidationPlanner
     private const long MinSampledBytes = 12L * 1024 * 1024;
     private const long MinFullBytes = 128L * 1024 * 1024;
 
+    // Hard upper bound on per-sample bytes for the non-Full modes. Without these caps,
+    // a 120 GB target with ~85 GB free produces ~14 GB per Quick sample (~42 GB total),
+    // which on a 60 MB/s USB stick is a multi-minute silent stall — exactly the Dev Smoke
+    // report. Quick is intentionally tiny; Sampled is bounded so even an 8 TB drive finishes
+    // within reasonable time. Full Free-Space mode keeps its fraction-based budget — it
+    // is the heavy-write path and the UI warns the user before starting.
+    internal const long QuickModeMaxBytesPerSample = 1L * 1024 * 1024;        // 1 MB
+    internal const long SampledModeMaxBytesPerSample = 8L * 1024 * 1024;      // 8 MB
+
     public static DriveValidationPlan Plan(UsbTargetInfo target, DriveValidationOptions options)
     {
         if (options.Mode == DriveValidationMode.DestructiveFullMediaValidation)
@@ -45,7 +54,9 @@ public static class DriveValidationPlanner
             return new DriveValidationPlan { BlockReason = $"Quick Safe Check needs about {UsbTargetInfo.FormatBytes(MinQuickBytes)} free." };
         }
 
-        var perSample = Math.Max(blockSize, usableBytes / 6);
+        // Quick mode targets a few MB total even on multi-TB drives so the user gets a
+        // result in seconds, not minutes. The per-sample budget is capped — see field doc.
+        var perSample = Math.Min(QuickModeMaxBytesPerSample, Math.Max((long)blockSize, usableBytes / 6));
         var offsets = SpreadOffsets(usableBytes, 3);
         return BuildPlan(offsets, perSample, blockSize, seedBase: 101);
     }
@@ -57,7 +68,11 @@ public static class DriveValidationPlanner
             return new DriveValidationPlan { BlockReason = $"Sampled Capacity Check needs about {UsbTargetInfo.FormatBytes(MinSampledBytes)} free." };
         }
 
-        var perSample = Math.Max(blockSize * 2L, usableBytes / 8);
+        // Sampled mode bounds per-sample writes so a 4 TB technician drive still finishes
+        // in roughly the same time as a 16 GB stick. Real fake-capacity detection comes
+        // from spread + signature uniqueness, not from writing huge files. Full Free-Space
+        // mode is the right choice when the operator wants heavy writes.
+        var perSample = Math.Min(SampledModeMaxBytesPerSample, Math.Max((long)blockSize * 2L, usableBytes / 8));
         var offsets = SpreadOffsets(usableBytes, 7);
         return BuildPlan(offsets, perSample, blockSize, seedBase: 303);
     }

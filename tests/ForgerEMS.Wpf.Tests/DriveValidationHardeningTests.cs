@@ -375,6 +375,136 @@ public sealed class DriveValidationHardeningTests
     }
 
     [Fact]
+    public void Planner_QuickMode_CapsSampleSizeOnLargeDrive()
+    {
+        // Dev Smoke 2026-05-22: a 120 GB drive with ~85 GB free produced ~14 GB per Quick sample
+        // because PlanQuick used `usableBytes / 6` with no cap. Verify the cap holds even with a
+        // huge drive so Quick Safe Check stays a few-MB total operation.
+        var huge = RemovableTarget("D:\\", freeBytes: 85L * 1024 * 1024 * 1024, totalBytes: 120L * 1024 * 1024 * 1024);
+        var plan = DriveValidationPlanner.Plan(huge, new DriveValidationOptions
+        {
+            Mode = DriveValidationMode.QuickSafeCheck
+        });
+
+        Assert.Null(plan.BlockReason);
+        Assert.NotEmpty(plan.Samples);
+        foreach (var sample in plan.Samples)
+        {
+            Assert.True(
+                sample.ByteLength <= DriveValidationPlanner.QuickModeMaxBytesPerSample,
+                $"Quick Safe Check sample {sample.Index} is {sample.ByteLength} bytes; expected ≤ {DriveValidationPlanner.QuickModeMaxBytesPerSample}.");
+        }
+
+        var totalBytes = plan.Samples.Sum(s => s.ByteLength);
+        Assert.True(totalBytes <= 10L * 1024 * 1024,
+            $"Quick Safe Check total writes {totalBytes} bytes; expected ≤ 10 MB for a fast smoke check.");
+    }
+
+    [Fact]
+    public void Planner_SampledMode_CapsSampleSizeOnLargeDrive()
+    {
+        var huge = RemovableTarget("D:\\", freeBytes: 85L * 1024 * 1024 * 1024, totalBytes: 120L * 1024 * 1024 * 1024);
+        var plan = DriveValidationPlanner.Plan(huge, new DriveValidationOptions
+        {
+            Mode = DriveValidationMode.SampledCapacityCheck
+        });
+
+        foreach (var sample in plan.Samples)
+        {
+            Assert.True(
+                sample.ByteLength <= DriveValidationPlanner.SampledModeMaxBytesPerSample,
+                $"Sampled sample {sample.Index} is {sample.ByteLength} bytes; expected ≤ {DriveValidationPlanner.SampledModeMaxBytesPerSample}.");
+        }
+    }
+
+    [Fact]
+    public void Planner_FullFreeSpaceMode_StillUsesFractionBudget()
+    {
+        // The caps must NOT apply to Full Free-Space mode — that mode is intentionally heavy
+        // and is gated behind an explicit "heavy writes" confirmation in the UI.
+        var huge = RemovableTarget("D:\\", freeBytes: 85L * 1024 * 1024 * 1024, totalBytes: 120L * 1024 * 1024 * 1024);
+        var plan = DriveValidationPlanner.Plan(huge, new DriveValidationOptions
+        {
+            Mode = DriveValidationMode.FullFreeSpaceValidation,
+            FullModeFreeSpaceFraction = 0.25
+        });
+
+        var totalBytes = plan.Samples.Sum(s => s.ByteLength);
+        Assert.True(totalBytes > 100L * 1024 * 1024,
+            $"Full Free-Space total should reflect the fraction budget; got only {totalBytes} bytes.");
+    }
+
+    [Fact]
+    public async Task Service_QuickModeOnLargeDrive_CompletesInReasonableTime()
+    {
+        // End-to-end timing guard: a Quick Safe Check against a temp folder mimicking ~85 GB free
+        // should finish in well under a minute. Before the planner cap this took 5+ minutes.
+        var root = Path.Combine(Path.GetTempPath(), "forgerems-dv-quick-fast-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var target = RemovableTarget(root + "\\", freeBytes: 85L * 1024 * 1024 * 1024, totalBytes: 120L * 1024 * 1024 * 1024);
+            var svc = new DriveValidationService();
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var result = await svc.RunAsync(
+                target,
+                new DriveValidationOptions { Mode = DriveValidationMode.QuickSafeCheck, BlockSizeBytes = 256 * 1024 });
+            sw.Stop();
+
+            Assert.True(result.Status is DriveValidationStatus.Passed or DriveValidationStatus.PassedWithWarnings,
+                $"Quick Safe Check should pass on a writable temp folder; got {result.Status}: {result.Summary}");
+            Assert.True(sw.Elapsed.TotalSeconds < 30,
+                $"Quick Safe Check took {sw.Elapsed.TotalSeconds:0.0}s; should be well under 30s after the per-sample cap fix.");
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Service_QuickMode_ProgressCallbackFiresMultipleTimes()
+    {
+        // The Dev Smoke report said the panel showed no progress for 5+ minutes. Even with small
+        // samples the user must see phase/progress updates, not a frozen UI. Count progress
+        // callbacks across a real Quick Safe Check run.
+        var root = Path.Combine(Path.GetTempPath(), "forgerems-dv-progress-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var target = RemovableTarget(root + "\\", freeBytes: 85L * 1024 * 1024 * 1024, totalBytes: 120L * 1024 * 1024 * 1024);
+            var svc = new DriveValidationService();
+            var phases = new List<DriveValidationPhase>();
+            var result = await svc.RunAsync(
+                target,
+                new DriveValidationOptions { Mode = DriveValidationMode.QuickSafeCheck, BlockSizeBytes = 256 * 1024 },
+                onProgress: p => phases.Add(p.Phase));
+
+            Assert.Contains(DriveValidationPhase.Preparing, phases);
+            Assert.Contains(DriveValidationPhase.SafetyCheckingTarget, phases);
+            Assert.Contains(DriveValidationPhase.PlanningSamples, phases);
+            Assert.Contains(DriveValidationPhase.WritingSample, phases);
+            Assert.Contains(DriveValidationPhase.ReadingSample, phases);
+            Assert.Contains(DriveValidationPhase.CleaningUp, phases);
+            Assert.True(phases.Count >= 8,
+                $"Quick Safe Check should report ≥ 8 progress events across all phases; saw {phases.Count}.");
+            Assert.True(result.Detail.Contains("total ", System.StringComparison.OrdinalIgnoreCase) &&
+                        result.Detail.Contains("ms", System.StringComparison.OrdinalIgnoreCase),
+                $"Final detail should include elapsed-ms breakdown for diagnostics. Got: {result.Detail}");
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void Planner_Quick_SpreadsSamplesAcrossUsableSpace()
     {
         var t = RemovableTarget("E:\\", freeBytes: 2L * 1024 * 1024 * 1024);

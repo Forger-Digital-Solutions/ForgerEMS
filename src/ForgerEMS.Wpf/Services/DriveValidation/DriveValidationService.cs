@@ -19,19 +19,22 @@ public sealed class DriveValidationService : IDriveValidationService
     {
         var runId = Guid.NewGuid();
         var started = DateTimeOffset.UtcNow;
+        var overall = Stopwatch.StartNew();
         Report(onProgress, DriveValidationPhase.Preparing, "Preparing Drive Validator…", 0, 0, 0);
 
+        var phaseWatch = Stopwatch.StartNew();
         Report(onProgress, DriveValidationPhase.SafetyCheckingTarget, "Checking target safety…", 0, 0, 0.05);
         if (!DriveValidationTargetSafety.IsSafeToStart(target, options, out var blockReason))
         {
             return DriveValidationResult.Blocked(
                 DriveValidationStatus.UnsafeTargetBlocked,
-                "Target blocked for Drive Validator.",
+                $"Target blocked for Drive Validator. (safety-check {phaseWatch.ElapsedMilliseconds} ms)",
                 blockReason,
                 target,
                 options.Mode);
         }
 
+        phaseWatch.Restart();
         Report(onProgress, DriveValidationPhase.PlanningSamples, "Planning validation samples…", 0, 0, 0.1);
         var plan = DriveValidationPlanner.Plan(target, options);
         if (!string.IsNullOrWhiteSpace(plan.BlockReason))
@@ -97,8 +100,10 @@ public sealed class DriveValidationService : IDriveValidationService
                 var sample = plan.Samples[i];
                 var path = temp.GetSamplePath(sample);
                 var fracBase = 0.15 + 0.65 * (i / (double)Math.Max(1, total));
+                var sampleWatch = Stopwatch.StartNew();
+                var sizeLabel = UsbTargetInfo.FormatBytes(sample.ByteLength);
 
-                Report(onProgress, DriveValidationPhase.WritingSample, $"Writing sample {i + 1}/{total}…", i + 1, total, fracBase);
+                Report(onProgress, DriveValidationPhase.WritingSample, $"Writing sample {i + 1}/{total} ({sizeLabel})…", i + 1, total, fracBase);
                 writeWatch.Start();
                 try
                 {
@@ -136,9 +141,10 @@ public sealed class DriveValidationService : IDriveValidationService
                 }
 
                 writeWatch.Stop();
-                Report(onProgress, DriveValidationPhase.Flushing, "Flushing writes to media…", i + 1, total, fracBase + 0.05);
+                var writeMs = sampleWatch.ElapsedMilliseconds;
+                Report(onProgress, DriveValidationPhase.Flushing, $"Flushing writes to media… (sample {i + 1} write {writeMs} ms)", i + 1, total, fracBase + 0.05);
 
-                Report(onProgress, DriveValidationPhase.ReadingSample, $"Reading sample {i + 1}/{total}…", i + 1, total, fracBase + 0.1);
+                Report(onProgress, DriveValidationPhase.ReadingSample, $"Reading sample {i + 1}/{total} ({sizeLabel})…", i + 1, total, fracBase + 0.1);
                 readWatch.Start();
                 try
                 {
@@ -178,6 +184,8 @@ public sealed class DriveValidationService : IDriveValidationService
 
                     samplesVerified++;
                     sampleHeads.Add(head);
+                    var totalMs = sampleWatch.ElapsedMilliseconds;
+                    Report(onProgress, DriveValidationPhase.Verifying, $"Sample {i + 1}/{total} verified in {totalMs} ms.", i + 1, total, fracBase + 0.13);
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
@@ -215,7 +223,9 @@ public sealed class DriveValidationService : IDriveValidationService
             }
 
             Report(onProgress, DriveValidationPhase.CleaningUp, "Removing temporary validation files…", total, total, 0.92);
+            var cleanupWatch = Stopwatch.StartNew();
             var cleanup = temp.Cleanup();
+            cleanupWatch.Stop();
 
             var status = DriveValidationStatus.Passed;
             var summary = "No issues found in sampled validation.";
@@ -236,6 +246,7 @@ public sealed class DriveValidationService : IDriveValidationService
             }
 
             var detail = BuildDetail(status, aliasCount, mismatchCount, writeMbps, readMbps, options.Mode);
+            detail += $" · total {overall.ElapsedMilliseconds} ms (write {writeWatch.ElapsedMilliseconds} ms · read {readWatch.ElapsedMilliseconds} ms · cleanup {cleanupWatch.ElapsedMilliseconds} ms)";
             if (cleanup.LeftoverPaths.Count > 0)
             {
                 detail += Environment.NewLine + "Leftover temp paths: " +
