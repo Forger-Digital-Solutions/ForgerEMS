@@ -1,6 +1,6 @@
 # ForgerEMS Environment and Local Configuration
 
-This file documents supported and reserved ForgerEMS environment variables for v1.2.1 Public Preview. Do not put real secrets in source files, screenshots, support emails, or issue reports. Use `.env.example` as a placeholder-only reference.
+This file documents supported and reserved ForgerEMS environment variables for v1.2.3 Public Preview. Do not put real secrets in source files, screenshots, support emails, or issue reports. Use `.env.example` as a placeholder-only reference.
 
 General app configuration is local-first. Environment variables are optional operator/developer overrides unless stated otherwise.
 

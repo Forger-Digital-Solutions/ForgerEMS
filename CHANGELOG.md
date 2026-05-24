@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.2.3-preview.1 — Public Preview (2026-05-23)
+
+### Dev Beta hardening pass
+
+- **System Intelligence main tab:** continues to expose only the three primary actions — Elevated Scan, Open Files, Create Support Bundle. Open Files presents a chooser for JSON report, Markdown report, or reports folder. Old duplicate buttons (Standard Scan, Restart as Administrator, Copy Admin Command, Copy Quick Summary, Open JSON/Markdown, Refresh Results, duplicate Hardware X-Ray entries) stay removed from the main tab.
+- **Elevation handoff:** Elevated Scan UAC handoff closes the non-elevated ForgerEMS instance after a successful relaunch so the elevated process owns the scan. UAC cancellation, blocked elevation, and runaway exit codes are surfaced as friendly status text; raw codes remain in advanced diagnostics only.
+- **USB Builder main tab:** Drive Validator and USB Intelligence Pro continue as small summary cards with **Open Drive Validator** / **Open USB Mapping Wizard** as the only entry points; both wizards still drive the actual validation/intelligence work for clear progress and safe completion.
+- **User-Agent strings:** Link-checker and quarantine-download HTTP `User-Agent` headers now bind to `AppReleaseInfo.Version` so they cannot drift behind the package version again.
+- **Version bump:** Assembly, csproj, AppReleaseInfo, installer `.iss`, backend Identifier strings, and shipping docs updated from `1.2.1-preview.1` to `1.2.3-preview.1`. CHANGELOG retains all prior entries.
+- **Docs / disclosures:** README, BETA_RELEASE_CHECKLIST, RELEASE_PROCESS, BETA_TESTER_QUICKSTART, FIRST_TESTER_DOWNLOAD_FLOW, DOWNLOAD_TROUBLESHOOTING, FAQ, UPDATE_SYSTEM, marketing docs, smoke checklist (renamed `DEV_BETA_SMOKE_CHECKLIST_v1.2.3.md`), and tooling scripts refreshed to `v1.2.3`. Required Dev Beta disclosures (beta technician-assist software, local-first diagnostics, Unknown/NotExposed sensor honesty, redacted support bundles, no auto-upload, Ventoy/third-party tools under their own licenses, no guaranteed repair/recovery) remain in place across in-app About / FAQ / Legal / Privacy and the docs bundle.
+- **Tests:** `AppReleaseInfoTests`, `BetaDocumentationTests`, `InfoDocumentTextsTests`, `DeepSensorDisclosureCopyTests`, `KyraForgerEmsReleaseAnswerTests`, `UserAgentHeaderProbeTests`, and `DriveValidatorDocsTests` updated to assert v1.2.3 strings and the renamed smoke checklist. New disclosure assertions added (see `BetaDocumentationTests`).
+- **Packaging:** Not rebuilt in this pass. `release/current/` artifacts still describe `1.2.1-preview.1`; rerun `tools/build-release.ps1 -Version 1.2.3-preview.1` (and supporting backend bundle scripts) to refresh installer/ZIP/release.json/CHECKSUMS.sha256 before publishing.
+
+---
+
 ## v1.2.1-preview.1 — Public Preview (2026-05-08)
 
 ### Elevated Scan and LibreHWM pass

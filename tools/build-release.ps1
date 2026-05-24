@@ -430,8 +430,8 @@ $checksumsPath = Join-Path $releaseRoot "CHECKSUMS.sha256"
 $installerOutputDir = Join-Path $distRoot "installer"
 $installerReleaseName = "ForgerEMS-Setup-v{0}.exe" -f $Version
 $installerReleasePath = Join-Path $releaseRoot $installerReleaseName
-$displayVersionLabel = "ForgerEMS v1.2.1 Public Preview"
-$releaseIdentifierLabel = "ForgerEMS v1.2.1 Public Preview - package $Version (ZIP-first technician bundle)"
+$displayVersionLabel = "ForgerEMS v1.2.3 Public Preview"
+$releaseIdentifierLabel = "ForgerEMS v1.2.3 Public Preview - package $Version (ZIP-first technician bundle)"
 
 $buildTempRoot = Join-Path $distRoot "tmp"
 Ensure-Dir -Path $buildTempRoot

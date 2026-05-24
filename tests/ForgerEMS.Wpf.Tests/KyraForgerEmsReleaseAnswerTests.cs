@@ -17,11 +17,11 @@ public sealed class KyraForgerEmsReleaseAnswerTests
                 PromptMode = CopilotPromptMode.General,
                     ContextText = """
                     User question: What is the newest ForgerEMS release?
-                    App version: 1.2.1-preview.1
+                    App version: 1.2.3-preview.1
                     """
             });
 
-        Assert.Contains("1.2.1-preview.1", text, StringComparison.Ordinal);
+        Assert.Contains("1.2.3-preview.1", text, StringComparison.Ordinal);
         Assert.Contains("running install", text, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("don't have live data tools", text, StringComparison.OrdinalIgnoreCase);
     }

@@ -221,7 +221,7 @@ No beta program can promise “100% safe,” but ForgerEMS is designed for **tec
 Open PowerShell in the folder that contains the ZIP and `CHECKSUMS.sha256`. For example:
 
 ```powershell
-Get-FileHash .\ForgerEMS-v1.2.1-preview.1.zip -Algorithm SHA256
+Get-FileHash .\ForgerEMS-v1.2.3-preview.1.zip -Algorithm SHA256
 ```
 
 Compare the `Hash` line to the line in `CHECKSUMS.sha256` for that filename.
@@ -354,3 +354,15 @@ Email **ForgerDigitalSolutions@outlook.com** with app version, Windows version, 
 ## What is ForgerEMS in one sentence?
 
 A Windows technician suite for **USB toolkit building**, **USB Intelligence**, **System Intelligence**, **Diagnostics**, **Toolkit Manager**, and **Kyra**.
+
+---
+
+## Does ForgerEMS guarantee repair, data recovery, malware removal, hardware diagnosis, or compatibility?
+
+**No.** ForgerEMS is **technician-assist software**, not a replacement for professional judgement. Dev Beta builds do not promise guaranteed repair, guaranteed data recovery, guaranteed malware removal, guaranteed hardware diagnosis, guaranteed driver/component compatibility, guaranteed pricing or marketplace accuracy, or guaranteed legal/regulatory compliance. System Intelligence and Hardware X-Ray may report **Unknown**, **NotExposed**, or **Inferred** when firmware, drivers, permissions, or sensor providers do not expose data — these are coverage limits, not failures. Confirm critical decisions with additional testing and treat third-party tools, OS images, and vendor utilities under their own licenses and terms.
+
+---
+
+## Are support bundles uploaded automatically?
+
+**No.** Support bundles are user-controlled. ForgerEMS attempts to redact local usernames, private paths, API keys, tokens, bearer values, and product keys from logs, diagnostics, and exported bundles, but you should still **review every bundle before sharing it**. The app does not automatically upload bundles, sensor data, scan reports, or USB inventories anywhere.

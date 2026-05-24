@@ -32,6 +32,12 @@ Release packaging must include:
 
 The provider is local and read-only. ForgerEMS does not expose fan control, voltage control, clock control, overclocking, undervolting, BIOS writes, or firmware writes. ForgerEMS does not redistribute HWiNFO, AIDA64, CPU-Z, or vendor tools, and users do not download sensor providers manually.
 
+## Optional Vendor-Detected Providers (no redistribution)
+
+ForgerEMS may surface read-only data from tools that are **already installed by the user or by an official driver**, without bundling, downloading, or installing them itself:
+
+- **NVIDIA SMI**: when `nvidia-smi.exe` is already present (System32, PATH, or `NVIDIA Corporation\NVSMI`) ForgerEMS runs a single short `--query-gpu` call to surface GPU temperature/load/clock/VRAM. No redistribution. If absent, the provider reports `Not detected` honestly and does nothing else. NVIDIA SMI is installed and licensed by NVIDIA as part of the official driver; ForgerEMS does not modify it.
+
 ## Tools Not Redistributed By Default
 
-ForgerEMS does not bundle HWiNFO, AIDA64, CPU-Z, GPU-Z, vendor tuning utilities, or proprietary sensor tools unless redistribution is explicitly licensed and reviewed.
+ForgerEMS does not bundle HWiNFO, AIDA64, CPU-Z, GPU-Z, vendor tuning utilities, smartctl/smartmontools, NVAPI/ADLX SDKs, or proprietary sensor tools unless redistribution is explicitly licensed and reviewed. The `nvidia-smi` integration above is detection-only — the binary itself is shipped by the NVIDIA driver, not by ForgerEMS.

@@ -123,6 +123,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private bool _verboseLiveLogs;
     private UsbManagedHeartbeatPhase _usbManagedHeartbeatPhase = UsbManagedHeartbeatPhase.Unknown;
     private CancellationTokenSource? _usbMonitorCancellation;
+    private UsbDeviceChangeDebouncer? _usbDeviceChangeDebouncer;
+    private UsbDeviceChangeWindowHook? _usbDeviceChangeWindowHook;
+    private bool _usbDeviceChangeHookAttached;
     private CancellationTokenSource? _manualUsbBenchmarkCts;
     private CancellationTokenSource? _autoUsbBenchmarkCts;
     private CancellationTokenSource? _autoUsbBenchmarkDebounceCts;
@@ -246,7 +249,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private string _toolkitMissingCountText = "Managed Missing: 0";
     private string _toolkitUpdatesCountText = "Managed updates available: 0";
     private string _toolkitFailedCountText = "Verification issues: 0";
-    private string _toolkitManualCountText = "Manual 0";
+    private string _toolkitManualCountText = "Manual / Vendor links: 0";
     private string _toolkitPlaceholderCountText = "Skipped/Placeholder 0";
     private string _toolkitHealthVerdictText = "Health Verdict: not scanned";
     private string _toolkitReadinessScoreText = "Toolkit readiness: Unknown / Limited Data (0/100)";
@@ -261,7 +264,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         "Toolkit Manager checks readiness, reports, links, and selected-tool details. Use USB Builder to add or update tools on the USB.";
     private const string ToolkitTargetHelperTextValue = "Change USB target from USB Builder.";
     private const string ToolkitManagerFooterGuidanceValue =
-        "Use USB Builder to add/update tools. Toolkit Manager inspects what is present and what needs attention. Manual items are vendor/download pages, gated tools, or user-supplied media — they do not count as managed-tool failures.";
+        "Use USB Builder to add/update tools. Toolkit Manager inspects what is present and what needs attention. " +
+        "Manual / Vendor links are OEM support pages, model-specific drivers, firmware lookup, and licensed/manual tools — they are not auto-downloaded and do not count as managed-tool failures. " +
+        "Use the Manual / Vendor links chip to open them.";
     private string _selectedToolkitFilter = "All";
     private string _selectedToolkitCategoryFilter = "All categories";
     private string _selectedToolkitFamilyFilter = "All families";
@@ -499,6 +504,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         CopyElevatedScanAdminCommand = new RelayCommand(CopyElevatedScanAdminCommandExecute, CanRunBackendOnlyActions);
         RestartAsAdministratorCommand = new RelayCommand(RestartAsAdministratorExecute);
         RefreshToolkitHealthCommand = new AsyncRelayCommand(RunToolkitHealthScanAsync, CanRunToolkitScan);
+        FullVerifyToolkitHealthCommand = new AsyncRelayCommand(RunToolkitHealthFullVerifyAsync, CanRunToolkitScan);
         VerifyToolkitLinksCommand = new AsyncRelayCommand(RunVerifyToolkitLinksAsync, CanVerifyToolkitLinks);
         CancelVerifyToolkitLinksCommand = new RelayCommand(CancelVerifyToolkitLinks, () => IsToolkitLinkVerificationBusy);
         UpdateToolkitCommand = new AsyncRelayCommand(RunToolkitUpdateAsync, CanRunTargetedActions);
@@ -722,6 +728,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         "All",
         "Installed",
         "Managed Missing",
+        "Manual / Vendor links",
         "Manual / Info",
         "Manual Required",
         "Verification Issues",
@@ -823,6 +830,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public RelayCommand RestartAsAdministratorCommand { get; }
 
     public AsyncRelayCommand RefreshToolkitHealthCommand { get; }
+
+    public AsyncRelayCommand FullVerifyToolkitHealthCommand { get; }
 
     public AsyncRelayCommand VerifyToolkitLinksCommand { get; }
 
@@ -4337,7 +4346,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private async Task RunToolkitHealthScanAsync()
+    private Task RunToolkitHealthScanAsync() => RunToolkitHealthScanAsync(fullVerify: false);
+
+    private Task RunToolkitHealthFullVerifyAsync() => RunToolkitHealthScanAsync(fullVerify: true);
+
+    private async Task RunToolkitHealthScanAsync(bool fullVerify)
     {
         if (SelectedUsbTarget is null)
         {
@@ -4357,20 +4370,33 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
+        // Normal Refresh Health is the fast cached path; Full Verify forces a
+        // re-hash of every managed file even when its size/last-write/expected
+        // checksum are unchanged. The cache is never used to make a security
+        // claim — fresh hashes still distinguish themselves in the verification
+        // wording recorded by the PowerShell scanner.
+        var arguments = new List<string>
+        {
+            "-TargetRoot",
+            SelectedUsbTarget.RootPath,
+            "-ManifestPath",
+            ResolveManifestPath(),
+        };
+        if (fullVerify)
+        {
+            arguments.Add("-FullVerify");
+        }
+
+        var displayName = fullVerify ? "Toolkit health scan (Full Verify)" : "Toolkit health scan";
+
         await RunScriptAsync(
             ScriptActionType.ToolkitHealth,
             new PowerShellRunRequest
             {
-                DisplayName = "Toolkit health scan",
+                DisplayName = displayName,
                 WorkingDirectory = _backendContext.WorkingDirectory,
                 ScriptPath = scriptPath,
-                Arguments =
-                [
-                    "-TargetRoot",
-                    SelectedUsbTarget.RootPath,
-                    "-ManifestPath",
-                    ResolveManifestPath()
-                ],
+                Arguments = arguments,
                 ProgressItemName = "toolkit health scan",
                 HeartbeatKind = PowerShellHeartbeatKind.LongRunningScan
             });
@@ -7862,7 +7888,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 _toolkitHealthAlignedWithSelection = false;
                 ResetToolkitLinkVerificationUi();
                 ToolkitStatusText = "Needs refresh";
-                ToolkitHealthVerdictText = $"Toolkit report was cached for {reportTargetRoot}. Click Refresh Toolkit for {selectedRoot}.";
+                ToolkitHealthVerdictText = $"Toolkit report was cached for {reportTargetRoot}. Click Refresh Health for {selectedRoot}.";
                 ToolkitReportPathText = $"Report: stale for selected target ({reportPath})";
                 ToolkitReadinessScoreText = "Toolkit readiness: Unknown / Limited Data (0/100)";
                 ToolkitReadinessStrengthsText = "Top strengths: stale report for selected target.";
@@ -7900,11 +7926,35 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 unknown = GetJsonInt(summary, "unknown");
             }
 
+            // Manual / Vendor links chip: combines MANUAL_REQUIRED entries with the vendor page
+            // shortcuts Setup writes (PLACEHOLDER/COVERED_BY_MANAGED with type=page). The chip
+            // label intentionally says "Manual / Vendor links" to reflect what these items
+            // actually are: OEM support, model-specific drivers, firmware lookup, and
+            // licensed/manual tools — not failures. Count is computed by scanning the JSON
+            // items pre-populating the grid so the chip number is honest at first render.
+            var vendorShortcutCount = manual;
+            if (root.TryGetProperty("items", out var preItems) && preItems.ValueKind == JsonValueKind.Array)
+            {
+                var counted = 0;
+                foreach (var probe in preItems.EnumerateArray())
+                {
+                    if (JsonItemIsManualOrVendorLink(probe))
+                    {
+                        counted++;
+                    }
+                }
+
+                if (counted > 0)
+                {
+                    vendorShortcutCount = counted;
+                }
+            }
+
             ToolkitInstalledCountText = $"Managed Ready: {installed}";
             ToolkitMissingCountText = $"Managed Missing: {missing}";
             ToolkitUpdatesCountText = $"Managed updates available: {updates}";
             ToolkitFailedCountText = $"Verification issues: {failed}";
-            ToolkitManualCountText = $"Manual / Info items: {manual}";
+            ToolkitManualCountText = $"Manual / Vendor links: {vendorShortcutCount}";
             ToolkitPlaceholderCountText = $"Skipped/Placeholder/Covered {skipped + placeholder + coveredByManaged}";
             var healthVerdict = GetJsonString(root, "healthVerdict", "UNKNOWN");
             ToolkitLastScanText = $"Last scan: {FormatGeneratedUtc(GetJsonString(root, "generatedUtc", string.Empty))} | Target: {reportTargetRoot}";
@@ -7915,7 +7965,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             if (functionalHealthy && verdictUpper.Contains("MANUAL", StringComparison.Ordinal))
             {
                 ToolkitHealthVerdictText =
-                    "Toolkit usable — manual/info items available (expected: download pages, licensed tools, or gated downloads ForgerEMS does not auto-fetch).";
+                    "Managed toolkit ready. Optional manual/vendor links are available for OEM support, model-specific drivers, firmware lookup, and licensed tools. No required managed downloads are missing.";
                 ToolkitStatusText = healthVerdict;
                 ApplyStatusBrushes(
                     "READY",
@@ -7982,6 +8032,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                         ClassificationReason = GetJsonString(item, "classificationReason", string.Empty),
                         Version = GetJsonString(item, "version", "Unknown"),
                         Verification = verification,
+                        VerificationMode = GetJsonString(item, "verificationMode", string.Empty),
                         Recommendation = GetJsonString(item, "recommendation", string.Empty),
                         NormalizedCategoryLabel = normalized,
                         Kind = GetJsonString(item, "kind", string.Empty),
@@ -8369,7 +8420,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 SelectedToolkitSourceTrustFilter = "official";
                 break;
             case "manual":
-                SelectedToolkitFilter = "Manual / Info";
+                // v1.2.3: route the legacy "manual" hint to the broader Manual / Vendor links
+                // chip so users land on the MSI/OEM/vendor support shortcuts as well as the
+                // narrower MANUAL_REQUIRED rows.
+                SelectedToolkitFilter = "Manual / Vendor links";
+                break;
+            case "vendor":
+            case "vendorlinks":
+            case "manualvendor":
+                SelectedToolkitFilter = "Manual / Vendor links";
                 break;
             default:
                 SelectedToolkitFilter = "All";
@@ -8393,7 +8452,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ClearAllToolkitHealthItems();
         ToolkitHealthItems.Clear();
         ToolkitClassificationSummaryText = "Toolkit classification: refresh required for selected target.";
-        ToolkitHealthVerdictText = "Toolkit health cache invalidated after USB target change. Click Refresh Toolkit.";
+        ToolkitHealthVerdictText = "Toolkit health cache invalidated after USB target change. Click Refresh Health.";
         ToolkitReportPathText = "Report: pending refresh for selected target.";
         ToolkitMissingCountText = "Managed Missing: --";
         ToolkitInstalledCountText = "Managed Ready: --";
@@ -8420,7 +8479,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                                      string.Equals(item.Status, "PLACEHOLDER", StringComparison.OrdinalIgnoreCase) ||
                                      string.Equals(item.Status, "COVERED_BY_MANAGED", StringComparison.OrdinalIgnoreCase),
             "Manual Required" => string.Equals(item.Status, "MANUAL_REQUIRED", StringComparison.OrdinalIgnoreCase),
+            // Backward-compatible "Manual / Info" still matches MANUAL_REQUIRED only.
             "Manual / Info" => string.Equals(item.Status, "MANUAL_REQUIRED", StringComparison.OrdinalIgnoreCase),
+            // v1.2.3 "Manual / Vendor links" is broader: it surfaces the MSI/OEM/vendor support
+            // shortcuts that Setup writes as PLACEHOLDER/COVERED_BY_MANAGED page entries, along
+            // with any tool flagged manualOnly or with kind=*-shortcut/page. These are not
+            // failures and not auto-downloaded — they're vendor pages, OEM support links,
+            // firmware lookup, model-specific drivers, and licensed/manual tools.
+            "Manual / Vendor links" => IsManualOrVendorLink(item),
             _ => true
         };
 
@@ -8465,6 +8531,103 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// True when this item should appear under the v1.2.3 "Manual / Vendor links" chip:
+    /// vendor support pages, OEM/driver lookup shortcuts, firmware lookup, licensed/manual tools,
+    /// or anything the manifest flagged as manualOnly. These items are not failures and are
+    /// never auto-downloaded — they are the MSI/OEM/vendor shortcut entries Setup writes to the
+    /// USB under \Tools\Portable\Vendor.
+    /// </summary>
+    internal static bool IsManualOrVendorLink(ToolkitHealthItemView item)
+    {
+        if (item is null)
+        {
+            return false;
+        }
+
+        if (string.Equals(item.Status, "MANUAL_REQUIRED", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (item.ManualOnly)
+        {
+            return true;
+        }
+
+        // Page/shortcut type entries that ended up classified as PLACEHOLDER/COVERED_BY_MANAGED
+        // are the vendor link entries: those are precisely the rows the user expected to see
+        // under the manual/vendor chip.
+        var typeIsPage = item.Type?.IndexOf("page", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                         item.Type?.IndexOf("shortcut", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                         item.Type?.IndexOf("link", StringComparison.OrdinalIgnoreCase) >= 0;
+        var kindIsShortcut = item.Kind?.IndexOf("shortcut", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                             item.Kind?.IndexOf("page", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                             item.Kind?.IndexOf("vendor", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                             item.Kind?.IndexOf("oem", StringComparison.OrdinalIgnoreCase) >= 0;
+        var statusIsPlaceholderLike =
+            string.Equals(item.Status, "PLACEHOLDER", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(item.Status, "COVERED_BY_MANAGED", StringComparison.OrdinalIgnoreCase);
+
+        if (statusIsPlaceholderLike && (typeIsPage || kindIsShortcut))
+        {
+            return true;
+        }
+
+        if (typeIsPage && string.Equals(item.Status, "SKIPPED", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// JSON-side counterpart of <see cref="IsManualOrVendorLink"/> used while parsing the
+    /// Toolkit Health report so the chip count is correct on first render (before the
+    /// observable item collection is populated).
+    /// </summary>
+    private static bool JsonItemIsManualOrVendorLink(JsonElement item)
+    {
+        var status = GetJsonString(item, "status", string.Empty);
+        if (string.Equals(status, "MANUAL_REQUIRED", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var manualOnly = GetJsonBool(item, "manualOnly");
+        if (manualOnly)
+        {
+            return true;
+        }
+
+        var type = GetJsonString(item, "type", string.Empty);
+        var kind = GetJsonString(item, "kind", string.Empty);
+
+        bool ContainsCi(string source, string fragment) =>
+            !string.IsNullOrEmpty(source) && source.IndexOf(fragment, StringComparison.OrdinalIgnoreCase) >= 0;
+
+        var typeIsPage = ContainsCi(type, "page") || ContainsCi(type, "shortcut") || ContainsCi(type, "link");
+        var kindIsShortcut = ContainsCi(kind, "shortcut") || ContainsCi(kind, "page") ||
+                             ContainsCi(kind, "vendor") || ContainsCi(kind, "oem");
+
+        var statusIsPlaceholderLike =
+            string.Equals(status, "PLACEHOLDER", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(status, "COVERED_BY_MANAGED", StringComparison.OrdinalIgnoreCase);
+
+        if (statusIsPlaceholderLike && (typeIsPage || kindIsShortcut))
+        {
+            return true;
+        }
+
+        if (typeIsPage && string.Equals(status, "SKIPPED", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private void ApplyProfilePreferences(UsbWorkspaceProfile profile)
@@ -9309,7 +9472,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 $"Optional providers: {optionalProviders}{Environment.NewLine}" +
                 $"Limited: {limited}{Environment.NewLine}" +
                 $"Storage: {storage}{Environment.NewLine}" +
-                "Guide: Unknown lowers confidence; NotExposed means firmware/driver/permission limit; failure requires explicit evidence." + Environment.NewLine +
+                "Guide: NotExposed is not failure. Unknown lowers confidence; NotExposed means firmware/driver/permission limit; a true failure requires explicit evidence." + Environment.NewLine +
+                "Why missing? Common reasons: firmware does not expose the sensor, vendor driver does not expose it, admin not granted, deep provider not packaged or off, optional vendor probe (e.g. ACPI thermal zones, NVIDIA SMI) unavailable on this machine." + Environment.NewLine +
                 $"Note: {note} {deepNote}";
         }
 
@@ -9419,6 +9583,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             {
                 var n when n.Contains("Windows", StringComparison.OrdinalIgnoreCase) => "Windows Native",
                 var n when n.Contains("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase) => "LibreHardwareMonitor",
+                var n when n.Contains("ACPI", StringComparison.OrdinalIgnoreCase) => "ACPI Thermal Zones",
+                var n when n.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) => "NVIDIA SMI",
                 var n when n.Contains("Deep", StringComparison.OrdinalIgnoreCase) => "Deep Sensor Provider",
                 var n when n.Contains("Admin", StringComparison.OrdinalIgnoreCase) => "Admin Bridge",
                 var n when n.Contains("Driver", StringComparison.OrdinalIgnoreCase) => "Driver Provider",
@@ -9430,7 +9596,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     ? "Bundled but disabled"
                     : label.Equals("Driver Provider", StringComparison.OrdinalIgnoreCase)
                         ? "Not included"
-                        : "Off";
+                        : label.Equals("NVIDIA SMI", StringComparison.OrdinalIgnoreCase)
+                            ? "Not detected"
+                            : label.Equals("ACPI Thermal Zones", StringComparison.OrdinalIgnoreCase)
+                                ? "No zones exposed"
+                                : "Off";
             if (!enabled &&
                 (label.Equals("Deep Sensor Provider", StringComparison.OrdinalIgnoreCase) ||
                  label.Equals("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase)) &&
@@ -9440,17 +9610,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 status = "Not packaged / unavailable";
             }
 
-            if (!enabled && mode.Equals("Disabled", StringComparison.OrdinalIgnoreCase))
-            {
-                rows.Add($"{label}: {status}");
-            }
-            else
-            {
-                rows.Add($"{label}: {status}");
-            }
+            rows.Add($"{label}: {status}");
         }
 
-        return FormatList(rows.Take(4), "Windows Native: Active; LibreHardwareMonitor: Off; Admin Bridge: Off; Driver Provider: Not included");
+        return FormatList(rows.Take(6), "Windows Native: Active; LibreHardwareMonitor: Off; ACPI Thermal Zones: No zones exposed; NVIDIA SMI: Not detected; Admin Bridge: Off; Driver Provider: Not included");
     }
 
     private static string BuildSensorProviderCompactSummary(SensorMatrixResult sensors)
@@ -9461,6 +9624,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             {
                 var n when n.Contains("Windows", StringComparison.OrdinalIgnoreCase) => "Windows Native",
                 var n when n.Contains("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase) => "LibreHardwareMonitor",
+                var n when n.Contains("ACPI", StringComparison.OrdinalIgnoreCase) => "ACPI Thermal Zones",
+                var n when n.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) => "NVIDIA SMI",
                 var n when n.Contains("Deep", StringComparison.OrdinalIgnoreCase) => "Deep Sensor Provider",
                 var n when n.Contains("Admin", StringComparison.OrdinalIgnoreCase) => "Admin Bridge",
                 var n when n.Contains("Driver", StringComparison.OrdinalIgnoreCase) => "Driver Provider",
@@ -9472,7 +9637,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     ? "Bundled but disabled"
                     : label.Equals("Driver Provider", StringComparison.OrdinalIgnoreCase)
                         ? "Not included"
-                        : "Off";
+                        : label.Equals("NVIDIA SMI", StringComparison.OrdinalIgnoreCase)
+                            ? "Not detected"
+                            : label.Equals("ACPI Thermal Zones", StringComparison.OrdinalIgnoreCase)
+                                ? "No zones exposed"
+                                : "Off";
             if (!provider.IsEnabled &&
                 (label.Equals("Deep Sensor Provider", StringComparison.OrdinalIgnoreCase) ||
                  label.Equals("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase)) &&
@@ -9484,7 +9653,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             return $"{label}: {status}";
         });
-        return FormatList(rows.Take(4), "Windows Native: Active; LibreHardwareMonitor: Off; Admin Bridge: Off; Driver Provider: Not included");
+        return FormatList(rows.Take(6), "Windows Native: Active; LibreHardwareMonitor: Off; ACPI Thermal Zones: No zones exposed; NVIDIA SMI: Not detected; Admin Bridge: Off; Driver Provider: Not included");
     }
 
     private static string BuildOptionalProviderStatusSummary(JsonElement root)
@@ -11768,68 +11937,134 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private void StartUsbAutoDetectionMonitor()
     {
+        // The legacy 1-second polling loop was retired in favor of an
+        // event-driven WM_DEVICECHANGE hook (see AttachUsbDeviceChangeNotifier).
+        // We keep this entry point because InitializeAsync still calls it; when
+        // the hook is already wired up there is nothing for it to do.
         if (_usbMonitorStarted)
         {
             return;
         }
 
         _usbMonitorStarted = true;
-        _usbMonitorCancellation = new CancellationTokenSource();
-        _ = MonitorUsbTargetsAsync(_usbMonitorCancellation.Token);
-        AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Automatic USB detection monitor started.", LogSeverity.Info));
+        if (_usbDeviceChangeHookAttached)
+        {
+            AppendLog(new LogLine(
+                DateTimeOffset.Now,
+                "[INFO] Event-driven USB plug/unplug detection active (WM_DEVICECHANGE, debounced).",
+                LogSeverity.Info));
+        }
+        else
+        {
+            AppendLog(new LogLine(
+                DateTimeOffset.Now,
+                "[INFO] USB detection ready. Plug/unplug refreshes will arrive via Windows device events once the main window is realized.",
+                LogSeverity.Info));
+        }
     }
 
-    private async Task MonitorUsbTargetsAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Wires the event-driven USB plug/unplug detection to the main application
+    /// window. Replaces the legacy 1-second polling loop with a debounced
+    /// WM_DEVICECHANGE hook (default 1200ms) so the target list refreshes once
+    /// per device-change burst without constant background scanning.
+    ///
+    /// Safety: this only triggers a target-list refresh. Toolkit Health is not
+    /// auto-started on hotplug, no destructive USB action is initiated, and
+    /// the existing USB target safety gate continues to filter out C:\,
+    /// system, internal, and EFI partitions inside <see cref="RefreshUsbTargetsAsync"/>.
+    /// </summary>
+    public void AttachUsbDeviceChangeNotifier(System.Windows.Window window)
     {
-        while (!cancellationToken.IsCancellationRequested)
+        ArgumentNullException.ThrowIfNull(window);
+        if (_usbDeviceChangeHookAttached)
         {
-            try
+            return;
+        }
+
+        _usbDeviceChangeDebouncer = new UsbDeviceChangeDebouncer(
+            OnUsbDeviceChangeFlushed,
+            TimeSpan.FromMilliseconds(1200));
+        _usbDeviceChangeWindowHook = new UsbDeviceChangeWindowHook(_usbDeviceChangeDebouncer);
+        _usbDeviceChangeWindowHook.Attach(window);
+        _usbDeviceChangeHookAttached = true;
+
+        AppendLog(new LogLine(
+            DateTimeOffset.Now,
+            "[INFO] WM_DEVICECHANGE hook installed (debounce=1200ms). Plug or unplug a USB to refresh targets automatically.",
+            LogSeverity.Info));
+    }
+
+    private void OnUsbDeviceChangeFlushed(UsbDeviceChangeReason reason)
+    {
+        // The debouncer fires on a thread-pool thread; marshal back to the UI
+        // thread before touching anything that listens to PropertyChanged.
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null)
+        {
+            return;
+        }
+
+        _ = dispatcher.InvokeAsync(() => HandleDebouncedUsbDeviceChangeAsync(reason));
+    }
+
+    private async Task HandleDebouncedUsbDeviceChangeAsync(UsbDeviceChangeReason reason)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (_isBusy || _refreshingUsbTargets || _benchmarksInProgress.Count > 0)
+        {
+            // Avoid stepping on a destructive USB operation in flight.
+            return;
+        }
+
+        try
+        {
+            var detectionResult = await _usbDetectionService.GetUsbTargetsAsync().ConfigureAwait(true);
+            var signature = BuildUsbSignature(detectionResult.Targets);
+            if (string.Equals(signature, _knownUsbSignature, StringComparison.Ordinal))
             {
-                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);
-                if (cancellationToken.IsCancellationRequested || _isBusy || _refreshingUsbTargets || _benchmarksInProgress.Count > 0)
-                {
-                    continue;
-                }
-
-                var detectionResult = await _usbDetectionService.GetUsbTargetsAsync(cancellationToken).ConfigureAwait(false);
-                var signature = BuildUsbSignature(detectionResult.Targets);
-                if (string.Equals(signature, _knownUsbSignature, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                var oldRoots = ParseUsbSignature(_knownUsbSignature);
-                var newRoots = ParseUsbSignature(signature);
-                var added = newRoots.Except(oldRoots, StringComparer.OrdinalIgnoreCase).ToArray();
-                var removed = oldRoots.Except(newRoots, StringComparer.OrdinalIgnoreCase).ToArray();
-
-                if (added.Length > 0)
-                {
-                    AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] USB device added: {string.Join(", ", added)}. Waiting for Windows mount to settle.", LogSeverity.Info));
-                    await Task.Delay(TimeSpan.FromMilliseconds(1600), cancellationToken).ConfigureAwait(false);
-                }
-
-                if (removed.Length > 0)
-                {
-                    foreach (var removedRoot in removed)
-                    {
-                        UsbPortLabelResolver.MarkDriveRemoved(removedRoot);
-                    }
-
-                    AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] USB device removed: {string.Join(", ", removed)}.", LogSeverity.Warning));
-                }
-
-                var refreshTask = await Application.Current.Dispatcher.InvokeAsync(() => RefreshUsbTargetsAsync());
-                await refreshTask.ConfigureAwait(false);
+                // Nothing interesting changed (could be a non-volume device hop).
+                return;
             }
-            catch (OperationCanceledException)
+
+            var oldRoots = ParseUsbSignature(_knownUsbSignature);
+            var newRoots = ParseUsbSignature(signature);
+            var added = newRoots.Except(oldRoots, StringComparer.OrdinalIgnoreCase).ToArray();
+            var removed = oldRoots.Except(newRoots, StringComparer.OrdinalIgnoreCase).ToArray();
+
+            if (added.Length > 0)
             {
-                break;
+                AppendLog(new LogLine(
+                    DateTimeOffset.Now,
+                    $"[INFO] USB device arrival event: {string.Join(", ", added)} (reason={reason}).",
+                    LogSeverity.Info));
             }
-            catch (Exception exception)
+
+            if (removed.Length > 0)
             {
-                AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Automatic USB detection skipped one cycle: {exception.Message}", LogSeverity.Warning));
+                foreach (var removedRoot in removed)
+                {
+                    UsbPortLabelResolver.MarkDriveRemoved(removedRoot);
+                }
+
+                AppendLog(new LogLine(
+                    DateTimeOffset.Now,
+                    $"[WARN] USB device removal event: {string.Join(", ", removed)} (reason={reason}).",
+                    LogSeverity.Warning));
             }
+
+            await RefreshUsbTargetsAsync().ConfigureAwait(true);
+        }
+        catch (Exception exception)
+        {
+            AppendLog(new LogLine(
+                DateTimeOffset.Now,
+                $"[WARN] Event-driven USB refresh skipped: {exception.Message}",
+                LogSeverity.Warning));
         }
     }
 
@@ -12732,7 +12967,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             using var client = new HttpClient();
             client.Timeout = TimeSpan.FromSeconds(10);
-            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "ForgerEMS/1.2.1-preview.1 (beta link checker; no execute)");
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", $"ForgerEMS/{AppReleaseInfo.Version} (beta link checker; no execute)");
             using var request = new HttpRequestMessage(HttpMethod.Head, uri);
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
             var sb = new StringBuilder(baseText);
@@ -12791,7 +13026,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             using var client = new HttpClient();
             client.Timeout = TimeSpan.FromMinutes(3);
-            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "ForgerEMS/1.2.1-preview.1 (beta quarantine download; no execute)");
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", $"ForgerEMS/{AppReleaseInfo.Version} (beta quarantine download; no execute)");
             await using var network = await client.GetStreamAsync(uri).ConfigureAwait(false);
             await using var file = File.Create(targetPath);
             using var incremental = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
@@ -14125,6 +14360,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         RunElevatedSystemScanCommand.RaiseCanExecuteChanged();
         CopyElevatedScanAdminCommand.RaiseCanExecuteChanged();
         RefreshToolkitHealthCommand.RaiseCanExecuteChanged();
+        FullVerifyToolkitHealthCommand.RaiseCanExecuteChanged();
         VerifyToolkitLinksCommand.RaiseCanExecuteChanged();
         CancelVerifyToolkitLinksCommand.RaiseCanExecuteChanged();
         UpdateToolkitCommand.RaiseCanExecuteChanged();
@@ -14622,6 +14858,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
 
         _usbMonitorCancellation?.Dispose();
+        try
+        {
+            _usbDeviceChangeWindowHook?.Dispose();
+            _usbDeviceChangeDebouncer?.Dispose();
+        }
+        catch
+        {
+            // The hook lives as long as the window; tearing it down a second
+            // time during shutdown is harmless.
+        }
+
         _copilotGenerationCancellation?.Dispose();
         _manualUsbBenchmarkCts?.Dispose();
         _autoUsbBenchmarkCts?.Dispose();

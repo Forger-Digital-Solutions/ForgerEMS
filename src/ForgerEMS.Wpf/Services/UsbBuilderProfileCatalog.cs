@@ -144,15 +144,17 @@ public static class UsbBuilderProfileCatalog
         yield return new(
             "oem-tools",
             "OEM recovery links and vendor tools",
-            "Official vendor support, drivers, firmware, and recovery utility shortcuts.",
+            // v1.2.3: the subtitle states exactly what is on the USB — manual/vendor shortcuts —
+            // and never implies drivers, firmware, or BIOS were auto-downloaded.
+            "Official vendor support, drivers, firmware lookup, and recovery utility shortcuts. Manual/vendor links — not auto-downloaded.",
             "OEM",
             IsRequired: false,
             DefaultIncluded: true,
             RequiresManualMedia: false,
             UsbBuilderPackDownloadMode.LinkOnlyLicenseRestricted,
-            UsbBuilderProfileSpaceEstimate.Range(20 * Mb, 80 * Mb, 300 * Mb, UsbBuilderPackSizeConfidence.Estimated, "shortcuts and guides"),
-            "OEM recovery images stay with the vendor; ForgerEMS links to official support pages and utility landing pages.",
-            ["Tools\\Portable", "Drivers"]);
+            UsbBuilderProfileSpaceEstimate.Range(20 * Mb, 80 * Mb, 300 * Mb, UsbBuilderPackSizeConfidence.Estimated, "manual/vendor shortcuts and guides"),
+            "OEM recovery images and model-specific drivers stay with the vendor. ForgerEMS writes manual/vendor link shortcuts (.url) under \\Tools\\Portable\\Vendor and points the user at official OEM support, driver, firmware, and Microsoft Surface pages. BIOS/firmware is never auto-downloaded.",
+            ["Tools\\Portable\\Vendor", "Tools\\Portable", "Drivers"]);
 
         yield return new(
             "diagnostics",

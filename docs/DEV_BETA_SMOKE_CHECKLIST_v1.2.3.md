@@ -1,10 +1,10 @@
-# ForgerEMS v1.2.1-preview.1 — Dev Beta Smoke Checklist
+# ForgerEMS v1.2.3-preview.1 — Dev Beta Smoke Checklist
 
-**Scope:** Confirm the v1.2.1 preview build behaves as expected, with focus on the new managed-download / Download Plan / freshness workflow. Mark each line **OK** / **BLOCKED** / **N/A**. Stop on the first BLOCKED in section 3 or 4 — those are the new-surface gates.
+**Scope:** Confirm the v1.2.3 preview build behaves as expected, with focus on the new managed-download / Download Plan / freshness workflow. Mark each line **OK** / **BLOCKED** / **N/A**. Stop on the first BLOCKED in section 3 or 4 — those are the new-surface gates.
 
 For broader regression coverage, see [FINAL_MANUAL_SMOKE_TEST.md](../FINAL_MANUAL_SMOKE_TEST.md). This checklist is additive, not a replacement.
 
-**Build under test:** `release/current/ForgerEMS-Setup-v1.2.1-preview.1.exe` or the matching ZIP. Single-file portable exe at `release/current/app/ForgerEMS.exe`.
+**Build under test:** `release/current/ForgerEMS-Setup-v1.2.3-preview.1.exe` or the matching ZIP. Single-file portable exe at `release/current/app/ForgerEMS.exe`.
 
 ---
 
@@ -12,7 +12,7 @@ For broader regression coverage, see [FINAL_MANUAL_SMOKE_TEST.md](../FINAL_MANUA
 
 - [ ] Install (or unzip) the build. Launch ForgerEMS.
 - [ ] Title bar reads **ForgerEMS**. Main window opens centered, not off-screen.
-- [ ] About / status area shows **1.2.1-preview.1**.
+- [ ] About / status area shows **1.2.3-preview.1**.
 - [ ] Network Pulse header renders. No "Internet: Paused" without an explicit pause.
 
 ## 2. Tab smoke
@@ -124,7 +124,7 @@ Run from a PowerShell prompt against the installed (or unzipped) `release/curren
 ## 8. Release artifact integrity
 
 - [ ] `release/current/CHECKSUMS.sha256` verifies against the on-disk artifacts (use `Get-FileHash -Algorithm SHA256` and compare).
-- [ ] `release/current/release.json` reports `version: 1.2.1-preview.1`, `channel: preview`.
+- [ ] `release/current/release.json` reports `version: 1.2.3-preview.1`, `channel: preview`.
 
 ## 9. Hard "must not" gates
 

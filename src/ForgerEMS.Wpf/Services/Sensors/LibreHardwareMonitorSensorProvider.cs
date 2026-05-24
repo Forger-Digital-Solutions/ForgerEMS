@@ -288,7 +288,26 @@ public class LibreHardwareMonitorSensorProvider : IHardwareSensorProvider
             "Sensors requiring admin access",
             "Unsupported hardware sensors"
         ],
-        ReadOnlyGuarantees = SensorProviderCapabilities.None.ReadOnlyGuarantees
+        ReadOnlyGuarantees = SensorProviderCapabilities.None.ReadOnlyGuarantees,
+        DataClasses =
+        [
+            new(SensorDataClass.CpuTemperature, SensorDataClassStatus.Available, "Available when LibreHardwareMonitor exposes a per-core or package temperature sensor."),
+            new(SensorDataClass.CpuPackagePower, SensorDataClassStatus.Available, "Available when an MSR/CPU power sensor is exposed."),
+            new(SensorDataClass.CpuLoad, SensorDataClassStatus.Available, "Available when LibreHardwareMonitor reports per-core or package load."),
+            new(SensorDataClass.CpuClock, SensorDataClassStatus.Available, "Live clocks when exposed by the CPU sensor tree."),
+            new(SensorDataClass.GpuTemperature, SensorDataClassStatus.Available, "Vendor driver dependent (NVIDIA / AMD / Intel)."),
+            new(SensorDataClass.GpuLoad, SensorDataClassStatus.Available, "Vendor driver dependent."),
+            new(SensorDataClass.GpuClock, SensorDataClassStatus.Available, "Vendor driver dependent."),
+            new(SensorDataClass.GpuVram, SensorDataClassStatus.Available, "When a Data or SmallData sensor is exposed for the GPU."),
+            new(SensorDataClass.FanRpm, SensorDataClassStatus.Available, "Available when SuperIO / EC fan tachometer is readable. Read-only only."),
+            new(SensorDataClass.StorageTemperature, SensorDataClassStatus.Available, "NVMe/SATA temperature when surfaced by Storage hardware."),
+            new(SensorDataClass.StorageSmart, SensorDataClassStatus.NotExposed, "Use Windows MSFT_StorageReliabilityCounter; LibreHardwareMonitor is not the SMART source."),
+            new(SensorDataClass.BoardSensors, SensorDataClassStatus.Available, "Motherboard / SuperIO temperatures and voltages, read-only display only."),
+            new(SensorDataClass.ThermalZone, SensorDataClassStatus.NotExposed, "Use the ACPI Thermal Zones optional probe instead."),
+            new(SensorDataClass.BatteryWear, SensorDataClassStatus.NotApplicable, "Use the Windows-Native powercfg path."),
+            new(SensorDataClass.BatteryCycleCount, SensorDataClassStatus.NotApplicable, "Use the Windows-Native powercfg path."),
+            new(SensorDataClass.BatteryChargeRate, SensorDataClassStatus.NotApplicable, "Use Windows battery APIs.")
+        ]
     };
 
     private static ThirdPartyNotice BuildThirdPartyNotice() => new()

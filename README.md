@@ -2,7 +2,7 @@
 
 **Forger Engineering Maintenance Suite** — a Windows desktop app for technicians who work with USB toolkits, repairs, and diagnostics.
 
-**Current release line:** **v1.2.1-preview.1** — **ForgerEMS v1.2.1 Public Preview** (toolkit catalog metadata, workflow presets, Toolkit Readiness Score, local machine profiles, Verify Links, Kyra awareness for the technician suite, config/env layer, support bundle export, and documentation pass; core WPF/.NET 8 architecture unchanged).
+**Current release line:** **v1.2.3-preview.1** — **ForgerEMS v1.2.3 Public Preview** (toolkit catalog metadata, workflow presets, Toolkit Readiness Score, local machine profiles, Verify Links, Kyra awareness for the technician suite, config/env layer, support bundle export, and documentation pass; core WPF/.NET 8 architecture unchanged).
 
 **Kickstarter:** Coming soon.
 
@@ -142,16 +142,16 @@ Staging without compiling the installer:
 .\tools\build-release.ps1 -DryRun
 ```
 
-Full local release (version follows `src/ForgerEMS.Wpf/ForgerEMS.Wpf.csproj`, currently **1.2.1-preview.1** / **ForgerEMS v1.2.1 Public Preview**):
+Full local release (version follows `src/ForgerEMS.Wpf/ForgerEMS.Wpf.csproj`, currently **1.2.3-preview.1** / **ForgerEMS v1.2.3 Public Preview**):
 
 ```powershell
-.\tools\build-release.ps1 -Version 1.2.1-preview.1
+.\tools\build-release.ps1 -Version 1.2.3-preview.1
 ```
 
 Without Inno Setup (skips installer + dual ZIP bundle; still stages `release\current\` app + backend + `release.json` + checksums):
 
 ```powershell
-.\tools\build-release.ps1 -Version 1.2.1-preview.1 -SkipInstaller
+.\tools\build-release.ps1 -Version 1.2.3-preview.1 -SkipInstaller
 ```
 
 Release layout, CI, and operator checklists: [RELEASE_PROCESS.md](RELEASE_PROCESS.md), [BETA_RELEASE_CHECKLIST.md](BETA_RELEASE_CHECKLIST.md), [BETA_TESTING_GUIDE.md](BETA_TESTING_GUIDE.md).

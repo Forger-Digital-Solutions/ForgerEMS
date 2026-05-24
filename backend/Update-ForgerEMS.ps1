@@ -2348,8 +2348,14 @@ foreach ($item in $orderedItems) {
         try {
             Write-UrlShortcut -ShortcutPath $dest -Url $url
             Write-Log "Shortcut updated: $destRel" "OK"
+            # v1.2.3-preview.1: track manual/vendor shortcut writes via Summary.Shortcut only.
+            # The legacy double-bump of Summary.PlaceholderOnly here caused the misleading
+            # "Placeholder-only / skipped manifest lines: $total" counter where the value would
+            # match the total manifest count when every item shipped a shortcut. PlaceholderOnly
+            # is now reserved for items that were genuinely skipped/placeholder, not for the
+            # successful manual/vendor shortcut writes that Toolkit Manager surfaces under the
+            # "Manual / Vendor links" chip.
             $script:Summary.Shortcut++
-            $script:Summary.PlaceholderOnly++
         }
         catch {
             Write-Log "Shortcut write failed: $($_.Exception.Message)" "ERROR"
@@ -2624,19 +2630,31 @@ Write-Log "Total manifest items: $($script:Summary.Total)" "INFO"
 Write-Log "Managed downloads selected (auto): $($script:Summary.ManagedFileItems)" "INFO"
 Write-Log "Managed downloads completed (written/updated): $($script:Summary.Downloaded)" "INFO"
 Write-Log "Managed downloads failed with fallback shortcut: $($script:Summary.FailedWithFallback)" "INFO"
-Write-Log "Manual/info shortcut items (expected, not failed downloads): $($script:Summary.PlaceholderItems)" "INFO"
+# v1.2.3-preview.1: "Manual/info shortcut" was renamed to "Manual/vendor shortcut" so the log
+# matches the Toolkit Manager "Manual / Vendor links" chip and Profile card wording. These are
+# OEM support pages, model-specific drivers, firmware lookup, and licensed/manual tools — not
+# failed managed downloads.
+Write-Log "Manual/vendor shortcut items in manifest (expected, not failed downloads): $($script:Summary.PlaceholderItems)" "INFO"
+Write-Log "Manual/vendor shortcuts updated on USB: $($script:Summary.Shortcut)" "INFO"
+Write-Log "Manual/vendor shortcuts reused (already current): $($script:Summary.FallbackShortcutsReused)" "INFO"
 Write-Log "Verified successfully: $($script:Summary.Verified)" "INFO"
-Write-Log "Placeholder-only / skipped manifest lines: $skippedOrPlaceholderOnly" "INFO"
-Write-Log "Fallback shortcuts created: $($script:Summary.FallbackShortcutsCreated)" "INFO"
-Write-Log "Fallback shortcuts reused: $($script:Summary.FallbackShortcutsReused)" "INFO"
+# Truly skipped/placeholder items: manifest lines that did not produce a managed download AND
+# did not write a manual/vendor shortcut (covered by managed, disabled, etc). This is no longer
+# double-counted against successful shortcut writes.
+Write-Log "Truly skipped / placeholder-only manifest lines: $skippedOrPlaceholderOnly" "INFO"
+Write-Log "Fallback shortcuts created (managed failure -> shortcut): $($script:Summary.FallbackShortcutsCreated)" "INFO"
 Write-Log "Archived prior files: $($script:Summary.Archived)" "INFO"
 Write-Log "Disabled manifest items: $($script:Summary.Disabled)" "INFO"
 Write-Log "Total failed managed items: $($script:Summary.Failed)" "INFO"
 
 Write-Log "--- ACTION SUMMARY ---" "OK"
-Write-Log ("Items downloaded: $($script:Summary.Downloaded)") "OK"
+Write-Log ("Managed tools ready: $($script:Summary.Downloaded + $script:Summary.UpToDateSkipped)") "OK"
+Write-Log ("Items downloaded this run: $($script:Summary.Downloaded)") "OK"
 Write-Log ("Items already up to date: $($script:Summary.UpToDateSkipped)") "OK"
-Write-Log ("Shortcuts updated: $($script:Summary.Shortcut)") "OK"
+Write-Log ("Manual/vendor shortcuts updated: $($script:Summary.Shortcut)") "OK"
+Write-Log ("Manual/vendor shortcuts reused: $($script:Summary.FallbackShortcutsReused)") "OK"
+Write-Log ("Optional manual/vendor links are available in Toolkit Manager (Manual / Vendor links chip) and on the USB.") "OK"
+Write-Log ("Review manual/vendor links for model-specific drivers, OEM support, firmware lookup, and licensed tools.") "OK"
 Write-Log ("Failures: $($script:Summary.Failed)") $(if ($script:Summary.Failed -gt 0) { "WARN" } else { "OK" })
 Write-Log ("Warnings: $($script:Summary.WarnEvents)") "INFO"
 $actionUsbReadiness = if ($script:Summary.Failed -eq 0) {
@@ -2660,7 +2678,7 @@ else {
 Write-Log ("USB readiness: $actionUsbReadiness") $actionReadinessLevel
 
 if ($script:Summary.Failed -gt 0) {
-    Write-Log "USB readiness: PARTIALLY STAGED - USB layout is present; one or more managed downloads need attention. Manual/info shortcuts above are normal and are not failed downloads." "WARN"
+    Write-Log "USB readiness: PARTIALLY STAGED - USB layout is present; one or more managed downloads need attention. Manual/vendor shortcuts above are normal and are not failed downloads." "WARN"
     Write-Log "------ FAILED MANAGED ITEMS (DETAIL) ------" "WARN"
     if ($script:ManagedFailureLines.Count -gt 0) {
         foreach ($line in $script:ManagedFailureLines) {

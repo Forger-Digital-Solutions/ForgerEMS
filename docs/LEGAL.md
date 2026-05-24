@@ -123,6 +123,22 @@ ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the
 
 ---
 
+## Technician-assist scope (Dev Beta)
+
+ForgerEMS is **technician-assist software**, not a replacement for professional judgement. The Public Preview / Dev Beta line specifically **does not promise**:
+
+- Guaranteed **repair** of any device, OS, application, or partition.
+- Guaranteed **data recovery** from failing, corrupted, encrypted, or wiped media.
+- Guaranteed **malware removal** or guaranteed **clean** result after a scan.
+- Guaranteed **hardware diagnosis** (sensors, drives, batteries, GPUs, etc.).
+- Guaranteed **driver / component / accessory compatibility**.
+- Guaranteed **pricing, marketplace, or resale-value accuracy**.
+- Guaranteed **legal, regulatory, or licensing compliance** for any third-party tool you decide to download or use through ForgerEMS.
+
+Technicians, refurbishers, and operators remain responsible for confirming official vendor links, licensing terms, and safe use before acting on any output, suggestion, or auto-prepared workflow from this app. Third-party tools surfaced or downloaded through ForgerEMS (Ventoy, OS images, vendor utilities, recovery images, mobile tooling, etc.) remain under their own licenses and terms — ForgerEMS does not claim ownership of them and does not represent itself as a legal authority on them.
+
+---
+
 ## Limitation of liability
 
 To the extent permitted by law, Forger Digital Solutions is **not liable** for indirect, incidental, special, consequential, or punitive damages, or for loss of profits, data, or goodwill, arising from use or inability to use the beta software — including misuse of tools suggested or launched by the user.

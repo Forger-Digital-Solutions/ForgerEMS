@@ -53,6 +53,14 @@ public sealed class ToolkitHealthItemView : INotifyPropertyChanged
 
     public string Verification { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Backend-emitted hint about how the most recent checksum verdict was
+    /// produced: "fresh" (hashed this run), "cached" (reused from a previous
+    /// verified scan), or empty (no checksum verification took place — manual
+    /// shortcuts, optional items, missing files, or legacy reports).
+    /// </summary>
+    public string VerificationMode { get; init; } = string.Empty;
+
     public string Recommendation { get; init; } = string.Empty;
 
     public string NormalizedCategoryLabel { get; init; } = string.Empty;
@@ -180,7 +188,7 @@ public sealed class ToolkitHealthItemView : INotifyPropertyChanged
 
     public string VerificationDisplay => Status.Trim().ToUpperInvariant() switch
     {
-        "INSTALLED" => "Verified",
+        "INSTALLED" => InstalledVerificationLabel(),
         "VERIFICATION_PENDING" => "Pending",
         "COVERED_BY_MANAGED" => "Covered",
         "HASH_FAILED" => "Checksum mismatch",
@@ -188,6 +196,57 @@ public sealed class ToolkitHealthItemView : INotifyPropertyChanged
         "MANUAL_REQUIRED" => "Manual",
         _ => string.IsNullOrWhiteSpace(Verification) ? "Unknown" : Verification
     };
+
+    /// <summary>
+    /// Short, technician-facing tag that distinguishes fresh vs cached vs
+    /// shortcut. Wording is intentionally honest — cached entries are NEVER
+    /// labeled "fresh verified."
+    /// </summary>
+    public string VerificationModeBadge => Status.Trim().ToUpperInvariant() switch
+    {
+        "INSTALLED" => VerificationMode.Trim().ToLowerInvariant() switch
+        {
+            "cached" => "Cached match",
+            "fresh" => "Fresh match",
+            _ => "Verified"
+        },
+        "VERIFICATION_PENDING" => "Pending",
+        "COVERED_BY_MANAGED" => "Covered shortcut",
+        "HASH_FAILED" => "Checksum mismatch",
+        "MISSING_REQUIRED" => "Not present",
+        "MANUAL_REQUIRED" => "Manual shortcut",
+        _ => string.Empty
+    };
+
+    /// <summary>
+    /// Longer tooltip-style explanation that matches the backend honesty
+    /// rules. Cached items advertise themselves as unchanged since the prior
+    /// verified scan, not as a fresh re-hash this run.
+    /// </summary>
+    public string VerificationModeTooltip => Status.Trim().ToUpperInvariant() switch
+    {
+        "INSTALLED" => VerificationMode.Trim().ToLowerInvariant() switch
+        {
+            "cached" => "Cached match: unchanged since previous verified scan. Re-hash by clicking Full Verify.",
+            "fresh" => "Fresh match: re-hashed this run.",
+            _ => "Verified."
+        },
+        "MANUAL_REQUIRED" => "Manual shortcut — no checksum verification expected.",
+        "COVERED_BY_MANAGED" => "Covered by a verified managed download; this shortcut is intentionally suppressed.",
+        "VERIFICATION_PENDING" => "File present, checksum not yet verified.",
+        "HASH_FAILED" => "File hash did not match the manifest's expected checksum.",
+        "MISSING_REQUIRED" => "File is not present on the target.",
+        _ => string.Empty
+    };
+
+    private string InstalledVerificationLabel()
+    {
+        // Keep the existing one-word grid column behaviour ("Verified") so
+        // existing UI layout/grid widths are unchanged. The cached vs fresh
+        // distinction lives in VerificationModeBadge / VerificationModeTooltip
+        // / DetailText.
+        return "Verified";
+    }
 
     public string ActionDisplay => Status.Trim().ToUpperInvariant() switch
     {
@@ -226,6 +285,7 @@ public sealed class ToolkitHealthItemView : INotifyPropertyChanged
         $"Found path: {(string.IsNullOrWhiteSpace(MatchedPath) ? "UNKNOWN" : MatchedPath)}{Environment.NewLine}" +
         $"Size: {(SizeBytes > 0 ? FormatSize(SizeBytes) : "unknown")}{Environment.NewLine}" +
         $"Verification: {VerificationDisplay}{Environment.NewLine}" +
+        $"Verification mode: {VerificationModeBadge}{(string.IsNullOrWhiteSpace(VerificationModeTooltip) ? string.Empty : " — " + VerificationModeTooltip)}{Environment.NewLine}" +
         $"Reason: {(string.IsNullOrWhiteSpace(ClassificationReason) ? "Report did not include a classification reason." : ClassificationReason)}{Environment.NewLine}" +
         OptionalCatalogMetadataLines() +
         $"Next step: {Recommendation}";

@@ -9,7 +9,7 @@ public sealed class InfoDocumentTextsTests
     [Fact]
     public void BuildAbout_ContainsProductIdentityAndNoCopilotLabel()
     {
-        var text = InfoDocumentTexts.BuildAbout("1.2.1-preview.1", "ForgerEMS v1.2.1 Public Preview", "test-fe", "test-be");
+        var text = InfoDocumentTexts.BuildAbout("1.2.3-preview.1", "ForgerEMS v1.2.3 Public Preview", "test-fe", "test-be");
         Assert.Contains("Forger Engineering Maintenance Suite", text, StringComparison.Ordinal);
         Assert.Contains("Forger Digital Solutions", text, StringComparison.Ordinal);
         Assert.Contains("docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md", text, StringComparison.Ordinal);
@@ -30,6 +30,22 @@ public sealed class InfoDocumentTextsTests
         Assert.DoesNotContain("Copilot", InfoDocumentTexts.BuildFaq(), StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Copilot", InfoDocumentTexts.BuildLegal(), StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Copilot", InfoDocumentTexts.BuildPrivacy(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BuildLegal_DiscloseTechnicianAssistScopeAndNoGuaranteedOutcomes()
+    {
+        var legal = InfoDocumentTexts.BuildLegal();
+        Assert.Contains("technician-assist", legal, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not a replacement", legal, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("guaranteed repair", legal, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("guaranteed data recovery", legal, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("guaranteed malware removal", legal, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("guaranteed hardware diagnosis", legal, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Unknown", legal, StringComparison.Ordinal);
+        Assert.Contains("NotExposed", legal, StringComparison.Ordinal);
+        Assert.Contains("review every bundle", legal, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not automatically upload", legal, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

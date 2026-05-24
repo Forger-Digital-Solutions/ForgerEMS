@@ -591,7 +591,7 @@ public sealed class NetworkPulseViewModel : ObservableObject
             : "Adapter link ceiling: unknown (not used as internet speed).";
         DetailGatewayText = s.GatewayPingMs is > 0
             ? $"{s.GatewayPingMs.Value.ToString("0.0", CultureInfo.InvariantCulture)} ms ICMP to default gateway (measured)"
-            : "— (not measured this cycle)";
+            : "— (sample pending)";
         DetailDnsText = s.DnsLookupMs is > 0
             ? $"{s.DnsLookupMs.Value.ToString("0.0", CultureInfo.InvariantCulture)} ms lookup sample (may be cached)"
             : "—";
@@ -691,9 +691,9 @@ public sealed class NetworkPulseViewModel : ObservableObject
         {
             NetworkPulseMeasurementKind.Measured => "Measured",
             NetworkPulseMeasurementKind.Estimated => "Estimated",
-            NetworkPulseMeasurementKind.Unavailable => "not measured this cycle",
+            NetworkPulseMeasurementKind.Unavailable => "sample pending",
             NetworkPulseMeasurementKind.Paused => "probe paused",
-            _ => "not measured this cycle"
+            _ => "sample pending"
         };
 
     private static string FormatSpeedLabel(double? mbps, NetworkPulseMeasurementKind kind)
@@ -760,7 +760,7 @@ public sealed class NetworkPulseViewModel : ObservableObject
         return (dot >= 0 ? value[..dot] : value).Trim();
     }
 
-    // Two-part surfaces such as "Online — checks inconsistent" share their colour with the
+    // Two-part surfaces such as "Partial check" share their colour with the
     // base ("Online" → green-ish). Map by checking the first word so future variations don't
     // silently fall to the default neutral colour.
     private static SolidColorBrush BrushForSurface(string surface)
@@ -769,6 +769,8 @@ public sealed class NetworkPulseViewModel : ObservableObject
         return head switch
         {
             "Online" => new SolidColorBrush(Color.FromRgb(134, 239, 172)),
+            "Partial check" => new SolidColorBrush(Color.FromRgb(186, 230, 253)),
+            "Testing…" => new SolidColorBrush(Color.FromRgb(186, 230, 253)),
             "Measuring" => new SolidColorBrush(Color.FromRgb(186, 230, 253)),
             "Stale" => new SolidColorBrush(Color.FromRgb(253, 224, 71)),
             "Limited" => new SolidColorBrush(Color.FromRgb(251, 191, 36)),
@@ -785,7 +787,7 @@ public sealed class NetworkPulseViewModel : ObservableObject
             return string.Empty;
         }
 
-        // Match the part before an em-dash, en-dash, hyphen, or " (": "Online — checks inconsistent"
+        // Match the part before an em-dash, en-dash, hyphen, or " (": "Partial check"
         // and "Online (verification mismatch)" both map to "Online".
         var separators = new[] { " — ", " – ", " - ", " (" };
         foreach (var sep in separators)
@@ -807,10 +809,11 @@ public sealed class NetworkPulseViewModel : ObservableObject
             return "NoUsableRouteOrProbe";
         }
 
-        // "Online — checks inconsistent" is informational, not an error. Keep the technical
+        // "Partial check" is informational, not an error. Keep the technical
         // category empty so error-banner consumers (clipboard, logs) do not over-react.
-        if (surface.StartsWith("Online", StringComparison.OrdinalIgnoreCase) &&
-            surface.Contains("checks", StringComparison.OrdinalIgnoreCase))
+        if (surface.StartsWith("Partial check", StringComparison.OrdinalIgnoreCase) ||
+            (surface.StartsWith("Online", StringComparison.OrdinalIgnoreCase) &&
+             surface.Contains("checks", StringComparison.OrdinalIgnoreCase)))
         {
             return string.Empty;
         }

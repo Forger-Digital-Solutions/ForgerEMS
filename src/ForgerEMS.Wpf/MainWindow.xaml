@@ -2830,26 +2830,35 @@
 
                                     <Grid Margin="0,0,0,12">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" MinWidth="168" />
+                                            <ColumnDefinition Width="*" MinWidth="148" />
                                             <ColumnDefinition Width="10" />
-                                            <ColumnDefinition Width="*" MinWidth="168" />
+                                            <ColumnDefinition Width="*" MinWidth="148" />
                                             <ColumnDefinition Width="10" />
-                                            <ColumnDefinition Width="*" MinWidth="168" />
+                                            <ColumnDefinition Width="*" MinWidth="148" />
+                                            <ColumnDefinition Width="10" />
+                                            <ColumnDefinition Width="*" MinWidth="148" />
                                         </Grid.ColumnDefinitions>
                                         <Button Grid.Column="0"
                                                 HorizontalAlignment="Stretch"
                                                 Padding="16,10"
                                                 Content="Refresh Health"
-                                                ToolTip="Rescan toolkit health for the USB target selected in USB Builder."
+                                                ToolTip="Fast health refresh: reuses cached verification for unchanged installed files. Use Full Verify for a fresh re-hash."
                                                 Command="{Binding RefreshToolkitHealthCommand}" />
                                         <Button Grid.Column="2"
+                                                HorizontalAlignment="Stretch"
+                                                Padding="16,10"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Content="Full Verify"
+                                                ToolTip="Deep verify: re-hash every installed managed file from scratch. Slow on populated USBs."
+                                                Command="{Binding FullVerifyToolkitHealthCommand}" />
+                                        <Button Grid.Column="4"
                                                 HorizontalAlignment="Stretch"
                                                 Padding="16,10"
                                                 Style="{StaticResource SecondaryButtonStyle}"
                                                 Content="Open Reports"
                                                 ToolTip="Open USB reports on the target or local runtime reports."
                                                 Command="{Binding OpenToolkitReportsCommand}" />
-                                        <Button Grid.Column="4"
+                                        <Button Grid.Column="6"
                                                 HorizontalAlignment="Stretch"
                                                 Padding="16,10"
                                                 Style="{StaticResource SecondaryButtonStyle}"

@@ -160,7 +160,8 @@ public sealed class SensorProviderCapabilities
             "No voltage control",
             "No clock control",
             "No BIOS or firmware writes"
-        ]
+        ],
+        DataClasses = Array.Empty<SensorDataClassAvailability>()
     };
 
     public IReadOnlyList<string> SupportedCapabilities { get; init; } = Array.Empty<string>();
@@ -168,7 +169,56 @@ public sealed class SensorProviderCapabilities
     public IReadOnlyList<string> MissingCapabilities { get; init; } = Array.Empty<string>();
 
     public IReadOnlyList<string> ReadOnlyGuarantees { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Typed per-data-class availability map. Additive to the free-text
+    /// SupportedCapabilities / MissingCapabilities lists so existing
+    /// markdown/JSON consumers keep working.
+    /// </summary>
+    public IReadOnlyList<SensorDataClassAvailability> DataClasses { get; init; } = Array.Empty<SensorDataClassAvailability>();
 }
+
+/// <summary>
+/// Concrete sensor data classes ForgerEMS knows how to report. Read-only.
+/// </summary>
+public enum SensorDataClass
+{
+    CpuTemperature,
+    CpuPackagePower,
+    CpuLoad,
+    CpuClock,
+    GpuTemperature,
+    GpuLoad,
+    GpuClock,
+    GpuVram,
+    FanRpm,
+    StorageSmart,
+    StorageTemperature,
+    BatteryCycleCount,
+    BatteryWear,
+    BatteryChargeRate,
+    ThermalZone,
+    BoardSensors
+}
+
+/// <summary>
+/// Per-data-class availability for a provider. NotExposed/Permission/Unavailable
+/// distinguishes "we tried and could not" from "we did not try" honestly.
+/// </summary>
+public enum SensorDataClassStatus
+{
+    Available,
+    NotExposed,
+    PermissionRequired,
+    ProviderUnavailable,
+    NotPackaged,
+    NotApplicable
+}
+
+public sealed record SensorDataClassAvailability(
+    SensorDataClass DataClass,
+    SensorDataClassStatus Status,
+    string Detail = "");
 
 public sealed class ThirdPartyNotice
 {
@@ -292,7 +342,9 @@ public static class SensorProviderRegistry
     {
         var providers = new IHardwareSensorProvider[]
         {
-            new BundledDeepSensorProvider()
+            new BundledDeepSensorProvider(),
+            new AcpiThermalZoneSensorProvider(),
+            new NvidiaSmiSensorProvider()
         };
         var manifests = new List<SensorProviderManifest>
         {
@@ -358,7 +410,26 @@ public static class SensorProviderRegistry
                 "Fan RPM without vendor/deep provider support",
                 "Package power without vendor/deep provider support"
             ],
-            ReadOnlyGuarantees = SensorProviderCapabilities.None.ReadOnlyGuarantees
+            ReadOnlyGuarantees = SensorProviderCapabilities.None.ReadOnlyGuarantees,
+            DataClasses =
+            [
+                new(SensorDataClass.CpuLoad, SensorDataClassStatus.Available, "Inventory + safe perf counters"),
+                new(SensorDataClass.CpuClock, SensorDataClassStatus.Available, "Reported base clock from Win32_Processor"),
+                new(SensorDataClass.CpuTemperature, SensorDataClassStatus.NotExposed, "Standard WMI rarely exposes CPU temperature; vendor driver or deep provider required."),
+                new(SensorDataClass.CpuPackagePower, SensorDataClassStatus.NotExposed, "Not exposed via safe built-in Windows APIs."),
+                new(SensorDataClass.GpuLoad, SensorDataClassStatus.NotExposed, "DX/WMI inventory only; live load needs vendor driver counters or deep provider."),
+                new(SensorDataClass.GpuClock, SensorDataClassStatus.NotExposed, "Vendor driver required for live clocks."),
+                new(SensorDataClass.GpuTemperature, SensorDataClassStatus.NotExposed, "Vendor driver or deep provider required."),
+                new(SensorDataClass.GpuVram, SensorDataClassStatus.NotExposed, "Inventory only; live VRAM utilisation needs driver counters."),
+                new(SensorDataClass.FanRpm, SensorDataClassStatus.NotExposed, "Standard Windows APIs do not expose fan RPM."),
+                new(SensorDataClass.StorageSmart, SensorDataClassStatus.Available, "MSFT_PhysicalDisk / MSFT_StorageReliabilityCounter when exposed."),
+                new(SensorDataClass.StorageTemperature, SensorDataClassStatus.NotExposed, "Exposed only for some NVMe; honestly reported per-disk."),
+                new(SensorDataClass.BatteryCycleCount, SensorDataClassStatus.NotExposed, "powercfg /batteryreport may include it; often hidden by firmware."),
+                new(SensorDataClass.BatteryWear, SensorDataClassStatus.Available, "Derived from powercfg /batteryreport design vs full-charge capacity when exposed."),
+                new(SensorDataClass.BatteryChargeRate, SensorDataClassStatus.NotExposed, "Not normalized by the safe scan."),
+                new(SensorDataClass.ThermalZone, SensorDataClassStatus.NotExposed, "Use the ACPI Thermal Zones optional probe when available."),
+                new(SensorDataClass.BoardSensors, SensorDataClassStatus.NotExposed, "Board sensors require LibreHardwareMonitor or vendor SDK.")
+            ]
         },
         Readings = builtInGroups.SelectMany(group => group.Readings).ToArray(),
         TechnicianNotes =

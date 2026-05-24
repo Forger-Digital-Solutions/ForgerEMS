@@ -85,6 +85,22 @@ public sealed class ToolkitManagerLayoutTests
         Assert.Contains("ToolkitSourceTrustFilterOptions", xaml, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ToolkitHealthVerdictCopy_PointsAtRefreshHealthButton()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "ViewModels", "MainViewModel.cs"));
+
+        // The action button in MainWindow.xaml is labeled "Refresh Health".
+        // User-facing prompts that direct the user to that button must match the label
+        // exactly — never "Refresh Toolkit", which does not exist.
+        Assert.DoesNotContain("Click Refresh Toolkit", source, StringComparison.Ordinal);
+        Assert.Contains(
+            "Toolkit health cache invalidated after USB target change. Click Refresh Health.",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains("Click Refresh Health for ", source, StringComparison.Ordinal);
+    }
+
     private static string ReadToolkitManagerSection()
     {
         var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));

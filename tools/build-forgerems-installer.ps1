@@ -101,7 +101,7 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
     $Version = Get-ProjectVersion -ProjectPath $csprojPath
 }
 
-$displayVersionLabel = "ForgerEMS v1.2.1 Public Preview"
+$displayVersionLabel = "ForgerEMS v1.2.3 Public Preview"
 $releaseIdentifierLabel = $displayVersionLabel
 
 if (-not $SkipPublish) {

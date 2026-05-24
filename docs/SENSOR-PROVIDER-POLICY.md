@@ -6,8 +6,35 @@ ForgerEMS sensor providers are local, read-only diagnostics components. Users sh
 
 - **Windows Native**: enabled by default. Uses built-in Windows APIs, WMI/CIM, registry reads, powercfg reports, storage reliability counters where exposed, security APIs, and ForgerEMS USB Intelligence evidence.
 - **LibreHardwareMonitor Deep Sensor Provider**: optional bundled reviewed provider loaded from `providers/sensors/LibreHardwareMonitorLib.dll`. It is enabled only when ForgerEMS Deep Sensor Mode resolves to `ReadOnly` through the environment variable, user setting, or installer default.
+- **ACPI Thermal Zones (optional probe)**: built-in Windows-native optional probe via `MSAcpi_ThermalZoneTemperature` in the `root\WMI` namespace. Runs read-only. Reports zone temperatures when the firmware/ACPI table exposes them and `No zones exposed` honestly when it does not. No data is fabricated. No driver install, no fan/voltage/clock writes.
+- **NVIDIA SMI (optional vendor-detected probe)**: detection-only. ForgerEMS never bundles or downloads `nvidia-smi.exe`. When the NVIDIA driver has already installed it on the machine (System32, PATH, or `NVIDIA Corporation\NVSMI`), ForgerEMS runs a single short read-only `--query-gpu` call, parses the CSV, and surfaces GPU temperature / load / graphics clock / VRAM used. When the binary is absent the provider reports `Not detected` honestly and does nothing else.
 - **ForgerEMS Admin Sensor Bridge**: future on-demand read-only bridge for sensors requiring elevation. Disabled by default and not included in the current beta.
 - **Signed Driver Provider**: roadmap only. Not part of the current beta.
+
+## Typed Data-Class Matrix
+
+Each provider declares per-data-class availability so the Hardware X-Ray UI and JSON report can be honest about what each provider *can* expose, separate from what is actually exposed on any specific machine:
+
+| Provider | CPU temp | CPU pkg power | CPU load/clock | GPU temp/load/clock | GPU VRAM | Fan RPM | Storage SMART/temp | Battery wear / cycles | Thermal zone | Board sensors |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Windows Native | NotExposed | NotExposed | Available | NotExposed | NotExposed | NotExposed | SMART Available / Temp NotExposed | Wear Available / Cycles NotExposed | NotExposed | NotExposed |
+| LibreHardwareMonitor | Available | Available | Available | Available | Available | Available | Temp Available / SMART NotExposed | NotApplicable | NotExposed | Available |
+| ACPI Thermal Zones | — | — | — | — | — | — | — | — | Available / NotExposed | — |
+| NVIDIA SMI | — | — | — | Available (NVIDIA only) | Available (NVIDIA only) | — | — | — | — | — |
+
+A capability of `Available` means the provider *can* surface that data class when present; per-machine availability still depends on firmware, drivers, permissions, and Deep Sensor Mode. `NotExposed` / `NotPackaged` / `ProviderUnavailable` / `PermissionRequired` / `NotApplicable` are all reported honestly and **must not** be treated as hardware failure.
+
+## Providers explicitly *not* added in v1.2.3
+
+The provider expansion pass evaluated the following candidates and deferred them by design:
+
+- **NVAPI / ADLX / AMD ADL**: vendor SDKs with redistribution and signing requirements that warrant their own legal review. Listed on the roadmap; not added blindly.
+- **Intel Power Gadget / Intel PCM**: superseded / requires a kernel driver that ForgerEMS does not install.
+- **HWiNFO Shared Memory SDK**: closed-source SDK; cannot be bundled without explicit license. Detection-only fallback could be added later if a user already has HWiNFO running.
+- **smartctl / smartmontools**: GPL-2.0; not bundled in this pass. SMART/NVMe health is currently sourced through Windows MSFT_StorageReliabilityCounter. A future design pass may add an optional detection of an already-installed `smartctl.exe` analogous to the `nvidia-smi` pattern.
+- **OpenHardwareMonitor (legacy)**: superseded by the actively maintained LibreHardwareMonitor fork already bundled.
+
+In every case the rule is the same: *do not add a dependency just because it exists.*
 
 ## Safety Rules
 
@@ -39,7 +66,7 @@ Bundled providers must:
 - clearly label admin requirements
 - be disabled by default if experimental
 
-ForgerEMS v1.2.1 Public Preview pins `LibreHardwareMonitorLib` 0.9.6 as the reviewed local read-only deep sensor provider. Users do not download it manually; release packaging ships the provider DLL and notices inside the installer and portable bundle.
+ForgerEMS v1.2.3 Public Preview pins `LibreHardwareMonitorLib` 0.9.6 as the reviewed local read-only deep sensor provider. Users do not download it manually; release packaging ships the provider DLL and notices inside the installer and portable bundle.
 
 ForgerEMS Deep Sensor Mode is disclosed in the installer and Settings. It only reads supported local hardware sensor data while ForgerEMS is running or a System Intelligence / Hardware X-Ray scan is executing. It does not install a background service, create a startup task, send sensor telemetry, use cloud sensor services, or auto-send reports.
 

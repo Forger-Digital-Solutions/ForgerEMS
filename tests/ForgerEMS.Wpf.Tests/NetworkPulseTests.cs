@@ -21,7 +21,10 @@ public sealed class NetworkPulseSettingsStoreTests
             var s = store.Load();
             Assert.True(s.RefreshIntervalSeconds >= 5);
             Assert.True(s.SpeedProbeCadenceSeconds >= 30);
-            Assert.False(s.UploadProbesEnabled);
+            // v1.2.3-preview.1: UploadProbesEnabled flipped to default-on so a normal cycle
+            // attempts a real upload sample (the widget can no longer honestly report
+            // "Up: not tested" as a normal end-of-cycle state).
+            Assert.True(s.UploadProbesEnabled);
             Assert.False(s.PauseOnMetered); // PauseOnMetered now defaults off — opt-in only.
             Assert.False(s.PauseOnBatterySaver);
             Assert.False(s.PauseDuringHostHeavyNetwork);
@@ -306,8 +309,11 @@ public sealed class NetworkPulseInternetWidgetTextTests
         new(st, "Stable", null, null, Array.Empty<double>(), 0, 0);
 
     [Fact]
-    public void FreshOnline_ShowsMeasuredDownload_AndUploadNotTested()
+    public void FreshOnline_UploadProbesOff_ShowsMeasuredDownload_AndLegacyUploadNotTested()
     {
+        // Legacy compatibility: when callers pass uploadProbesEnabled:false (the pre-v1.2.3
+        // default), the widget still emits the "Up: not tested" string so existing
+        // settings/UX behaviour is preserved for users who opted out of upload probes.
         var snap = new NetworkPulseSnapshot(
             NetworkPulseStatus.Good,
             NetworkPulseConfidence.High,
@@ -975,10 +981,12 @@ public sealed class NetworkPulseInternetWidgetTextTests
     }
 
     [Fact]
-    public void DefaultSettings_UploadProbesDisabled_AutoTestEnabled()
+    public void DefaultSettings_UploadProbesEnabledByDefault_AutoTestEnabled()
     {
+        // v1.2.3-preview.1: a normal Network Pulse cycle now attempts ping + download + upload
+        // by default so the header can show a real Up Mbps reading.
         var s = new NetworkPulseSettings();
-        Assert.False(s.UploadProbesEnabled);
+        Assert.True(s.UploadProbesEnabled);
         Assert.True(s.AutoTestSpeedLightly);
     }
 
@@ -1073,8 +1081,11 @@ public sealed class NetworkPulseHumanPriorityModelTests
     }
 
     [Fact]
-    public void Surface_HttpsFailWithIcmpOk_ShowsChecksInconsistent_NotLimited()
+    public void Surface_HttpsFailWithIcmpOk_ShowsPartialCheck_NotLimited()
     {
+        // v1.2.3-preview.1: was "Online — checks inconsistent" — now rendered as "Partial check".
+        // The cycle is honestly incomplete (HTTPS reachability didn't confirm) and the user
+        // should not be misled by a clean Online label.
         var snap = new NetworkPulseSnapshot(
             NetworkPulseStatus.Good,
             NetworkPulseConfidence.Medium,
@@ -1107,10 +1118,9 @@ public sealed class NetworkPulseHumanPriorityModelTests
             TimeSpan.FromMinutes(10),
             DateTimeOffset.UtcNow);
 
-        Assert.Contains("Online", l1, StringComparison.Ordinal);
+        Assert.Contains("Partial check", l1, StringComparison.Ordinal);
         Assert.DoesNotContain("Internet: Limited", l1, StringComparison.Ordinal);
-        Assert.Contains("checks", l1, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("verification checks", l3, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("checks inconsistent", l1, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("mixed or failing", l3, StringComparison.Ordinal);
     }
 
@@ -1188,8 +1198,9 @@ public sealed class NetworkPulseHumanPriorityModelTests
     }
 
     [Fact]
-    public void Surface_CaptiveSuspectedWithHealthySignals_ShowsChecksInconsistent()
+    public void Surface_CaptiveSuspectedWithHealthySignals_ShowsPartialCheck()
     {
+        // v1.2.3-preview.1: was "Online — checks inconsistent" — now rendered as "Partial check".
         // captiveSuspected currently sets InternetReachable=false on the snapshot — same shape
         // as a content-filter dropping the probe.
         var snap = new NetworkPulseSnapshot(
@@ -1219,8 +1230,9 @@ public sealed class NetworkPulseHumanPriorityModelTests
             new NetworkPulseLastKnownGood(),
             false, 0, TimeSpan.FromMinutes(10), DateTimeOffset.UtcNow);
 
-        Assert.Contains("Online", l1, StringComparison.Ordinal);
+        Assert.Contains("Partial check", l1, StringComparison.Ordinal);
         Assert.DoesNotContain("Internet: Limited", l1, StringComparison.Ordinal);
+        Assert.DoesNotContain("checks inconsistent", l1, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -1248,5 +1260,359 @@ public sealed class NetworkPulseHumanPriorityModelTests
             false, consecutiveHardFailures: 6, TimeSpan.FromMinutes(10), DateTimeOffset.UtcNow);
 
         Assert.Contains("Offline", l1, StringComparison.Ordinal);
+    }
+}
+
+// v1.2.3 hardening: strong throughput + healthy ping + low loss must veto the streak-based
+// downgrade to "Limited" even when Windows verification probes fail for many cycles. Mirrors
+// the user-reported v1.2.3-preview.1 scenario: 18.5 Mbps measured, 6 ms ping, 0% loss, but the
+// header dropped to "Internet: Limited" because NCSI / captive-portal checks were inconsistent.
+public sealed class NetworkPulseStrongEvidenceTests
+{
+    private static LatencyMonitorResult HealthyLatency(double ping = 6, double loss = 0) =>
+        new(ping, JitterMs: 1, PacketLossPercent: loss, GatewayPingMs: 1, DnsLookupMs: 1, AnyIcmpSuccess: true);
+
+    [Fact]
+    public void ClassifyStatus_StrongEvidence_VetoesLimitedDowngrade_AtThreshold()
+    {
+        // download 18.5 Mbps measured this cycle, 6 ms ping, 0 loss, HTTPS verification failing
+        // for 3 cycles — must NOT escalate to Limited.
+        var status = NetworkPulseService.ClassifyStatusForTests(
+            hasUsableRoute: true,
+            httpsReachable: false,
+            dnsSucceeded: true,
+            HealthyLatency(),
+            downloadMbps: 18.5,
+            latencyKind: NetworkPulseMeasurementKind.Measured,
+            httpsOnlyFailureStreak: 3,
+            hasStrongUsabilityEvidence: true);
+
+        Assert.NotEqual(NetworkPulseStatus.Limited, status);
+        Assert.Equal(NetworkPulseStatus.Good, status);
+    }
+
+    [Fact]
+    public void ClassifyStatus_StrongEvidence_VetoesLimitedDowngrade_AtLargeStreak()
+    {
+        // Even after many cycles of HTTPS-only failure, strong throughput must hold the line.
+        var status = NetworkPulseService.ClassifyStatusForTests(
+            hasUsableRoute: true,
+            httpsReachable: false,
+            dnsSucceeded: true,
+            HealthyLatency(),
+            downloadMbps: 25,
+            latencyKind: NetworkPulseMeasurementKind.Measured,
+            httpsOnlyFailureStreak: 12,
+            hasStrongUsabilityEvidence: true);
+
+        Assert.NotEqual(NetworkPulseStatus.Limited, status);
+    }
+
+    [Fact]
+    public void ClassifyStatus_WeakEvidence_StillDowngradesAtThreshold()
+    {
+        // ICMP only, no fresh throughput, HTTPS failing for 3 cycles — Limited path stays open.
+        var status = NetworkPulseService.ClassifyStatusForTests(
+            hasUsableRoute: true,
+            httpsReachable: false,
+            dnsSucceeded: true,
+            HealthyLatency(),
+            downloadMbps: null,
+            latencyKind: NetworkPulseMeasurementKind.Measured,
+            httpsOnlyFailureStreak: 3,
+            hasStrongUsabilityEvidence: false);
+
+        Assert.Equal(NetworkPulseStatus.Limited, status);
+    }
+
+    [Fact]
+    public void StrongEvidence_FreshDownloadAndHealthyLatency_IsTrue()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var ok = NetworkPulseService.HasStrongUsabilityEvidenceForTests(
+            currentDownloadMbps: 18.5,
+            downloadKind: NetworkPulseMeasurementKind.Measured,
+            lastGoodDownloadMbps: null,
+            lastGoodDownloadUtc: default,
+            effectivePingMs: 6,
+            latencyKind: NetworkPulseMeasurementKind.Measured,
+            latency: HealthyLatency(),
+            utcNow: now);
+
+        Assert.True(ok);
+    }
+
+    [Fact]
+    public void StrongEvidence_LastGoodDownloadWithinFreshness_IsTrue()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var ok = NetworkPulseService.HasStrongUsabilityEvidenceForTests(
+            currentDownloadMbps: null,
+            downloadKind: NetworkPulseMeasurementKind.Unavailable,
+            lastGoodDownloadMbps: 18.5,
+            lastGoodDownloadUtc: now.AddMinutes(-2),
+            effectivePingMs: 6,
+            latencyKind: NetworkPulseMeasurementKind.Measured,
+            latency: HealthyLatency(),
+            utcNow: now);
+
+        Assert.True(ok);
+    }
+
+    [Fact]
+    public void StrongEvidence_StaleLastGoodDownload_IsFalse()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var ok = NetworkPulseService.HasStrongUsabilityEvidenceForTests(
+            currentDownloadMbps: null,
+            downloadKind: NetworkPulseMeasurementKind.Unavailable,
+            lastGoodDownloadMbps: 18.5,
+            lastGoodDownloadUtc: now.AddMinutes(-30),
+            effectivePingMs: 6,
+            latencyKind: NetworkPulseMeasurementKind.Measured,
+            latency: HealthyLatency(),
+            utcNow: now);
+
+        Assert.False(ok);
+    }
+
+    [Fact]
+    public void StrongEvidence_HighPacketLoss_IsFalse()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var ok = NetworkPulseService.HasStrongUsabilityEvidenceForTests(
+            currentDownloadMbps: 18.5,
+            downloadKind: NetworkPulseMeasurementKind.Measured,
+            lastGoodDownloadMbps: null,
+            lastGoodDownloadUtc: default,
+            effectivePingMs: 6,
+            latencyKind: NetworkPulseMeasurementKind.Measured,
+            latency: HealthyLatency(loss: 8),
+            utcNow: now);
+
+        Assert.False(ok);
+    }
+
+    [Fact]
+    public void StrongEvidence_HighPing_IsFalse()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var ok = NetworkPulseService.HasStrongUsabilityEvidenceForTests(
+            currentDownloadMbps: 18.5,
+            downloadKind: NetworkPulseMeasurementKind.Measured,
+            lastGoodDownloadMbps: null,
+            lastGoodDownloadUtc: default,
+            effectivePingMs: 400,
+            latencyKind: NetworkPulseMeasurementKind.Measured,
+            latency: HealthyLatency(ping: 400),
+            utcNow: now);
+
+        Assert.False(ok);
+    }
+
+    [Fact]
+    public void Surface_StrongEvidenceMultiCycle_RendersPartialCheck_NotLimited()
+    {
+        // Status stays Good thanks to the strong-evidence override. InternetReachable=false signals
+        // the HTTPS verification mismatch — the v1.2.3 widget surfaces this as "Partial check"
+        // (was "Online — checks inconsistent"). It must NOT downgrade to "Limited".
+        var snap = new NetworkPulseSnapshot(
+            NetworkPulseStatus.Good,
+            NetworkPulseConfidence.Medium,
+            InternetReachable: false,
+            "Ethernet",
+            NetworkPulseConnectionKind.Ethernet,
+            null,
+            PingMs: 6,
+            JitterMs: 1,
+            PacketLossPercent: 0,
+            DownloadMbps: 18.5,
+            UploadMbps: null,
+            NetworkPulseMeasurementKind.Measured,
+            NetworkPulseMeasurementKind.Unavailable,
+            NetworkPulseMeasurementKind.Measured,
+            GatewayPingMs: 1,
+            DnsLookupMs: 1,
+            DateTimeOffset.UtcNow,
+            string.Empty,
+            "n",
+            "s");
+        var (l1, _, l3) = NetworkPulseInternetWidgetText.Build(
+            userEnabled: true,
+            showInHeader: true,
+            snap,
+            new NetworkPulseSmoothedHeadline(NetworkPulseStatus.Good, "Stable", 18.5, null, Array.Empty<double>(), 0, 0),
+            new NetworkPulseLastKnownGood(),
+            uploadProbesEnabled: false,
+            consecutiveHardFailures: 0,
+            TimeSpan.FromMinutes(10),
+            DateTimeOffset.UtcNow,
+            verificationInconsistentStreak: 5);
+
+        Assert.Contains("Partial check", l1, StringComparison.Ordinal);
+        Assert.DoesNotContain("Internet: Limited", l1, StringComparison.Ordinal);
+        Assert.DoesNotContain("checks inconsistent", l1, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Internet appears usable", l3, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void FullCycle_AllMeasured_RendersFullCheckTimestamp_NotPartial()
+    {
+        // When upload probes are on AND all three (latency/download/upload) measured this cycle,
+        // the freshness line uses "Full check Xs ago" wording so the user knows the timestamp
+        // represents a complete cycle rather than a download-only refresh.
+        var snap = new NetworkPulseSnapshot(
+            NetworkPulseStatus.Good,
+            NetworkPulseConfidence.High,
+            InternetReachable: true,
+            "Ethernet",
+            NetworkPulseConnectionKind.Ethernet,
+            null,
+            PingMs: 12,
+            JitterMs: 2,
+            PacketLossPercent: 0,
+            DownloadMbps: 95.3,
+            UploadMbps: 19.8,
+            NetworkPulseMeasurementKind.Measured,
+            NetworkPulseMeasurementKind.Measured,
+            NetworkPulseMeasurementKind.Measured,
+            GatewayPingMs: 1,
+            DnsLookupMs: 1,
+            DateTimeOffset.UtcNow,
+            string.Empty,
+            "n",
+            "s",
+            DownloadSkipReason: NetworkPulseSkipReason.None,
+            UploadSkipReason: NetworkPulseSkipReason.None,
+            LatencySkipReason: NetworkPulseSkipReason.None,
+            CycleComplete: true);
+        var (l1, l2, l3) = NetworkPulseInternetWidgetText.Build(
+            userEnabled: true,
+            showInHeader: true,
+            snap,
+            new NetworkPulseSmoothedHeadline(NetworkPulseStatus.Good, "Stable", 95.3, 19.8, Array.Empty<double>(), 0, 0),
+            new NetworkPulseLastKnownGood(),
+            uploadProbesEnabled: true,
+            consecutiveHardFailures: 0,
+            TimeSpan.FromMinutes(10),
+            DateTimeOffset.UtcNow);
+
+        Assert.Contains("Online", l1, StringComparison.Ordinal);
+        Assert.Contains("Up: 19.8 Mbps", l2, StringComparison.Ordinal);
+        Assert.Contains("Full check", l3, StringComparison.Ordinal);
+        Assert.DoesNotContain("Partial check", l3, StringComparison.Ordinal);
+        Assert.DoesNotContain("not tested", l2, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("not measured this cycle", l2, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void UploadTimedOut_RendersPartialCheck_AndExplainsReason()
+    {
+        // Upload probes on, upload timed out, download + ping measured: this is a Partial check
+        // — not Online/Full check — and the subtitle must explain why.
+        var snap = new NetworkPulseSnapshot(
+            NetworkPulseStatus.Good,
+            NetworkPulseConfidence.Medium,
+            InternetReachable: true,
+            "Ethernet",
+            NetworkPulseConnectionKind.Ethernet,
+            null,
+            PingMs: 12,
+            JitterMs: 2,
+            PacketLossPercent: 0,
+            DownloadMbps: 95.3,
+            UploadMbps: null,
+            NetworkPulseMeasurementKind.Measured,
+            NetworkPulseMeasurementKind.Unavailable,
+            NetworkPulseMeasurementKind.Measured,
+            GatewayPingMs: 1,
+            DnsLookupMs: 1,
+            DateTimeOffset.UtcNow,
+            string.Empty,
+            "n",
+            "s",
+            DownloadSkipReason: NetworkPulseSkipReason.None,
+            UploadSkipReason: NetworkPulseSkipReason.TimedOut,
+            LatencySkipReason: NetworkPulseSkipReason.None,
+            CycleComplete: false);
+        var (l1, l2, l3) = NetworkPulseInternetWidgetText.Build(
+            userEnabled: true,
+            showInHeader: true,
+            snap,
+            new NetworkPulseSmoothedHeadline(NetworkPulseStatus.Good, "Stable", 95.3, null, Array.Empty<double>(), 0, 0),
+            new NetworkPulseLastKnownGood(),
+            uploadProbesEnabled: true,
+            consecutiveHardFailures: 0,
+            TimeSpan.FromMinutes(10),
+            DateTimeOffset.UtcNow);
+
+        Assert.Contains("Partial check", l1, StringComparison.Ordinal);
+        Assert.Contains("Up: timed out", l2, StringComparison.Ordinal);
+        Assert.Contains("timed out", l3, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Up: not tested", l2, StringComparison.Ordinal);
+        Assert.DoesNotContain("Full check", l3, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UploadProbeOff_v1_2_3_NewSnapshot_ShowsUpProbesOff_WhenCallerEnabled()
+    {
+        // New snapshot vocabulary: when caller passes uploadProbesEnabled:true but the snapshot
+        // reports the probe was disabled in settings, render "Up: probes off" instead of the
+        // ambiguous legacy "not tested" string.
+        var snap = new NetworkPulseSnapshot(
+            NetworkPulseStatus.Good,
+            NetworkPulseConfidence.Medium,
+            InternetReachable: true,
+            "Ethernet",
+            NetworkPulseConnectionKind.Ethernet,
+            null,
+            PingMs: 12,
+            JitterMs: 2,
+            PacketLossPercent: 0,
+            DownloadMbps: 95.3,
+            UploadMbps: null,
+            NetworkPulseMeasurementKind.Measured,
+            NetworkPulseMeasurementKind.Unavailable,
+            NetworkPulseMeasurementKind.Measured,
+            GatewayPingMs: 1,
+            DnsLookupMs: 1,
+            DateTimeOffset.UtcNow,
+            string.Empty,
+            "n",
+            "s",
+            DownloadSkipReason: NetworkPulseSkipReason.None,
+            UploadSkipReason: NetworkPulseSkipReason.ProbesDisabledInSettings,
+            LatencySkipReason: NetworkPulseSkipReason.None,
+            CycleComplete: true);
+        var (_, l2, _) = NetworkPulseInternetWidgetText.Build(
+            userEnabled: true,
+            showInHeader: true,
+            snap,
+            new NetworkPulseSmoothedHeadline(NetworkPulseStatus.Good, "Stable", 95.3, null, Array.Empty<double>(), 0, 0),
+            new NetworkPulseLastKnownGood(),
+            uploadProbesEnabled: true,
+            consecutiveHardFailures: 0,
+            TimeSpan.FromMinutes(10),
+            DateTimeOffset.UtcNow);
+
+        Assert.Contains("Up: probes off", l2, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Surface_PingOnly_DnsAndHttpsBothFailMultiCycle_IsLimited()
+    {
+        // No DNS, no HTTPS for sustained streak — Limited is the right call even though ICMP works.
+        var pingOnly = new LatencyMonitorResult(20, 2, 0, 1, null, AnyIcmpSuccess: true);
+        var status = NetworkPulseService.ClassifyStatusForTests(
+            hasUsableRoute: true,
+            httpsReachable: false,
+            dnsSucceeded: false,
+            pingOnly,
+            downloadMbps: null,
+            latencyKind: NetworkPulseMeasurementKind.Measured,
+            httpsOnlyFailureStreak: 3,
+            hasStrongUsabilityEvidence: false);
+
+        Assert.Equal(NetworkPulseStatus.Limited, status);
     }
 }

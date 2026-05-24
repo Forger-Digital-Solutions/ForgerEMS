@@ -21,7 +21,7 @@ public static class InfoDocumentTexts
             {BetaSupportInfo.BetaIssueSupportLine}
 
             WHAT THIS BUILD IS
-            ForgerEMS v1.2.1 Public Preview is a free, offline-first Windows technician toolkit for safer Ventoy-oriented USB maintenance media, toolkit health, local system scans, USB benchmarking on removable targets, and Kyra — a grounded assistant that prefers facts from your own scans.
+            ForgerEMS v1.2.3 Public Preview is a free, offline-first Windows technician toolkit for safer Ventoy-oriented USB maintenance media, toolkit health, local system scans, USB benchmarking on removable targets, and Kyra — a grounded assistant that prefers facts from your own scans.
 
             CORE AREAS (honest maturity)
             • USB Builder — Beta: removable targets only; blocks Windows/system/internal OS drives and unsafe partitions.
@@ -195,8 +195,14 @@ public static class InfoDocumentTexts
             YOUR RESPONSIBILITY
             You are responsible for complying with software licenses and local laws, and for backing up data before destructive steps.
 
+            TECHNICIAN-ASSIST SCOPE
+            ForgerEMS is a Dev Beta / Public Preview technician-assist tool. It is not a replacement for professional judgement and does not promise guaranteed repair, guaranteed data recovery, guaranteed malware removal, guaranteed hardware diagnosis, guaranteed driver/component compatibility, guaranteed pricing or marketplace accuracy, or guaranteed legal/regulatory compliance. Technicians remain responsible for confirming official vendor links, licensing, and safe use before they act on any output from this app.
+
             SYSTEM INTELLIGENCE
-            Diagnostics, Hardware X-Ray, sensor coverage, and resale guidance are informative and may not be perfectly accurate. Confirm critical decisions with additional testing. There is no warranty that every sensor is exposed on every machine.
+            Diagnostics, Hardware X-Ray, sensor coverage, and resale guidance are informative and may not be perfectly accurate. System Intelligence and Hardware X-Ray may report Unknown / NotExposed / Inferred when firmware, drivers, permissions, or sensor providers do not expose data; missing readings are coverage limits, not failures. Confirm critical decisions with additional testing. There is no warranty that every sensor is exposed on every machine.
+
+            SUPPORT BUNDLES
+            Support bundles are user-controlled. ForgerEMS attempts to redact local usernames, private paths, API keys, tokens, bearer values, and product keys from logs, diagnostics, and exported bundles, but you should still review every bundle before sharing it. ForgerEMS does not automatically upload support bundles, sensor data, scan reports, or USB inventories anywhere.
 
             MARKETPLACE / VALUE
             Estimates and listing-style guidance are estimates, not guarantees of sale price or outcome.

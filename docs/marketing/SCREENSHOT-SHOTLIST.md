@@ -1,4 +1,4 @@
-# Screenshot shot list — v1.2.1 Public Preview
+# Screenshot shot list — v1.2.3 Public Preview
 
 1. **Main header** — version chip + Public Preview banner line.
 2. **USB Builder** — safe removable target selected; safety pill readable.

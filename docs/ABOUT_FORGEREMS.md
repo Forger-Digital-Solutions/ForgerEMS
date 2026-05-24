@@ -77,6 +77,8 @@ ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the
 
 Prerelease software is provided **as-is**; behavior may change between builds. Prefer **GitHub Releases** ZIPs for testing. Read [LEGAL.md](LEGAL.md) and [PRIVACY.md](PRIVACY.md).
 
+ForgerEMS is **technician-assist software, not a replacement for professional judgement**. Dev Beta builds **do not promise** guaranteed repair, guaranteed data recovery, guaranteed malware removal, guaranteed hardware diagnosis, guaranteed driver/component compatibility, guaranteed pricing or marketplace accuracy, or guaranteed legal/regulatory compliance. Technicians are responsible for confirming official vendor links, licensing, and safe use of any third-party tool or image surfaced by the app. System Intelligence and Hardware X-Ray may report **Unknown**, **NotExposed**, or **Inferred** when firmware, drivers, permissions, or sensor providers do not expose data — missing readings are coverage limits, not failures. Support bundles are user-controlled; ForgerEMS attempts to redact local usernames, private paths, API keys, tokens, and product keys, but you should still review every bundle before sharing it, and the app does not automatically upload bundles, sensor data, scan reports, or USB inventories anywhere.
+
 Third-party notices are included in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), [THIRD-PARTY-SENSOR-NOTICES.md](THIRD-PARTY-SENSOR-NOTICES.md), and packaged sensor notice files under `providers/sensors/`.
 
 ---

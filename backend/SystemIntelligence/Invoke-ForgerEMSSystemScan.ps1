@@ -2207,7 +2207,7 @@ try {
     $report = [ordered]@{}
     $report["schemaVersion"] = 1
     $report["product"] = "ForgerEMS"
-    $report["releaseIdentifier"] = "ForgerEMS v1.2.1 Public Preview"
+    $report["releaseIdentifier"] = "ForgerEMS v1.2.3 Public Preview"
     $report["generatedUtc"] = (Get-Date).ToUniversalTime().ToString("o")
     $report["scanMode"] = $scanModeValue
     $report["overallStatus"] = $overallStatus

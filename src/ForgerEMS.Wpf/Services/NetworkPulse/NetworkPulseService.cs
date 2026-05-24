@@ -168,6 +168,8 @@ public sealed class NetworkPulseService : IDisposable
         double? uploadMbps = null;
         var speedProbeAttempted = false;
         var speedProbeFailed = false;
+        var downloadSkipReason = NetworkPulseSkipReason.None;
+        var uploadSkipReason = NetworkPulseSkipReason.None;
 
         var now = DateTimeOffset.UtcNow;
         var probeDue = settings.AutoTestSpeedLightly &&
@@ -192,6 +194,7 @@ public sealed class NetworkPulseService : IDisposable
                 {
                     downloadKind = NetworkPulseMeasurementKind.Unavailable;
                     speedProbeFailed = true;
+                    downloadSkipReason = down.Succeeded ? NetworkPulseSkipReason.ImplausibleResult : NetworkPulseSkipReason.ProbeFailed;
                     if (down.Succeeded)
                     {
                         _diag.Emit("Download sample discarded (implausible Mbps or empty read).", LogSeverity.Info);
@@ -203,20 +206,31 @@ public sealed class NetworkPulseService : IDisposable
                     using var upCt = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     upCt.CancelAfter(TimeSpan.FromSeconds(14));
                     var upBytes = Math.Min(16_384, bytes / 8);
-                    var up = await _speedProbeRunner.RunUploadSampleAsync(Math.Max(4096, upBytes), upCt.Token).ConfigureAwait(false);
-                    if (up.Succeeded && NetworkPulseSpeedSanity.IsPlausibleMeasuredMbps(up.Mbps))
+                    try
                     {
-                        uploadMbps = up.Mbps;
-                        uploadKind = NetworkPulseMeasurementKind.Measured;
+                        var up = await _speedProbeRunner.RunUploadSampleAsync(Math.Max(4096, upBytes), upCt.Token).ConfigureAwait(false);
+                        if (up.Succeeded && NetworkPulseSpeedSanity.IsPlausibleMeasuredMbps(up.Mbps))
+                        {
+                            uploadMbps = up.Mbps;
+                            uploadKind = NetworkPulseMeasurementKind.Measured;
+                        }
+                        else
+                        {
+                            uploadKind = NetworkPulseMeasurementKind.Unavailable;
+                            uploadSkipReason = up.Succeeded ? NetworkPulseSkipReason.ImplausibleResult : NetworkPulseSkipReason.ProbeFailed;
+                        }
                     }
-                    else
+                    catch (OperationCanceledException) when (upCt.IsCancellationRequested && !ct.IsCancellationRequested)
                     {
                         uploadKind = NetworkPulseMeasurementKind.Unavailable;
+                        uploadSkipReason = NetworkPulseSkipReason.TimedOut;
+                        _diag.Emit("Upload sample timed out this cycle.", LogSeverity.Info);
                     }
                 }
                 else
                 {
                     uploadKind = NetworkPulseMeasurementKind.Unavailable;
+                    uploadSkipReason = NetworkPulseSkipReason.ProbesDisabledInSettings;
                 }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -228,6 +242,11 @@ public sealed class NetworkPulseService : IDisposable
                 downloadKind = NetworkPulseMeasurementKind.Unavailable;
                 uploadKind = NetworkPulseMeasurementKind.Unavailable;
                 speedProbeFailed = true;
+                downloadSkipReason = NetworkPulseSkipReason.ProbeFailed;
+                if (settings.UploadProbesEnabled && uploadSkipReason == NetworkPulseSkipReason.None)
+                {
+                    uploadSkipReason = NetworkPulseSkipReason.ProbeFailed;
+                }
                 _diag.Emit($"Speed probe failed ({ex.GetType().Name}).", LogSeverity.Warning);
             }
         }
@@ -235,17 +254,49 @@ public sealed class NetworkPulseService : IDisposable
         {
             downloadKind = NetworkPulseMeasurementKind.Unavailable;
             uploadKind = NetworkPulseMeasurementKind.Unavailable;
+            downloadSkipReason = NetworkPulseSkipReason.ProbesDisabledInSettings;
+            uploadSkipReason = NetworkPulseSkipReason.ProbesDisabledInSettings;
         }
         else
         {
             downloadKind = NetworkPulseMeasurementKind.Unavailable;
             uploadKind = NetworkPulseMeasurementKind.Unavailable;
+            downloadSkipReason = NetworkPulseSkipReason.NotDueThisCycle;
+            uploadSkipReason = settings.UploadProbesEnabled
+                ? NetworkPulseSkipReason.NotDueThisCycle
+                : NetworkPulseSkipReason.ProbesDisabledInSettings;
+        }
+
+        // Make sure uploadSkipReason is set whenever upload is not measured.
+        if (uploadKind != NetworkPulseMeasurementKind.Measured && uploadSkipReason == NetworkPulseSkipReason.None)
+        {
+            uploadSkipReason = settings.UploadProbesEnabled
+                ? NetworkPulseSkipReason.NotDueThisCycle
+                : NetworkPulseSkipReason.ProbesDisabledInSettings;
         }
 
         var fallbackHttpLatency = !latency.AnyIcmpSuccess && httpReach.ElapsedMs is > 0 ? httpReach.ElapsedMs : null;
         var effectivePingMs = latency.IcmpMedianMs ?? fallbackHttpLatency;
         var latencyKind = effectivePingMs is > 0 ? NetworkPulseMeasurementKind.Measured : NetworkPulseMeasurementKind.Unavailable;
-        var confidence = ClassifyConfidence(latency, downloadKind == NetworkPulseMeasurementKind.Measured);
+        var confidence = ClassifyConfidence(
+            latency,
+            downloadKind == NetworkPulseMeasurementKind.Measured,
+            verificationMismatch: httpsVerificationFailed && hasOtherUsabilityEvidence);
+
+        // "Strong usability evidence" gate: a recent successful throughput sample with healthy
+        // ping and low packet loss is direct proof the user can browse. We refuse to escalate
+        // an HTTPS-only verification failure to "Limited" while this holds — Windows NCSI /
+        // captive-portal probes can fail persistently due to VPNs, custom DNS (Pi-hole, NextDNS),
+        // content filters, or transient Microsoft endpoint issues without breaking real traffic.
+        var hasStrongUsabilityEvidence = HasStrongUsabilityEvidence(
+            downloadMbps,
+            downloadKind,
+            _lastGood,
+            effectivePingMs,
+            latencyKind,
+            latency,
+            now);
+
         var rawStatus = ClassifyStatus(
             hasUsableRoute,
             reach,
@@ -253,7 +304,8 @@ public sealed class NetworkPulseService : IDisposable
             latency,
             downloadMbps,
             latencyKind,
-            _httpsOnlyFailureStreak);
+            _httpsOnlyFailureStreak,
+            hasStrongUsabilityEvidence);
         var smoothed = _stabilizer.Smooth(
             rawStatus,
             reach,
@@ -315,6 +367,22 @@ public sealed class NetworkPulseService : IDisposable
                 ? " Upload sample: small HTTPS POST when enabled."
                 : " Upload probes: off (default).");
 
+        var latencySkipReason = latencyKind == NetworkPulseMeasurementKind.Measured
+            ? NetworkPulseSkipReason.None
+            : NetworkPulseSkipReason.ProbeFailed;
+
+        // A "full cycle" requires latency + download + upload to all resolve to a measured value
+        // OR for upload probes to be intentionally disabled in settings (in which case download +
+        // latency are enough for a "full check" by the user's policy). If upload probes are
+        // enabled but upload did not return measured this cycle, the cycle is partial.
+        var uploadCoveredForFullCheck =
+            uploadKind == NetworkPulseMeasurementKind.Measured ||
+            uploadSkipReason == NetworkPulseSkipReason.ProbesDisabledInSettings;
+        var cycleComplete = latencyKind == NetworkPulseMeasurementKind.Measured &&
+                            downloadKind == NetworkPulseMeasurementKind.Measured &&
+                            uploadCoveredForFullCheck &&
+                            reach;
+
         var snapshot = new NetworkPulseSnapshot(
             rawStatus,
             confidence,
@@ -335,7 +403,11 @@ public sealed class NetworkPulseService : IDisposable
             now,
             string.Empty,
             notes,
-            "Uses small network checks only. Does not run a full Ookla-style saturation test. Never treats adapter link speed as internet speed.");
+            "Uses small network checks only. Does not run a full Ookla-style saturation test. Never treats adapter link speed as internet speed.",
+            downloadSkipReason,
+            uploadSkipReason,
+            latencySkipReason,
+            cycleComplete);
 
         if (effectivePingMs is > 0)
         {
@@ -397,7 +469,8 @@ public sealed class NetworkPulseService : IDisposable
             settings.UploadProbesEnabled,
             _consecutiveHardFailures,
             fresh,
-            now);
+            now,
+            verificationInconsistentStreak: _httpsOnlyFailureStreak);
 
         return new NetworkPulseUiState(
             snapshot,
@@ -518,11 +591,16 @@ public sealed class NetworkPulseService : IDisposable
             "If checks fail, Network Pulse shows unknown/offline rather than implying the whole app failed.");
     }
 
-    private static NetworkPulseConfidence ClassifyConfidence(LatencyMonitorResult latency, bool hadDownloadSample)
+    private static NetworkPulseConfidence ClassifyConfidence(
+        LatencyMonitorResult latency,
+        bool hadDownloadSample,
+        bool verificationMismatch = false)
     {
         if (hadDownloadSample && latency.AnyIcmpSuccess && latency.PacketLossPercent <= 1)
         {
-            return NetworkPulseConfidence.High;
+            // High confidence requires verification probes to agree as well — if they disagree,
+            // ratchet down to Medium so the UI/popup can explain the inconsistency honestly.
+            return verificationMismatch ? NetworkPulseConfidence.Medium : NetworkPulseConfidence.High;
         }
 
         if (latency.AnyIcmpSuccess)
@@ -541,7 +619,8 @@ public sealed class NetworkPulseService : IDisposable
             latency,
             downloadMbps,
             latencyKind,
-            httpsOnlyFailureStreak: 0);
+            httpsOnlyFailureStreak: 0,
+            hasStrongUsabilityEvidence: false);
 
     internal static NetworkPulseStatus ClassifyStatusForTests(
         bool hasUsableRoute,
@@ -550,7 +629,7 @@ public sealed class NetworkPulseService : IDisposable
         LatencyMonitorResult latency,
         double? downloadMbps,
         NetworkPulseMeasurementKind latencyKind) =>
-        ClassifyStatus(hasUsableRoute, httpsReachable, dnsSucceeded, latency, downloadMbps, latencyKind, httpsOnlyFailureStreak: 0);
+        ClassifyStatus(hasUsableRoute, httpsReachable, dnsSucceeded, latency, downloadMbps, latencyKind, httpsOnlyFailureStreak: 0, hasStrongUsabilityEvidence: false);
 
     internal static NetworkPulseStatus ClassifyStatusForTests(
         bool hasUsableRoute,
@@ -560,12 +639,77 @@ public sealed class NetworkPulseService : IDisposable
         double? downloadMbps,
         NetworkPulseMeasurementKind latencyKind,
         int httpsOnlyFailureStreak) =>
-        ClassifyStatus(hasUsableRoute, httpsReachable, dnsSucceeded, latency, downloadMbps, latencyKind, httpsOnlyFailureStreak);
+        ClassifyStatus(hasUsableRoute, httpsReachable, dnsSucceeded, latency, downloadMbps, latencyKind, httpsOnlyFailureStreak, hasStrongUsabilityEvidence: false);
 
-    // HTTPS verification probe failures must be sustained before they downgrade visible status.
-    // A single failed Microsoft NCSI / captive probe with healthy ICMP+route+throughput is not a
-    // user-visible outage — that is what HttpsOnlyLimitedThreshold enforces here.
+    internal static NetworkPulseStatus ClassifyStatusForTests(
+        bool hasUsableRoute,
+        bool httpsReachable,
+        bool dnsSucceeded,
+        LatencyMonitorResult latency,
+        double? downloadMbps,
+        NetworkPulseMeasurementKind latencyKind,
+        int httpsOnlyFailureStreak,
+        bool hasStrongUsabilityEvidence) =>
+        ClassifyStatus(hasUsableRoute, httpsReachable, dnsSucceeded, latency, downloadMbps, latencyKind, httpsOnlyFailureStreak, hasStrongUsabilityEvidence);
+
+    // HTTPS verification probe failures must be sustained AND lack strong throughput evidence
+    // before they downgrade visible status. A single failed Microsoft NCSI / captive probe with
+    // healthy ICMP+route+throughput is not a user-visible outage — that is what
+    // HttpsOnlyLimitedThreshold (with the strong-evidence override) enforces here.
     private const int HttpsOnlyLimitedThreshold = 3;
+
+    // Strong usability evidence freshness window: a successful download sample older than this
+    // is no longer considered proof of current usability.
+    private static readonly TimeSpan StrongEvidenceFreshness = TimeSpan.FromMinutes(5);
+
+    internal static bool HasStrongUsabilityEvidenceForTests(
+        double? currentDownloadMbps,
+        NetworkPulseMeasurementKind downloadKind,
+        double? lastGoodDownloadMbps,
+        DateTimeOffset lastGoodDownloadUtc,
+        double? effectivePingMs,
+        NetworkPulseMeasurementKind latencyKind,
+        LatencyMonitorResult latency,
+        DateTimeOffset utcNow)
+    {
+        var hasFreshDownload =
+            (downloadKind == NetworkPulseMeasurementKind.Measured &&
+             NetworkPulseSpeedSanity.IsPlausibleMeasuredMbps(currentDownloadMbps) &&
+             currentDownloadMbps > 1) ||
+            (NetworkPulseSpeedSanity.IsPlausibleMeasuredMbps(lastGoodDownloadMbps) &&
+             lastGoodDownloadMbps > 1 &&
+             lastGoodDownloadUtc != default &&
+             (utcNow - lastGoodDownloadUtc) <= StrongEvidenceFreshness);
+
+        if (!hasFreshDownload)
+        {
+            return false;
+        }
+
+        // Latency must look healthy: a usable ping reading <= 150 ms and low loss.
+        var pingHealthy = latencyKind == NetworkPulseMeasurementKind.Measured &&
+                          effectivePingMs is > 0 and <= 150;
+        var lossHealthy = (latency.PacketLossPercent) <= 2.0;
+        return pingHealthy && lossHealthy;
+    }
+
+    private static bool HasStrongUsabilityEvidence(
+        double? currentDownloadMbps,
+        NetworkPulseMeasurementKind downloadKind,
+        NetworkPulseLastKnownGood lastGood,
+        double? effectivePingMs,
+        NetworkPulseMeasurementKind latencyKind,
+        LatencyMonitorResult latency,
+        DateTimeOffset utcNow) =>
+        HasStrongUsabilityEvidenceForTests(
+            currentDownloadMbps,
+            downloadKind,
+            lastGood.DownloadMbps,
+            lastGood.DownloadUtc,
+            effectivePingMs,
+            latencyKind,
+            latency,
+            utcNow);
 
     private static NetworkPulseStatus ClassifyStatus(
         bool hasUsableRoute,
@@ -574,7 +718,8 @@ public sealed class NetworkPulseService : IDisposable
         LatencyMonitorResult latency,
         double? downloadMbps,
         NetworkPulseMeasurementKind latencyKind,
-        int httpsOnlyFailureStreak)
+        int httpsOnlyFailureStreak,
+        bool hasStrongUsabilityEvidence)
     {
         if (!hasUsableRoute && !httpsReachable && !dnsSucceeded && !latency.AnyIcmpSuccess)
         {
@@ -593,10 +738,16 @@ public sealed class NetworkPulseService : IDisposable
                 return hasUsableRoute ? NetworkPulseStatus.Limited : NetworkPulseStatus.Offline;
             }
 
-            // HTTPS-only failure with strong other usability signals: only downgrade to Limited
-            // once the failure has persisted for several cycles. Until then fall through to the
-            // latency-based classification — the user can browse, ping, and resolve names.
-            if (httpsOnlyFailureStreak >= HttpsOnlyLimitedThreshold)
+            // HTTPS-only failure with strong throughput + healthy ping + low loss: do NOT downgrade
+            // to Limited even if the verification streak is long. The user can browse; surface
+            // wording will say "Online — checks inconsistent" and confidence drops to Medium.
+            // Stronger negative evidence (high loss, DNS+HTTPS both failing, no ICMP, captive
+            // portal strongly detected) takes its own paths above/below.
+            if (hasStrongUsabilityEvidence)
+            {
+                // fall through to latency-based classification
+            }
+            else if (httpsOnlyFailureStreak >= HttpsOnlyLimitedThreshold)
             {
                 return NetworkPulseStatus.Limited;
             }
