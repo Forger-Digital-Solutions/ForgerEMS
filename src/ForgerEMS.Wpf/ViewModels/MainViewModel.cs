@@ -192,6 +192,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private Visibility _managedDownloadRetryPanelVisibility = Visibility.Collapsed;
     private string _usbBuilderProfileSummaryText = "This update will include: Core, Windows, Legacy Windows, Linux Rescue, Diagnostics, OEM Tools. macOS / Mobile folders are off.";
     private string _usbBuilderProfileNoteText = "Unchecked packs are skipped for this run. Existing user-supplied files already on the USB are not deleted.";
+    private string _fullManagedDownloadStatusText = "Managed downloads: select a USB target and profile to calculate.";
+    private string _fullManagedDownloadDetailText = "Full Managed Download updates safe verified downloads only. BIOS, firmware, and model-specific OEM drivers remain manual lookup links.";
     private string _logsText = string.Empty;
     private string _recentLogsText = "No log output yet.";
     private string _selectedLogLevelFilter = "All";
@@ -493,6 +495,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         RevalidateManagedDownloadsCommand = new AsyncRelayCommand(RunRevalidateManagedDownloadsAsync, CanRunBackendOnlyActions);
         SetupUsbCommand = new AsyncRelayCommand(RunSetupUsbAsync, CanRunTargetedActions);
         UpdateUsbCommand = new AsyncRelayCommand(RunUpdateUsbAsync, CanRunTargetedActions);
+        FullManagedDownloadCommand = new AsyncRelayCommand(RunFullManagedDownloadAsync, CanRunTargetedActions);
         SelectRecommendedUsbBuilderProfileCommand = new RelayCommand(SelectRecommendedUsbBuilderProfile, () => !IsBusy);
         SelectAllUsbBuilderProfileCommand = new RelayCommand(SelectAllUsbBuilderProfile, () => !IsBusy);
         ResetUsbBuilderProfileCommand = new RelayCommand(ResetUsbBuilderProfile, () => !IsBusy);
@@ -808,6 +811,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public AsyncRelayCommand SetupUsbCommand { get; }
 
     public AsyncRelayCommand UpdateUsbCommand { get; }
+
+    public AsyncRelayCommand FullManagedDownloadCommand { get; }
 
     public RelayCommand SelectRecommendedUsbBuilderProfileCommand { get; }
 
@@ -1498,6 +1503,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         get => _usbBuilderProfileSummaryText;
         private set => SetProperty(ref _usbBuilderProfileSummaryText, value);
+    }
+
+    public string FullManagedDownloadStatusText
+    {
+        get => _fullManagedDownloadStatusText;
+        private set => SetProperty(ref _fullManagedDownloadStatusText, value);
+    }
+
+    public string FullManagedDownloadDetailText
+    {
+        get => _fullManagedDownloadDetailText;
+        private set => SetProperty(ref _fullManagedDownloadDetailText, value);
     }
 
     public string UsbBuilderProfileNoteText
@@ -3709,6 +3726,111 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 Arguments = arguments,
                 ProgressItemName = "managed downloads"
             });
+    }
+
+    private async Task RunFullManagedDownloadAsync()
+    {
+        // Thin guided wrapper around Update-ForgerEMS.ps1 scoped by the selected USB Builder
+        // Profile. The Update script already enforces:
+        //   * type=file + enabled-only filtering
+        //   * categoryId filtering via -IncludedCategories
+        //   * sha256/sha512 checksum verification against the vendor checksum source
+        //   * skipping items already present with the right hash
+        // This action exists so the technician has a profile-area button that says "managed
+        // downloads only" without the destructive-sounding "Setup USB" or "Update USB"
+        // wording. It does not seed folders, install Ventoy, format the drive, or copy
+        // user-supplied media.
+        if (!TryGetValidatedSelectedTarget("Full Managed Download", out var selectedUsbTarget))
+        {
+            return;
+        }
+
+        var manifestPath = ResolveManifestPath();
+        var includedCategories = GetIncludedUsbBuilderCategoryArguments();
+        var includedSet = new HashSet<string>(includedCategories, StringComparer.OrdinalIgnoreCase);
+
+        UsbBuilderProfileFullManagedDownloadPlan plan;
+        try
+        {
+            plan = UsbBuilderProfileFullManagedDownloadPlanner.Calculate(
+                manifestPath,
+                includedSet,
+                selectedUsbTarget.RootPath);
+        }
+        catch (Exception exception)
+        {
+            _userPromptService.ShowMessage(
+                "Full Managed Download unavailable",
+                "Could not read the managed-download catalog: " + exception.Message,
+                MessageBoxImage.Error);
+            return;
+        }
+
+        if (plan.EligibleManagedCount == 0)
+        {
+            _userPromptService.ShowMessage(
+                "Full Managed Download",
+                "No managed items are eligible for this USB Builder Profile. Manual/vendor links remain guided shortcuts.",
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        var freeSpaceText = TryGetFreeSpaceText(selectedUsbTarget.RootPath, out var freeBytes);
+        var sizeLine = plan.EstimatedDownloadBytes > 0
+            ? $"Estimated download size: {plan.EstimatedDownloadDisplay}"
+            : "Estimated download size: not pinned in catalog; runtime checksum verification gates each item.";
+
+        var confirmation =
+            $"Managed downloads eligible (this profile): {plan.EligibleManagedCount}{Environment.NewLine}" +
+            $"Already current on USB: {plan.AlreadyPresentCount}{Environment.NewLine}" +
+            $"Missing / to download: {plan.MissingCount}{Environment.NewLine}" +
+            $"Managed items excluded by profile filter: {plan.ExcludedByProfileCount}{Environment.NewLine}" +
+            $"Manual / vendor links (not part of managed downloads): {plan.ExcludedManualOrVendorCount}{Environment.NewLine}" +
+            $"Catalog safety exclusions (disabled / no checksum): {plan.ExcludedBySafetyCount}{Environment.NewLine}" +
+            $"{sizeLine}{Environment.NewLine}" +
+            $"Destination root: {selectedUsbTarget.RootPath}{Environment.NewLine}" +
+            $"Free space: {freeSpaceText}{Environment.NewLine}" +
+            $"Checksum policy: require-for-release. Every managed item is verified via Update-ForgerEMS.{Environment.NewLine}" +
+            $"BIOS, firmware, and model-specific OEM drivers remain manual lookup links and are not part of this action.{Environment.NewLine}" +
+            $"No USB partitioning, no Ventoy install, and no destructive write step will run.{Environment.NewLine}{Environment.NewLine}" +
+            "Start Full Managed Download?";
+
+        if (!_userPromptService.Confirm("Full Managed Download", confirmation))
+        {
+            FullManagedDownloadStatusText = $"Full Managed Download: canceled before start ({plan.ShortSummaryLine}).";
+            return;
+        }
+
+        var arguments = new System.Collections.Generic.List<string>
+        {
+            "-UsbRoot",
+            selectedUsbTarget.RootPath,
+            "-IncludedCategories",
+            string.Join(",", includedCategories)
+        };
+
+        try
+        {
+            var result = await RunScriptAsync(
+                ScriptActionType.UpdateUsb,
+                new PowerShellRunRequest
+                {
+                    DisplayName = "Full Managed Download",
+                    WorkingDirectory = _backendContext.WorkingDirectory,
+                    ScriptPath = _backendContext.UpdateScriptPath,
+                    Arguments = arguments,
+                    ProgressItemName = "managed downloads"
+                });
+
+            FullManagedDownloadStatusText = result?.Succeeded == true
+                ? $"Full Managed Download: finished. {plan.ShortSummaryLine}. Review the managed download result and toolkit health."
+                : $"Full Managed Download: finished with one or more issues. {plan.ShortSummaryLine}. Review the managed download result.";
+        }
+        finally
+        {
+            RefreshUsbBuilderProfileSummary();
+            LoadToolkitHealthReport();
+        }
     }
 
     private async Task RunUpdateUsbAsync()
@@ -13187,6 +13309,35 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         UsbBuilderProfileNoteText =
             $"{offText} Unchecked means do not add/update/seed that pack this run. Existing user-supplied files on the USB are left alone. " +
             (string.IsNullOrWhiteSpace(totals.OptionalNote) ? string.Empty : totals.OptionalNote);
+
+        RefreshFullManagedDownloadStatus();
+    }
+
+    private void RefreshFullManagedDownloadStatus()
+    {
+        try
+        {
+            var manifestPath = ResolveManifestPath();
+            var includedSet = new HashSet<string>(
+                GetIncludedUsbBuilderCategoryArguments(),
+                StringComparer.OrdinalIgnoreCase);
+            var plan = UsbBuilderProfileFullManagedDownloadPlanner.Calculate(
+                manifestPath,
+                includedSet,
+                SelectedUsbTarget?.RootPath);
+
+            var profileFilterNote = plan.ExcludedByProfileCount > 0
+                ? $" {plan.ProfileExclusionLine}"
+                : string.Empty;
+
+            FullManagedDownloadStatusText =
+                $"{plan.ShortSummaryLine} | {plan.ManualLinkLine}.{profileFilterNote}";
+        }
+        catch
+        {
+            FullManagedDownloadStatusText =
+                "Managed downloads: status unavailable (catalog could not be read).";
+        }
     }
 
     private void ScheduleUsbBuilderProfileMediaScan()
@@ -14350,6 +14501,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         RevalidateManagedDownloadsCommand.RaiseCanExecuteChanged();
         SetupUsbCommand.RaiseCanExecuteChanged();
         UpdateUsbCommand.RaiseCanExecuteChanged();
+        FullManagedDownloadCommand.RaiseCanExecuteChanged();
         SelectRecommendedUsbBuilderProfileCommand.RaiseCanExecuteChanged();
         SelectAllUsbBuilderProfileCommand.RaiseCanExecuteChanged();
         ResetUsbBuilderProfileCommand.RaiseCanExecuteChanged();

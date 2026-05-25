@@ -2223,7 +2223,35 @@
                                         Style="{StaticResource SecondaryButtonStyle}"
                                         Content="Reset to defaults"
                                         Command="{Binding ResetUsbBuilderProfileCommand}" />
+                                <Button x:Name="UsbBuilderProfileFullManagedDownloadButton"
+                                        Margin="0,0,8,4"
+                                        Padding="10,6"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Content="Full Managed Download"
+                                        ToolTip="Download/update all safe managed tools for this USB profile. Manual/vendor links remain guided shortcuts."
+                                        Command="{Binding FullManagedDownloadCommand}" />
                             </WrapPanel>
+
+                            <Border Margin="0,0,0,8"
+                                    Padding="10"
+                                    Background="#142A3A"
+                                    BorderBrush="{DynamicResource PanelBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6">
+                                <StackPanel>
+                                    <TextBlock x:Name="UsbBuilderProfileFullManagedDownloadStatusText"
+                                               FontSize="12"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource PanelLabelBrush}"
+                                               Text="{Binding FullManagedDownloadStatusText}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,4,0,0"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource PanelMutedTextBrush}"
+                                               Text="{Binding FullManagedDownloadDetailText}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
 
                             <Border Padding="12"
                                     Background="#E8F4FC"
