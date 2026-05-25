@@ -15,7 +15,9 @@ namespace ForgerEMS.Wpf.Tests;
 // Update-ForgerEMS.ps1 resolution order so bundled wins over USB-side.
 public sealed class PackagedManifestFreshnessTests
 {
-    private const int ExpectedActiveManagedDownloadCount = 30;
+    // 2026-05-25 follow-up promotion pass: NetBSD 10.1 amd64 ISO Installer and
+    // openSUSE Leap 16.0 Offline Installer (x86_64) brought the active count from 30 to 32.
+    private const int ExpectedActiveManagedDownloadCount = 32;
 
     private static string RepoRoot
     {
@@ -40,7 +42,7 @@ public sealed class PackagedManifestFreshnessTests
         Path.Combine(RepoRoot, "manifests", "ForgerEMS.updates.json");
 
     [Fact]
-    public void SourceManifest_HasExactlyThirtyActiveManagedDownloads()
+    public void SourceManifest_HasExpectedActiveManagedDownloadCount()
     {
         var active = CountActiveManagedFileItems(SourceManifestPath);
         Assert.Equal(ExpectedActiveManagedDownloadCount, active);
@@ -87,7 +89,7 @@ public sealed class PackagedManifestFreshnessTests
     }
 
     [Fact]
-    public void PackagedManifests_AllReportThirtyActiveManagedDownloads()
+    public void PackagedManifests_AllReportExpectedActiveManagedDownloadCount()
     {
         foreach (var packagedPath in PackagedManifestCopiesThatExist())
         {

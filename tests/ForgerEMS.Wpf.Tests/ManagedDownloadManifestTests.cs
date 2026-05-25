@@ -403,6 +403,83 @@ public sealed class ManagedDownloadManifestTests
     }
 
     [Fact]
+    public void ManagedDownloadManifest_Batch5PromotedIsoEntriesHaveValidChecksumAndMetadata()
+    {
+        // 2026-05-25 follow-up promotion pass: NetBSD 10.1 amd64 and openSUSE Leap 16.0 x86_64 offline installer.
+        // NetBSD uses SHA-512 coverage (vendor publishes only SHA512); openSUSE uses SHA-256 coverage
+        // (vendor publishes a per-file .iso.sha256 companion).
+        using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
+
+        var netbsd = document.RootElement.GetProperty("items")
+            .EnumerateArray()
+            .SingleOrDefault(e => string.Equals(GetString(e, "name"), "NetBSD 10.1 amd64 ISO Installer", StringComparison.Ordinal));
+        Assert.NotEqual(default, netbsd.ValueKind);
+        Assert.Equal("file", GetString(netbsd, "type"));
+        Assert.True(netbsd.TryGetProperty("enabled", out var nbEnabled) && nbEnabled.GetBoolean(), "NetBSD entry must be enabled.");
+
+        var sha512 = GetString(netbsd, "sha512");
+        Assert.Equal(128, sha512.Length);
+        Assert.All(sha512, c => Assert.True(Uri.IsHexDigit(c), "NetBSD sha512 must be hex."));
+        var sha512Url = GetString(netbsd, "sha512Url");
+        Assert.StartsWith("https://cdn.netbsd.org/", sha512Url, StringComparison.Ordinal);
+        Assert.False(netbsd.TryGetProperty("sha256", out _), "NetBSD entry must not carry sha256 alongside sha512.");
+        Assert.False(netbsd.TryGetProperty("sha256Url", out _), "NetBSD entry must not carry sha256Url alongside sha512Url.");
+        Assert.Equal("official", GetString(netbsd, "sourceTrust"));
+        Assert.False(string.IsNullOrWhiteSpace(GetString(netbsd, "fallbackRule")), "NetBSD entry: fallbackRule is required.");
+        Assert.False(string.IsNullOrWhiteSpace(GetString(netbsd, "technicianNotes")), "NetBSD entry: technicianNotes is required.");
+        Assert.False(string.IsNullOrWhiteSpace(GetString(netbsd, "secureBootNote")), "NetBSD entry: secureBootNote is required.");
+        Assert.False(string.IsNullOrWhiteSpace(GetString(netbsd, "ventoyNotes")), "NetBSD entry: ventoyNotes is required.");
+        Assert.Equal("UpToDate", GetString(netbsd.GetProperty("freshness"), "freshnessStatus"));
+        Assert.Equal("sha512-pinned", GetString(netbsd.GetProperty("freshness"), "checksumVerificationMode"));
+
+        var opensuse = document.RootElement.GetProperty("items")
+            .EnumerateArray()
+            .SingleOrDefault(e => string.Equals(GetString(e, "name"), "openSUSE Leap 16.0 Offline Installer (x86_64)", StringComparison.Ordinal));
+        Assert.NotEqual(default, opensuse.ValueKind);
+        Assert.Equal("file", GetString(opensuse, "type"));
+        Assert.True(opensuse.TryGetProperty("enabled", out var osEnabled) && osEnabled.GetBoolean(), "openSUSE entry must be enabled.");
+
+        var sha256 = GetString(opensuse, "sha256");
+        Assert.Equal(64, sha256.Length);
+        Assert.All(sha256, c => Assert.True(Uri.IsHexDigit(c), "openSUSE sha256 must be hex."));
+        var sha256Url = GetString(opensuse, "sha256Url");
+        Assert.StartsWith("https://download.opensuse.org/", sha256Url, StringComparison.Ordinal);
+        Assert.EndsWith(".iso.sha256", sha256Url, StringComparison.Ordinal);
+        Assert.Equal("official", GetString(opensuse, "sourceTrust"));
+        Assert.False(string.IsNullOrWhiteSpace(GetString(opensuse, "fallbackRule")), "openSUSE entry: fallbackRule is required.");
+        Assert.False(string.IsNullOrWhiteSpace(GetString(opensuse, "technicianNotes")), "openSUSE entry: technicianNotes is required.");
+        Assert.False(string.IsNullOrWhiteSpace(GetString(opensuse, "secureBootNote")), "openSUSE entry: secureBootNote is required.");
+        Assert.False(string.IsNullOrWhiteSpace(GetString(opensuse, "ventoyNotes")), "openSUSE entry: ventoyNotes is required.");
+        Assert.Equal("UpToDate", GetString(opensuse.GetProperty("freshness"), "freshnessStatus"));
+        Assert.Equal("sha256-pinned", GetString(opensuse.GetProperty("freshness"), "checksumVerificationMode"));
+    }
+
+    [Fact]
+    public void ManagedDownloadManifest_Batch5PromotedSourceUrlsArePinnedAndStableOnly()
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
+        var promoted = new[]
+        {
+            "NetBSD 10.1 amd64 ISO Installer",
+            "openSUSE Leap 16.0 Offline Installer (x86_64)"
+        };
+
+        foreach (var name in promoted)
+        {
+            var item = document.RootElement.GetProperty("items")
+                .EnumerateArray()
+                .SingleOrDefault(e => string.Equals(GetString(e, "name"), name, StringComparison.Ordinal));
+
+            var url = GetString(item, "url");
+            Assert.StartsWith("https://", url, StringComparison.Ordinal);
+            foreach (var forbidden in new[] { "/latest", "nightly", "beta", "rc", "snapshot", "development", "tumbleweed" })
+            {
+                Assert.DoesNotContain(forbidden, url, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+    }
+
+    [Fact]
     public void ManagedDownloadManifest_HasNoDuplicateNames()
     {
         using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));

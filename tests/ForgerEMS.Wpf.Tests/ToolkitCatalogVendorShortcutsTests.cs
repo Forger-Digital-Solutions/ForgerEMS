@@ -189,7 +189,8 @@ public sealed class ToolkitCatalogVendorShortcutsTests
             }
         }
 
-        Assert.Equal(30, activeManagedFileCount);
+        // 2026-05-25 follow-up promotion pass added NetBSD 10.1 amd64 and openSUSE Leap 16.0 x86_64 (30 -> 32).
+        Assert.Equal(32, activeManagedFileCount);
     }
 
     private static bool IsApprovedVendorHost(string url)

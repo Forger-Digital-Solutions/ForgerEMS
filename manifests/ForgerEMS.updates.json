@@ -1281,10 +1281,10 @@
       "manualOnly": true,
       "secureBootNote": "Secure Boot generally supported on mainstream openSUSE media, subject to target firmware.",
       "sourceTrust": "official",
-      "notes": "Manual only: official openSUSE portal; promote Leap only after a stable versioned ISO/checksum pair is verified.",
-      "technicianNotes": "2026-05-21 recheck found official Leap checksum files, but live URL/HEAD validation was inconsistent during this pass. Keep manual until a versioned ISO and checksum URL revalidate reliably.",
+      "notes": "Manual landing page only: upstream openSUSE portal for Leap, Tumbleweed, and ARM media. The active managed autodownload for the Leap 16.0 offline installer is the companion entry `openSUSE Leap 16.0 Offline Installer (x86_64)`; this shortcut remains for technicians who need Tumbleweed, network/JeOS variants, or non-x86_64 architectures.",
+      "technicianNotes": "2026-05-25 re-verified download.opensuse.org live (HTTP 200 through the official mirror network, Content-Length 4469030912) and the per-file .iso.sha256 companion. Leap 16.0 is the current stable; the prior 2026-05-21 inconsistent live validation has cleared. The x86_64 offline installer managed companion was promoted under this catalog pass. This page entry stays as a manual upstream landing-page shortcut and does not itself carry checksum metadata; Tumbleweed remains intentionally out of scope for stable managed promotion.",
       "ventoyNotes": "Ventoy can boot many openSUSE ISOs; use media check and official sha256/asc files manually.",
-      "fallbackRule": "Use get.opensuse.org or download.opensuse.org only. Do not pin Current/latest aliases without a versioned artifact and matching checksum."
+      "fallbackRule": "Use get.opensuse.org or download.opensuse.org only for non-x86_64 Leap variants and Tumbleweed. The Leap 16.0 x86_64 offline installer is now covered by the managed companion; if that companion is demoted in future, restore manual verification using the per-file .sha256 companion here."
     },
     {
       "name": "Tails Download Page",
@@ -1876,10 +1876,10 @@
       "manualOnly": true,
       "secureBootNote": "Secure Boot is not the normal NetBSD install path; expect to disable Secure Boot.",
       "sourceTrust": "official",
-      "notes": "Manual only: official NetBSD release page; SHA512 resolver support exists, but managed promotion still requires live URL/checksum revalidation to pass consistently.",
-      "technicianNotes": "2026-05-21 recheck confirmed official NetBSD 10.1 amd64 ISO and SHA512 checksum files. Kept manual because operational Invoke-WebRequest/HEAD validation to cdn.netbsd.org/ftp.netbsd.org was refused intermittently in this environment, so managed revalidation would be fragile.",
+      "notes": "Manual landing page only: upstream NetBSD release index. The active managed autodownload for the amd64 ISO is the companion entry `NetBSD 10.1 amd64 ISO Installer`; this shortcut remains for technicians who need the broader netbsd.org navigation (other architectures, release notes, source).",
+      "technicianNotes": "2026-05-25 re-verified cdn.netbsd.org live (HTTP 200 on both the versioned ISO and the per-release SHA512 file); the prior 2026-05-21 intermittent HEAD refusal has cleared. The amd64-specific managed companion was promoted under this catalog pass (see `NetBSD 10.1 amd64 ISO Installer`). This page entry stays as a manual upstream landing-page shortcut; it does not itself carry checksum metadata.",
       "ventoyNotes": "Ventoy compatibility varies; use official install images manually when ISO boot is unreliable.",
-      "fallbackRule": "Use netbsd.org/cdn.netbsd.org release directories and verify NetBSD-10.1-amd64.iso with the vendor SHA512 file manually. Promote only when live URL and checksum-source probes are stable."
+      "fallbackRule": "Use netbsd.org/cdn.netbsd.org release directories for non-amd64 architectures and release-note navigation. The amd64 ISO is now covered by the managed companion; if that companion is demoted in future, restore manual verification using the vendor SHA512 file here."
     },
     {
       "name": "FreeBSD Download Page",
@@ -3320,6 +3320,91 @@
         "upstreamReleaseType": "official-mirror-index",
         "lastKnownChecksumSource": "Official AlmaLinux signed CHECKSUM file",
         "updateRecommendation": "No upstream change observed after promotion; remain pinned at 10.1."
+      }
+    },
+    {
+      "name": "NetBSD 10.1 amd64 ISO Installer",
+      "type": "file",
+      "dest": "ISO\\BSD\\NetBSD-10.1-amd64.iso",
+      "url": "https://cdn.netbsd.org/pub/NetBSD/NetBSD-10.1/iso/NetBSD-10.1-amd64.iso",
+      "sha512": "7a5e5071307e1795885ffc6e1b8aac465082c21c8b79f4c9b4103ef44e4f2da45477299d213ae0093f6534dc99dc2bbf78f41e9dd556c72a02516068bf43fe49",
+      "sha512Url": "https://cdn.netbsd.org/pub/NetBSD/NetBSD-10.1/iso/SHA512",
+      "sourceType": "official-mirror",
+      "fragilityLevel": "low",
+      "fallbackRule": "Use cdn.netbsd.org NetBSD-10.1 iso directory and the per-release SHA512 file. Demote if cdn.netbsd.org stops resolving the version-pinned ISO and SHA512 file together, or if the SHA512 file stops carrying a BSD-format line for NetBSD-10.1-amd64.iso.",
+      "maintenanceRank": 31,
+      "enabled": true,
+      "archive": true,
+      "kind": "os",
+      "family": "BSD",
+      "osCategory": "Server",
+      "architecture": "amd64",
+      "bootMode": [
+        "uefi",
+        "bios"
+      ],
+      "recommendedUse": "Portable BSD installer ISO. amd64 image suitable for BSD server/workstation installs and rescue use.",
+      "technicianNotes": "Promoted 2026-05-25 after live URL + SHA512 source revalidation. cdn.netbsd.org returned 200 OK for both the versioned ISO (Content-Length 654090240) and the per-release SHA512 file; the BSD-format `SHA512 (NetBSD-10.1-amd64.iso) = ...` line matches the pinned hash and is resolved filename-aware by the existing SHA-512 resolver path. Bump version, URL, and pinned SHA-512 together when 10.x advances.",
+      "licenseNote": "Free / open source (BSD).",
+      "secureBootNote": "Secure Boot is not the default NetBSD install path; expect to disable Secure Boot.",
+      "ventoyNotes": "Ventoy compatibility varies; use install ISO and follow vendor instructions if firmware refuses ISO boot.",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official version-pinned installer ISO with SHA-512 coverage.",
+      "freshness": {
+        "currentPinnedVersion": "10.1",
+        "latestKnownStableVersion": "10.1",
+        "lastFreshnessAuditUtc": "2026-05-25T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha512-pinned",
+        "upstreamReleaseType": "official-mirror-index",
+        "lastKnownChecksumSource": "Official NetBSD SHA512 release file",
+        "updateRecommendation": "Promoted from manual to managed on 2026-05-25 after live revalidation; remain pinned at 10.1."
+      }
+    },
+    {
+      "name": "openSUSE Leap 16.0 Offline Installer (x86_64)",
+      "type": "file",
+      "dest": "ISO\\Linux\\Leap-16.0-offline-installer-x86_64.install.iso",
+      "url": "https://download.opensuse.org/distribution/leap/16.0/offline/Leap-16.0-offline-installer-x86_64.install.iso",
+      "sha256": "d780a228058fb4688a31b5bde22d7b97c86e04a2ced33f3d7c8e88a710d96d24",
+      "sha256Url": "https://download.opensuse.org/distribution/leap/16.0/offline/Leap-16.0-offline-installer-x86_64.install.iso.sha256",
+      "sourceType": "official-mirror",
+      "fragilityLevel": "medium",
+      "fallbackRule": "Use download.opensuse.org for the same Leap point release and the matching per-file .iso.sha256 companion. Do not pin -Current aliases without a versioned artifact and matching hash.",
+      "maintenanceRank": 32,
+      "enabled": true,
+      "archive": true,
+      "kind": "os",
+      "family": "Linux",
+      "osCategory": "Server",
+      "architecture": "amd64",
+      "bootMode": [
+        "uefi",
+        "bios",
+        "secure-boot"
+      ],
+      "recommendedUse": "openSUSE Leap stable offline installer for general-purpose Linux server and lab installs.",
+      "technicianNotes": "Promoted 2026-05-25 after live URL + per-file SHA-256 companion revalidation. download.opensuse.org redirected through the official mirror network and returned 200 OK with Content-Length 4469030912; the per-file `.iso.sha256` companion published the matching hash for Leap-16.0-offline-installer-x86_64.install.iso. Bump version, URL, and pinned SHA-256 together when the Leap point release advances; 15.x has been retired upstream and superseded by Leap 16.0.",
+      "licenseNote": "Free / open source (SUSE/openSUSE licenses).",
+      "secureBootNote": "Secure Boot generally supported on mainstream openSUSE media, subject to target firmware.",
+      "ventoyNotes": "Ventoy can boot openSUSE Leap installer ISOs; use media check when troubleshooting.",
+      "sourceTrust": "official",
+      "notes": "Active managed autodownload: official version-pinned offline installer ISO with SHA-256 coverage.",
+      "freshness": {
+        "currentPinnedVersion": "16.0",
+        "latestKnownStableVersion": "16.0",
+        "lastFreshnessAuditUtc": "2026-05-25T00:00:00Z",
+        "freshnessStatus": "UpToDate",
+        "updateChannel": "stable",
+        "requiresManualReview": false,
+        "majorVersionBoundary": false,
+        "checksumVerificationMode": "sha256-pinned",
+        "upstreamReleaseType": "official-mirror-index",
+        "lastKnownChecksumSource": "Per-file vendor .iso.sha256 companion at download.opensuse.org",
+        "updateRecommendation": "Promoted from manual to managed on 2026-05-25 after live revalidation; remain pinned at 16.0."
       }
     },
     {
