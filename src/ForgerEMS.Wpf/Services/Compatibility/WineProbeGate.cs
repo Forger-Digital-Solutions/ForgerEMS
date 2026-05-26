@@ -1,3 +1,5 @@
+using System;
+using System.Threading;
 using VentoyToolkitSetup.Wpf.Infrastructure;
 
 namespace VentoyToolkitSetup.Wpf.Services.Compatibility;
@@ -14,30 +16,71 @@ namespace VentoyToolkitSetup.Wpf.Services.Compatibility;
 /// confidence or surface as a failure. Use
 /// <see cref="WineProbeOutcome.UnsupportedUnderWine"/> to flag the result as
 /// "compatibility limited" rather than "broken".
+///
+/// Test isolation: <see cref="OverrideEnvironment"/> is backed by an
+/// <see cref="AsyncLocal{T}"/> so a test setting an override in one logical
+/// call context cannot leak into a parallel test running on a different
+/// context. Prefer <see cref="PushOverride"/> for try/finally-free scopes.
 /// </remarks>
 public static class WineProbeGate
 {
+    private static readonly AsyncLocal<CompatibilityEnvironment?> _override = new();
+
     /// <summary>
-    /// Overrides the ambient environment for testing. Production callers
-    /// leave this null and pick up <c>App.CompatibilityEnvironment</c>.
+    /// Overrides the ambient environment for testing. Backed by
+    /// <see cref="AsyncLocal{T}"/> so two parallel tests cannot clobber
+    /// each other and so an override never leaks across test boundaries.
+    /// Production callers leave this null and pick up <c>App.CompatibilityEnvironment</c>.
     /// </summary>
-    public static CompatibilityEnvironment? OverrideEnvironment { get; set; }
+    public static CompatibilityEnvironment? OverrideEnvironment
+    {
+        get => _override.Value;
+        set => _override.Value = value;
+    }
+
+    /// <summary>
+    /// Convenience scope: push an override, dispose to restore the prior
+    /// value. Pairs well with <c>using</c> in test methods.
+    /// </summary>
+    public static IDisposable PushOverride(CompatibilityEnvironment? environment)
+    {
+        var prior = _override.Value;
+        _override.Value = environment;
+        return new OverrideScope(prior);
+    }
 
     private static CompatibilityEnvironment? Current => OverrideEnvironment ?? App.CompatibilityEnvironment;
 
     /// <summary>
-    /// True if the host is in compatibility mode (Wine or Linux-likely);
-    /// callers should skip native Windows probes and return an Unsupported
-    /// outcome instead.
+    /// True only when the current ambient environment was explicitly
+    /// identified as Wine. Probes that need to skip Windows-only calls
+    /// should consult this property — not <see cref="IsCompatibilityMode"/>
+    /// — so they never gate on weaker signals.
     /// </summary>
-    public static bool IsCompatibilityMode => Current?.IsCompatibilityMode == true;
+    public static bool IsWine
+    {
+        get
+        {
+            var env = Current;
+            return env is { IsWine: true } &&
+                   env.Platform == RuntimePlatformKind.WindowsUnderWine;
+        }
+    }
+
+    /// <summary>
+    /// True if the host is in compatibility mode. Today this is
+    /// semantically identical to <see cref="IsWine"/> — pure Linux hosts
+    /// do not trip this flag because ForgerEMS does not ship a native
+    /// Linux process.
+    /// </summary>
+    public static bool IsCompatibilityMode => IsWine;
 
     /// <summary>
     /// True if the probe should run normally. Equivalent to
-    /// <c>!IsCompatibilityMode</c>; named affirmatively so the call site
-    /// reads as "if the probe is allowed".
+    /// <c>!IsWine</c>; named affirmatively so the call site reads as
+    /// "if the probe is allowed".
     /// </summary>
-    public static bool IsWindowsOnlyProbeAllowed => !IsCompatibilityMode;
+    public static bool IsWindowsOnlyProbeAllowed => !IsWine;
 
     /// <summary>
     /// Build the standard "compatibility limited" message for a probe.
@@ -47,5 +90,27 @@ public static class WineProbeGate
     public static string DescribeUnsupported(string probeName)
     {
         return $"{probeName} is unsupported in Wine compatibility mode; this is a host limitation, not a hardware fault.";
+    }
+
+    private sealed class OverrideScope : IDisposable
+    {
+        private readonly CompatibilityEnvironment? _prior;
+        private bool _disposed;
+
+        public OverrideScope(CompatibilityEnvironment? prior)
+        {
+            _prior = prior;
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            _override.Value = _prior;
+        }
     }
 }

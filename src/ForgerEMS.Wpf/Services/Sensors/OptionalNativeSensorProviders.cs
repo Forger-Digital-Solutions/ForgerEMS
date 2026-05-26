@@ -36,7 +36,7 @@ public sealed class AcpiThermalZoneSensorProvider : IHardwareSensorProvider
         // ACPI / MSAcpi_ThermalZoneTemperature is a Windows-only WMI namespace
         // — Wine has no implementation. Skip the probe under compatibility mode
         // and report neutrally so confidence scoring is not penalized.
-        if (WineProbeGate.IsCompatibilityMode)
+        if (WineProbeGate.IsWine)
         {
             failureReason = WineProbeGate.DescribeUnsupported("ACPI thermal zone probe");
             notes.Add("Windows-only probe unavailable under Wine compatibility mode.");
@@ -224,7 +224,7 @@ public sealed class NvidiaSmiSensorProvider : IHardwareSensorProvider
         // nvidia-smi.exe is a Windows-native binary and the Wine prefix does
         // not contain it. Skip the probe entirely so we do not spawn a
         // process that is guaranteed to fail in the Wine event log.
-        if (WineProbeGate.IsCompatibilityMode)
+        if (WineProbeGate.IsWine)
         {
             return BuildNotDetected("Windows-only probe unavailable under Wine compatibility mode.");
         }

@@ -14,6 +14,7 @@ namespace ForgerEMS.Wpf.Tests;
 /// detection, the WPF software-render gate, probe gating, banner state,
 /// Linux helper JSON parsing, and the helper script's stable contract.
 /// </summary>
+[Collection(WineCompatibilityCollection.Name)]
 public sealed class WineCompatibilityTests
 {
     private static readonly string[] UnsupportedDefaults = { "WMI" };
@@ -286,19 +287,28 @@ public sealed class WineCompatibilityTests
     {
         var path = LocateRepoRelativeFile("src/ForgerEMS.Wpf/Services/Sensors/LibreHardwareMonitorSensorProvider.cs");
         var text = File.ReadAllText(path);
-        Assert.Contains("WineProbeGate.IsCompatibilityMode", text, StringComparison.Ordinal);
+        // The probe now consults the strict IsWine property rather than the
+        // weaker IsCompatibilityMode alias.
+        Assert.Contains("WineProbeGate.IsWine", text, StringComparison.Ordinal);
     }
 
     // ---- Helpers --------------------------------------------------------
 
     private static CompatibilityEnvironment BuildCompatEnv(
         bool compatibilityMode,
-        RuntimePlatformKind platform = RuntimePlatformKind.WindowsNative,
+        RuntimePlatformKind? platform = null,
         string? wineVersion = null,
         string? distro = null)
     {
+        // Platform defaults follow the compatibility flag so callers that
+        // ask for "Wine on" but forget to pass a platform still get a
+        // self-consistent envelope. WineProbeGate.IsWine requires
+        // Platform == WindowsUnderWine alongside isWine=true.
+        var effectivePlatform = platform ??
+            (compatibilityMode ? RuntimePlatformKind.WindowsUnderWine : RuntimePlatformKind.WindowsNative);
+
         return new CompatibilityEnvironment(
-            platform,
+            effectivePlatform,
             isWine: compatibilityMode,
             wineVersion: wineVersion,
             hostKernel: null,

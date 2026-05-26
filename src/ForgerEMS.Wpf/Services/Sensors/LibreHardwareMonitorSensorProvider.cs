@@ -31,7 +31,7 @@ public class LibreHardwareMonitorSensorProvider : IHardwareSensorProvider
         // Windows-only ring0 hooks that Wine does not implement — calling
         // Computer.Open() under Wine has historically faulted the process.
         // Refuse to attempt it under compatibility mode and report neutrally.
-        if (WineProbeGate.IsCompatibilityMode)
+        if (WineProbeGate.IsWine)
         {
             return BuildDisabledResult(
                 packaged,

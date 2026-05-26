@@ -90,18 +90,26 @@ public static class RuntimeCompatibilityService
             signals.Add("env:STEAM_COMPAT_DATA_PATH set (Proton)");
         }
 
+        // Wine classification requires STRONG, Wine-specific evidence. /proc
+        // and /etc/os-release tell us "the host is Linux-ish" but do NOT
+        // prove we are inside a Wine prefix — they can be present in
+        // sandboxes, containers, or odd CI environments where a tool surfaces
+        // a fake /proc. Without this guard a Windows CI runner with an
+        // accessible /proc/version (e.g. via a mapped drive) would flip into
+        // compatibility mode and start gating Windows-native probes.
         var isWine = signals.Any(s =>
             s.StartsWith("env:WINE", StringComparison.Ordinal) ||
             s.StartsWith("env:STEAM_COMPAT_DATA_PATH", StringComparison.Ordinal) ||
             s.StartsWith("ntdll:wine", StringComparison.Ordinal) ||
-            s.StartsWith("registry:HKLM\\Software\\Wine", StringComparison.Ordinal) ||
-            s.StartsWith("file:/proc/version", StringComparison.Ordinal) ||
-            s.StartsWith("file:/etc/os-release", StringComparison.Ordinal));
+            s.StartsWith("registry:HKLM\\Software\\Wine", StringComparison.Ordinal));
 
         var platform = ClassifyPlatform(isWine, isLinuxHost);
 
-        var isCompatibilityMode = platform == RuntimePlatformKind.WindowsUnderWine
-                                  || platform == RuntimePlatformKind.LinuxHostLikely;
+        // Compatibility mode is now strictly Wine-driven. Pure Linux hosts
+        // are reported via Platform/LinuxDistro for diagnostics but do not
+        // flip gating — ForgerEMS does not run as a native Linux process,
+        // so the platform-Linux path is informational only.
+        var isCompatibilityMode = isWine && platform == RuntimePlatformKind.WindowsUnderWine;
 
         var forceSoftwareRendering = isCompatibilityMode;
 

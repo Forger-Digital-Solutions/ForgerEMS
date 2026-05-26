@@ -99,7 +99,7 @@ public sealed class SystemHealthEvaluator
         // Under Wine compatibility mode, treat TPM/Secure-Boot "unknown" as a
         // host-limitation note instead of a confidence penalty. Real hardware
         // health is unchanged; we just stop pretending Windows ran a probe.
-        var isCompatibility = WineProbeGate.IsCompatibilityMode;
+        var isCompatibility = WineProbeGate.IsWine;
 
         if (profile.TpmPresent == false && !isCompatibility)
         {
@@ -297,7 +297,7 @@ public sealed class SystemHealthEvaluator
         var reasons = new List<string>();
         var score = 88;
         var confidence = "High";
-        var isCompatibility = WineProbeGate.IsCompatibilityMode;
+        var isCompatibility = WineProbeGate.IsWine;
 
         if (isCompatibility)
         {
