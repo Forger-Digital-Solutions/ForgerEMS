@@ -3488,6 +3488,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private bool CanRunTargetedActions()
     {
+        // Wine compatibility mode disables every targeted USB Builder action
+        // that mutates state on the selected drive (Setup, Update, Rename,
+        // Ventoy install/update, Toolkit update, Full Managed Download) —
+        // these all go through Update-ForgerEMS.ps1 / Setup-USB and depend
+        // on Windows-only PowerShell + WMI paths that are not available in
+        // a Wine prefix. Catalog browsing, profile editing, link safety,
+        // and Drive Validator (read-only) stay enabled.
+        if (_compatibilityEnvironment?.IsCompatibilityMode == true)
+        {
+            return false;
+        }
+
         return !_isBusy &&
                _backendContext.IsAvailable &&
                SelectedUsbTarget is not null &&

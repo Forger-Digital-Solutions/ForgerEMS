@@ -5,6 +5,7 @@ using System.Linq;
 using LibreHardwareMonitor.Hardware;
 using VentoyToolkitSetup.Wpf.Configuration;
 using VentoyToolkitSetup.Wpf.Infrastructure;
+using VentoyToolkitSetup.Wpf.Services.Compatibility;
 
 namespace VentoyToolkitSetup.Wpf.Services;
 
@@ -25,6 +26,19 @@ public class LibreHardwareMonitorSensorProvider : IHardwareSensorProvider
         _ = profile;
         var packaged = _packagedOverride ?? SensorProviderRegistry.IsBundledDeepProviderPackaged();
         var resolution = DeepSensorModeResolver.Resolve();
+
+        // LibreHardwareMonitor probes MSRs, SMBus, ACPI and SuperIO via
+        // Windows-only ring0 hooks that Wine does not implement — calling
+        // Computer.Open() under Wine has historically faulted the process.
+        // Refuse to attempt it under compatibility mode and report neutrally.
+        if (WineProbeGate.IsCompatibilityMode)
+        {
+            return BuildDisabledResult(
+                packaged,
+                WineProbeGate.DescribeUnsupported("LibreHardwareMonitor deep sensor probe"),
+                resolution);
+        }
+
         if (!resolution.IsEnabled)
         {
             return BuildDisabledResult(

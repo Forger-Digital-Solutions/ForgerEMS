@@ -366,3 +366,18 @@ A Windows technician suite for **USB toolkit building**, **USB Intelligence**, *
 ## Are support bundles uploaded automatically?
 
 **No.** Support bundles are user-controlled. ForgerEMS attempts to redact local usernames, private paths, API keys, tokens, bearer values, and product keys from logs, diagnostics, and exported bundles, but you should still **review every bundle before sharing it**. The app does not automatically upload bundles, sensor data, scan reports, or USB inventories anywhere.
+
+---
+
+## Can I run ForgerEMS on Linux through Wine?
+
+**Experimentally, yes.** ForgerEMS detects Wine on startup, forces WPF
+into `SoftwareOnly` render mode, and shows a yellow compatibility banner
+at the top of the window. Catalog browsing, profiles, the Drive Validator
+wizard (read-only), and Kyra still work. USB drive write actions — Setup
+USB, Update USB, Rename USB, Install/Update Ventoy, Toolkit Update, and
+Full Managed Download — are disabled under Wine in this prerelease. Use
+native Windows for any USB writing step. See
+[docs/LINUX-WINE-COMPATIBILITY.md](LINUX-WINE-COMPATIBILITY.md) for the
+full guide, tested distros, launch flags, and how to collect logs for a
+bug report.

@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Management;
+using VentoyToolkitSetup.Wpf.Services.Compatibility;
 
 namespace VentoyToolkitSetup.Wpf.Services;
 
@@ -31,6 +32,16 @@ public sealed class AcpiThermalZoneSensorProvider : IHardwareSensorProvider
         };
         var failureReason = string.Empty;
         var status = SensorDataClassStatus.NotExposed;
+
+        // ACPI / MSAcpi_ThermalZoneTemperature is a Windows-only WMI namespace
+        // — Wine has no implementation. Skip the probe under compatibility mode
+        // and report neutrally so confidence scoring is not penalized.
+        if (WineProbeGate.IsCompatibilityMode)
+        {
+            failureReason = WineProbeGate.DescribeUnsupported("ACPI thermal zone probe");
+            notes.Add("Windows-only probe unavailable under Wine compatibility mode.");
+            return BuildAcpiUnsupportedUnderWineResult(failureReason, notes);
+        }
 
         try
         {
@@ -150,6 +161,33 @@ public sealed class AcpiThermalZoneSensorProvider : IHardwareSensorProvider
         };
     }
 
+    private static SensorProviderResult BuildAcpiUnsupportedUnderWineResult(string failureReason, List<string> notes) => new()
+    {
+        ProviderName = "ACPI Thermal Zones",
+        ProviderVersion = "1.0",
+        ProviderKind = nameof(AcpiThermalZoneSensorProvider),
+        IsEnabled = false,
+        IsBundled = true,
+        RequiresAdmin = false,
+        RequiresThirdPartyLicenseNotice = false,
+        IsReadOnly = true,
+        TrustLevel = SensorProviderTrustLevels.BuiltInWindows,
+        RuntimeMode = SensorProviderRuntimeModes.Disabled,
+        Capabilities = new SensorProviderCapabilities
+        {
+            SupportedCapabilities = ["Read-only ACPI thermal zone temperatures when firmware exposes them"],
+            MissingCapabilities = ["Wine has no MSAcpi_ThermalZoneTemperature implementation"],
+            ReadOnlyGuarantees = SensorProviderCapabilities.None.ReadOnlyGuarantees,
+            DataClasses =
+            [
+                new(SensorDataClass.ThermalZone, SensorDataClassStatus.ProviderUnavailable, failureReason)
+            ]
+        },
+        FailureReason = failureReason,
+        Readings = Array.Empty<SensorReading>(),
+        Notes = notes.ToArray()
+    };
+
     private static string NormalizeInstance(string instance)
     {
         if (string.IsNullOrWhiteSpace(instance))
@@ -182,6 +220,14 @@ public sealed class NvidiaSmiSensorProvider : IHardwareSensorProvider
     public SensorProviderResult Read(SystemProfile profile)
     {
         _ = profile;
+
+        // nvidia-smi.exe is a Windows-native binary and the Wine prefix does
+        // not contain it. Skip the probe entirely so we do not spawn a
+        // process that is guaranteed to fail in the Wine event log.
+        if (WineProbeGate.IsCompatibilityMode)
+        {
+            return BuildNotDetected("Windows-only probe unavailable under Wine compatibility mode.");
+        }
 
         var path = (PathResolverOverride ?? ResolveNvidiaSmiPath)();
         if (string.IsNullOrEmpty(path))
@@ -270,37 +316,52 @@ public sealed class NvidiaSmiSensorProvider : IHardwareSensorProvider
         };
     }
 
-    private static SensorProviderResult BuildNotDetected() => new()
+    private static SensorProviderResult BuildNotDetected(string? overrideReason = null)
     {
-        ProviderName = "NVIDIA SMI",
-        ProviderVersion = "driver",
-        ProviderKind = nameof(NvidiaSmiSensorProvider),
-        IsEnabled = false,
-        IsBundled = false,
-        RequiresAdmin = false,
-        IsReadOnly = true,
-        TrustLevel = SensorProviderTrustLevels.VendorDetected,
-        RuntimeMode = SensorProviderRuntimeModes.Disabled,
-        Capabilities = new SensorProviderCapabilities
+        var reason = overrideReason ?? "nvidia-smi not detected. ForgerEMS does not install vendor tools.";
+        var missing = overrideReason is null
+            ? "nvidia-smi.exe was not detected; no probe was attempted"
+            : overrideReason;
+        var notes = overrideReason is null
+            ? new[]
+            {
+                "nvidia-smi is installed by the official NVIDIA driver. ForgerEMS does not bundle or download it.",
+                "If you want this probe, install the standard NVIDIA driver from nvidia.com or via Windows Update."
+            }
+            : new[]
+            {
+                "Windows-only probe — ForgerEMS does not attempt to run nvidia-smi under Wine compatibility mode.",
+                "On native Linux the host distro's NVIDIA driver provides its own nvidia-smi binary."
+            };
+
+        return new SensorProviderResult
         {
-            SupportedCapabilities = ["Optional NVIDIA-only GPU sensors when the driver is installed"],
-            MissingCapabilities = ["nvidia-smi.exe was not detected; no probe was attempted"],
-            ReadOnlyGuarantees = SensorProviderCapabilities.None.ReadOnlyGuarantees,
-            DataClasses =
-            [
-                new(SensorDataClass.GpuTemperature, SensorDataClassStatus.NotPackaged, "nvidia-smi not detected on PATH or System32."),
-                new(SensorDataClass.GpuLoad, SensorDataClassStatus.NotPackaged),
-                new(SensorDataClass.GpuClock, SensorDataClassStatus.NotPackaged),
-                new(SensorDataClass.GpuVram, SensorDataClassStatus.NotPackaged)
-            ]
-        },
-        FailureReason = "nvidia-smi not detected. ForgerEMS does not install vendor tools.",
-        Notes =
-        [
-            "nvidia-smi is installed by the official NVIDIA driver. ForgerEMS does not bundle or download it.",
-            "If you want this probe, install the standard NVIDIA driver from nvidia.com or via Windows Update."
-        ]
-    };
+            ProviderName = "NVIDIA SMI",
+            ProviderVersion = "driver",
+            ProviderKind = nameof(NvidiaSmiSensorProvider),
+            IsEnabled = false,
+            IsBundled = false,
+            RequiresAdmin = false,
+            IsReadOnly = true,
+            TrustLevel = SensorProviderTrustLevels.VendorDetected,
+            RuntimeMode = SensorProviderRuntimeModes.Disabled,
+            Capabilities = new SensorProviderCapabilities
+            {
+                SupportedCapabilities = ["Optional NVIDIA-only GPU sensors when the driver is installed"],
+                MissingCapabilities = [missing],
+                ReadOnlyGuarantees = SensorProviderCapabilities.None.ReadOnlyGuarantees,
+                DataClasses =
+                [
+                    new(SensorDataClass.GpuTemperature, SensorDataClassStatus.NotPackaged, "nvidia-smi not detected on PATH or System32."),
+                    new(SensorDataClass.GpuLoad, SensorDataClassStatus.NotPackaged),
+                    new(SensorDataClass.GpuClock, SensorDataClassStatus.NotPackaged),
+                    new(SensorDataClass.GpuVram, SensorDataClassStatus.NotPackaged)
+                ]
+            },
+            FailureReason = reason,
+            Notes = notes
+        };
+    }
 
     private static SensorProviderResult BuildProviderUnavailable(string reason) => new()
     {

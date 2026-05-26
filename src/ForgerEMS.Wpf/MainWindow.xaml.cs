@@ -1112,7 +1112,18 @@ public partial class MainWindow : Window
 
     private void SyncVisualEffectsMode()
     {
-        switch (_visualEffectsMode)
+        // Under Wine the WPF render pipeline runs in SoftwareOnly mode, so
+        // sustained per-frame redraws cost ~10x more than on native Windows
+        // and reliably cascade into stutter. Quietly downgrade Animated to
+        // Static when running in compatibility mode; the saved user
+        // preference is preserved for when they next run on real Windows.
+        var effectiveMode = _visualEffectsMode;
+        if (effectiveMode == VisualEffectsMode.Animated && App.CompatibilityEnvironment?.IsCompatibilityMode == true)
+        {
+            effectiveMode = VisualEffectsMode.Static;
+        }
+
+        switch (effectiveMode)
         {
             case VisualEffectsMode.Off:
                 _animatedBackgroundEnabled = false;
@@ -1123,7 +1134,6 @@ public partial class MainWindow : Window
                 _backgroundDetail = BackgroundDetailLevel.Medium;
                 break;
             default:
-                _visualEffectsMode = VisualEffectsMode.Static;
                 _animatedBackgroundEnabled = false;
                 _backgroundDetail = BackgroundDetailLevel.Low;
                 break;

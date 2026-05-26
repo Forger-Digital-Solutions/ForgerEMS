@@ -4360,5 +4360,47 @@
                 </DockPanel>
             </Border>
         </Grid>
+
+        <!-- Wine / Linux compatibility banner. Sits above all other content
+             via Panel.ZIndex; collapses entirely on native Windows. -->
+        <Border x:Name="CompatibilityBanner"
+                Panel.ZIndex="9999"
+                Visibility="{Binding CompatibilityBannerVisibility, FallbackValue=Collapsed}"
+                Background="#FF1B2A3A"
+                BorderBrush="#FFFBBF24"
+                BorderThickness="0,0,0,2"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Top"
+                Padding="16,8"
+                SnapsToDevicePixels="True"
+                UseLayoutRounding="True">
+            <StackPanel Orientation="Vertical">
+                <TextBlock Text="{Binding CompatibilityBannerHeadline}"
+                           FontWeight="SemiBold"
+                           FontSize="13"
+                           Foreground="#FFFBBF24" />
+                <TextBlock Text="{Binding CompatibilityBannerBody}"
+                           FontSize="12"
+                           Margin="0,2,0,0"
+                           Foreground="#FFE6EEF8"
+                           TextWrapping="Wrap" />
+                <TextBlock Text="{Binding LinuxHelperSummary}"
+                           FontSize="11"
+                           Margin="0,4,0,0"
+                           Foreground="#FFB8C8DA"
+                           TextWrapping="Wrap">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Visible" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding LinuxHelperSummary}" Value="">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </StackPanel>
+        </Border>
     </Grid>
 </Window>
