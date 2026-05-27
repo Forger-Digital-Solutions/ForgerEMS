@@ -214,7 +214,9 @@ function Get-ManagedItemsMissingChecksumCoverage {
 
         $hasSha256 = -not [string]::IsNullOrWhiteSpace([string]$item.sha256)
         $hasSha256Url = -not [string]::IsNullOrWhiteSpace([string]$item.sha256Url)
-        if ($hasSha256 -or $hasSha256Url) { continue }
+        $hasSha512 = -not [string]::IsNullOrWhiteSpace([string]$item.sha512)
+        $hasSha512Url = -not [string]::IsNullOrWhiteSpace([string]$item.sha512Url)
+        if ($hasSha256 -or $hasSha256Url -or $hasSha512 -or $hasSha512Url) { continue }
 
         $missing.Add([PSCustomObject]@{
             Name = [string]$item.name
