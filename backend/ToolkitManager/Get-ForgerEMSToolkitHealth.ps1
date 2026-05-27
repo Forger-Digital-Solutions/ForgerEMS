@@ -809,6 +809,15 @@ function Get-ToolkitItemStatus {
         ventoyNotes = [string]$Item.ventoyNotes
         secureBootNote = [string]$Item.secureBootNote
         sourceTrust = [string]$Item.sourceTrust
+        downloadMode = [string]$Item.downloadMode
+        actionLabel = [string]$Item.actionLabel
+        secondaryActionLabel = [string]$Item.secondaryActionLabel
+        actionReason = [string]$Item.actionReason
+        promotionStatus = [string]$Item.promotionStatus
+        promotionEvidence = [string]$Item.promotionEvidence
+        legalRisk = [string]$Item.legalRisk
+        checksumRequirement = [string]$Item.checksumRequirement
+        managedPromotionCandidate = if ($null -ne $Item.managedPromotionCandidate) { [bool]$Item.managedPromotionCandidate } else { $false }
         currentPinnedVersion = [string]$freshness.currentPinnedVersion
         latestKnownStableVersion = [string]$freshness.latestKnownStableVersion
         lastFreshnessAuditUtc = [string]$freshness.lastFreshnessAuditUtc

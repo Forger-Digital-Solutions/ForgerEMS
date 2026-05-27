@@ -1856,6 +1856,33 @@ function Assert-ManifestFragilityLevelField {
     }
 }
 
+function Assert-ManifestDownloadModeField {
+    param(
+        [AllowNull()]$Value,
+        [Parameter(Mandatory)][string]$FieldName
+    )
+
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) { return }
+
+    $normalized = ([string]$Value).Trim()
+    if ($normalized -notin @(
+            "ManagedDownload",
+            "OfficialDownloadPage",
+            "ManualMediaRequired",
+            "ReviewFirst",
+            "VendorPortal",
+            "LicenseRestricted",
+            "DynamicMirrorOnly",
+            "OEMSpecific",
+            "FirmwareBlocked",
+            "CommunityToolkit",
+            "Unsupported",
+            "InfoOnly"
+        )) {
+        throw "$FieldName has an unsupported downloadMode value."
+    }
+}
+
 function Assert-ManifestContract {
     param(
         [Parameter(Mandatory)]$Manifest,
@@ -1936,6 +1963,7 @@ function Assert-ManifestContract {
         Assert-ManifestSha512Field -Value $item.sha512 -FieldName "$prefix.sha512"
         Assert-ManifestSourceTypeField -Value $item.sourceType -FieldName "$prefix.sourceType"
         Assert-ManifestFragilityLevelField -Value $item.fragilityLevel -FieldName "$prefix.fragilityLevel"
+        Assert-ManifestDownloadModeField -Value $item.downloadMode -FieldName "$prefix.downloadMode"
         Assert-ManifestStringField -Value $item.fallbackRule -FieldName "$prefix.fallbackRule"
         Assert-ManifestPositiveIntegerField -Value $item.maintenanceRank -FieldName "$prefix.maintenanceRank"
         Assert-ManifestBooleanField -Value $item.borderline -FieldName "$prefix.borderline"

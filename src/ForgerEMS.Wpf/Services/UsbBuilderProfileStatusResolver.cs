@@ -46,13 +46,13 @@ public static class UsbBuilderProfileStatusResolver
         {
             UsbBuilderProfilePackStatus.Required => "Required",
             UsbBuilderProfilePackStatus.Included => "Included",
-            UsbBuilderProfilePackStatus.AutoDownloadable => "Auto-downloadable",
-            UsbBuilderProfilePackStatus.GuidedOfficialDownload => "Guided official download",
-            UsbBuilderProfilePackStatus.UserSuppliedMedia => "User-supplied media",
+            UsbBuilderProfilePackStatus.AutoDownloadable => "Managed Download",
+            UsbBuilderProfilePackStatus.GuidedOfficialDownload => "Official Download Page",
+            UsbBuilderProfilePackStatus.UserSuppliedMedia => "Manual Media Required",
             // v1.2.3: these packs are vendor support / OEM / firmware lookup / licensed-tool
             // shortcuts. Call them what they are so users do not assume drivers were
             // auto-downloaded.
-            UsbBuilderProfilePackStatus.LinkOnlyLicenseRestricted => "Manual / vendor links available",
+            UsbBuilderProfilePackStatus.LinkOnlyLicenseRestricted => "Vendor Portal / License Required",
             UsbBuilderProfilePackStatus.Optional => "Optional",
             UsbBuilderProfilePackStatus.AlreadyPresent => "Already present",
             UsbBuilderProfilePackStatus.NotSelected => "Not selected",
@@ -64,13 +64,13 @@ public static class UsbBuilderProfileStatusResolver
     public static string ToAcquisitionChip(UsbBuilderPackDownloadMode mode) =>
         mode switch
         {
-            UsbBuilderPackDownloadMode.AutoDownloadable => "Auto / catalog",
-            UsbBuilderPackDownloadMode.GuidedOfficialDownload => "Guided official",
-            UsbBuilderPackDownloadMode.UserSuppliedMedia => "User-supplied",
+            UsbBuilderPackDownloadMode.AutoDownloadable => "Managed Download",
+            UsbBuilderPackDownloadMode.GuidedOfficialDownload => "Official Download Page",
+            UsbBuilderPackDownloadMode.UserSuppliedMedia => "Manual Media Required",
             // v1.2.3: was "Link-only" — make explicit that these are manual / vendor / OEM
             // shortcuts, not managed downloads.
-            UsbBuilderPackDownloadMode.LinkOnlyLicenseRestricted => "Manual / vendor",
-            UsbBuilderPackDownloadMode.Mixed => "Auto + guided",
+            UsbBuilderPackDownloadMode.LinkOnlyLicenseRestricted => "Vendor Portal",
+            UsbBuilderPackDownloadMode.Mixed => "Managed + Official Page",
             UsbBuilderPackDownloadMode.Required => "Required",
             UsbBuilderPackDownloadMode.Optional => "Optional",
             _ => "Pack"

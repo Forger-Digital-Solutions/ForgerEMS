@@ -23,14 +23,12 @@ public sealed class UsbBuilderProfilePlannerAndHtmlTests
     }
 
     [Fact]
-    public void StatusResolver_NeverReturnsManualMediaRequiredLabel()
+    public void StatusResolver_UsesTechnicianActionLabels()
     {
-        foreach (var definition in UsbBuilderProfileCatalog.All)
-        {
-            var status = UsbBuilderProfileStatusResolver.Resolve(definition, isIncluded: true, 0, 0);
-            var label = UsbBuilderProfileStatusResolver.ToDisplayLabel(status);
-            Assert.DoesNotContain("Manual media required", label, StringComparison.OrdinalIgnoreCase);
-        }
+        Assert.Equal("Managed Download", UsbBuilderProfileStatusResolver.ToDisplayLabel(UsbBuilderProfilePackStatus.AutoDownloadable));
+        Assert.Equal("Official Download Page", UsbBuilderProfileStatusResolver.ToDisplayLabel(UsbBuilderProfilePackStatus.GuidedOfficialDownload));
+        Assert.Equal("Manual Media Required", UsbBuilderProfileStatusResolver.ToDisplayLabel(UsbBuilderProfilePackStatus.UserSuppliedMedia));
+        Assert.Equal("Vendor Portal / License Required", UsbBuilderProfileStatusResolver.ToDisplayLabel(UsbBuilderProfilePackStatus.LinkOnlyLicenseRestricted));
     }
 
     [Theory]

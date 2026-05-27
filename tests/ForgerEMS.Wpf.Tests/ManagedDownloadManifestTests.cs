@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using VentoyToolkitSetup.Wpf.Services.Intelligence;
 using Xunit;
 
 namespace ForgerEMS.Wpf.Tests;
@@ -46,6 +47,205 @@ public sealed class ManagedDownloadManifestTests
     }
 
     [Fact]
+    public void ManagedDownloadManifestSchema_AcceptsDownloadModeEnum()
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.schema.json")));
+        var enumValues = document.RootElement
+            .GetProperty("properties")
+            .GetProperty("items")
+            .GetProperty("items")
+            .GetProperty("properties")
+            .GetProperty("downloadMode")
+            .GetProperty("enum")
+            .EnumerateArray()
+            .Select(e => e.GetString() ?? string.Empty)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var expected in ManifestPromotionPolicy.ValidDownloadModes)
+        {
+            Assert.Contains(expected, enumValues);
+        }
+    }
+
+    [Fact]
+    public void ManagedDownloadManifest_EveryItemHasValidExplicitOrInferredDownloadMode()
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
+        var invalid = new List<string>();
+
+        foreach (var item in document.RootElement.GetProperty("items").EnumerateArray())
+        {
+            var name = GetString(item, "name");
+            var inferred = ManifestPromotionPolicy.InferDownloadMode(
+                GetString(item, "downloadMode"),
+                GetString(item, "type"),
+                GetBool(item, "manualOnly"),
+                GetString(item, "kind"),
+                GetString(item, "sourceTrust"),
+                string.Join(' ', GetString(item, "notes"), GetString(item, "technicianNotes"), GetString(item, "actionReason")),
+                GetString(item, "legacyWarning"),
+                GetString(item, "licenseNote"),
+                GetString(item, "dest"),
+                GetString(item, "family"));
+
+            if (!ManifestPromotionPolicy.IsValidDownloadMode(inferred))
+            {
+                invalid.Add($"{name}: {inferred}");
+            }
+        }
+
+        Assert.Empty(invalid);
+    }
+
+    [Fact]
+    public void ManagedDownloadManifest_DownloadModePolicyKeepsUnsafeModesPageOnly()
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
+        var violations = new List<string>();
+
+        foreach (var item in document.RootElement.GetProperty("items").EnumerateArray())
+        {
+            var name = GetString(item, "name");
+            var type = GetString(item, "type");
+            var mode = ManifestPromotionPolicy.CanonicalizeDownloadMode(GetString(item, "downloadMode"));
+            var hasChecksum = HasChecksumProof(item);
+
+            if (mode == ManifestPromotionPolicy.ManagedDownload && !string.Equals(type, "file", StringComparison.OrdinalIgnoreCase))
+            {
+                violations.Add($"{name}: ManagedDownload must be type=file.");
+            }
+
+            if (string.Equals(type, "file", StringComparison.OrdinalIgnoreCase) && mode != ManifestPromotionPolicy.ManagedDownload)
+            {
+                violations.Add($"{name}: type=file must map to ManagedDownload.");
+            }
+
+            if (mode == ManifestPromotionPolicy.ManagedDownload && !hasChecksum)
+            {
+                violations.Add($"{name}: ManagedDownload lacks checksum proof.");
+            }
+
+            var pageOnlyModes = new[]
+            {
+                ManifestPromotionPolicy.ManualMediaRequired,
+                ManifestPromotionPolicy.FirmwareBlocked,
+                ManifestPromotionPolicy.VendorPortal,
+                ManifestPromotionPolicy.OemSpecific,
+                ManifestPromotionPolicy.LicenseRestricted
+            };
+
+            if (pageOnlyModes.Contains(mode, StringComparer.Ordinal) &&
+                !string.Equals(type, "page", StringComparison.OrdinalIgnoreCase))
+            {
+                violations.Add($"{name}: {mode} must stay type=page.");
+            }
+        }
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void ManagedDownloadManifest_PageItemsDoNotCarryChecksumFields()
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
+        var violations = new List<string>();
+
+        foreach (var item in document.RootElement.GetProperty("items").EnumerateArray())
+        {
+            if (!string.Equals(GetString(item, "type"), "page", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            foreach (var checksumField in new[] { "sha256", "sha256Url", "sha512", "sha512Url" })
+            {
+                if (item.TryGetProperty(checksumField, out _))
+                {
+                    violations.Add($"{GetString(item, "name")}.{checksumField}");
+                }
+            }
+        }
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void ManagedDownloadManifest_RestrictedPlatformsNeverUseManagedDownload()
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
+        var violations = new List<string>();
+
+        foreach (var item in document.RootElement.GetProperty("items").EnumerateArray())
+        {
+            var mode = GetString(item, "downloadMode");
+            if (!string.Equals(mode, ManifestPromotionPolicy.ManagedDownload, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var name = GetString(item, "name");
+            var text = string.Join(' ',
+                name,
+                GetString(item, "dest"),
+                GetString(item, "categoryId"),
+                GetString(item, "family"),
+                GetString(item, "notes"),
+                GetString(item, "technicianNotes"),
+                GetString(item, "legacyWarning")).ToLowerInvariant();
+
+            if (text.Contains("windows-legacy", StringComparison.Ordinal) ||
+                text.Contains("manual iso required", StringComparison.Ordinal) ||
+                text.Contains("macos", StringComparison.Ordinal) ||
+                text.Contains("ios-ipados", StringComparison.Ordinal) ||
+                text.Contains("manual ipsw", StringComparison.Ordinal) ||
+                text.Contains("android-manual-firmware-drop", StringComparison.Ordinal) ||
+                text.Contains("manual firmware", StringComparison.Ordinal) ||
+                text.Contains("bios", StringComparison.Ordinal) ||
+                text.Contains("firmware required", StringComparison.Ordinal))
+            {
+                violations.Add(name);
+            }
+        }
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void ManagedDownloadManifest_NoGenericInfoActionLabelOutsideInfoOnly()
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
+        var violations = document.RootElement.GetProperty("items")
+            .EnumerateArray()
+            .Where(item => string.Equals(GetString(item, "actionLabel"), "Info", StringComparison.OrdinalIgnoreCase) &&
+                           !string.Equals(GetString(item, "downloadMode"), ManifestPromotionPolicy.InfoOnly, StringComparison.Ordinal))
+            .Select(item => GetString(item, "name"))
+            .ToArray();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void ManagedDownloadManifest_HasNoDuplicateNamesOrDestinations()
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
+        var duplicateNames = document.RootElement.GetProperty("items")
+            .EnumerateArray()
+            .GroupBy(item => GetString(item, "name"), StringComparer.Ordinal)
+            .Where(g => !string.IsNullOrWhiteSpace(g.Key) && g.Count() > 1)
+            .Select(g => g.Key)
+            .ToArray();
+        var duplicateDestinations = document.RootElement.GetProperty("items")
+            .EnumerateArray()
+            .GroupBy(item => GetString(item, "dest"), StringComparer.OrdinalIgnoreCase)
+            .Where(g => !string.IsNullOrWhiteSpace(g.Key) && g.Count() > 1)
+            .Select(g => g.Key)
+            .ToArray();
+
+        Assert.Empty(duplicateNames);
+        Assert.Empty(duplicateDestinations);
+    }
+
+    [Fact]
     public void ManagedDownloadManifest_DestinationsStayRelative()
     {
         using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
@@ -80,7 +280,12 @@ public sealed class ManagedDownloadManifestTests
 
         Assert.NotEqual(default, item.ValueKind);
         Assert.Equal("page", GetString(item, "type"));
-        Assert.Contains("Manual", GetString(item, "notes"), StringComparison.OrdinalIgnoreCase);
+        var mode = GetString(item, "downloadMode");
+        Assert.True(
+            GetString(item, "notes").Contains("Manual", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(mode, ManifestPromotionPolicy.OfficialDownloadPage, StringComparison.Ordinal) ||
+            string.Equals(mode, ManifestPromotionPolicy.LicenseRestricted, StringComparison.Ordinal),
+            $"{itemName} must stay page-only with either manual wording or an explicit non-managed downloadMode.");
     }
 
     [Theory]
@@ -279,7 +484,7 @@ public sealed class ManagedDownloadManifestTests
             "FreeBSD 15.0-RELEASE amd64 disc1 ISO",
             "OpenBSD 7.9 amd64 install ISO",
             "Rocky Linux 10.1 Minimal (x86_64)",
-            "AlmaLinux 10.1 Minimal (x86_64)"
+            "AlmaLinux 10.2 Minimal (x86_64)"
         };
 
         using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
@@ -318,7 +523,7 @@ public sealed class ManagedDownloadManifestTests
             "FreeBSD 15.0-RELEASE amd64 disc1 ISO",
             "OpenBSD 7.9 amd64 install ISO",
             "Rocky Linux 10.1 Minimal (x86_64)",
-            "AlmaLinux 10.1 Minimal (x86_64)"
+            "AlmaLinux 10.2 Minimal (x86_64)"
         };
 
         using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
@@ -533,6 +738,27 @@ public sealed class ManagedDownloadManifestTests
         }
 
         Assert.Empty(violations);
+    }
+
+    [Theory]
+    [InlineData("Windows 8.1 Lifecycle Info", ManifestPromotionPolicy.ManualMediaRequired)]
+    [InlineData("Windows 7 Lifecycle Info", ManifestPromotionPolicy.ManualMediaRequired)]
+    [InlineData("Apple macOS Download and Install Guide", ManifestPromotionPolicy.ManualMediaRequired)]
+    [InlineData("iPhone Manual IPSW", ManifestPromotionPolicy.ManualMediaRequired)]
+    [InlineData("Google Pixel Factory Images", ManifestPromotionPolicy.FirmwareBlocked)]
+    [InlineData("Microsoft Surface Drivers and Firmware", ManifestPromotionPolicy.FirmwareBlocked)]
+    [InlineData("Dell Support / Drivers", ManifestPromotionPolicy.OemSpecific)]
+    [InlineData("Parted Magic Download Page", ManifestPromotionPolicy.LicenseRestricted)]
+    [InlineData("Hiren's BootCD PE Download Page", ManifestPromotionPolicy.CommunityToolkit)]
+    public void ManagedDownloadManifest_KnownRestrictedEntriesUseExpectedDownloadMode(string itemName, string expectedMode)
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
+        var item = document.RootElement.GetProperty("items")
+            .EnumerateArray()
+            .Single(e => string.Equals(GetString(e, "name"), itemName, StringComparison.Ordinal));
+
+        Assert.Equal("page", GetString(item, "type"));
+        Assert.Equal(expectedMode, GetString(item, "downloadMode"));
     }
 
     [Theory]
@@ -934,10 +1160,231 @@ public sealed class ManagedDownloadManifestTests
         Assert.Empty(violations);
     }
 
+    [Fact]
+    public void ManagedDownloadManifest_Batch6PromotedExpansionEntriesHaveValidChecksumAndMetadata()
+    {
+        // 2026-05-27 catalog-expansion wave. Each entry below was promoted from a page entry
+        // (or added alongside one) after live revalidation of the official artifact URL and
+        // a binding check against the upstream checksum source. Mixed coverage: most entries
+        // use sha256, Debian Live uses sha512 (cdimage.debian.org/debian-cd publishes
+        // SHA512SUMS but not SHA256SUMS in the iso-hybrid directory).
+        // Entries whose checksumVerificationMode is exactly "sha256-pinned" (per-file or
+        // project-wide sha256 file at a stable upstream URL).
+        var sha256Promoted = new[]
+        {
+            "Fedora Workstation 44-1.7 Live (x86_64)",
+            "Arch Linux 2026.05.01 (x86_64)",
+            "Xubuntu 24.04.4 LTS Desktop (amd64)",
+            "Lubuntu 24.04.4 LTS Desktop (amd64)",
+            "Kubuntu 24.04.4 LTS Desktop (amd64)",
+            "FreeDOS 1.4 LiveCD",
+            "FreeDOS 1.4 FullUSB",
+            "TrueNAS SCALE 24.10.2 (amd64)",
+            "Proxmox Backup Server 4.2-1 ISO Installer",
+            "Rocky Linux 10.1 DVD (x86_64)",
+            "AlmaLinux 10.2 DVD (x86_64)",
+            "Parrot Security 7.2 (amd64)",
+            "TestDisk 7.2 Win64 Portable (zip)"
+        };
+
+        // Entries sourced from GitHub releases use the api.github.com per-asset digest
+        // endpoint, so checksumVerificationMode is "github-asset-digest", but the sha256
+        // is still pinned in the manifest. Asserted shape is the same except for that mode.
+        var githubAssetDigestPromoted = new[]
+        {
+            "KeePassXC 2.7.12 Win64 Portable (zip)",
+            "Microsoft PowerToys 0.99.1 (x64 user setup)"
+        };
+
+        var sha512Promoted = new[]
+        {
+            "Debian Live 13.5.0 GNOME (amd64)",
+            "Debian Live 13.5.0 KDE (amd64)",
+            "Debian Live 13.5.0 Xfce (amd64)"
+        };
+
+        using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
+
+        foreach (var name in sha256Promoted)
+        {
+            var item = document.RootElement.GetProperty("items")
+                .EnumerateArray()
+                .SingleOrDefault(e => string.Equals(GetString(e, "name"), name, StringComparison.Ordinal));
+
+            Assert.NotEqual(default, item.ValueKind);
+            Assert.Equal("file", GetString(item, "type"));
+            Assert.True(item.TryGetProperty("enabled", out var enabled) && enabled.GetBoolean(), $"{name} must be enabled.");
+
+            var sha256 = GetString(item, "sha256");
+            Assert.Equal(64, sha256.Length);
+            Assert.All(sha256, c => Assert.True(Uri.IsHexDigit(c), $"{name}: sha256 must be hex."));
+
+            var sha256Url = GetString(item, "sha256Url");
+            Assert.StartsWith("https://", sha256Url, StringComparison.Ordinal);
+
+            Assert.False(item.TryGetProperty("sha512", out _), $"{name} must not carry sha512 alongside sha256.");
+            Assert.False(item.TryGetProperty("sha512Url", out _), $"{name} must not carry sha512Url alongside sha256Url.");
+
+            Assert.Equal("official", GetString(item, "sourceTrust"));
+            Assert.Equal(ManifestPromotionPolicy.ManagedDownload, GetString(item, "downloadMode"));
+            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "fallbackRule")), $"{name}: fallbackRule is required.");
+            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "technicianNotes")), $"{name}: technicianNotes is required.");
+            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "recommendedUse")), $"{name}: recommendedUse is required.");
+            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "licenseNote")), $"{name}: licenseNote is required.");
+            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "sourceType")), $"{name}: sourceType is required.");
+            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "fragilityLevel")), $"{name}: fragilityLevel is required.");
+            Assert.True(item.TryGetProperty("maintenanceRank", out var rank) && rank.ValueKind == JsonValueKind.Number,
+                $"{name}: maintenanceRank is required.");
+            Assert.Equal("UpToDate", GetString(item.GetProperty("freshness"), "freshnessStatus"));
+            Assert.Equal("stable", GetString(item.GetProperty("freshness"), "updateChannel"));
+            Assert.Equal("sha256-pinned", GetString(item.GetProperty("freshness"), "checksumVerificationMode"));
+        }
+
+        foreach (var name in githubAssetDigestPromoted)
+        {
+            var item = document.RootElement.GetProperty("items")
+                .EnumerateArray()
+                .SingleOrDefault(e => string.Equals(GetString(e, "name"), name, StringComparison.Ordinal));
+
+            Assert.NotEqual(default, item.ValueKind);
+            Assert.Equal("file", GetString(item, "type"));
+            Assert.True(item.TryGetProperty("enabled", out var enabled) && enabled.GetBoolean(), $"{name} must be enabled.");
+
+            var sha256 = GetString(item, "sha256");
+            Assert.Equal(64, sha256.Length);
+            Assert.All(sha256, c => Assert.True(Uri.IsHexDigit(c), $"{name}: sha256 must be hex."));
+
+            var sha256Url = GetString(item, "sha256Url");
+            Assert.StartsWith("https://api.github.com/repos/", sha256Url, StringComparison.Ordinal);
+
+            Assert.False(item.TryGetProperty("sha512", out _), $"{name} must not carry sha512 alongside sha256.");
+            Assert.False(item.TryGetProperty("sha512Url", out _), $"{name} must not carry sha512Url alongside sha256Url.");
+
+            Assert.Equal("official", GetString(item, "sourceTrust"));
+            Assert.Equal(ManifestPromotionPolicy.ManagedDownload, GetString(item, "downloadMode"));
+            Assert.Equal("github-release", GetString(item, "sourceType"));
+            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "fallbackRule")), $"{name}: fallbackRule is required.");
+            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "technicianNotes")), $"{name}: technicianNotes is required.");
+            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "recommendedUse")), $"{name}: recommendedUse is required.");
+            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "licenseNote")), $"{name}: licenseNote is required.");
+            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "fragilityLevel")), $"{name}: fragilityLevel is required.");
+            Assert.True(item.TryGetProperty("maintenanceRank", out var rank) && rank.ValueKind == JsonValueKind.Number,
+                $"{name}: maintenanceRank is required.");
+            Assert.Equal("UpToDate", GetString(item.GetProperty("freshness"), "freshnessStatus"));
+            Assert.Equal("stable", GetString(item.GetProperty("freshness"), "updateChannel"));
+            Assert.Equal("github-asset-digest", GetString(item.GetProperty("freshness"), "checksumVerificationMode"));
+        }
+
+        foreach (var name in sha512Promoted)
+        {
+            var item = document.RootElement.GetProperty("items")
+                .EnumerateArray()
+                .SingleOrDefault(e => string.Equals(GetString(e, "name"), name, StringComparison.Ordinal));
+
+            Assert.NotEqual(default, item.ValueKind);
+            Assert.Equal("file", GetString(item, "type"));
+            Assert.True(item.TryGetProperty("enabled", out var enabled) && enabled.GetBoolean(), $"{name} must be enabled.");
+
+            var sha512 = GetString(item, "sha512");
+            Assert.Equal(128, sha512.Length);
+            Assert.All(sha512, c => Assert.True(Uri.IsHexDigit(c), $"{name}: sha512 must be hex."));
+
+            var sha512Url = GetString(item, "sha512Url");
+            Assert.StartsWith("https://cdimage.debian.org/", sha512Url, StringComparison.Ordinal);
+
+            Assert.False(item.TryGetProperty("sha256", out _), $"{name} must not carry sha256 alongside sha512.");
+            Assert.False(item.TryGetProperty("sha256Url", out _), $"{name} must not carry sha256Url alongside sha512Url.");
+
+            Assert.Equal("official", GetString(item, "sourceTrust"));
+            Assert.Equal(ManifestPromotionPolicy.ManagedDownload, GetString(item, "downloadMode"));
+            Assert.Equal("sha512-pinned", GetString(item.GetProperty("freshness"), "checksumVerificationMode"));
+        }
+    }
+
+    [Fact]
+    public void ManagedDownloadManifest_Batch6PromotedSourceUrlsArePinnedAndStableOnly()
+    {
+        var promoted = new[]
+        {
+            "Fedora Workstation 44-1.7 Live (x86_64)",
+            "Arch Linux 2026.05.01 (x86_64)",
+            "Xubuntu 24.04.4 LTS Desktop (amd64)",
+            "Lubuntu 24.04.4 LTS Desktop (amd64)",
+            "Kubuntu 24.04.4 LTS Desktop (amd64)",
+            "Debian Live 13.5.0 GNOME (amd64)",
+            "Debian Live 13.5.0 KDE (amd64)",
+            "Debian Live 13.5.0 Xfce (amd64)",
+            "FreeDOS 1.4 LiveCD",
+            "FreeDOS 1.4 FullUSB",
+            "TrueNAS SCALE 24.10.2 (amd64)",
+            "Proxmox Backup Server 4.2-1 ISO Installer",
+            "Rocky Linux 10.1 DVD (x86_64)",
+            "AlmaLinux 10.2 DVD (x86_64)",
+            "Parrot Security 7.2 (amd64)",
+            "KeePassXC 2.7.12 Win64 Portable (zip)",
+            "TestDisk 7.2 Win64 Portable (zip)",
+            "Microsoft PowerToys 0.99.1 (x64 user setup)"
+        };
+
+        using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
+        foreach (var name in promoted)
+        {
+            var item = document.RootElement.GetProperty("items")
+                .EnumerateArray()
+                .SingleOrDefault(e => string.Equals(GetString(e, "name"), name, StringComparison.Ordinal));
+
+            Assert.NotEqual(default, item.ValueKind);
+            var url = GetString(item, "url");
+            Assert.StartsWith("https://", url, StringComparison.Ordinal);
+            foreach (var forbidden in new[] { "/latest", "nightly", "beta", "rc-", "snapshot", "/development/" })
+            {
+                Assert.DoesNotContain(forbidden, url, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+    }
+
+    [Fact]
+    public void ManagedDownloadManifest_Batch6GithubReleasePromotedEntriesUseAssetDigestEndpoint()
+    {
+        // KeePassXC and PowerToys are sourced from GitHub releases; their sha256Url must route
+        // through the api.github.com per-asset digest endpoint so the resolver can rebind
+        // checksums without scraping HTML.
+        var promoted = new[]
+        {
+            "KeePassXC 2.7.12 Win64 Portable (zip)",
+            "Microsoft PowerToys 0.99.1 (x64 user setup)"
+        };
+
+        using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
+        foreach (var name in promoted)
+        {
+            var item = document.RootElement.GetProperty("items")
+                .EnumerateArray()
+                .SingleOrDefault(e => string.Equals(GetString(e, "name"), name, StringComparison.Ordinal));
+
+            Assert.NotEqual(default, item.ValueKind);
+            Assert.Equal("github-release", GetString(item, "sourceType"));
+            Assert.StartsWith("https://github.com/", GetString(item, "url"), StringComparison.Ordinal);
+            Assert.StartsWith("https://api.github.com/repos/", GetString(item, "sha256Url"), StringComparison.Ordinal);
+            Assert.Equal("github-asset-digest", GetString(item.GetProperty("freshness"), "checksumVerificationMode"));
+        }
+    }
+
     private static string GetString(JsonElement item, string propertyName) =>
         item.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString() ?? string.Empty
             : string.Empty;
+
+    private static bool GetBool(JsonElement item, string propertyName) =>
+        item.TryGetProperty(propertyName, out var value) &&
+        value.ValueKind is JsonValueKind.True or JsonValueKind.False &&
+        value.GetBoolean();
+
+    private static bool HasChecksumProof(JsonElement item) =>
+        !string.IsNullOrWhiteSpace(GetString(item, "sha256")) ||
+        !string.IsNullOrWhiteSpace(GetString(item, "sha256Url")) ||
+        !string.IsNullOrWhiteSpace(GetString(item, "sha512")) ||
+        !string.IsNullOrWhiteSpace(GetString(item, "sha512Url"));
 
     private static string FindRepoFile(string relativePath)
     {

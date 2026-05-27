@@ -252,6 +252,56 @@
             ],
             "description": "Trust level of the upstream URL. 'official' = vendor/project page. 'community' = trusted community distribution. 'manual' = no automated provenance."
           },
+          "downloadMode": {
+            "type": "string",
+            "enum": [
+              "ManagedDownload",
+              "OfficialDownloadPage",
+              "ManualMediaRequired",
+              "ReviewFirst",
+              "VendorPortal",
+              "LicenseRestricted",
+              "DynamicMirrorOnly",
+              "OEMSpecific",
+              "FirmwareBlocked",
+              "CommunityToolkit",
+              "Unsupported",
+              "InfoOnly"
+            ],
+            "description": "First-class technician action mode. Optional for backward compatibility; legacy manifests infer from type/manualOnly/kind/sourceTrust/notes."
+          },
+          "actionLabel": {
+            "type": "string",
+            "description": "Optional primary technician-facing action label. When absent, UI derives a label from downloadMode."
+          },
+          "secondaryActionLabel": {
+            "type": "string",
+            "description": "Optional secondary technician-facing action label."
+          },
+          "actionReason": {
+            "type": "string",
+            "description": "Short explanation for why this action mode was selected."
+          },
+          "promotionStatus": {
+            "type": "string",
+            "description": "Promotion audit status such as promoted, kept page-only, blocked, or needs human review."
+          },
+          "promotionEvidence": {
+            "type": "string",
+            "description": "Official evidence supporting the mode: checksum source, signature, portal reason, or legal/manual blocker."
+          },
+          "legalRisk": {
+            "type": "string",
+            "description": "Plain-English legal or licensing risk summary."
+          },
+          "checksumRequirement": {
+            "type": "string",
+            "description": "Checksum/signature requirement for promotion or continued managed download eligibility."
+          },
+          "managedPromotionCandidate": {
+            "type": "boolean",
+            "description": "True when this page entry looks like a future managed candidate but is intentionally not promoted yet."
+          },
           "freshness": {
             "type": "object",
             "description": "Catalog freshness intelligence. All fields are optional and informational. ForgerEMS never auto-upgrades based on this metadata; it only surfaces review actions for the technician. Missing or stale freshness data is treated as ManualReviewRequired by the audit helper.",

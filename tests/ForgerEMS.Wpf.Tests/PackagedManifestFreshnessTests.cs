@@ -15,9 +15,10 @@ namespace ForgerEMS.Wpf.Tests;
 // Update-ForgerEMS.ps1 resolution order so bundled wins over USB-side.
 public sealed class PackagedManifestFreshnessTests
 {
-    // 2026-05-25 follow-up promotion pass: NetBSD 10.1 amd64 ISO Installer and
-    // openSUSE Leap 16.0 Offline Installer (x86_64) brought the active count from 30 to 32.
-    private const int ExpectedActiveManagedDownloadCount = 32;
+    // 2026-05-27 catalog-expansion (Batch 6) promotion pass added 18 managed file entries
+    // (15 OS / ISO + 3 technician tool), bringing the active count from 32 to 50.
+    // See docs/MANAGED_DOWNLOAD_EXPANSION_REPORT.md for the per-entry proof trail.
+    private const int ExpectedActiveManagedDownloadCount = 50;
 
     private static string RepoRoot
     {
@@ -55,6 +56,7 @@ public sealed class PackagedManifestFreshnessTests
     [InlineData("Rescuezilla 2.6.2",     "2.6.2")]
     [InlineData("MemTest86+ 8.10",       "8.10")]
     [InlineData("Alpine Linux 3.23.4",   "3.23.4")]
+    [InlineData("AlmaLinux 10.2",        "10.2")]
     public void SourceManifest_ContainsLatestPromotedVersion(string nameFragment, string expectedLatestStableVersion)
     {
         using var document = JsonDocument.Parse(File.ReadAllText(SourceManifestPath));

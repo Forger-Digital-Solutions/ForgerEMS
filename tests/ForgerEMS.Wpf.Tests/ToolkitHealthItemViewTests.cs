@@ -85,6 +85,76 @@ public sealed class ToolkitHealthItemViewTests
         Assert.NotEmpty(v.RecommendationShort);
     }
 
+    [Theory]
+    [InlineData(ManifestPromotionPolicy.ManagedDownload, "Managed Download", "Downloads and verifies checksum when available.")]
+    [InlineData(ManifestPromotionPolicy.OfficialDownloadPage, "Official Download Page", "Opens the vendor/project page. Technician verifies/downloads manually.")]
+    [InlineData(ManifestPromotionPolicy.ManualMediaRequired, "Manual Media Required", "User must supply legally obtained media.")]
+    [InlineData(ManifestPromotionPolicy.ReviewFirst, "Review First", "Official/community page; verify licensing/provenance before use.")]
+    [InlineData(ManifestPromotionPolicy.VendorPortal, "Vendor Portal", "Model-specific/OEM workflow. Use serial/model lookup.")]
+    [InlineData(ManifestPromotionPolicy.OemSpecific, "Vendor Portal", "Model-specific/OEM workflow. Use serial/model lookup.")]
+    [InlineData(ManifestPromotionPolicy.LicenseRestricted, "License / EULA Required", "Manual vendor flow required before download/use.")]
+    [InlineData(ManifestPromotionPolicy.DynamicMirrorOnly, "Official Mirror Page", "Dynamic mirror/checksum flow prevents safe managed download.")]
+    [InlineData(ManifestPromotionPolicy.FirmwareBlocked, "Firmware / BIOS Portal", "Firmware downloads are intentionally manual.")]
+    [InlineData(ManifestPromotionPolicy.CommunityToolkit, "Community Toolkit Page", "Review provenance and licensing before client use.")]
+    [InlineData(ManifestPromotionPolicy.Unsupported, "Unsupported / Reference Only", "Unsupported / reference-only entry.")]
+    [InlineData(ManifestPromotionPolicy.InfoOnly, "Reference Info", "Reference information only.")]
+    public void DownloadMode_MapsToTechnicianActionLabels(string mode, string expectedLabel, string expectedHelper)
+    {
+        var v = new ToolkitHealthItemView
+        {
+            Status = "MISSING_REQUIRED",
+            Type = "manualDownload",
+            DownloadMode = mode
+        };
+
+        Assert.Equal(expectedLabel, v.DownloadActionLabel);
+        Assert.Equal(expectedHelper, v.ActionHelperText);
+        Assert.Equal(expectedLabel, v.ActionDisplay);
+    }
+
+    [Theory]
+    [InlineData("file", false, "", "official", "", "", "", "", ManifestPromotionPolicy.ManagedDownload)]
+    [InlineData("page", true, "", "official", "Manual ISO required", "Unsupported by vendor", "", @"ISO\\Windows-Legacy\\MANUAL ISO REQUIRED.url", ManifestPromotionPolicy.ManualMediaRequired)]
+    [InlineData("page", true, "driver-shortcut", "official", "model-specific driver lookup", "", "", @"Drivers\\Vendor\\DOWNLOAD - Dell.url", ManifestPromotionPolicy.OemSpecific)]
+    [InlineData("page", false, "", "official", "Review first: verify provenance", "", "", @"Tools\\Portable\\DOWNLOAD.url", ManifestPromotionPolicy.ReviewFirst)]
+    [InlineData("page", false, "", "official", "Vendor page", "", "", @"Tools\\Portable\\DOWNLOAD.url", ManifestPromotionPolicy.OfficialDownloadPage)]
+    [InlineData("page", false, "", "community", "Community toolkit", "", "", @"MediCat.USB\\DOWNLOAD.url", ManifestPromotionPolicy.CommunityToolkit)]
+    [InlineData("page", false, "", "", "", "", "", @"Docs\\REFERENCE.url", ManifestPromotionPolicy.InfoOnly)]
+    public void DownloadMode_InferenceKeepsLegacyManifestCompatibility(
+        string type,
+        bool manualOnly,
+        string kind,
+        string sourceTrust,
+        string notes,
+        string legacyWarning,
+        string licenseNote,
+        string dest,
+        string expected)
+    {
+        var actual = ManifestPromotionPolicy.InferDownloadMode(
+            explicitDownloadMode: "",
+            type,
+            manualOnly,
+            kind,
+            sourceTrust,
+            notes,
+            legacyWarning,
+            licenseNote,
+            dest,
+            family: "");
+
+        Assert.Equal(expected, actual);
+    }
+
+    [Theory]
+    [InlineData(ManifestPromotionPolicy.OfficialDownloadPage)]
+    [InlineData(ManifestPromotionPolicy.ManualMediaRequired)]
+    [InlineData(ManifestPromotionPolicy.ReviewFirst)]
+    public void DownloadMode_NonInfoModesDoNotUseGenericInfoLabel(string mode)
+    {
+        Assert.NotEqual("Info", ManifestPromotionPolicy.GetPrimaryActionLabel(mode));
+    }
+
     [Fact]
     public void DetailText_IncludesCatalogMetadataFields()
     {

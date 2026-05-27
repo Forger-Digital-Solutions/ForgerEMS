@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using VentoyToolkitSetup.Wpf.Services.Intelligence;
 
 namespace VentoyToolkitSetup.Wpf.Models;
 
@@ -103,6 +104,26 @@ public sealed class ToolkitHealthItemView : INotifyPropertyChanged
 
     /// <summary>Trust level of the upstream URL: "official", "community", or "manual".</summary>
     public string SourceTrust { get; init; } = string.Empty;
+
+    /// <summary>First-class catalog action mode: ManagedDownload, OfficialDownloadPage, ManualMediaRequired, and related policy modes.</summary>
+    public string DownloadMode { get; init; } = string.Empty;
+
+    /// <summary>Optional manifest-supplied primary action label. When absent, it is derived from DownloadMode.</summary>
+    public string ActionLabel { get; init; } = string.Empty;
+
+    public string SecondaryActionLabel { get; init; } = string.Empty;
+
+    public string ActionReason { get; init; } = string.Empty;
+
+    public string PromotionStatus { get; init; } = string.Empty;
+
+    public string PromotionEvidence { get; init; } = string.Empty;
+
+    public string LegalRisk { get; init; } = string.Empty;
+
+    public string ChecksumRequirement { get; init; } = string.Empty;
+
+    public bool ManagedPromotionCandidate { get; init; }
 
     public string CurrentPinnedVersion { get; init; } = string.Empty;
 
@@ -248,17 +269,58 @@ public sealed class ToolkitHealthItemView : INotifyPropertyChanged
         return "Verified";
     }
 
-    public string ActionDisplay => Status.Trim().ToUpperInvariant() switch
+    public string EffectiveDownloadMode =>
+        ManifestPromotionPolicy.InferDownloadMode(
+            DownloadMode,
+            Type,
+            ManualOnly,
+            Kind,
+            SourceTrust,
+            string.Join(" ", Recommendation, TechnicianNotes, ActionReason),
+            LegacyWarning,
+            LicenseNote,
+            ExpectedPath,
+            Family);
+
+    public string DownloadActionLabel =>
+        !string.IsNullOrWhiteSpace(ActionLabel)
+            ? ActionLabel.Trim()
+            : ManifestPromotionPolicy.GetPrimaryActionLabel(EffectiveDownloadMode);
+
+    public string ActionHelperText =>
+        !string.IsNullOrWhiteSpace(ActionReason)
+            ? ActionReason.Trim()
+            : ManifestPromotionPolicy.GetHelperText(EffectiveDownloadMode);
+
+    private bool HasDownloadActionMetadata =>
+        !string.IsNullOrWhiteSpace(DownloadMode) ||
+        !string.IsNullOrWhiteSpace(ActionLabel) ||
+        !string.IsNullOrWhiteSpace(ActionReason) ||
+        ManualOnly ||
+        string.Equals(Type, "manualDownload", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(Type, "managedAutoDownload", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(Type, "file", StringComparison.OrdinalIgnoreCase);
+
+    public string ActionDisplay
     {
-        "INSTALLED" => "No action needed",
-        "VERIFICATION_PENDING" => "Revalidate",
-        "HASH_FAILED" => "Checksum issue",
-        "UPDATE_AVAILABLE" => "Review update",
-        "MISSING_REQUIRED" => "Run Setup USB Toolkit",
-        "COVERED_BY_MANAGED" => "No action needed",
-        "MANUAL_REQUIRED" => string.IsNullOrWhiteSpace(MatchedPath) ? "Open shortcut" : "No action needed",
-        _ => string.IsNullOrWhiteSpace(Recommendation) ? "Review detail" : TruncateSingleLine(Recommendation, 44)
-    };
+        get
+        {
+            var status = Status.Trim().ToUpperInvariant();
+            return status switch
+            {
+                "INSTALLED" => "No action needed",
+                "VERIFICATION_PENDING" => "Revalidate",
+                "HASH_FAILED" => "Checksum issue",
+                "UPDATE_AVAILABLE" => "Review update",
+                "MISSING_REQUIRED" => HasDownloadActionMetadata ? DownloadActionLabel : "Run Setup USB Toolkit",
+                "COVERED_BY_MANAGED" => "No action needed",
+                "MANUAL_REQUIRED" => string.IsNullOrWhiteSpace(MatchedPath) ? DownloadActionLabel : "No action needed",
+                _ => !string.IsNullOrWhiteSpace(DownloadMode) || ManualOnly || string.Equals(Type, "manualDownload", StringComparison.OrdinalIgnoreCase)
+                    ? DownloadActionLabel
+                    : string.IsNullOrWhiteSpace(Recommendation) ? "Review detail" : TruncateSingleLine(Recommendation, 44)
+            };
+        }
+    }
 
     public string RecommendationShort => TruncateSingleLine(Recommendation, 72);
 
@@ -277,6 +339,7 @@ public sealed class ToolkitHealthItemView : INotifyPropertyChanged
         $"Beta safety rating: {(string.IsNullOrWhiteSpace(BetaSafetyRating) ? "Needs review" : BetaSafetyRating)}{Environment.NewLine}" +
         $"Download status: {(string.IsNullOrWhiteSpace(DownloadStatus) ? StatusDisplayUi : DownloadStatus)}{Environment.NewLine}" +
         $"Checksum status: {(string.IsNullOrWhiteSpace(ChecksumStatus) ? VerificationDisplay : ChecksumStatus)}{Environment.NewLine}" +
+        OptionalDownloadModeLines() +
         OptionalFreshnessMetadataLines() +
         $"Classification: {NormalizedCategoryLabel}{Environment.NewLine}" +
         $"Status: {StatusDisplayUi}{Environment.NewLine}" +
@@ -471,6 +534,13 @@ public sealed class ToolkitHealthItemView : INotifyPropertyChanged
             string.IsNullOrWhiteSpace(VentoyNotes) &&
             string.IsNullOrWhiteSpace(SecureBootNote) &&
             string.IsNullOrWhiteSpace(SourceTrust) &&
+            string.IsNullOrWhiteSpace(DownloadMode) &&
+            string.IsNullOrWhiteSpace(ActionLabel) &&
+            string.IsNullOrWhiteSpace(ActionReason) &&
+            string.IsNullOrWhiteSpace(PromotionStatus) &&
+            string.IsNullOrWhiteSpace(PromotionEvidence) &&
+            string.IsNullOrWhiteSpace(LegalRisk) &&
+            string.IsNullOrWhiteSpace(ChecksumRequirement) &&
             !ManualOnly)
         {
             return string.Empty;
@@ -489,6 +559,41 @@ public sealed class ToolkitHealthItemView : INotifyPropertyChanged
         AppendIfSet(sb, "Ventoy notes", VentoyNotes);
         AppendIfSet(sb, "Secure Boot", SecureBootNote);
         AppendIfSet(sb, "Source trust", SourceTrust);
+        AppendIfSet(sb, "Download mode", EffectiveDownloadMode);
+        AppendIfSet(sb, "Action", DownloadActionLabel);
+        AppendIfSet(sb, "Action reason", ActionHelperText);
+        AppendIfSet(sb, "Promotion status", PromotionStatus);
+        AppendIfSet(sb, "Promotion evidence", PromotionEvidence);
+        AppendIfSet(sb, "Legal risk", LegalRisk);
+        AppendIfSet(sb, "Checksum requirement", ChecksumRequirement);
+        if (ManagedPromotionCandidate) { sb.Append("Managed promotion candidate: yes").Append(Environment.NewLine); }
+        return sb.ToString();
+    }
+
+    private string OptionalDownloadModeLines()
+    {
+        if (string.IsNullOrWhiteSpace(DownloadMode) &&
+            string.IsNullOrWhiteSpace(ActionLabel) &&
+            string.IsNullOrWhiteSpace(ActionReason) &&
+            string.IsNullOrWhiteSpace(PromotionStatus) &&
+            string.IsNullOrWhiteSpace(PromotionEvidence) &&
+            string.IsNullOrWhiteSpace(LegalRisk) &&
+            string.IsNullOrWhiteSpace(ChecksumRequirement) &&
+            !ManagedPromotionCandidate)
+        {
+            return string.Empty;
+        }
+
+        var sb = new System.Text.StringBuilder();
+        AppendIfSet(sb, "Download mode", EffectiveDownloadMode);
+        AppendIfSet(sb, "Primary action", DownloadActionLabel);
+        AppendIfSet(sb, "Action helper", ActionHelperText);
+        AppendIfSet(sb, "Secondary action", SecondaryActionLabel);
+        AppendIfSet(sb, "Promotion status", PromotionStatus);
+        AppendIfSet(sb, "Promotion evidence", PromotionEvidence);
+        AppendIfSet(sb, "Legal risk", LegalRisk);
+        AppendIfSet(sb, "Checksum requirement", ChecksumRequirement);
+        if (ManagedPromotionCandidate) { sb.Append("Managed promotion candidate: yes").Append(Environment.NewLine); }
         return sb.ToString();
     }
 

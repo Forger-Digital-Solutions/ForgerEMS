@@ -324,6 +324,211 @@ function Assert-ManagedDownloadFragilityLevelValue {
     }
 }
 
+function Get-ValidDownloadModes {
+    return @(
+        "ManagedDownload",
+        "OfficialDownloadPage",
+        "ManualMediaRequired",
+        "ReviewFirst",
+        "VendorPortal",
+        "LicenseRestricted",
+        "DynamicMirrorOnly",
+        "OEMSpecific",
+        "FirmwareBlocked",
+        "CommunityToolkit",
+        "Unsupported",
+        "InfoOnly"
+    )
+}
+
+function Assert-DownloadModeValue {
+    param(
+        [AllowNull()]$Value,
+        [Parameter(Mandatory)][string]$FieldName
+    )
+
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) { return }
+
+    $normalized = ([string]$Value).Trim()
+    if ($normalized -notin (Get-ValidDownloadModes)) {
+        throw "$FieldName has an unsupported downloadMode value: $normalized"
+    }
+}
+
+function Test-ManifestItemChecksumProof {
+    param([Parameter(Mandatory)]$Item)
+
+    return (-not [string]::IsNullOrWhiteSpace([string]$Item.sha256)) -or
+           (-not [string]::IsNullOrWhiteSpace([string]$Item.sha256Url)) -or
+           (-not [string]::IsNullOrWhiteSpace([string]$Item.sha512)) -or
+           (-not [string]::IsNullOrWhiteSpace([string]$Item.sha512Url))
+}
+
+function Get-InferredManifestDownloadMode {
+    param([Parameter(Mandatory)]$Item)
+
+    $explicit = [string]$Item.downloadMode
+    if (-not [string]::IsNullOrWhiteSpace($explicit)) {
+        Assert-DownloadModeValue -Value $explicit -FieldName "downloadMode"
+        return $explicit.Trim()
+    }
+
+    $itemType = if ($Item.type) { ([string]$Item.type).Trim().ToLowerInvariant() } else { "file" }
+    if ($itemType -eq "file" -or $itemType -eq "managedautodownload" -or $itemType -eq "managed") {
+        return "ManagedDownload"
+    }
+
+    $kind = if ($Item.kind) { ([string]$Item.kind).Trim().ToLowerInvariant() } else { "" }
+    $sourceTrust = if ($Item.sourceTrust) { ([string]$Item.sourceTrust).Trim().ToLowerInvariant() } else { "" }
+    $manualOnly = if ($null -ne $Item.manualOnly) { [bool]$Item.manualOnly } else { $false }
+    $text = @(
+        [string]$Item.name,
+        [string]$Item.notes,
+        [string]$Item.technicianNotes,
+        [string]$Item.legacyWarning,
+        [string]$Item.licenseNote,
+        [string]$Item.dest,
+        [string]$Item.family
+    ) -join " "
+    $text = $text.ToLowerInvariant()
+
+    if ($text -match 'android-manual-firmware-drop|manual firmware|firmware required|bios portal|uefi firmware|surface drivers and firmware') {
+        return "FirmwareBlocked"
+    }
+
+    if ($manualOnly -and ($text -match 'manual iso|manual media|manual installer|manual ipsw|user-supplied|legally obtained|windows-legacy|macos-manual-installer-drop|ios-manual-ipsw-drop')) {
+        return "ManualMediaRequired"
+    }
+
+    if ($kind -eq "driver-shortcut" -and $sourceTrust -eq "official") {
+        if ($text -match 'model-specific|serial|oem|drivers\\vendor|support / drivers') {
+            return "OEMSpecific"
+        }
+
+        return "VendorPortal"
+    }
+
+    if ($text -match 'review first|provenance') {
+        return "ReviewFirst"
+    }
+
+    if ($text -match 'dynamic mirror|mirror selection|rotating mirror') {
+        return "DynamicMirrorOnly"
+    }
+
+    if ($text -match 'paid|commercial|trial|eula required|licence required|license required') {
+        return "LicenseRestricted"
+    }
+
+    if ($manualOnly -and $text -match 'unsupported') {
+        return "Unsupported"
+    }
+
+    if ($sourceTrust -eq "official") {
+        return "OfficialDownloadPage"
+    }
+
+    if ($sourceTrust -eq "community") {
+        return "CommunityToolkit"
+    }
+
+    return "InfoOnly"
+}
+
+function Get-ManifestDownloadModePolicyIssues {
+    param(
+        [Parameter(Mandatory)]$Manifest,
+        [Parameter(Mandatory)][string]$ManagedChecksumPolicy
+    )
+
+    $issues = New-Object System.Collections.Generic.List[string]
+    $seenNames = @{}
+    $seenDests = @{}
+    $requireChecksum = $ManagedChecksumPolicy -eq "require-for-release"
+
+    foreach ($item in @($Manifest.items)) {
+        if ($null -eq $item) { continue }
+
+        $name = [string]$item.name
+        $dest = [string]$item.dest
+        $type = if ($item.type) { ([string]$item.type).Trim().ToLowerInvariant() } else { "file" }
+        $mode = Get-InferredManifestDownloadMode -Item $item
+        $modeLower = $mode.ToLowerInvariant()
+        $text = @(
+            $name,
+            [string]$item.notes,
+            [string]$item.technicianNotes,
+            [string]$item.legacyWarning,
+            [string]$item.licenseNote,
+            $dest,
+            [string]$item.family,
+            [string]$item.categoryId
+        ) -join " "
+        $text = $text.ToLowerInvariant()
+
+        if ($seenNames.ContainsKey($name)) {
+            [void]$issues.Add("Duplicate manifest item name: $name")
+        }
+        elseif (-not [string]::IsNullOrWhiteSpace($name)) {
+            $seenNames[$name] = $true
+        }
+
+        if ($seenDests.ContainsKey($dest)) {
+            [void]$issues.Add("Duplicate manifest destination: $dest")
+        }
+        elseif (-not [string]::IsNullOrWhiteSpace($dest)) {
+            $seenDests[$dest] = $true
+        }
+
+        if ($mode -eq "ManagedDownload" -and $type -ne "file") {
+            [void]$issues.Add("$name declares ManagedDownload but type is '$type'.")
+        }
+
+        if ($type -eq "file" -and $mode -ne "ManagedDownload") {
+            [void]$issues.Add("$name is type=file but downloadMode is '$mode'.")
+        }
+
+        if ($mode -eq "ManagedDownload" -and $requireChecksum -and -not (Test-ManifestItemChecksumProof -Item $item)) {
+            [void]$issues.Add("$name is ManagedDownload without checksum proof under require-for-release.")
+        }
+
+        if ($type -eq "page") {
+            foreach ($field in @("sha256", "sha256Url", "sha512", "sha512Url")) {
+                if ($null -ne $item.PSObject.Properties[$field] -and -not [string]::IsNullOrWhiteSpace([string]$item.$field)) {
+                    [void]$issues.Add("$name is a page item but declares $field.")
+                }
+            }
+        }
+
+        if ($mode -in @("ManualMediaRequired", "FirmwareBlocked", "VendorPortal", "OEMSpecific") -and $type -ne "page") {
+            [void]$issues.Add("$name uses $mode but is not type=page.")
+        }
+
+        if ($mode -eq "LicenseRestricted" -and $type -ne "page") {
+            [void]$issues.Add("$name is license-restricted but is not type=page.")
+        }
+
+        if (($text -match 'windows-legacy|manual iso required|macos|ios-ipados|manual ipsw|android-manual-firmware-drop|manual firmware|firmware required|bios|uefi firmware') -and $mode -eq "ManagedDownload") {
+            [void]$issues.Add("$name is restricted/manual media or firmware but was classified as ManagedDownload.")
+        }
+
+        if (($text -match "hiren|strelec|medicat|community winpe") -and $mode -eq "ManagedDownload") {
+            [void]$issues.Add("$name is a community WinPE/toolkit entry and cannot be ManagedDownload without an explicit legal allowlist.")
+        }
+
+        $actionLabel = [string]$item.actionLabel
+        if ($mode -ne "InfoOnly" -and $actionLabel.Trim() -eq "Info") {
+            [void]$issues.Add("$name uses raw actionLabel 'Info' outside InfoOnly.")
+        }
+
+        if ($modeLower -notin @((Get-ValidDownloadModes) | ForEach-Object { $_.ToLowerInvariant() })) {
+            [void]$issues.Add("$name inferred unsupported downloadMode '$mode'.")
+        }
+    }
+
+    return $issues.ToArray()
+}
+
 function Get-ManagedChecksumPolicy {
     param([Parameter(Mandatory)]$Manifest)
 
@@ -1060,6 +1265,8 @@ function Assert-VendorInventoryContract {
         $sourceUrl = [string]$entry.sourceUrl
         $version = [string]$entry.version
         $sourceTrust = if ($entry.source_trust) { ([string]$entry.source_trust).Trim().ToLowerInvariant() } else { "" }
+        $downloadMode = [string]$entry.downloadMode
+        $verificationMode = [string]$entry.verificationMode
 
         if ([string]::IsNullOrWhiteSpace($name)) {
             throw "$prefix.name is required."
@@ -1083,6 +1290,28 @@ function Assert-VendorInventoryContract {
 
         if ($sourceTrust -notin @("official", "community", "manual")) {
             throw "$prefix.source_trust must be 'official', 'community', or 'manual'."
+        }
+
+        Assert-DownloadModeValue -Value $downloadMode -FieldName "$prefix.downloadMode"
+
+        if (-not [string]::IsNullOrWhiteSpace($verificationMode) -and $verificationMode -notin @("manual-root", "managed-page-shortcut", "verified-file-checksum")) {
+            throw "$prefix.verificationMode must be 'manual-root', 'managed-page-shortcut', or 'verified-file-checksum'."
+        }
+
+        if ($sourceTrust -eq "manual" -and [string]$entry.verificationMode -ne "manual-root") {
+            throw "$prefix manual inventory roots must use verificationMode='manual-root'."
+        }
+
+        if ([bool]$entry.managed -and [string]::IsNullOrWhiteSpace($sourceUrl)) {
+            throw "$prefix managed vendor inventory entries must declare sourceUrl."
+        }
+
+        if ([bool]$entry.managed -and [string]::IsNullOrWhiteSpace($downloadMode)) {
+            throw "$prefix managed vendor inventory entries must declare downloadMode."
+        }
+
+        if ([bool]$entry.managed -and $downloadMode -notin @("VendorPortal", "OEMSpecific", "OfficialDownloadPage", "FirmwareBlocked")) {
+            throw "$prefix managed vendor shortcuts must remain page/portal modes, not $downloadMode."
         }
 
         Assert-Sha256Value -Value $entry.checksum -FieldName "$prefix.checksum"
@@ -1461,6 +1690,13 @@ Run-Test -Name "managed-items-have-checksum-coverage" -Body {
     Add-Warning ("[offline] " + $message)
 }
 
+Run-Test -Name "manifest-download-mode-policy-is-valid" -Body {
+    $issues = @(Get-ManifestDownloadModePolicyIssues -Manifest $manifest -ManagedChecksumPolicy $managedChecksumPolicy)
+    if ($issues.Count -gt 0) {
+        throw ("Manifest downloadMode policy violations: " + ($issues -join "; "))
+    }
+}
+
 Run-Test -Name "managed-download-resilience-metadata-is-complete" -Body {
     $issues = @(Get-ManagedFileResilienceMetadataIssues -Manifest $manifest)
     if ($issues.Count -eq 0) {
@@ -1522,7 +1758,7 @@ if (-not $RevalidateManagedDownloads) {
             "_forgerems\support\ForgerEMS-Link-Inventory.csv",
             "Drivers\README.txt",
             "MediCat.USB\DOWNLOAD - MediCat.url",
-            "ISO\Linux\DOWNLOAD - Fedora Workstation.url",
+            "ISO\Linux\DOWNLOAD - Pop!_OS.url",
             "ISO\Linux\DOWNLOAD - Endless OS.url",
             "Tools\Portable\Security\DOWNLOAD - AdwCleaner.url"
         )) {

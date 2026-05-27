@@ -108,11 +108,10 @@ public sealed class UsbBuilderProfileAndCrossPlatformCatalogTests
             "MANUAL IPSW REQUIRED - ",
             "MANUAL FIRMWARE REQUIRED - ",
             "MANUAL MEDIA REQUIRED - ",
-            "GUIDE - ",
-            "INFO - "
+            "GUIDE - "
         };
 
-        // Any .url filename whose leaf contains a how-to verb must use GUIDE, not INFO.
+        // Any .url filename whose leaf contains a how-to verb must use GUIDE.
         var guideVerbs = new[] { "restore", "recovery", "create bootable", "createinstallmedia", "configurator", "build guide", "install guide", "how to" };
 
         foreach (var item in Items())
@@ -128,15 +127,15 @@ public sealed class UsbBuilderProfileAndCrossPlatformCatalogTests
                 approvedPrefixes.Any(p => leaf.StartsWith(p, StringComparison.Ordinal)),
                 $"Catalog .url filename does not start with an approved action label: {dest}");
 
-            if (leaf.StartsWith("INFO - ", StringComparison.Ordinal))
+            Assert.False(leaf.StartsWith("INFO - ", StringComparison.Ordinal),
+                $"Catalog .url filename must use a precise action label instead of INFO: {dest}");
+
+            var leafLower = leaf.ToLowerInvariant();
+            foreach (var verb in guideVerbs)
             {
-                var leafLower = leaf.ToLowerInvariant();
-                foreach (var verb in guideVerbs)
-                {
-                    Assert.False(
-                        leafLower.Contains(verb),
-                        $"INFO label is overused for what reads as a how-to (verb '{verb}'): {dest}. Use GUIDE instead.");
-                }
+                Assert.False(
+                    leafLower.Contains(verb) && !leaf.StartsWith("GUIDE - ", StringComparison.Ordinal),
+                    $"How-to shortcut should use GUIDE (verb '{verb}'): {dest}.");
             }
         }
     }
@@ -346,7 +345,7 @@ public sealed class UsbBuilderProfileAndCrossPlatformCatalogTests
     {
       "name": "macOS profile marker",
       "type": "page",
-      "dest": "ISO\\macOS\\INFO - Apple macOS download and install guide.url",
+      "dest": "ISO\\macOS\\GUIDE - Apple macOS download and install guide.url",
       "url": "https://support.apple.com/en-us/120280",
       "enabled": true,
       "categoryId": "macos"

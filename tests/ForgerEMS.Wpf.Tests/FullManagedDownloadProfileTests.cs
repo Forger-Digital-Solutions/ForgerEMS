@@ -77,14 +77,15 @@ public sealed class FullManagedDownloadProfileTests
     [Fact]
     public void Planner_WithAllCategories_EligibleCountMatchesActiveManagedFileCount()
     {
-        // Promotion follow-up pass left active count at 32. The planner's eligibility math
-        // must agree with the catalog's managed file count when every category is selected.
+        // 2026-05-27 Batch 6 catalog-expansion pass left active count at 50. The planner's
+        // eligibility math must agree with the catalog's managed file count when every
+        // category is selected.
         var plan = UsbBuilderProfileFullManagedDownloadPlanner.Calculate(
             SourceManifestPath,
             new HashSet<string>(AllCategories, StringComparer.OrdinalIgnoreCase),
             usbRootPath: null);
 
-        Assert.Equal(32, plan.EligibleManagedCount);
+        Assert.Equal(50, plan.EligibleManagedCount);
     }
 
     [Fact]
@@ -95,9 +96,11 @@ public sealed class FullManagedDownloadProfileTests
             new HashSet<string>(AllCategories, StringComparer.OrdinalIgnoreCase),
             usbRootPath: null);
 
-        // Catalog has 199 items total; 32 managed files; the remaining 167 are
+        // Catalog has 217 items total; 50 managed files; the remaining 167 are
         // page/manual/vendor shortcuts. The planner must count those into the
-        // manual-or-vendor exclusion bucket.
+        // manual-or-vendor exclusion bucket. (Batch 6 expansion preserved the
+        // 167 non-file count because every promotion added a new file entry
+        // alongside the existing page entry, not in place of it.)
         Assert.Equal(167, plan.ExcludedManualOrVendorCount);
         Assert.DoesNotContain(plan.EligibleNames, n => n.Contains("Download Page", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(plan.EligibleNames, n => n.StartsWith("MSI ", StringComparison.OrdinalIgnoreCase));
@@ -205,6 +208,9 @@ public sealed class FullManagedDownloadProfileTests
 
     [Theory]
     [InlineData("Ubuntu 24.04.4 LTS Desktop (amd64)", "linux-rescue")]
+    [InlineData("Proxmox Backup Server 4.2-1 ISO Installer", "linux-rescue")]
+    [InlineData("Rocky Linux 10.1 DVD (x86_64)", "linux-rescue")]
+    [InlineData("AlmaLinux 10.2 DVD (x86_64)", "linux-rescue")]
     [InlineData("Kali Linux 2026.1 Installer (amd64)", "linux-rescue")]
     [InlineData("openSUSE Leap 16.0 Offline Installer (x86_64)", "linux-rescue")]
     [InlineData("NetBSD 10.1 amd64 ISO Installer", "linux-rescue")]

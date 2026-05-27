@@ -281,7 +281,7 @@ public sealed class ToolkitWorkspacePlanningTests
             "FreeBSD 15.0-RELEASE amd64 disc1 ISO",
             "OpenBSD 7.9 amd64 install ISO",
             "Rocky Linux 10.1 Minimal (x86_64)",
-            "AlmaLinux 10.1 Minimal (x86_64)"
+            "AlmaLinux 10.2 Minimal (x86_64)"
         };
 
         using var document = JsonDocument.Parse(File.ReadAllText(manifest));

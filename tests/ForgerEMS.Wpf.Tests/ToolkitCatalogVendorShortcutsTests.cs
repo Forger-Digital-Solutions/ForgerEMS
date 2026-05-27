@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using VentoyToolkitSetup.Wpf.Services.Intelligence;
 using Xunit;
 
 namespace ForgerEMS.Wpf.Tests;
@@ -167,6 +168,44 @@ public sealed class ToolkitCatalogVendorShortcutsTests
     }
 
     [Fact]
+    public void VendorInventory_ManualRootsRemainManualAndDriverShortcutsStayPortalOnly()
+    {
+        using var document = LoadVendorInventory();
+        var items = document.RootElement.GetProperty("items").EnumerateArray().ToArray();
+        Assert.NotEmpty(items);
+
+        foreach (var item in items)
+        {
+            var name = item.GetProperty("name").GetString() ?? string.Empty;
+            var managed = item.GetProperty("managed").GetBoolean();
+            var mode = item.GetProperty("downloadMode").GetString() ?? string.Empty;
+            var verificationMode = item.GetProperty("verificationMode").GetString() ?? string.Empty;
+            var sourceTrust = item.GetProperty("source_trust").GetString() ?? string.Empty;
+
+            Assert.True(ManifestPromotionPolicy.IsValidDownloadMode(mode), $"{name}: invalid downloadMode.");
+
+            if (!managed)
+            {
+                Assert.Equal("manual-root", verificationMode);
+                Assert.DoesNotContain(mode, new[] { ManifestPromotionPolicy.ManagedDownload });
+            }
+            else
+            {
+                Assert.Equal("official", sourceTrust);
+                Assert.Equal("managed-page-shortcut", verificationMode);
+                Assert.Contains(mode, new[]
+                {
+                    ManifestPromotionPolicy.VendorPortal,
+                    ManifestPromotionPolicy.OemSpecific,
+                    ManifestPromotionPolicy.OfficialDownloadPage,
+                    ManifestPromotionPolicy.FirmwareBlocked
+                });
+                Assert.Equal(string.Empty, item.GetProperty("checksum").GetString());
+            }
+        }
+    }
+
+    [Fact]
     public void EligibilityAudit_ManualVendorEntriesDoNotIncreaseManagedFileCount()
     {
         // The packaged manifest tracks 30 active managed file downloads. Vendor
@@ -189,8 +228,9 @@ public sealed class ToolkitCatalogVendorShortcutsTests
             }
         }
 
-        // 2026-05-25 follow-up promotion pass added NetBSD 10.1 amd64 and openSUSE Leap 16.0 x86_64 (30 -> 32).
-        Assert.Equal(32, activeManagedFileCount);
+        // 2026-05-27 Batch 6 catalog-expansion pass added 18 managed file entries
+        // (15 OS / ISO + 3 technician tool), bringing the active count from 32 to 50.
+        Assert.Equal(50, activeManagedFileCount);
     }
 
     private static bool IsApprovedVendorHost(string url)
@@ -239,6 +279,12 @@ public sealed class ToolkitCatalogVendorShortcutsTests
     private static JsonDocument LoadManifest()
     {
         var path = FindRepoFile("manifests", "ForgerEMS.updates.json");
+        return JsonDocument.Parse(File.ReadAllText(path));
+    }
+
+    private static JsonDocument LoadVendorInventory()
+    {
+        var path = FindRepoFile("manifests", "vendor.inventory.json");
         return JsonDocument.Parse(File.ReadAllText(path));
     }
 
