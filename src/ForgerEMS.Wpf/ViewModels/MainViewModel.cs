@@ -98,8 +98,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private AppUpdateSettings _appUpdateSettings = new();
     private UsbBuilderProfileSettings _usbBuilderProfileSettings = new();
     private bool _loadingUsbBuilderProfileSettings;
-    private readonly UsbBuilderProfileMediaScanner _usbBuilderProfileMediaScanner = new();
-    private readonly UsbHtmlDocumentationGenerator _usbHtmlDocumentationGenerator = new();
     private CancellationTokenSource? _usbBuilderProfileMediaScanCts;
     private bool _updateCheckInProgress;
     private CancellationTokenSource? _updateCheckCancellation;
@@ -122,7 +120,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private Visibility _appUpdateDiagnosticsHintVisibility = Visibility.Collapsed;
     private bool _verboseLiveLogs;
     private UsbManagedHeartbeatPhase _usbManagedHeartbeatPhase = UsbManagedHeartbeatPhase.Unknown;
-    private CancellationTokenSource? _usbMonitorCancellation;
     private UsbDeviceChangeDebouncer? _usbDeviceChangeDebouncer;
     private UsbDeviceChangeWindowHook? _usbDeviceChangeWindowHook;
     private bool _usbDeviceChangeHookAttached;
@@ -8763,7 +8760,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         var kind = GetJsonString(item, "kind", string.Empty);
 
         bool ContainsCi(string source, string fragment) =>
-            !string.IsNullOrEmpty(source) && source.IndexOf(fragment, StringComparison.OrdinalIgnoreCase) >= 0;
+            !string.IsNullOrEmpty(source) && source.Contains(fragment, StringComparison.OrdinalIgnoreCase);
 
         var typeIsPage = ContainsCi(type, "page") || ContainsCi(type, "shortcut") || ContainsCi(type, "link");
         var kindIsShortcut = ContainsCi(kind, "shortcut") || ContainsCi(kind, "page") ||
@@ -13258,7 +13255,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         RefreshUsbBuilderProfileSummary();
     }
 
-    private static IReadOnlyList<UsbBuilderProfileOption> CreateUsbBuilderProfileOptions() =>
+    private static List<UsbBuilderProfileOption> CreateUsbBuilderProfileOptions() =>
         UsbBuilderProfileCatalog.All
             .Select(definition => UsbBuilderProfileOption.FromDefinition(definition, definition.DefaultIncluded))
             .ToList();
@@ -13385,7 +13382,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             var categoryIds = UsbBuilderProfileOptions.Select(o => o.CategoryId).ToArray();
-            var results = await _usbBuilderProfileMediaScanner.ScanAsync(root, categoryIds, cancellationToken)
+            var results = await UsbBuilderProfileMediaScanner.ScanAsync(root, categoryIds, cancellationToken)
                 .ConfigureAwait(true);
             foreach (var option in UsbBuilderProfileOptions)
             {
@@ -13416,7 +13413,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             await RefreshUsbBuilderProfileMediaScanAsync(CancellationToken.None).ConfigureAwait(true);
-            var written = _usbHtmlDocumentationGenerator.GenerateAll(new UsbHtmlDocumentationRequest
+            var written = UsbHtmlDocumentationGenerator.GenerateAll(new UsbHtmlDocumentationRequest
             {
                 UsbRoot = root,
                 ProfileOptions = UsbBuilderProfileOptions.ToList(),
@@ -15007,7 +15004,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
 
         _disposed = true;
-        _usbMonitorCancellation?.Cancel();
         _copilotGenerationCancellation?.Cancel();
         _usbBenchmarkHostInterruptKind = UsbBenchmarkHostInterruptKind.AppShutdown;
         try
@@ -15028,7 +15024,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // ignore
         }
 
-        _usbMonitorCancellation?.Dispose();
         try
         {
             _usbDeviceChangeWindowHook?.Dispose();

@@ -7,8 +7,8 @@ generic `Info` button.
 
 Current source manifest summary:
 
-- Total manifest items: 199
-- `ManagedDownload`: 32
+- Total manifest items: 217
+- `ManagedDownload`: 50
 - `OfficialDownloadPage`: 94
 - `ManualMediaRequired`: 22
 - `ReviewFirst`: 5

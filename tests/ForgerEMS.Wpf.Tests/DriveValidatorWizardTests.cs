@@ -47,7 +47,7 @@ public sealed class DriveValidatorWizardTests
 
     private static DriveValidatorWizardViewModel BuildVm(
         IReadOnlyList<UsbTargetInfo> targets,
-        DriveValidatorWizardViewModel.RunValidationDelegate? runner = null,
+        DriveValidatorWizardViewModel.RunValidationCallback? runner = null,
         UsbTargetInfo? preferred = null,
         Func<string, string, bool>? confirmHeavyMode = null,
         Func<UsbTargetInfo, string>? portLabelLookup = null)
@@ -186,7 +186,7 @@ public sealed class DriveValidatorWizardTests
             }
         };
 
-        DriveValidatorWizardViewModel.RunValidationDelegate runner =
+        DriveValidatorWizardViewModel.RunValidationCallback runner =
             async (target, options, portHint, onProgress, ct) =>
             {
                 // Emit a few progress events so the wizard exercises HandleProgress.
@@ -233,7 +233,7 @@ public sealed class DriveValidatorWizardTests
     [Fact]
     public async Task Wizard_ProgressMapSnapshot_PopulatesAndUpdatesRegionTiles()
     {
-        DriveValidatorWizardViewModel.RunValidationDelegate runner =
+        DriveValidatorWizardViewModel.RunValidationCallback runner =
             async (target, options, portHint, onProgress, ct) =>
             {
                 onProgress?.Invoke(new DriveValidationProgress
@@ -279,7 +279,7 @@ public sealed class DriveValidatorWizardTests
     {
         // Regression: ensure the wizard's running step does not stay stuck on CleaningUp once
         // a terminal result is applied (mirrors the inline-panel Part A fix from Phase 1).
-        DriveValidatorWizardViewModel.RunValidationDelegate runner =
+        DriveValidatorWizardViewModel.RunValidationCallback runner =
             (target, options, portHint, onProgress, ct) =>
             {
                 onProgress?.Invoke(new DriveValidationProgress

@@ -119,7 +119,7 @@ public partial class App : Application
                             AppendStartupLog($"LinuxHelper: {diagnostic}");
                         }
 
-                        Dispatcher.BeginInvoke(new Action(() => mainViewModel.LinuxHelperResult = result));
+                        _ = Dispatcher.BeginInvoke(new Action(() => mainViewModel.LinuxHelperResult = result));
                     }
                     catch (Exception helperException)
                     {

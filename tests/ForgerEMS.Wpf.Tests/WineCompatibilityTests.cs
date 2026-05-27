@@ -14,7 +14,7 @@ namespace ForgerEMS.Wpf.Tests;
 /// detection, the WPF software-render gate, probe gating, banner state,
 /// Linux helper JSON parsing, and the helper script's stable contract.
 /// </summary>
-[Collection(WineCompatibilityCollection.Name)]
+[Collection(WineCompatibilitySerialFixture.Name)]
 public sealed class WineCompatibilityTests
 {
     private static readonly string[] UnsupportedDefaults = { "WMI" };

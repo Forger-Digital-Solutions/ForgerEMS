@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services;
 using Xunit;
@@ -93,8 +94,7 @@ public sealed class UsbBuilderProfilePlannerAndHtmlTests
             .Select(d => UsbBuilderProfileOption.FromDefinition(d, d.DefaultIncluded))
             .ToList();
 
-        var generator = new UsbHtmlDocumentationGenerator();
-        var written = generator.GenerateAll(new UsbHtmlDocumentationRequest
+        var written = UsbHtmlDocumentationGenerator.GenerateAll(new UsbHtmlDocumentationRequest
         {
             UsbRoot = temp.Path,
             ProfileOptions = options,
@@ -127,15 +127,14 @@ public sealed class UsbBuilderProfilePlannerAndHtmlTests
     }
 
     [Fact]
-    public void MediaScanner_DetectsExistingUserFilesWithoutDeleting()
+    public async Task MediaScanner_DetectsExistingUserFilesWithoutDeleting()
     {
         using var temp = new TempFolder();
         var firmware = Path.Combine(temp.Path, "ISO", "Android", "Android-Manual-Firmware-Drop", "Samsung", "user.bin");
         Directory.CreateDirectory(Path.GetDirectoryName(firmware)!);
         File.WriteAllBytes(firmware, new byte[1024]);
 
-        var scanner = new UsbBuilderProfileMediaScanner();
-        var results = scanner.ScanAsync(temp.Path, ["android"]).GetAwaiter().GetResult();
+        var results = await UsbBuilderProfileMediaScanner.ScanAsync(temp.Path, ["android"]);
 
         Assert.True(results["android"].TotalBytes >= 1024);
         Assert.True(File.Exists(firmware));

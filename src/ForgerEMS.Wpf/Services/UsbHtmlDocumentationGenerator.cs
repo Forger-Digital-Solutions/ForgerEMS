@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.Json;
@@ -19,11 +20,9 @@ public sealed class UsbHtmlDocumentationRequest
     public string SupportEmail { get; init; } = BetaSupportInfo.SupportEmail;
 }
 
-public sealed class UsbHtmlDocumentationGenerator
+public static class UsbHtmlDocumentationGenerator
 {
-    private readonly UsbRootPolisher _usbRootPolisher = new();
-
-    public IReadOnlyList<string> GenerateAll(UsbHtmlDocumentationRequest request)
+    public static IReadOnlyList<string> GenerateAll(UsbHtmlDocumentationRequest request)
     {
         var written = new List<string>();
         var root = request.UsbRoot;
@@ -32,7 +31,7 @@ public sealed class UsbHtmlDocumentationGenerator
         Directory.CreateDirectory(Path.Combine(root, "_logs"));
         Directory.CreateDirectory(Path.Combine(root, "_reports"));
 
-        _usbRootPolisher.Polish(root);
+        UsbRootPolisher.Polish(root);
 
         WriteFile(Path.Combine(root, "README.html"), BuildDashboardHtml(request), written);
         WriteFile(Path.Combine(root, "_docs", "start-here.html"), BuildStartHereHtml(request), written);
@@ -41,12 +40,12 @@ public sealed class UsbHtmlDocumentationGenerator
         WriteFile(Path.Combine(root, "_reports", "index.html"), BuildReportsIndexHtml(root), written);
         WriteFile(Path.Combine(root, "_logs", "index.html"), BuildLogsIndexHtml(root), written);
 
-        _usbRootPolisher.Polish(root);
+        UsbRootPolisher.Polish(root);
 
         return written;
     }
 
-    private static void WriteFile(string path, string html, ICollection<string> written)
+    private static void WriteFile(string path, string html, List<string> written)
     {
         var directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrWhiteSpace(directory))
@@ -57,6 +56,9 @@ public sealed class UsbHtmlDocumentationGenerator
         File.WriteAllText(path, html, Encoding.UTF8);
         written.Add(path);
     }
+
+    private static void AppendInvariant(StringBuilder sb, FormattableString line) =>
+        sb.AppendLine(line.ToString(CultureInfo.InvariantCulture));
 
     private static string BuildDashboardHtml(UsbHtmlDocumentationRequest request)
     {
@@ -70,18 +72,18 @@ public sealed class UsbHtmlDocumentationGenerator
         sb.AppendLine("<header class=\"hero\">");
         sb.AppendLine("<h1>ForgerEMS Technician USB</h1>");
         sb.AppendLine("<p class=\"lead\">Open this page first — your technician dashboard for this USB.</p>");
-        sb.AppendLine($"<p class=\"muted\">Generated {UsbHtmlEscaper.Escape(DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss zzz"))} · App {UsbHtmlEscaper.Escape(request.AppVersion)}</p>");
+        AppendInvariant(sb, $"<p class=\"muted\">Generated {UsbHtmlEscaper.Escape(DateTimeOffset.Now.ToString("yyyy-MM-dd HH:mm:ss zzz", CultureInfo.InvariantCulture))} · App {UsbHtmlEscaper.Escape(request.AppVersion)}</p>");
         sb.AppendLine("</header>");
 
         sb.AppendLine("<section><h2>Profile summary</h2>");
-        sb.AppendLine($"<p>This USB profile includes: <strong>{UsbHtmlEscaper.Escape(packs)}</strong>.</p>");
-        sb.AppendLine($"<p>Estimated space: <strong>{UsbHtmlEscaper.Escape(totals.TypicalRangeDisplay)}</strong> typical ({UsbHtmlEscaper.Escape(totals.MinimumDisplay)} minimum) before user-supplied media.</p>");
+        AppendInvariant(sb, $"<p>This USB profile includes: <strong>{UsbHtmlEscaper.Escape(packs)}</strong>.</p>");
+        AppendInvariant(sb, $"<p>Estimated space: <strong>{UsbHtmlEscaper.Escape(totals.TypicalRangeDisplay)}</strong> typical ({UsbHtmlEscaper.Escape(totals.MinimumDisplay)} minimum) before user-supplied media.</p>");
         if (request.UsbFreeBytes is > 0)
         {
-            sb.AppendLine($"<p>USB free space at generation: <strong>{UsbHtmlEscaper.Escape(UsbTargetInfo.FormatBytes(request.UsbFreeBytes.Value))}</strong>.</p>");
+            AppendInvariant(sb, $"<p>USB free space at generation: <strong>{UsbHtmlEscaper.Escape(UsbTargetInfo.FormatBytes(request.UsbFreeBytes.Value))}</strong>.</p>");
         }
 
-        sb.AppendLine($"<p>{totals.UserSuppliedPackCount} pack(s) need user-supplied or guided official downloads. {totals.AutoOrGuidedPackCount} pack(s) can auto-download or use guided official sources.</p>");
+        AppendInvariant(sb, $"<p>{totals.UserSuppliedPackCount} pack(s) need user-supplied or guided official downloads. {totals.AutoOrGuidedPackCount} pack(s) can auto-download or use guided official sources.</p>");
         sb.AppendLine("</section>");
 
         sb.AppendLine("<section><h2>Quick links</h2><ul class=\"links\">");
@@ -99,9 +101,9 @@ public sealed class UsbHtmlDocumentationGenerator
         foreach (var option in included)
         {
             sb.AppendLine("<tr>");
-            sb.AppendLine($"<td>{UsbHtmlEscaper.Escape(option.DisplayName)}</td>");
-            sb.AppendLine($"<td>{UsbHtmlEscaper.Escape(option.StatusChipText)}</td>");
-            sb.AppendLine($"<td>{UsbHtmlEscaper.Escape(option.SpaceChipText)}</td>");
+            AppendInvariant(sb, $"<td>{UsbHtmlEscaper.Escape(option.DisplayName)}</td>");
+            AppendInvariant(sb, $"<td>{UsbHtmlEscaper.Escape(option.StatusChipText)}</td>");
+            AppendInvariant(sb, $"<td>{UsbHtmlEscaper.Escape(option.SpaceChipText)}</td>");
             sb.AppendLine("</tr>");
         }
 
@@ -112,7 +114,7 @@ public sealed class UsbHtmlDocumentationGenerator
             sb.AppendLine("<section><h2>User-supplied media checklist</h2><ul>");
             foreach (var option in userSupplied)
             {
-                sb.AppendLine($"<li><strong>{UsbHtmlEscaper.Escape(option.DisplayName)}</strong> — {UsbHtmlEscaper.Escape(option.ManualMediaExplanation)}</li>");
+                AppendInvariant(sb, $"<li><strong>{UsbHtmlEscaper.Escape(option.DisplayName)}</strong> — {UsbHtmlEscaper.Escape(option.ManualMediaExplanation)}</li>");
             }
 
             sb.AppendLine("</ul><p>See <a href=\"_docs/manual-media-guide.html\">manual media guide</a> for folder destinations.</p></section>");
@@ -123,8 +125,8 @@ public sealed class UsbHtmlDocumentationGenerator
         sb.AppendLine("<li>ForgerEMS does not redistribute macOS, iOS IPSW, legacy Windows, or OEM firmware images.</li>");
         sb.AppendLine("<li>Use official vendor sources only. Do not use gray-market mirrors.</li></ul></section>");
 
-        sb.AppendLine($"<footer><p>Support: <a href=\"mailto:{UsbHtmlEscaper.EscapeAttribute(request.SupportEmail)}\">{UsbHtmlEscaper.Escape(request.SupportEmail)}</a></p>");
-        sb.AppendLine($"<p class=\"muted\">{UsbHtmlEscaper.Escape(BetaSupportInfo.DoNotEmailSecretsWarning)}</p></footer>");
+        AppendInvariant(sb, $"<footer><p>Support: <a href=\"mailto:{UsbHtmlEscaper.EscapeAttribute(request.SupportEmail)}\">{UsbHtmlEscaper.Escape(request.SupportEmail)}</a></p>");
+        AppendInvariant(sb, $"<p class=\"muted\">{UsbHtmlEscaper.Escape(BetaSupportInfo.DoNotEmailSecretsWarning)}</p></footer>");
         sb.AppendLine(HtmlDocument.Close());
         return sb.ToString();
     }
@@ -141,7 +143,7 @@ public sealed class UsbHtmlDocumentationGenerator
         sb.AppendLine("<li>Run managed updates from ForgerEMS on a trusted PC to refresh catalog downloads.</li>");
         sb.AppendLine("<li>Check <a href=\"../_logs/index.html\">logs</a> and <a href=\"../_reports/index.html\">reports</a> after updates.</li>");
         sb.AppendLine("</ol>");
-        sb.AppendLine($"<p>Selected packs: {UsbHtmlEscaper.Escape(string.Join(", ", request.ProfileOptions.Where(o => o.IsIncluded).Select(o => o.DisplayName)))}</p>");
+        AppendInvariant(sb, $"<p>Selected packs: {UsbHtmlEscaper.Escape(string.Join(", ", request.ProfileOptions.Where(o => o.IsIncluded).Select(o => o.DisplayName)))}</p>");
         sb.AppendLine(HtmlDocument.Close());
         return sb.ToString();
     }
@@ -196,14 +198,14 @@ public sealed class UsbHtmlDocumentationGenerator
         string? secondaryCategory,
         (string Label, string Folder, string Notes)[] rows)
     {
-        sb.AppendLine($"<section><h2>{UsbHtmlEscaper.Escape(title)}</h2>");
+        AppendInvariant(sb, $"<section><h2>{UsbHtmlEscaper.Escape(title)}</h2>");
         sb.AppendLine("<table><thead><tr><th>Workflow</th><th>Folder</th><th>Notes</th></tr></thead><tbody>");
         foreach (var row in rows)
         {
             sb.AppendLine("<tr>");
-            sb.AppendLine($"<td>{UsbHtmlEscaper.Escape(row.Label)}</td>");
-            sb.AppendLine($"<td><code>{UsbHtmlEscaper.Escape(row.Folder)}</code></td>");
-            sb.AppendLine($"<td>{UsbHtmlEscaper.Escape(row.Notes)}</td>");
+            AppendInvariant(sb, $"<td>{UsbHtmlEscaper.Escape(row.Label)}</td>");
+            AppendInvariant(sb, $"<td><code>{UsbHtmlEscaper.Escape(row.Folder)}</code></td>");
+            AppendInvariant(sb, $"<td>{UsbHtmlEscaper.Escape(row.Notes)}</td>");
             sb.AppendLine("</tr>");
         }
 
@@ -211,7 +213,7 @@ public sealed class UsbHtmlDocumentationGenerator
 
         if (UsbBuilderProfileCatalog.TryGet(primaryCategory, out var definition))
         {
-            sb.AppendLine($"<p class=\"note\"><strong>What ForgerEMS can do:</strong> {UsbHtmlEscaper.Escape(UsbBuilderProfileStatusResolver.ToAcquisitionChip(definition.DownloadMode))}. {UsbHtmlEscaper.Escape(definition.ManualMediaExplanation)}</p>");
+            AppendInvariant(sb, $"<p class=\"note\"><strong>What ForgerEMS can do:</strong> {UsbHtmlEscaper.Escape(UsbBuilderProfileStatusResolver.ToAcquisitionChip(definition.DownloadMode))}. {UsbHtmlEscaper.Escape(definition.ManualMediaExplanation)}</p>");
         }
 
         sb.AppendLine("</section>");
@@ -268,13 +270,13 @@ public sealed class UsbHtmlDocumentationGenerator
                 {
                     var name = GetJsonString(item, "name");
                     var reason = GetJsonString(item, "safeReason");
-                    sb.AppendLine($"<li><strong>{UsbHtmlEscaper.Escape(name)}</strong> — {UsbHtmlEscaper.Escape(reason)}</li>");
+                    AppendInvariant(sb, $"<li><strong>{UsbHtmlEscaper.Escape(name)}</strong> — {UsbHtmlEscaper.Escape(reason)}</li>");
                 }
 
                 sb.AppendLine("</ul>");
             }
 
-            sb.AppendLine($"<p class=\"muted\">Support raw JSON: <a href=\"{UsbHtmlEscaper.EscapeAttribute(relativeLink)}\">{UsbHtmlEscaper.Escape(Path.GetFileName(jsonPath))}</a></p>");
+            AppendInvariant(sb, $"<p class=\"muted\">Support raw JSON: <a href=\"{UsbHtmlEscaper.EscapeAttribute(relativeLink)}\">{UsbHtmlEscaper.Escape(Path.GetFileName(jsonPath))}</a></p>");
         }
         catch
         {
@@ -294,7 +296,7 @@ public sealed class UsbHtmlDocumentationGenerator
             AppendSummaryRow(sb, "Release", GetJsonString(root, "releaseType"));
             if (root.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
             {
-                AppendSummaryRow(sb, "Manifest items", items.GetArrayLength().ToString());
+                AppendSummaryRow(sb, "Manifest items", items.GetArrayLength().ToString(CultureInfo.InvariantCulture));
             }
 
             sb.AppendLine("</tbody></table>");
@@ -313,8 +315,8 @@ public sealed class UsbHtmlDocumentationGenerator
         }
 
         sb.AppendLine("<tr>");
-        sb.AppendLine($"<th>{UsbHtmlEscaper.Escape(label)}</th>");
-        sb.AppendLine($"<td>{UsbHtmlEscaper.Escape(value)}</td>");
+        AppendInvariant(sb, $"<th>{UsbHtmlEscaper.Escape(label)}</th>");
+        AppendInvariant(sb, $"<td>{UsbHtmlEscaper.Escape(value)}</td>");
         sb.AppendLine("</tr>");
     }
 
@@ -387,9 +389,9 @@ public sealed class UsbHtmlDocumentationGenerator
     private static void AppendLogSummaryRow(StringBuilder sb, string label, FileInfo file, string linkPrefix)
     {
         sb.AppendLine("<tr>");
-        sb.AppendLine($"<td>{UsbHtmlEscaper.Escape(label)}</td>");
-        sb.AppendLine($"<td><a href=\"{UsbHtmlEscaper.EscapeAttribute(linkPrefix + file.Name)}\">{UsbHtmlEscaper.Escape(file.Name)}</a></td>");
-        sb.AppendLine($"<td>{UsbHtmlEscaper.Escape(file.LastWriteTimeUtc.ToString("yyyy-MM-dd HH:mm:ss"))} UTC</td>");
+        AppendInvariant(sb, $"<td>{UsbHtmlEscaper.Escape(label)}</td>");
+        AppendInvariant(sb, $"<td><a href=\"{UsbHtmlEscaper.EscapeAttribute(linkPrefix + file.Name)}\">{UsbHtmlEscaper.Escape(file.Name)}</a></td>");
+        AppendInvariant(sb, $"<td>{UsbHtmlEscaper.Escape(file.LastWriteTimeUtc.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture))} UTC</td>");
         sb.AppendLine("</tr>");
     }
 
@@ -429,20 +431,20 @@ public sealed class UsbHtmlDocumentationGenerator
         foreach (var file in files)
         {
             var name = Path.GetFileName(file);
-            sb.AppendLine($"<li><a href=\"{UsbHtmlEscaper.EscapeAttribute(linkPrefix + name)}\">{UsbHtmlEscaper.Escape(name)}</a></li>");
+            AppendInvariant(sb, $"<li><a href=\"{UsbHtmlEscaper.EscapeAttribute(linkPrefix + name)}\">{UsbHtmlEscaper.Escape(name)}</a></li>");
         }
 
         sb.AppendLine("</ul>");
     }
 
     private static void AppendLink(StringBuilder sb, string label, string href) =>
-        sb.AppendLine($"<li><a href=\"{UsbHtmlEscaper.EscapeAttribute(href)}\">{UsbHtmlEscaper.Escape(label)}</a></li>");
+        AppendInvariant(sb, $"<li><a href=\"{UsbHtmlEscaper.EscapeAttribute(href)}\">{UsbHtmlEscaper.Escape(label)}</a></li>");
 
     private static class HtmlDocument
     {
         public static string Open(string title) =>
             "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\"/>\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/>\n" +
-            $"<title>{UsbHtmlEscaper.Escape(title)}</title>\n<style>\n{EmbeddedCss}\n</style>\n</head>\n<body>\n";
+            FormattableString.Invariant($"<title>{UsbHtmlEscaper.Escape(title)}</title>\n<style>\n{EmbeddedCss}\n</style>\n</head>\n<body>\n");
 
         public static string Close() => "</body>\n</html>\n";
 

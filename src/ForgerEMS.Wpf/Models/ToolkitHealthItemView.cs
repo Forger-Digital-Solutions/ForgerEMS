@@ -260,7 +260,7 @@ public sealed class ToolkitHealthItemView : INotifyPropertyChanged
         _ => string.Empty
     };
 
-    private string InstalledVerificationLabel()
+    private static string InstalledVerificationLabel()
     {
         // Keep the existing one-word grid column behaviour ("Verified") so
         // existing UI layout/grid widths are unchanged. The cached vs fresh

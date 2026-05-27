@@ -46,6 +46,12 @@ public sealed class FullManagedDownloadProfileTests
         "macos", "android", "ios-ipados", "oem-tools", "diagnostics"
     };
 
+    private static readonly string[] CoreOnlyCategories = ["core"];
+
+    private static readonly string[] LinuxRescueAndCoreCategories = ["linux-rescue", "core"];
+
+    private static readonly string[] ManagedDownloadCategories = ["linux-rescue", "diagnostics", "windows", "core"];
+
     [Fact]
     public void Planner_AllManagedFileEntries_ClassifyIntoKnownCategorySet()
     {
@@ -117,7 +123,7 @@ public sealed class FullManagedDownloadProfileTests
         // becomes profile-excluded. (Backend always force-includes core anyway.)
         var plan = UsbBuilderProfileFullManagedDownloadPlanner.Calculate(
             SourceManifestPath,
-            new HashSet<string>(new[] { "core" }, StringComparer.OrdinalIgnoreCase),
+            new HashSet<string>(CoreOnlyCategories, StringComparer.OrdinalIgnoreCase),
             usbRootPath: null);
 
         Assert.Equal(1, plan.EligibleManagedCount);
@@ -132,7 +138,7 @@ public sealed class FullManagedDownloadProfileTests
         // Linux ISOs because the backend has no dedicated bsd category.
         var plan = UsbBuilderProfileFullManagedDownloadPlanner.Calculate(
             SourceManifestPath,
-            new HashSet<string>(new[] { "linux-rescue", "core" }, StringComparer.OrdinalIgnoreCase),
+            new HashSet<string>(LinuxRescueAndCoreCategories, StringComparer.OrdinalIgnoreCase),
             usbRootPath: null);
 
         Assert.Contains(plan.EligibleNames, n => n.Contains("NetBSD 10.1", StringComparison.Ordinal));
@@ -150,7 +156,7 @@ public sealed class FullManagedDownloadProfileTests
         // there can sneak into a non-oem-tools selection.
         var plan = UsbBuilderProfileFullManagedDownloadPlanner.Calculate(
             SourceManifestPath,
-            new HashSet<string>(new[] { "linux-rescue", "diagnostics", "windows", "core" }, StringComparer.OrdinalIgnoreCase),
+            new HashSet<string>(ManagedDownloadCategories, StringComparer.OrdinalIgnoreCase),
             usbRootPath: null);
 
         foreach (var name in plan.EligibleNames)

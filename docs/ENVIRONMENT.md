@@ -4,7 +4,7 @@ This file documents supported and reserved ForgerEMS environment variables for v
 
 General app configuration is local-first. Environment variables are optional operator/developer overrides unless stated otherwise.
 
-Placeholder values such as `REPLACE_ME`, `REPLACE_WITH_BETA_ACCESS_TOKEN`, `YOUR_*`, `PASTE_*`, `REPLACE_MODEL_NAME`, `local-model-name`, `model-name`, `example.local`, `sk-REPLACE_ME`, `changeme`, and `TODO` are treated as **not configured**. They are examples only and must not make Kyra mark a provider ready.
+Placeholder values such as `REPLACE_ME`, `REPLACE_WITH_BETA_ACCESS_TOKEN`, `YOUR_*`, `PASTE_*`, `REPLACE_MODEL_NAME`, `local-model-name`, `model-name`, `example.local`, `OPENAI_API_KEY_PLACEHOLDER`, `changeme`, and `TODO` are treated as **not configured**. They are examples only and must not make Kyra mark a provider ready.
 
 For installed-app testing, persistent variables are Windows **User** environment variables. Use `tools/show-forgerems-env-status.ps1` to inspect User env readiness without printing raw secrets.
 

@@ -4,7 +4,7 @@ namespace VentoyToolkitSetup.Wpf.Services;
 
 public sealed class UsbRootPolisher
 {
-    public void Polish(string usbRoot)
+    public static void Polish(string usbRoot)
     {
         if (string.IsNullOrWhiteSpace(usbRoot) || !Directory.Exists(usbRoot))
         {

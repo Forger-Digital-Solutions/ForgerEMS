@@ -1,3 +1,4 @@
+using System.Buffers;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -23,6 +24,7 @@ public static class RuntimeCompatibilityService
 {
     private const string WineRegistryPath = @"SOFTWARE\Wine";
     private const string WineNtdllExport = "wine_get_version";
+    private static readonly SearchValues<char> NewlineSearchValues = SearchValues.Create("\r\n");
 
     /// <summary>
     /// Runs every probe and returns an immutable snapshot of the environment.
@@ -314,7 +316,7 @@ public static class RuntimeCompatibilityService
 
     private static string TrimToFirstNewline(string value)
     {
-        var newline = value.IndexOfAny(new[] { '\r', '\n' });
+        var newline = value.AsSpan().IndexOfAny(NewlineSearchValues);
         return newline < 0 ? value.Trim() : value[..newline].Trim();
     }
 

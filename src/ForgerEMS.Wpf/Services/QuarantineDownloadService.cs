@@ -14,6 +14,7 @@ public static class QuarantineDownloadService
 {
     private const string PayloadFileName = "payload.forgerq";
     private const string MetadataFileName = "quarantine.json";
+    private static readonly JsonSerializerOptions MetadataJsonOptions = new() { WriteIndented = true };
 
     public static string GetDefaultQuarantineRoot() =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ForgerEMS", "Quarantine");
@@ -417,7 +418,7 @@ public static class QuarantineDownloadService
             avExternalSecurityLikelyIntercepted = result.ExternalSecurityLikelyIntercepted
         };
 
-        var json = JsonSerializer.Serialize(metadata, new JsonSerializerOptions { WriteIndented = true });
+        var json = JsonSerializer.Serialize(metadata, MetadataJsonOptions);
         var folder = Path.GetDirectoryName(result.MetadataPath);
         if (!string.IsNullOrWhiteSpace(folder))
         {
@@ -583,7 +584,7 @@ public static class QuarantineDownloadService
         }
     }
 
-    private static void AddOutcomeState(ICollection<SafetyCheckSeverity> states, QuarantineOutcome outcome)
+    private static void AddOutcomeState(List<SafetyCheckSeverity> states, QuarantineOutcome outcome)
     {
         AddState(states, outcome switch
         {
@@ -596,7 +597,7 @@ public static class QuarantineDownloadService
         });
     }
 
-    private static void AddState(ICollection<SafetyCheckSeverity> states, SafetyCheckSeverity state)
+    private static void AddState(List<SafetyCheckSeverity> states, SafetyCheckSeverity state)
     {
         if (!states.Contains(state))
         {

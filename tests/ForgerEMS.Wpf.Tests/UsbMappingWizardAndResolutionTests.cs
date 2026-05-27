@@ -10,6 +10,7 @@ using Xunit;
 
 namespace ForgerEMS.Wpf.Tests;
 
+[Collection(UsbPortLabelResolverSerialFixture.Name)]
 public sealed class UsbMappingWizardAndResolutionTests
 {
     private sealed class StubUsbIntelligence : IUsbIntelligenceService

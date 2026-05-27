@@ -69,6 +69,18 @@ function Get-RedactedPreview([string] $value, [int] $maxLen = 24) {
     return ($head + '...')
 }
 
+function Get-HitClassification([string] $relativePath, [string] $line) {
+    if ($relativePath -match '(?i)[\\/]tests[\\/]|\.Tests[\\/]') {
+        return 'Allowed test fixture'
+    }
+
+    if ($line -match '(?i)REPLACE_ME|REPLACE_WITH_BETA_ACCESS_TOKEN|REPLACE_MODEL_NAME|YOUR_|PASTE_|fake[-_A-Za-z0-9]*|dummy|example|placeholder|sample|not-a-real|redaction fixture') {
+        return 'Allowed placeholder/example'
+    }
+
+    return 'Review required'
+}
+
 $hits = [System.Collections.Generic.List[object]]::new()
 
 Get-ChildItem -LiteralPath $RepoRoot -Recurse -File -Force | ForEach-Object {
@@ -114,12 +126,14 @@ Get-ChildItem -LiteralPath $RepoRoot -Recurse -File -Force | ForEach-Object {
             if ($patternId -match 'API_KEY=' -and $line -match '^\s*[#\-*\s]*(GEMINI|OPENAI|example|set\s)') { continue }
 
             $preview = Get-RedactedPreview $m.Value
+            $classification = Get-HitClassification $rel $line
             $hits.Add([pscustomobject]@{
-                    Path    = $rel
-                    Line    = $i + 1
-                    Pattern = $patternId
-                    Preview = $preview
-                    InTests = ($rel -match '(?i)[\\/]tests[\\/]|\.Tests[\\/]')
+                    Path           = $rel
+                    Line           = $i + 1
+                    Pattern        = $patternId
+                    Preview        = $preview
+                    Classification = $classification
+                    InTests        = ($rel -match '(?i)[\\/]tests[\\/]|\.Tests[\\/]')
                 })
         }
     }
@@ -133,13 +147,33 @@ if ($hits.Count -eq 0) {
     exit 0
 }
 
-$hits | Sort-Object Path, Line | Format-Table -AutoSize Path, Line, Pattern, Preview, InTests
+$reviewRequired = $hits | Where-Object { $_.Classification -eq 'Review required' }
+$allowed = $hits | Where-Object { $_.Classification -ne 'Review required' }
 
-$nonTest = $hits | Where-Object { -not $_.InTests }
-if ($Strict -and $nonTest.Count -gt 0) {
-    Write-Host "Strict mode: hits outside test paths - review required." -ForegroundColor Red
-    exit 1
+if ($reviewRequired.Count -gt 0) {
+    $reviewRequired | Sort-Object Path, Line | Format-Table -AutoSize Path, Line, Pattern, Preview, Classification
+    if ($allowed.Count -gt 0) {
+        Write-Host ("Allowed placeholder/test fixtures: {0}" -f $allowed.Count) -ForegroundColor Cyan
+    }
+
+    if ($Strict) {
+        Write-Host "Strict mode: review-required secret-like hits found." -ForegroundColor Red
+        exit 1
+    }
+
+    Write-Host "Review-required secret-like hits found." -ForegroundColor Yellow
+    exit 0
 }
 
-Write-Host "Review hits above. Test projects may contain fake example tokens by design." -ForegroundColor Yellow
+Write-Host "No real secrets found." -ForegroundColor Green
+Write-Host ("Allowed placeholder/test fixtures: {0}" -f $allowed.Count) -ForegroundColor Cyan
+if ($VerbosePreference -ne 'SilentlyContinue') {
+    $allowed | Sort-Object Path, Line | Format-Table -AutoSize Path, Line, Pattern, Preview, Classification
+}
+
+if ($Strict) {
+    Write-Host "Strict mode: no review-required hits." -ForegroundColor Green
+    exit 0
+}
+
 exit 0

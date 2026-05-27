@@ -16,7 +16,7 @@ namespace ForgerEMS.Wpf.Tests;
 /// honesty, Linux helper service state machine, USB Builder write gating, and
 /// startup log redaction guard.
 /// </summary>
-[Collection(WineCompatibilityCollection.Name)]
+[Collection(WineCompatibilitySerialFixture.Name)]
 public sealed class WineCompatibilityPhase2Tests
 {
     // ---- AcpiThermalZoneSensorProvider Wine gating -----------------------

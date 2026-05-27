@@ -24,7 +24,7 @@ namespace VentoyToolkitSetup.Wpf.ViewModels;
 /// </summary>
 public sealed class DriveValidatorWizardViewModel : ObservableObject, IDisposable
 {
-    public delegate Task<DriveValidationResult> RunValidationDelegate(
+    public delegate Task<DriveValidationResult> RunValidationCallback(
         UsbTargetInfo target,
         DriveValidationOptions options,
         string? portPathHint,
@@ -37,7 +37,7 @@ public sealed class DriveValidatorWizardViewModel : ObservableObject, IDisposabl
     private readonly Func<UsbTargetInfo, string> _portLabelLookup;
     private readonly Func<string, string, bool>? _confirmHeavyMode;
     private readonly Action<string, LogSeverity>? _appendLog;
-    private readonly RunValidationDelegate _runValidationAsync;
+    private readonly RunValidationCallback _runValidationAsync;
     private readonly UsbTargetInfo? _preferredTarget;
 
     private DriveValidatorWizardStep _step = DriveValidatorWizardStep.SelectTarget;
@@ -64,7 +64,7 @@ public sealed class DriveValidatorWizardViewModel : ObservableObject, IDisposabl
     public DriveValidatorWizardViewModel(
         Func<IReadOnlyList<UsbTargetInfo>> getTargets,
         Func<UsbTargetInfo, (bool isSafe, string reason)> safetyEvaluator,
-        RunValidationDelegate runValidationAsync,
+        RunValidationCallback runValidationAsync,
         Func<UsbTargetInfo, DriveValidationResult?>? lastValidationLookup = null,
         Func<UsbTargetInfo, string>? portLabelLookup = null,
         Func<string, string, bool>? confirmHeavyMode = null,

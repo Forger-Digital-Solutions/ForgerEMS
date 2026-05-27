@@ -2,12 +2,12 @@ using System.IO;
 
 namespace VentoyToolkitSetup.Wpf.Services;
 
-public sealed class UsbBuilderProfileMediaScanner
+public static class UsbBuilderProfileMediaScanner
 {
     public const int DefaultMaxFilesPerCategory = 5000;
     public const long DefaultMaxBytesPerCategory = 64L * 1024 * 1024 * 1024;
 
-    public async Task<IReadOnlyDictionary<string, UsbBuilderProfileMediaScanResult>> ScanAsync(
+    public static async Task<IReadOnlyDictionary<string, UsbBuilderProfileMediaScanResult>> ScanAsync(
         string usbRoot,
         IEnumerable<string> categoryIds,
         CancellationToken cancellationToken = default)

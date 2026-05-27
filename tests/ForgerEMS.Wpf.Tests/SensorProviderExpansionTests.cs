@@ -112,7 +112,7 @@ public sealed class SensorProviderExpansionTests
         Assert.False(result.RequiresAdmin);
         Assert.True(result.IsReadOnly);
         Assert.Equal(SensorProviderRuntimeModes.Disabled, result.RuntimeMode);
-        Assert.Contains("does not bundle", result.Notes.First(), System.StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not bundle", result.Notes[0], System.StringComparison.OrdinalIgnoreCase);
         Assert.All(result.Capabilities.DataClasses, d =>
             Assert.Equal(SensorDataClassStatus.NotPackaged, d.Status));
     }

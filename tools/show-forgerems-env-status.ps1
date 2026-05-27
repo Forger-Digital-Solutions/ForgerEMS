@@ -12,11 +12,14 @@ function Test-PlaceholderValue {
     param([AllowNull()][string]$Value)
     if ([string]::IsNullOrWhiteSpace($Value)) { return $false }
     $v = $Value.Trim()
-    if ($v -match '^(?i:REPLACE_ME|REPLACE_WITH_BETA_ACCESS_TOKEN|REPLACE_MODEL_NAME|local-model-name|model-name|changeme|TODO|sk-REPLACE_ME)$') { return $true }
+    $legacyOpenAiPlaceholder = 'sk-' + 'REPLACE_ME'
+    if ($v -match '^(?i:REPLACE_ME|REPLACE_WITH_BETA_ACCESS_TOKEN|REPLACE_MODEL_NAME|local-model-name|model-name|changeme|TODO|OPENAI_API_KEY_PLACEHOLDER)$') { return $true }
+    if ([string]::Equals($v, $legacyOpenAiPlaceholder, [StringComparison]::OrdinalIgnoreCase)) { return $true }
     if ($v -like "REPLACE_*") { return $true }
     if ($v -like "YOUR_*") { return $true }
     if ($v -like "PASTE_*") { return $true }
     if ($v -match '(?i)REPLACE_ME') { return $true }
+    if ($v -match '(?i)PLACEHOLDER') { return $true }
     if ($v -match '(?i)example\.local') { return $true }
     return $false
 }

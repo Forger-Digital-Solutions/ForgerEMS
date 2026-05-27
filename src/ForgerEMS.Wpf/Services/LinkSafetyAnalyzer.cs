@@ -706,13 +706,13 @@ public static class LinkSafetyAnalyzer
         return LinkSafetyBand.LowConcern;
     }
 
-    private static IReadOnlyList<SafetyCheckSeverity> AppendState(List<SafetyCheckSeverity> states, SafetyCheckSeverity state)
+    private static List<SafetyCheckSeverity> AppendState(List<SafetyCheckSeverity> states, SafetyCheckSeverity state)
     {
         AddState(states, state);
         return states;
     }
 
-    private static void AddState(ICollection<SafetyCheckSeverity> states, SafetyCheckSeverity state)
+    private static void AddState(List<SafetyCheckSeverity> states, SafetyCheckSeverity state)
     {
         if (!states.Contains(state))
         {

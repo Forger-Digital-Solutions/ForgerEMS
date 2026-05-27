@@ -11,7 +11,7 @@ namespace ForgerEMS.Wpf.Tests;
 /// execution order on flaky CI agents.
 /// </summary>
 [CollectionDefinition(Name, DisableParallelization = true)]
-public sealed class WineCompatibilityCollection
+public sealed class WineCompatibilitySerialFixture
 {
     public const string Name = "WineCompatibility";
 }

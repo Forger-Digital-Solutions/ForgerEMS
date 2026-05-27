@@ -14,7 +14,7 @@ namespace ForgerEMS.Wpf.Tests;
 /// parallel tests cannot clobber each other, and explicit
 /// <see cref="WineProbeGate.IsWine"/> usage in probe gates.
 /// </summary>
-[Collection(WineCompatibilityCollection.Name)]
+[Collection(WineCompatibilitySerialFixture.Name)]
 public sealed class WineDetectionRegressionTests
 {
     [Fact]

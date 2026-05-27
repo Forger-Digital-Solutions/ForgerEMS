@@ -17,7 +17,7 @@ public sealed record UsbBuilderProfileCategoryDefinition(
 
 public static class UsbBuilderProfileCatalog
 {
-    private static readonly IReadOnlyDictionary<string, UsbBuilderProfileCategoryDefinition> Definitions =
+    private static readonly Dictionary<string, UsbBuilderProfileCategoryDefinition> Definitions =
         BuildDefinitions().ToDictionary(d => d.CategoryId, StringComparer.OrdinalIgnoreCase);
 
     public static IReadOnlyList<UsbBuilderProfileCategoryDefinition> All => Definitions.Values.ToList();

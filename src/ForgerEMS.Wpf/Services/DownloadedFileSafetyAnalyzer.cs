@@ -63,6 +63,8 @@ public sealed class DownloadedFileSafetyReport
 
 public static class DownloadedFileSafetyAnalyzer
 {
+    private static readonly JsonSerializerOptions MetadataJsonOptions = new() { WriteIndented = true };
+
     private static readonly string[] HighRiskExtensions =
     [
         ".exe", ".msi", ".bat", ".cmd", ".ps1", ".vbs", ".js", ".scr", ".dll", ".com", ".pif", ".reg", ".hta"
@@ -383,7 +385,7 @@ public static class DownloadedFileSafetyAnalyzer
                 avExternalSecurityLikelyIntercepted = false,
                 note = "Local read-only copy to ForgerEMS quarantine. Payload saved with neutral extension and not executed."
             };
-            File.WriteAllText(metadataPath, JsonSerializer.Serialize(metadata, new JsonSerializerOptions { WriteIndented = true }), Encoding.UTF8);
+            File.WriteAllText(metadataPath, JsonSerializer.Serialize(metadata, MetadataJsonOptions), Encoding.UTF8);
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
         {
@@ -753,7 +755,7 @@ public static class DownloadedFileSafetyAnalyzer
         }
     }
 
-    private static void AddState(ICollection<SafetyCheckSeverity> states, SafetyCheckSeverity state)
+    private static void AddState(List<SafetyCheckSeverity> states, SafetyCheckSeverity state)
     {
         if (!states.Contains(state))
         {
