@@ -406,12 +406,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private SafeTestingEnvironmentStatus _cachedSafeTestingStatus = SafeTestingEnvironmentProbe.ProbeQuick();
     private bool _experimentalEmbeddedWslRunner;
     private CancellationTokenSource? _safeTestingEnvironmentRefreshCts;
+    private bool _isLinkSafetyBusy;
     private string _linkSafetyUrlInput = string.Empty;
     private string _linkSafetyResultText =
-        "Paste an https URL, tap Analyze for local heuristics, then optionally HTTPS HEAD. Quarantine download never runs the file.";
+        "Paste an http(s) URL. Analyze reads headers and a bounded HTML preview only. Quarantine download never runs the file.";
     private string _localFileSafetyPath = string.Empty;
     private string _localFileSafetyResultText =
-        "Pick a downloaded file for a read-only check (SHA256 + heuristics). ForgerEMS never executes the selected file.";
+        "Pick a downloaded file for a read-only check. ForgerEMS computes metadata only and never executes the selected file.";
     private string _lastLocalSafetySha256 = string.Empty;
     private Visibility _appUpdateBannerVisibility = Visibility.Collapsed;
     private string _appUpdateBannerTitle = string.Empty;
@@ -585,9 +586,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         RunWslHostStatusRunnerCommand = new AsyncRelayCommand(
             () => RunWslHostArgumentsUiAsync(WslHostStatusArgs, "wsl.exe --status"),
             () => !IsBusy && !_isWslRunnerBusy && DiagnosticsFeatureFlags.EmbeddedWslCommandRunnerEnabled && _wslExecutor.IsWslInstalled());
-        AnalyzeLinkSafetyCommand = new RelayCommand(RunLinkSafetyAnalyze, () => !IsBusy);
-        FetchLinkSafetyHeadersCommand = new AsyncRelayCommand(RunLinkSafetyHeadAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(_linkSafetyUrlInput));
-        DownloadLinkToQuarantineCommand = new AsyncRelayCommand(DownloadLinkToQuarantineAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(_linkSafetyUrlInput));
+        AnalyzeLinkSafetyCommand = new AsyncRelayCommand(RunLinkSafetyAnalyzeAsync, CanRunLinkSafetyAction);
+        FetchLinkSafetyHeadersCommand = new AsyncRelayCommand(RunLinkSafetyHeadAsync, CanRunLinkSafetyAction);
+        DownloadLinkToQuarantineCommand = new AsyncRelayCommand(DownloadLinkToQuarantineAsync, CanRunLinkSafetyAction);
         BrowseLocalFileSafetyCommand = new RelayCommand(BrowseLocalFileSafety, () => !IsBusy);
         AnalyzeLocalFileSafetyCommand = new RelayCommand(RunLocalFileSafetyAnalyze, () => !IsBusy && !string.IsNullOrWhiteSpace(_localFileSafetyPath));
         CopyLocalFileSafetyShaCommand = new RelayCommand(CopyLocalFileSafetySha, () => !string.IsNullOrWhiteSpace(_lastLocalSafetySha256));
@@ -939,7 +940,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public AsyncRelayCommand RunWslHostStatusRunnerCommand { get; }
 
-    public RelayCommand AnalyzeLinkSafetyCommand { get; }
+    public AsyncRelayCommand AnalyzeLinkSafetyCommand { get; }
 
     public AsyncRelayCommand FetchLinkSafetyHeadersCommand { get; }
 
@@ -2797,11 +2798,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             if (SetProperty(ref _linkSafetyUrlInput, value))
             {
+                LinkSafetyResultText = string.IsNullOrWhiteSpace(value)
+                    ? "Paste an http(s) URL. Analyze reads headers and a bounded HTML preview only. Quarantine download never runs the file."
+                    : "Ready to analyze. Previous URL result cleared.";
+                AnalyzeLinkSafetyCommand.RaiseCanExecuteChanged();
                 FetchLinkSafetyHeadersCommand.RaiseCanExecuteChanged();
                 DownloadLinkToQuarantineCommand.RaiseCanExecuteChanged();
             }
         }
     }
+
+    public bool IsLinkSafetyCheckRunning => _isLinkSafetyBusy;
 
     public string LinkSafetyResultText
     {
@@ -2816,6 +2823,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             if (SetProperty(ref _localFileSafetyPath, value))
             {
+                _lastLocalSafetySha256 = string.Empty;
+                LocalFileSafetyResultText = string.IsNullOrWhiteSpace(value)
+                    ? "Pick a downloaded file for a read-only check. ForgerEMS computes metadata only and never executes the selected file."
+                    : "Ready to analyze selected file. Previous file result cleared.";
+                CopyLocalFileSafetyShaCommand.RaiseCanExecuteChanged();
+                CopyLocalFileSafetyReportCommand.RaiseCanExecuteChanged();
                 AnalyzeLocalFileSafetyCommand.RaiseCanExecuteChanged();
                 CopyLocalFileToQuarantineCommand.RaiseCanExecuteChanged();
             }
@@ -12962,10 +12975,44 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         WslRunnerOutputText = string.Empty;
     }
 
-    private void RunLinkSafetyAnalyze()
+    private bool CanRunLinkSafetyAction()
     {
-        var report = LinkSafetyAnalyzer.Analyze(LinkSafetyUrlInput);
-        LinkSafetyResultText = LinkSafetyAnalyzer.FormatReport(report);
+        return !IsBusy && !_isLinkSafetyBusy && !string.IsNullOrWhiteSpace(_linkSafetyUrlInput);
+    }
+
+    private void SetLinkSafetyBusy(bool value)
+    {
+        if (_isLinkSafetyBusy == value)
+        {
+            return;
+        }
+
+        _isLinkSafetyBusy = value;
+        OnPropertyChanged(nameof(IsLinkSafetyCheckRunning));
+        AnalyzeLinkSafetyCommand.RaiseCanExecuteChanged();
+        FetchLinkSafetyHeadersCommand.RaiseCanExecuteChanged();
+        DownloadLinkToQuarantineCommand.RaiseCanExecuteChanged();
+    }
+
+    private async Task RunLinkSafetyAnalyzeAsync()
+    {
+        SetLinkSafetyBusy(true);
+        LinkSafetyResultText = "Analyzing URL metadata. Previous URL result cleared. ForgerEMS will not save or execute payload bytes.";
+
+        try
+        {
+            var report = await LinkSafetyAnalyzer.AnalyzeAsync(LinkSafetyUrlInput).ConfigureAwait(true);
+            LinkSafetyResultText = LinkSafetyAnalyzer.FormatReport(report);
+        }
+        catch (Exception exception)
+        {
+            StartupDiagnosticLog.AppendException("RunLinkSafetyAnalyzeAsync", exception);
+            LinkSafetyResultText = "URL analysis failed: " + exception.Message + Environment.NewLine + "ForgerEMS did not execute anything.";
+        }
+        finally
+        {
+            SetLinkSafetyBusy(false);
+        }
     }
 
     private void BrowseLocalFileSafety()
@@ -12997,6 +13044,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         try
         {
+            _lastLocalSafetySha256 = string.Empty;
+            CopyLocalFileSafetyShaCommand.RaiseCanExecuteChanged();
+            LocalFileSafetyResultText = "Analyzing selected file metadata. Previous file result cleared. ForgerEMS will not execute, unzip, or shell-open the file.";
+
             var report = DownloadedFileSafetyAnalyzer.Analyze(LocalFileSafetyPath.Trim(), out var error);
             if (report is null)
             {
@@ -13006,7 +13057,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            _lastLocalSafetySha256 = report.Sha256Hex;
+            _lastLocalSafetySha256 = report.Sha256Hex.Length == 64 ? report.Sha256Hex : string.Empty;
             CopyLocalFileSafetyShaCommand.RaiseCanExecuteChanged();
             CopyLocalFileSafetyReportCommand.RaiseCanExecuteChanged();
             LocalFileSafetyResultText = DownloadedFileSafetyAnalyzer.FormatReport(report);
@@ -13068,7 +13119,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            DownloadedFileSafetyAnalyzer.CopyToQuarantine(path, DownloadedFileSafetyAnalyzer.GetQuarantineRoot(), out var dest, out var error);
+            DownloadedFileSafetyAnalyzer.CopyToQuarantine(path, DownloadedFileSafetyAnalyzer.GetQuarantineRoot(), out var dest, out var error, out var metadataPath);
             if (!string.IsNullOrWhiteSpace(error))
             {
                 LocalFileSafetyResultText = "Copy to quarantine failed: " + error;
@@ -13077,7 +13128,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Copied file to quarantine (not executed): " + CopilotRedactor.Redact(dest, enabled: true), LogSeverity.Success));
             LocalFileSafetyResultText = (LocalFileSafetyResultText ?? string.Empty) + Environment.NewLine + Environment.NewLine +
-                                        "Copied to quarantine (read-only copy; original untouched):" + Environment.NewLine + CopilotRedactor.Redact(dest, enabled: true);
+                                        "Copied to ForgerEMS quarantine with neutral extension (read-only copy; original untouched; no execution):" + Environment.NewLine +
+                                        CopilotRedactor.Redact(dest, enabled: true) + Environment.NewLine +
+                                        "Metadata: " + CopilotRedactor.Redact(metadataPath ?? "(not available)", enabled: true);
         }
         catch (Exception exception)
         {
@@ -13088,106 +13141,51 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private async Task RunLinkSafetyHeadAsync()
     {
-        var report = LinkSafetyAnalyzer.Analyze(LinkSafetyUrlInput);
-        var baseText = LinkSafetyAnalyzer.FormatReport(report);
-        if (!Uri.TryCreate(LinkSafetyUrlInput.Trim(), UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
-        {
-            RunOnUi(() => LinkSafetyResultText = baseText + Environment.NewLine + Environment.NewLine +
-                                                "HTTPS HEAD was skipped (needs a valid https:// URL).");
-            return;
-        }
+        SetLinkSafetyBusy(true);
+        LinkSafetyResultText = "Checking URL headers. Previous URL result cleared. If HEAD is blocked, ForgerEMS will fall back to safe bounded GET metadata.";
 
         try
         {
-            using var client = new HttpClient();
-            client.Timeout = TimeSpan.FromSeconds(10);
-            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", $"ForgerEMS/{AppReleaseInfo.Version} (beta link checker; no execute)");
-            using var request = new HttpRequestMessage(HttpMethod.Head, uri);
-            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
-            var sb = new StringBuilder(baseText);
-            sb.AppendLine().AppendLine("--- HTTPS HEAD (informational only; servers may omit headers) ---");
-            sb.AppendLine(FormattableString.Invariant($"HTTP {(int)response.StatusCode} {response.ReasonPhrase}"));
-            if (response.Headers.Location is not null)
-            {
-                sb.AppendLine("Location: " + response.Headers.Location);
-            }
-
-            foreach (var key in new[] { "Content-Type", "Content-Length", "Content-Disposition", "Last-Modified" })
-            {
-                if (response.Content.Headers.TryGetValues(key, out var values))
-                {
-                    sb.AppendLine(key + ": " + string.Join(", ", values));
-                }
-            }
-
-            RunOnUi(() => LinkSafetyResultText = sb.ToString());
+            var report = await LinkSafetyAnalyzer.AnalyzeAsync(LinkSafetyUrlInput).ConfigureAwait(true);
+            LinkSafetyResultText = LinkSafetyAnalyzer.FormatReport(report);
         }
         catch (Exception ex)
         {
-            RunOnUi(() => LinkSafetyResultText = baseText + Environment.NewLine + Environment.NewLine +
-                                                "HEAD request failed (network, TLS, or server policy): " + ex.Message);
+            StartupDiagnosticLog.AppendException("RunLinkSafetyHeadAsync", ex);
+            LinkSafetyResultText = "Header check failed: " + ex.Message + Environment.NewLine + "ForgerEMS did not execute anything.";
+        }
+        finally
+        {
+            SetLinkSafetyBusy(false);
         }
     }
 
     private async Task DownloadLinkToQuarantineAsync()
     {
-        if (!Uri.TryCreate(LinkSafetyUrlInput.Trim(), UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
-        {
-            RunOnUi(() => LinkSafetyResultText = "Quarantine download requires a valid https:// URL.");
-            return;
-        }
+        SetLinkSafetyBusy(true);
+        LinkSafetyResultText = "Downloading to ForgerEMS quarantine with neutral filename. Previous URL result cleared. ForgerEMS will not execute, unzip, or shell-open the payload.";
 
-        var quarantineRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ForgerEMS", "Quarantine");
-        Directory.CreateDirectory(quarantineRoot);
-        var name = Path.GetFileName(uri.AbsolutePath);
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            name = "download.bin";
-        }
-
-        foreach (var c in Path.GetInvalidFileNameChars())
-        {
-            name = name.Replace(c, '_');
-        }
-
-        if (name.Length > 120)
-        {
-            name = name[..120];
-        }
-
-        var targetPath = Path.Combine(quarantineRoot, $"{DateTimeOffset.Now:yyyyMMdd-HHmmss}-{name}");
         try
         {
-            using var client = new HttpClient();
-            client.Timeout = TimeSpan.FromMinutes(3);
-            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", $"ForgerEMS/{AppReleaseInfo.Version} (beta quarantine download; no execute)");
-            await using var network = await client.GetStreamAsync(uri).ConfigureAwait(false);
-            await using var file = File.Create(targetPath);
-            using var incremental = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-            var buffer = new byte[81920];
-            long totalBytes = 0;
-            int read;
-            while ((read = await network.ReadAsync(buffer.AsMemory(0, buffer.Length)).ConfigureAwait(false)) > 0)
+            var result = await QuarantineDownloadService.DownloadAsync(LinkSafetyUrlInput).ConfigureAwait(true);
+            LinkSafetyResultText = QuarantineDownloadService.FormatResult(result);
+            if (result.Outcome == QuarantineOutcome.Quarantined)
             {
-                totalBytes += read;
-                if (totalBytes > 200L * 1024 * 1024)
-                {
-                    throw new IOException("Download exceeds 200 MB beta quarantine limit.");
-                }
-
-                incremental.AppendData(new ReadOnlySpan<byte>(buffer, 0, read));
-                await file.WriteAsync(buffer.AsMemory(0, read)).ConfigureAwait(false);
+                AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Downloaded to ForgerEMS quarantine (not executed): " + CopilotRedactor.Redact(result.PayloadPath ?? string.Empty, enabled: true), LogSeverity.Success));
             }
-
-            var hash = Convert.ToHexString(incremental.GetHashAndReset());
-            RunOnUi(() => LinkSafetyResultText =
-                "Saved bytes only (not executed) to:\n" + targetPath +
-                "\n\nSHA256: " + hash +
-                "\n\nScan with Windows Defender or upload the hash to VirusTotal manually if you choose. Delete the file when done.");
+            else if (result.Outcome == QuarantineOutcome.BlockedByExternalSecurity)
+            {
+                AppendLog(new LogLine(DateTimeOffset.Now, "[WARN] External AV/security intercepted quarantine download before retention.", LogSeverity.Warning));
+            }
         }
         catch (Exception ex)
         {
-            RunOnUi(() => LinkSafetyResultText = "Quarantine download failed: " + ex.Message);
+            StartupDiagnosticLog.AppendException("DownloadLinkToQuarantineAsync", ex);
+            LinkSafetyResultText = "Quarantine download failed: " + ex.Message + Environment.NewLine + "ForgerEMS did not execute anything.";
+        }
+        finally
+        {
+            SetLinkSafetyBusy(false);
         }
     }
 

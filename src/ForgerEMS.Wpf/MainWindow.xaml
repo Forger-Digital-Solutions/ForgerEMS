@@ -3689,7 +3689,7 @@
                                             </GroupBox>
                                             <Expander Margin="0,10,0,0" Header="Link / Download Safety Checker (beta)" IsExpanded="False" Style="{StaticResource DiagnosticsExpanderStyle}">
                                                 <StackPanel>
-                                                    <TextBlock FontSize="12" Foreground="{DynamicResource PanelTextBrush}" TextWrapping="Wrap" Text="URL Analyze is heuristic-only. HTTPS HEAD checks headers and does not download full files. Quarantine download never executes files." />
+                                                    <TextBlock FontSize="12" Foreground="{DynamicResource PanelTextBrush}" TextWrapping="Wrap" Text="Analyze checks URL metadata with HEAD and safe bounded GET fallback. Quarantine download saves to a neutral ForgerEMS quarantine file only after explicit action. ForgerEMS never executes, shell-opens, or unzips payloads." />
                                                     <TextBox Margin="0,10,0,8" MinHeight="32" FontFamily="Consolas" FontSize="12" Padding="8,6" Background="#FF0E1624" Foreground="{DynamicResource PanelTextBrush}" BorderBrush="{DynamicResource PanelBorderBrush}" TextWrapping="Wrap" AcceptsReturn="False" Text="{Binding LinkSafetyUrlInput, UpdateSourceTrigger=PropertyChanged}" />
                                                     <WrapPanel Margin="0,0,0,8">
                                                         <Button MinWidth="120" Margin="0,0,8,8" Content="Analyze URL" Command="{Binding AnalyzeLinkSafetyCommand}" />
@@ -3701,7 +3701,7 @@
                                             </Expander>
                                             <Expander Margin="0,10,0,0" Header="Downloaded file / EXE safety (read-only)" IsExpanded="False" Style="{StaticResource DiagnosticsExpanderStyle}">
                                                 <StackPanel>
-                                                    <TextBlock FontSize="12" Foreground="{DynamicResource PanelTextBrush}" TextWrapping="Wrap" Text="Local file analyzer is read-only and never executes selected files. Copy-to-quarantine computes SHA256 and preserves source metadata." />
+                                                    <TextBlock FontSize="12" Foreground="{DynamicResource PanelTextBrush}" TextWrapping="Wrap" Text="Local file analyzer is read-only and never executes selected files. It computes SHA256 when readable, detects file type from headers, and reports signature metadata when available." />
                                                     <WrapPanel Margin="0,10,0,8">
                                                         <Button MinWidth="160" Margin="0,0,8,8" Style="{StaticResource SecondaryButtonStyle}" Content="Pick file…" Command="{Binding BrowseLocalFileSafetyCommand}" />
                                                         <Button MinWidth="120" Margin="0,0,8,8" Content="Analyze file" Command="{Binding AnalyzeLocalFileSafetyCommand}" />
