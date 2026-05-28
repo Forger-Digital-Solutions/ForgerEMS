@@ -148,6 +148,8 @@ Full local logs may contain sensitive context. Before you share:
 
 If an **online** provider is enabled by an operator, prompts and optional context are handled under **that provider’s** terms and your network path. **Offline/local modes** remain available where implemented.
 
+**Driver Hub:** The desktop app opens official vendor/project pages only when you choose **Open Official Page**, copies official URLs when you choose **Copy Link**, and writes local `.url` shortcuts to the selected USB when you choose **Add Shortcut to USB**. It does **not** auto-install drivers, auto-download OEM packages, auto-flash BIOS/firmware, submit service tags/serial numbers, or add device identifiers to vendor URLs. Driver Hub logs use the card name and relative USB shortcut path; normal log redaction still applies.
+
 **Toolkit Manager → Verify Links:** When you opt in, the desktop app issues short **HEAD** or minimal **ranged GET** requests to official URLs from your toolkit manifest/catalog so it can record HTTP metadata (status, redirects, length hints). **Those checks do not download complete payloads and do not execute downloaded third-party files.** Kyra and logs avoid embedding raw query strings or secret-bearing URLs.
 
 ---

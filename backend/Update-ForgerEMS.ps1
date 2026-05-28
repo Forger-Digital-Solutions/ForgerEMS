@@ -168,11 +168,16 @@ Write-ProgressLog ("startup / args parsed: DriveLetter='{0}' UsbRoot='{1}' Manif
 function Write-Log {
     param(
         [Parameter(Mandatory)][string]$Message,
-        [ValidateSet("INIT","INFO","OK","WARN","ERROR","ACTION","COMPLETE")][string]$Level = "INFO"
+        [ValidateSet("INIT","INFO","OK","WARN","ERROR","ACTION","COMPLETE","PROGRESS")][string]$Level = "INFO"
     )
 
     $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-    $line = "[$ts][$Level] $Message"
+    # PROGRESS lines are user-facing "live" ticks (download progress, etc.). They are
+    # written to Write-Host so the WPF UI can advance its live-status fields, but they
+    # are intentionally NOT persisted to the backend update_*.log — checkpoint INFO
+    # entries (download start / every >=30s / >=10% / completion) carry that history.
+    $displayLevel = if ($Level -eq "PROGRESS") { "INFO" } else { $Level }
+    $line = "[$ts][$displayLevel] $Message"
 
     switch ($Level) {
         "INFO"  { Write-Host $line -ForegroundColor Cyan }
@@ -185,6 +190,11 @@ function Write-Log {
         "ACTION" { Write-Host $line -ForegroundColor Yellow }
         "INIT" { Write-Host $line -ForegroundColor Cyan }
         "COMPLETE" { Write-Host $line -ForegroundColor Green }
+        "PROGRESS" { Write-Host $line -ForegroundColor Cyan }
+    }
+
+    if ($Level -eq "PROGRESS") {
+        return
     }
 
     if ($script:LogFile -and -not $WhatIfPreference) {
@@ -192,6 +202,39 @@ function Write-Log {
         if ($logParent -and (Test-Path -LiteralPath $logParent)) {
             Add-Content -LiteralPath $script:LogFile -Value $line -Encoding UTF8
         }
+    }
+}
+
+function Format-ByteSize {
+    param([Parameter(Mandatory)][int64]$Bytes)
+    if ($Bytes -lt 0) { $Bytes = 0 }
+    $units = @('B','KB','MB','GB','TB')
+    $value = [double]$Bytes
+    $unitIndex = 0
+    while ($value -ge 1024 -and $unitIndex -lt ($units.Length - 1)) {
+        $value = $value / 1024
+        $unitIndex++
+    }
+    if ($unitIndex -le 1) {
+        '{0:0} {1}' -f $value, $units[$unitIndex]
+    }
+    else {
+        '{0:0.0} {1}' -f $value, $units[$unitIndex]
+    }
+}
+
+function Format-ElapsedDuration {
+    param([Parameter(Mandatory)][TimeSpan]$Elapsed)
+    $totalSeconds = [int][Math]::Round($Elapsed.TotalSeconds)
+    if ($totalSeconds -lt 0) { $totalSeconds = 0 }
+    if ($totalSeconds -ge 3600) {
+        '{0}h {1}m {2}s' -f [int]($totalSeconds / 3600), [int](($totalSeconds % 3600) / 60), [int]($totalSeconds % 60)
+    }
+    elseif ($totalSeconds -ge 60) {
+        '{0}m {1}s' -f [int]($totalSeconds / 60), [int]($totalSeconds % 60)
+    }
+    else {
+        '{0}s' -f $totalSeconds
     }
 }
 
@@ -888,24 +931,58 @@ function Invoke-HttpClientDownload {
         $lastLogBytes = [int64]0
         $lastLogUtc = [DateTime]::UtcNow
         $lastProgressUtc = [DateTime]::UtcNow
+        $lastCheckpointUtc = [DateTime]::MinValue
+        $lastCheckpointPercent = -1.0
+        $checkpointEmitted = $false
+        # Rolling-speed state: we calculate (delta bytes) / (delta seconds) per sample
+        # interval, then smooth with an exponential moving average so the displayed
+        # MB/s reflects RECENT throughput, not total-bytes / total-elapsed-time. The
+        # cumulative average is kept separately and only surfaced on the completion line.
+        $emaMbps = 0.0
+        $emaAlpha = 0.3
+        $emaPrimed = $false
+        $sampleStartBytes = [int64]0
+        $sampleStartUtc = [DateTime]::UtcNow
         $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+        $itemStartUtc = [DateTime]::UtcNow
 
         while (($read = $responseStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
             $fileStream.Write($buffer, 0, $read)
             $downloadedBytes += [int64]$read
 
             $nowUtc = [DateTime]::UtcNow
-            if (($nowUtc - $lastLogUtc).TotalSeconds -ge 2 -or ($totalBytes -gt 0 -and $downloadedBytes -ge $totalBytes)) {
-                $elapsedSeconds = [Math]::Max($stopwatch.Elapsed.TotalSeconds, 0.001)
-                $speedMbps = ($downloadedBytes / 1MB) / $elapsedSeconds
-                $downloadedMb = [Math]::Round($downloadedBytes / 1MB, 0)
+            $isFinalByte = ($totalBytes -gt 0 -and $downloadedBytes -ge $totalBytes)
+            if (($nowUtc - $lastLogUtc).TotalSeconds -ge 2 -or $isFinalByte) {
+                $sampleSeconds = [Math]::Max(($nowUtc - $sampleStartUtc).TotalSeconds, 0.001)
+                $deltaBytes = $downloadedBytes - $sampleStartBytes
+                $sampleMbps = if ($deltaBytes -gt 0) { ($deltaBytes / 1MB) / $sampleSeconds } else { 0.0 }
+                if (-not $emaPrimed) {
+                    $emaMbps = $sampleMbps
+                    $emaPrimed = $true
+                }
+                else {
+                    $emaMbps = ($emaAlpha * $sampleMbps) + ((1 - $emaAlpha) * $emaMbps)
+                }
+                if ($emaMbps -lt 0) { $emaMbps = 0.0 }
+                $sampleStartUtc = $nowUtc
+                $sampleStartBytes = $downloadedBytes
 
+                $totalElapsedSeconds = [Math]::Max($stopwatch.Elapsed.TotalSeconds, 0.001)
+                $avgMbps = ($downloadedBytes / 1MB) / $totalElapsedSeconds
+                if ($avgMbps -lt 0) { $avgMbps = 0.0 }
+
+                $downloadedSizeText = Format-ByteSize $downloadedBytes
+                $totalSizeText = if ($totalBytes -gt 0) { Format-ByteSize $totalBytes } else { "" }
+
+                $percent = -1.0
                 if ($totalBytes -gt 0) {
-                    $totalMb = [Math]::Round($totalBytes / 1MB, 0)
                     $percent = [Math]::Min(100, [Math]::Round(($downloadedBytes / [double]$totalBytes) * 100, 1))
                     $remainingBytes = [Math]::Max(0, $totalBytes - $downloadedBytes)
-                    $etaSeconds = if ($speedMbps -gt 0) { [int][Math]::Round(($remainingBytes / 1MB) / $speedMbps) } else { 0 }
-                    $eta = if ($etaSeconds -ge 3600) {
+                    $etaSeconds = if ($emaMbps -gt 0.05) { [int][Math]::Round(($remainingBytes / 1MB) / $emaMbps) } else { 0 }
+                    $eta = if ($emaMbps -le 0.05) {
+                        'unknown'
+                    }
+                    elseif ($etaSeconds -ge 3600) {
                         '{0}h {1}m {2}s' -f [int]($etaSeconds / 3600), [int](($etaSeconds % 3600) / 60), [int]($etaSeconds % 60)
                     }
                     elseif ($etaSeconds -ge 60) {
@@ -915,10 +992,35 @@ function Invoke-HttpClientDownload {
                         '{0}s' -f $etaSeconds
                     }
 
-                    Write-Log ("Downloading {0}... {1}% | {2} MB / {3} MB | {4:0.0} MB/s | ETA {5}" -f $ItemName, $percent, $downloadedMb, $totalMb, $speedMbps, $eta) "INFO"
+                    $progressMessage = "Downloading {0}... {1} of {2} | {3}% | {4:0.0} MB/s current | ETA {5}" -f $ItemName, $downloadedSizeText, $totalSizeText, $percent, $emaMbps, $eta
                 }
                 else {
-                    Write-Log ("Downloading {0}... {1} MB downloaded | {2:0.0} MB/s" -f $ItemName, $downloadedMb, $speedMbps) "INFO"
+                    $progressMessage = "Downloading {0}... {1} downloaded | {2:0.0} MB/s current" -f $ItemName, $downloadedSizeText, $emaMbps
+                }
+
+                # Promote a tick to a persistent checkpoint only on: first tick, every >=30s,
+                # every >=10% progress, or final byte. All other ticks go out as PROGRESS so
+                # the UI advances its live status but the log file is not flooded.
+                $checkpointDue = (-not $checkpointEmitted) -or $isFinalByte
+                if (-not $checkpointDue) {
+                    if (($nowUtc - $lastCheckpointUtc).TotalSeconds -ge 30) {
+                        $checkpointDue = $true
+                    }
+                    elseif ($percent -ge 0 -and ($percent - $lastCheckpointPercent) -ge 10) {
+                        $checkpointDue = $true
+                    }
+                }
+
+                if ($checkpointDue) {
+                    Write-Log $progressMessage "INFO"
+                    $checkpointEmitted = $true
+                    $lastCheckpointUtc = $nowUtc
+                    if ($percent -ge 0) {
+                        $lastCheckpointPercent = $percent
+                    }
+                }
+                else {
+                    Write-Log $progressMessage "PROGRESS"
                 }
 
                 if ($downloadedBytes -gt $lastLogBytes) {
@@ -936,6 +1038,13 @@ function Invoke-HttpClientDownload {
 
         $fileStream.Flush($true)
         $stopwatch.Stop()
+
+        $finalTotalBytes = if ($totalBytes -gt 0) { $totalBytes } else { $downloadedBytes }
+        $finalElapsedSec = [Math]::Max($stopwatch.Elapsed.TotalSeconds, 0.001)
+        $finalAvgMbps = ($finalTotalBytes / 1MB) / $finalElapsedSec
+        $finalSizeText = Format-ByteSize $finalTotalBytes
+        $finalElapsedText = Format-ElapsedDuration $stopwatch.Elapsed
+        Write-Log ("Download complete: {0} {1} in {2} | avg {3:0.0} MB/s" -f $ItemName, $finalSizeText, $finalElapsedText, $finalAvgMbps) "OK"
 
         return [PSCustomObject]@{
             Method      = "HttpClient"

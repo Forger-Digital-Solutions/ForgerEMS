@@ -2,7 +2,7 @@
 
 **Forger Engineering Maintenance Suite** — a Windows desktop app for technicians who work with USB toolkits, repairs, and diagnostics.
 
-**Current release line:** **v1.2.3-preview.1** — **ForgerEMS v1.2.3 Public Preview** (toolkit catalog metadata, workflow presets, Toolkit Readiness Score, local machine profiles, Verify Links, Kyra awareness for the technician suite, config/env layer, support bundle export, and documentation pass; core WPF/.NET 8 architecture unchanged).
+**Current release line:** **v1.2.3-preview.1** — **ForgerEMS v1.2.3 Public Preview** (toolkit catalog metadata, Driver Hub, workflow presets, Toolkit Readiness Score, local machine profiles, Verify Links, Kyra awareness for the technician suite, config/env layer, support bundle export, and documentation pass; core WPF/.NET 8 architecture unchanged).
 
 **Kickstarter:** Coming soon.
 
@@ -28,6 +28,7 @@ This is **Public Preview / prerelease** software: behavior and packaging can cha
 | **System Intelligence** | Local scan summaries with Hardware X-Ray sensor coverage, health scoring, FlipValue, Best Use / Device Fit, and honest Unknown/NotExposed handling before repair or resale prep. |
 | **Diagnostics** | Unified health checklist, file/link safety helpers, and technician-oriented tools (including WSL-related helpers where applicable). |
 | **Toolkit Manager** | Manifest-driven health for what is on your USB, now with technician-focused categories and catalog metadata (purpose, official URL, license/redistribution note, download/checksum status, distribution model, beta safety rating). Health checks distinguish verified managed tools, present-but-not-verified tools, manual/info shortcuts, shortcuts covered/suppressed by installed managed tools, and missing required items. **Verify Links** runs optional **HTTP metadata-only** checks (HEAD / tiny ranged GET): reachability, redirects, and trust hints — **no full downloads and no execution** of third-party payloads. |
+| **Driver Hub** | Curated app-store-style hub for official GPU utilities, OEM support portals, chipset/network/audio driver pages, BIOS/firmware support links, and Linux driver guidance. It opens official vendor/project pages, can copy links, and can add safe `.url` shortcuts to the selected USB. It does **not** auto-install drivers, auto-download OEM packages, upload service tags, or automate BIOS/firmware flashing. |
 | **Kyra** | In-app assistant: offline local answers first, with optional **Kyra Beta Gateway**, **Bring Your Own Key**, local AI, and live-tool paths shown in **Kyra AI Settings**. BYOK keys are optional, hidden, and never stored as plaintext appsettings. After System Intelligence, Kyra can answer many **hardware / upgrade / parts** questions from local scan data, and can explain dry-run **Technician Workflow Presets** (checklist guidance only; no destructive automation). |
 | **Kyra Intelligence Network** | Local-first repair memory plus optional anonymous community learning foundations. Default is **Local Only**; community upload is off/disabled in this phase. |
 

@@ -392,6 +392,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private CancellationTokenSource? _wslRunnerCancellation;
     private readonly ConcurrentQueue<string> _wslPendingOutputLines = new();
     private readonly ConcurrentQueue<LogLine> _pendingLiveLogs = new();
+    private readonly ManagedDownloadProgressLogThrottle _managedDownloadProgressThrottle = new();
     private readonly object _logDedupLock = new();
     private string _lastEnqueuedLogText = string.Empty;
     private LogSeverity _lastEnqueuedLogSeverity = LogSeverity.Info;
@@ -665,6 +666,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ClearIgnoredAppUpdateVersionCommand = new RelayCommand(ClearIgnoredAppUpdateVersion, CanClearIgnoredAppUpdateVersion);
         ClearIgnoredAppUpdateVersionCommand.RaiseCanExecuteChanged();
         CheckForUpdatesNowCommand.RaiseCanExecuteChanged();
+        InitializeDriverHub();
 
         CopilotMessages.Add(new CopilotChatMessage
         {
@@ -7809,6 +7811,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             MachineProfileLastSavedText = "Last profile saved: not yet";
             MachineProfileLastHealthText = "Last health score: unknown";
             MachineProfileLastToolkitReadinessText = "Last toolkit readiness: unknown";
+            RefreshDriverHubRecommendations();
             RefreshCopilotContextText();
             RefreshKyraQuickPromptVisibilities();
             return;
@@ -7961,6 +7964,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             SaveMachineProfileSnapshot(root);
             RefreshMachineProfileSummary(root);
 
+            RefreshDriverHubRecommendations();
             RefreshKyraQuickPromptVisibilities();
         }
         catch
@@ -7993,6 +7997,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     SystemIntelligenceStatusBorderBrush = border;
                     SystemIntelligenceStatusForeground = foreground;
                 });
+            RefreshDriverHubRecommendations();
             RefreshKyraQuickPromptVisibilities();
         }
     }
@@ -13821,6 +13826,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         AppUpdateDownloadAdvancedInstallerCommand.RaiseCanExecuteChanged();
         CopyUpdateZipLinkCommand.RaiseCanExecuteChanged();
         CopyUpdateChecksumInstructionsCommand.RaiseCanExecuteChanged();
+        RaiseDriverHubCommandStates();
     }
 
     private void HideAppUpdateBanner()
@@ -14599,7 +14605,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private void AppendLog(LogLine line)
     {
-        var redacted = CopilotRedactor.Redact(line.Text, enabled: true);
+        var stripped = BackendLogPrefix.Normalize(line.Text);
+        var redacted = UserFacingLogSanitizer.Sanitize(stripped, GetSafeLogPathRoots(), enabled: true);
         var normalizedForDisplay = UsbLogDisplayNormalizer.NormalizeHashProviderLabels(redacted);
 
         lock (_logDedupLock)
@@ -14624,6 +14631,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             line.IsErrorStream,
             line.Channel);
 
+        var keep = _managedDownloadProgressThrottle.ShouldKeep(sanitized.Text, sanitized.Timestamp.UtcDateTime);
+
+        if (!keep)
+        {
+            // Progress UI status fields still advance for throttled ticks so the user sees
+            // live transfer detail without flooding Full Logs.
+            var statusText = sanitized.Text;
+            RunOnUi(() => ApplyProgressFromLog(statusText));
+            return;
+        }
+
         _pendingLiveLogs.Enqueue(sanitized);
         ScheduleLiveLogFlush();
 
@@ -14634,6 +14652,25 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         catch
         {
             // Session log persistence is best effort only.
+        }
+    }
+
+    private IEnumerable<string> GetSafeLogPathRoots()
+    {
+        var target = SelectedUsbTarget;
+        if (target is null)
+        {
+            yield break;
+        }
+
+        if (!string.IsNullOrWhiteSpace(target.RootPath))
+        {
+            yield return target.RootPath;
+        }
+
+        if (!string.IsNullOrWhiteSpace(target.DriveLetter))
+        {
+            yield return target.DriveLetter;
         }
     }
 

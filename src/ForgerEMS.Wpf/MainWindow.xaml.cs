@@ -476,6 +476,7 @@ public partial class MainWindow : Window
             NavUsbButton,
             NavSystemButton,
             NavToolkitButton,
+            NavDriverHubButton,
             NavCopilotButton,
             NavDiagnosticsButton,
             NavSettingsButton

@@ -1,6 +1,6 @@
 # ForgerEMS v1.2.3-preview.1 — Dev Beta Smoke Checklist
 
-**Scope:** Confirm the v1.2.3 preview build behaves as expected, with focus on the new managed-download / Download Plan / freshness workflow. Mark each line **OK** / **BLOCKED** / **N/A**. Stop on the first BLOCKED in section 3 or 4 — those are the new-surface gates.
+**Scope:** Confirm the v1.2.3 preview build behaves as expected, with focus on Driver Hub plus the managed-download / Download Plan / freshness workflow. Mark each line **OK** / **BLOCKED** / **N/A**. Stop on the first BLOCKED in section 3 or 4 — those are the new-surface gates.
 
 For broader regression coverage, see [FINAL_MANUAL_SMOKE_TEST.md](../FINAL_MANUAL_SMOKE_TEST.md). This checklist is additive, not a replacement.
 
@@ -20,6 +20,7 @@ For broader regression coverage, see [FINAL_MANUAL_SMOKE_TEST.md](../FINAL_MANUA
 - [ ] USB Builder tab opens. With no USB attached, the no-drive state is clear.
 - [ ] Kyra (Beta) tab opens. Send `Hi` — get a response (local or online).
 - [ ] System Intelligence tab opens. Status reads without errors.
+- [ ] Driver Hub tab opens. Header, safety note, search, filters, and catalog cards render.
 - [ ] Logs tab opens. Filter dropdown populated.
 
 ## 3. Toolkit Manager — new surface
@@ -48,6 +49,20 @@ For broader regression coverage, see [FINAL_MANUAL_SMOKE_TEST.md](../FINAL_MANUA
 
 - [ ] Load one of the built-in profiles (e.g. **Windows Recovery USB** or **Linux Admin Pack**) from the **Workspace Profile** dropdown. Plan grid re-flows accordingly.
 - [ ] **Save** with a custom name; relaunch the app; **Load** the saved profile back; selections restore.
+
+## 5b. Driver Hub
+
+- [ ] Open **Driver Hub**.
+- [ ] Confirm header copy: "Official driver tools, OEM support links, firmware helpers, and GPU utilities." and the safety note that ForgerEMS does not auto-flash BIOS/firmware or install drivers without user action.
+- [ ] With no System Intelligence report, **Recommended for this PC** says: "Run System Intelligence to personalize recommendations."
+- [ ] Run **System Intelligence**, return to Driver Hub, and confirm recommendations say "Recommended based on detected vendor/GPU" or similar detected-source wording, not "Needed", "outdated", or "latest installed".
+- [ ] Filter **GPU**, **OEM**, and **Linux**. Cards wrap cleanly and buttons remain visible.
+- [ ] Use search for `NVIDIA`, `Dell`, `fwupd`, and a nonsense term. The nonsense search shows "No Driver Hub cards match your filter."
+- [ ] Click **Open Official Page** on one card. It opens the vendor/project page only; no download or installer starts automatically.
+- [ ] Click **Copy Link** and verify the clipboard contains the official HTTPS URL.
+- [ ] Select a USB target, then click **Add Shortcut to USB**. Confirm a `.url` appears under a logical `Drivers\...` path and does not overwrite an unrelated existing file.
+- [ ] Deselect / remove the USB target and confirm **Add Shortcut to USB** is disabled or reports "Select a USB target first."
+- [ ] Confirm logs do not expose service tags, serials, private paths, API keys, or query strings with device identifiers.
 
 ## 6. Freshness governance
 

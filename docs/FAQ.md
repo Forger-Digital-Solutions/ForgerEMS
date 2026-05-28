@@ -138,6 +138,16 @@ If a related managed download is already installed and checksum-verified, a miss
 
 ---
 
+## What is Driver Hub?
+
+**Driver Hub** is a curated official-link catalog for GPU utilities, OEM support portals, chipset/network/audio driver pages, BIOS/firmware support links, and Linux driver guidance.
+
+It is **not** a sketchy driver-updater clone. ForgerEMS opens official vendor/project pages, copies official URLs, and can add `.url` shortcuts to the selected USB under `Drivers\...`. It does **not** claim a driver is outdated or current unless a real version comparison exists, does **not** auto-install drivers, does **not** auto-download OEM packages, does **not** upload service tags or serial numbers, and does **not** automate BIOS/firmware flashing.
+
+Recommendations are hints only, based on detected manufacturer/GPU/CPU/platform data from System Intelligence when available. Firmware cards remind you to confirm the exact model, power, battery/AC state, and vendor instructions before updates.
+
+---
+
 ## What is the USB Builder Profile?
 
 The **USB Builder tab → USB Builder Profile** lets you pick which toolkit packs Setup USB and Update USB seed or refresh on the selected target. Each pack is one of:
@@ -353,7 +363,7 @@ Email **ForgerDigitalSolutions@outlook.com** with app version, Windows version, 
 
 ## What is ForgerEMS in one sentence?
 
-A Windows technician suite for **USB toolkit building**, **USB Intelligence**, **System Intelligence**, **Diagnostics**, **Toolkit Manager**, and **Kyra**.
+A Windows technician suite for **USB toolkit building**, **USB Intelligence**, **System Intelligence**, **Driver Hub**, **Diagnostics**, **Toolkit Manager**, and **Kyra**.
 
 ---
 

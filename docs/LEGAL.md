@@ -53,6 +53,14 @@ ForgerEMS catalog entries use a fixed set of action labels in their `.url` filen
 
 ---
 
+## Driver Hub, drivers, BIOS, and firmware
+
+Driver Hub is an official-link-first catalog. It opens vendor/project pages, copies official links, and writes `.url` shortcuts to a selected USB when you choose that action. It does **not** auto-install drivers, auto-download OEM driver packages, submit service tags or serial numbers, compare installed driver versions, or automate BIOS/firmware flashing.
+
+Driver, BIOS, and firmware compatibility remains the responsibility of the technician/user. Confirm the exact model, power and battery/AC state, vendor instructions, warranty terms, and rollback/recovery procedure before firmware updates. A Driver Hub recommendation means "based on detected vendor/GPU/CPU/platform," not "needed," "outdated," or "safe to install."
+
+---
+
 ## Cross-platform toolkit packs (macOS, Android, iOS / iPadOS)
 
 ForgerEMS is Windows-first. The macOS, Android, and iOS / iPadOS USB Builder packs are off by default and treat all media as **manual media required**.
