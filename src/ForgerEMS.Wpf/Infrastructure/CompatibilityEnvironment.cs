@@ -62,8 +62,7 @@ public sealed class CompatibilityEnvironment
     public IReadOnlyList<string> UnsupportedFeatures { get; }
 
     /// <summary>
-    /// Features that may work but are degraded or partial (e.g. animated
-    /// visuals downgraded to static under software rendering).
+    /// Features that may work but are degraded or partial under compatibility mode.
     /// </summary>
     public IReadOnlyList<string> LimitedFeatures { get; }
 

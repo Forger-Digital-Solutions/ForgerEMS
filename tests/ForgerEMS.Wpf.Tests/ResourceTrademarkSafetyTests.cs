@@ -46,28 +46,6 @@ public sealed class ResourceTrademarkSafetyTests
         "lvfs-logo"
     ];
 
-    private static readonly string[] UnsafeBackgroundLabels =
-    [
-        "Text=\"Ubuntu\"",
-        "Text=\"Kali Linux\"",
-        "Text=\"Linux Mint\"",
-        "Text=\"MemTest86+\"",
-        "Text=\"HWInfo\"",
-        "Text=\"HWiNFO\"",
-        "Text=\"CrystalDiskInfo\"",
-        "Text=\"Rescuezilla\"",
-        "Text=\"Clonezilla\"",
-        "Text=\"GParted\"",
-        "Text=\"SystemRescue\"",
-        "Text=\"DriverStoreExplorer\"",
-        "Text=\"RustDesk\"",
-        "Text=\"Angry IP Scanner\"",
-        "Text=\"Rufus\"",
-        "Text=\"Ventoy\"",
-        "Text=\"balenaEtcher\"",
-        "Text=\"Ventoy Core\""
-    ];
-
     private const string IndependenceDisclaimer =
         "ForgerEMS is independent and is not affiliated with, sponsored by, or endorsed by Microsoft, Linux distributions, hardware vendors, driver vendors, or third-party tools referenced in the app. Names are used only to identify compatibility, official resources, or supported technician workflows.";
 
@@ -138,23 +116,36 @@ public sealed class ResourceTrademarkSafetyTests
     }
 
     [Fact]
-    public void MainCircuitBackground_UsesGenericVisibleLabels()
+    public void MainWindow_UsesPackagedStaticCommandCenterBackgroundOnly()
     {
         var xaml = File.ReadAllText(Path.Combine(RepoRoot, "src", "ForgerEMS.Wpf", "MainWindow.xaml"));
-        var start = xaml.IndexOf("x:Name=\"CircuitBackgroundLayer\"", StringComparison.Ordinal);
-        var end = xaml.IndexOf("x:Name=\"BackgroundReadabilityVeil\"", StringComparison.Ordinal);
 
-        Assert.True(start >= 0, "Could not find CircuitBackgroundLayer in MainWindow.xaml.");
-        Assert.True(end > start, "Could not find the end of the circuit background layer in MainWindow.xaml.");
+        Assert.Contains("x:Name=\"CommandCenterBackgroundImage\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Source=\"Assets/ForgerEMS_CommandCenterBackground.png\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Stretch=\"UniformToFill\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"BackgroundReadabilityVeil\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("x:Name=\"CircuitBackgroundLayer\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("x:Name=\"TraceLightCanvas\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("CircuitPulseTraceStyle", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("BackgroundDetailComboBox", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ComboBoxItem Content=\"Animated\"", xaml, StringComparison.Ordinal);
+    }
 
-        var backgroundLayer = xaml[start..end];
-        foreach (var label in UnsafeBackgroundLabels)
-        {
-            Assert.DoesNotContain(label, backgroundLayer, StringComparison.OrdinalIgnoreCase);
-        }
+    [Fact]
+    public void StaticCommandCenterBackgroundAsset_ExistsAsPackagedPng()
+    {
+        var backgroundPath = Path.Combine(RepoRoot, "src", "ForgerEMS.Wpf", "Assets", "ForgerEMS_CommandCenterBackground.png");
+        Assert.True(File.Exists(backgroundPath), "The static command-center background asset is missing.");
 
-        Assert.Contains("Text=\"Multiboot Core\"", backgroundLayer, StringComparison.Ordinal);
-        Assert.Contains("Text=\"Network Radar\"", backgroundLayer, StringComparison.Ordinal);
+        var bytes = File.ReadAllBytes(backgroundPath);
+        Assert.True(bytes.Length > 1_000_000, "The upgraded background should be the packaged high-detail PNG, not the old small generated asset.");
+        Assert.Equal(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }, bytes.Take(8).ToArray());
+
+        var width = ReadBigEndianInt32(bytes, 16);
+        var height = ReadBigEndianInt32(bytes, 20);
+        Assert.True(width >= 1500, $"Expected a wide command-center background. Actual width: {width}.");
+        Assert.True(height >= 900, $"Expected a tall command-center background. Actual height: {height}.");
+        Assert.InRange(width / (double)height, 1.60, 1.75);
     }
 
     [Fact]
@@ -170,41 +161,11 @@ public sealed class ResourceTrademarkSafetyTests
     }
 
     [Fact]
-    public void BackgroundGenerator_UsesSafeLabelZonesAndGenericLabels()
+    public void BackgroundGenerator_IsRemovedSoPackagedImageRemainsSourceOfTruth()
     {
-        var generatorText = File.ReadAllText(Path.Combine(RepoRoot, "tools", "Generate-SafeCommandCenterBackground.ps1"));
-
-        Assert.Contains("ModuleLabelSafeHeight", generatorText, StringComparison.Ordinal);
-        Assert.Contains("ModuleLabelSafeWidth", generatorText, StringComparison.Ordinal);
-        Assert.Contains("Draw-LabelPill", generatorText, StringComparison.Ordinal);
-        Assert.Contains("Draw-FeShield", generatorText, StringComparison.Ordinal);
-
-        foreach (var label in new[]
-                 {
-                     "Desktop Image",
-                     "Modern Image",
-                     "Server Image",
-                     "Live Terminal",
-                     "Security Live",
-                     "Desktop Live",
-                     "Image Restore",
-                     "Disk Clone",
-                     "Recovery Kit",
-                     "Multiboot USB",
-                     "Boot Writer",
-                     "Image Flasher",
-                     "Memory Check",
-                     "Hardware Info",
-                     "Disk Health",
-                     "Driver Store",
-                     "Remote Screen",
-                     "Network Radar",
-                     "MULTIBOOT`nCORE",
-                     "MEDIC USB"
-                 })
-        {
-            Assert.Contains(label, generatorText, StringComparison.Ordinal);
-        }
+        Assert.False(
+            File.Exists(Path.Combine(RepoRoot, "tools", "Generate-SafeCommandCenterBackground.ps1")),
+            "The command-center background should not be regenerated by a local script.");
     }
 
     [Fact]
@@ -226,4 +187,10 @@ public sealed class ResourceTrademarkSafetyTests
         Assert.Contains(IndependenceDisclaimer, InfoDocumentTexts.BuildAbout("1.2.3-preview.1", "ForgerEMS v1.2.3 Public Preview", "frontend", "backend"), StringComparison.Ordinal);
         Assert.Contains(IndependenceDisclaimer, InfoDocumentTexts.BuildLegal(), StringComparison.Ordinal);
     }
+
+    private static int ReadBigEndianInt32(byte[] bytes, int offset) =>
+        (bytes[offset] << 24) |
+        (bytes[offset + 1] << 16) |
+        (bytes[offset + 2] << 8) |
+        bytes[offset + 3];
 }

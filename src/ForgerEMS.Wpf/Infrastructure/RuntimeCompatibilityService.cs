@@ -176,7 +176,6 @@ public static class RuntimeCompatibilityService
     {
         return new[]
         {
-            "Animated background visuals (downgraded to static under software rendering)",
             "USB device enumeration (Windows API only; richer enumeration requires the Linux helper)",
             "Live system intelligence scans (limited to features that do not require WMI)"
         };

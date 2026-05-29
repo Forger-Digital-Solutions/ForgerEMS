@@ -56,21 +56,20 @@ public sealed class KyraUxPolishTests
     }
 
     [Fact]
-    public void MainWindow_VisualEffectsDefaultIsStaticLowPower()
+    public void MainWindow_UsesStaticBackgroundWithoutAnimationControls()
     {
         var root = FindRepoRoot();
         var xaml = File.ReadAllText(Path.Combine(root, "src", "ForgerEMS.Wpf", "MainWindow.xaml"));
         var code = File.ReadAllText(Path.Combine(root, "src", "ForgerEMS.Wpf", "MainWindow.xaml.cs"));
 
-        Assert.Contains("Text=\"Visual Effects\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Off / Plain dark", xaml, StringComparison.Ordinal);
-        Assert.Contains("Static / Low Power", xaml, StringComparison.Ordinal);
-        Assert.Contains("Animated", xaml, StringComparison.Ordinal);
-        Assert.Contains("private VisualEffectsMode _visualEffectsMode = VisualEffectsMode.Static;", code, StringComparison.Ordinal);
-        Assert.Contains("private bool _animatedBackgroundEnabled;", code, StringComparison.Ordinal);
-        Assert.Contains("CanRunBackgroundAnimation()", code, StringComparison.Ordinal);
-        Assert.Contains("WindowState != WindowState.Minimized", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("private bool _animatedBackgroundEnabled = true;", code, StringComparison.Ordinal);
+        Assert.Contains("Source=\"Assets/ForgerEMS_CommandCenterBackground.png\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Stretch=\"UniformToFill\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("BackgroundDetailComboBox", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ComboBoxItem Content=\"Animated\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("_animatedBackgroundEnabled", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("_backgroundAnimationTimer", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("CanRunBackgroundAnimation", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("TraceParticle", code, StringComparison.Ordinal);
     }
 
     [Fact]

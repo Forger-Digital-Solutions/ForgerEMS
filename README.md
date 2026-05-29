@@ -34,7 +34,7 @@ This is **Public Preview / prerelease** software: behavior and packaging can cha
 
 More context: [docs/ABOUT_FORGEREMS.md](docs/ABOUT_FORGEREMS.md) · Behavior notes: [KYRA_BEHAVIOR_SPEC.md](KYRA_BEHAVIOR_SPEC.md) (repository root).
 
-**Visual Effects:** The app defaults to **Static / Low Power** backgrounds for public preview responsiveness. Animated CyberViking/circuit effects remain optional in Settings, and **Off / Plain dark** is available for slower machines or remote sessions.
+**Command-center background:** The app uses one packaged static background image for public preview responsiveness.
 
 **Hardware X-Ray / Deep Sensor Mode:** Deep Sensor Mode is optional and uses bundled local read-only hardware sensors when enabled, including LibreHardwareMonitorLib where packaged. No separate LibreHardwareMonitor download is required. ForgerEMS does not control fans, voltages, clocks, overclocking, undervolting, BIOS, or firmware. Unavailable readings are coverage limits, not failures. **Elevated Scan** is an optional deeper scan that asks Windows for administrator approval; Standard Scan is always available without it.
 

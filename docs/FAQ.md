@@ -32,9 +32,9 @@ You get **one bundle** with `START_HERE.bat`, verification hints, checksums, and
 
 ---
 
-## Why is the animated background static by default?
+## Why is the command-center background static?
 
-For public preview, ForgerEMS prioritizes launch speed, scrolling, toolkit checks, and Kyra responsiveness. **Settings → Visual Effects** defaults to **Static / Low Power**. You can choose **Animated** if you want the circuit motion, or **Off / Plain dark** for slower systems, remote sessions, or battery-saving work.
+ForgerEMS uses a packaged static command-center image so the preview app stays responsive while logs, toolkit checks, and Kyra run.
 
 ---
 

@@ -42,11 +42,9 @@ For deeper coverage, use **Run Elevated Scan**. If ForgerEMS is not already runn
 
 ---
 
-## 6. Check Visual Effects if the app feels slow
+## 6. Check responsiveness during normal work
 
-For public preview, **Settings → Visual Effects** defaults to **Static / Low Power** for responsiveness. Use **Animated** only if you want the motion, or **Off / Plain dark** for slower machines, remote sessions, or battery-saving testing.
-
----
+ForgerEMS now uses a packaged static command-center background. During testing, focus on launch speed, scrolling, toolkit checks, and Kyra responsiveness while USB workflows are running.
 
 ## 7. Select USB
 

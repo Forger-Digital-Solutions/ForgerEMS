@@ -24,7 +24,7 @@ ForgerEMS is a **Windows desktop technician workbench** centered on **USB toolki
 - **Kyra** for grounded local assistance, with optional online providers only when configured; after a System Intelligence scan, Kyra can answer many **hardware, upgrade, and parts** questions from local evidence, and use sanitized gateway research for current compatibility/pricing when enabled
 - **Kyra Intelligence Network** for local-first repair memory and optional anonymous community learning foundations
 
-Hardware X-Ray uses local read-only providers to show detected hardware and available sensor coverage. Deep Sensor Mode may use bundled LibreHardwareMonitor technology where packaged and enabled. Visual Effects default to **Static / Low Power** so the preview app stays responsive; animated circuit effects are optional in Settings.
+Hardware X-Ray uses local read-only providers to show detected hardware and available sensor coverage. Deep Sensor Mode may use bundled LibreHardwareMonitor technology where packaged and enabled. The command-center background is a packaged static image so the preview app stays responsive.
 
 ---
 
