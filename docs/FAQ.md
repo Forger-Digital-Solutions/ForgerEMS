@@ -6,6 +6,8 @@
 
 This page is practical guidance, not legal advice. See also [LEGAL.md](LEGAL.md) and [PRIVACY.md](PRIVACY.md). Environment variables: [ENVIRONMENT.md](ENVIRONMENT.md). Campaign FAQ: [marketing/PUBLIC-FAQ.md](marketing/PUBLIC-FAQ.md).
 
+ForgerEMS is independent and is not affiliated with, sponsored by, or endorsed by Microsoft, Linux distributions, hardware vendors, driver vendors, or third-party tools referenced in the app. Names are used only to identify compatibility, official resources, or supported technician workflows.
+
 ---
 
 ## What should I download first?

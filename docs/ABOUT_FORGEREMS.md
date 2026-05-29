@@ -81,6 +81,8 @@ ForgerEMS is **technician-assist software, not a replacement for professional ju
 
 Third-party notices are included in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), [THIRD-PARTY-SENSOR-NOTICES.md](THIRD-PARTY-SENSOR-NOTICES.md), and packaged sensor notice files under `providers/sensors/`.
 
+ForgerEMS is independent and is not affiliated with, sponsored by, or endorsed by Microsoft, Linux distributions, hardware vendors, driver vendors, or third-party tools referenced in the app. Names are used only to identify compatibility, official resources, or supported technician workflows.
+
 ---
 
 ## Learn more

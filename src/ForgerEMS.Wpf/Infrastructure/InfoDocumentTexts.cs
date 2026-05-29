@@ -42,6 +42,9 @@ public static class InfoDocumentTexts
             PRIVACY / SAFETY (summary)
             Telemetry and crash reporting default to off unless you enable them via environment variables (see docs/ENVIRONMENT.md). Reports, logs, and sensor data stay local unless you choose to export or share them. Review exports before sending. {BetaSupportInfo.DoNotEmailSecretsWarning}
 
+            INDEPENDENCE / TRADEMARKS
+            ForgerEMS is independent and is not affiliated with, sponsored by, or endorsed by Microsoft, Linux distributions, hardware vendors, driver vendors, or third-party tools referenced in the app. Names are used only to identify compatibility, official resources, or supported technician workflows.
+
             KYRA (OPTIONAL ONLINE PROVIDERS)
             Offline Kyra needs no API keys. Public beta can use ForgerEMS Kyra Gateway with only FORGEREMS_KYRA_GATEWAY_URL + FORGEREMS_KYRA_GATEWAY_BETA_TOKEN. Provider API keys stay server-side. Optional BYOK providers (OpenAI-compatible, LM Studio, Ollama, Gemini/Anthropic paths where stubbed, custom base URL): see docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md and docs/ENVIRONMENT.md. Kyra Advanced shows status without revealing secrets.
 
@@ -176,6 +179,7 @@ public static class InfoDocumentTexts
 
             THIRD-PARTY TOOLS
             ForgerEMS may reference, integrate with, download, or guide you to third-party tools (for example Ventoy or manifest-listed utilities). Those tools remain under their own licenses and terms. ForgerEMS does not claim ownership of them.
+            ForgerEMS is independent and is not affiliated with, sponsored by, or endorsed by Microsoft, Linux distributions, hardware vendors, driver vendors, or third-party tools referenced in the app. Names are used only to identify compatibility, official resources, or supported technician workflows. Third-party logos, icons, and product marks must not be used as decorative ForgerEMS artwork unless explicit written permission or license proof is kept in the repo.
 
             LIBREHARDWAREMONITOR / SENSOR PROVIDERS
             ForgerEMS may include LibreHardwareMonitorLib as a bundled local read-only sensor provider for Hardware X-Ray when Deep Sensor Mode is enabled.

@@ -1135,17 +1135,17 @@
                         <Rectangle Grid.Row="1" Margin="0,2,2,0" Fill="#FF38BDF8" />
                         <Rectangle Grid.Row="1" Grid.Column="1" Margin="2,2,0,0" Fill="#FF38BDF8" />
                     </Grid>
-                    <TextBlock VerticalAlignment="Bottom" Text="Windows" Style="{StaticResource CircuitNodeLabelStyle}" />
+                    <TextBlock VerticalAlignment="Bottom" Text="OS Images" Style="{StaticResource CircuitNodeLabelStyle}" />
                     </Grid>
 
                     <Border x:Name="UbuntuToolNode" Tag="Satellite" Canvas.Left="6" Canvas.Top="120" Style="{StaticResource SatelliteNodeStyle}" BorderBrush="#A338BDF8">
-                        <TextBlock Text="Ubuntu" Style="{StaticResource SatelliteNodeLabelStyle}" />
+                        <TextBlock Text="Live Terminal" Style="{StaticResource SatelliteNodeLabelStyle}" />
                     </Border>
                     <Border x:Name="KaliToolNode" Tag="Satellite" Canvas.Left="106" Canvas.Top="150" Style="{StaticResource SatelliteNodeStyle}" BorderBrush="#A338BDF8">
-                        <TextBlock Text="Kali Linux" Style="{StaticResource SatelliteNodeLabelStyle}" />
+                        <TextBlock Text="Security Live" Style="{StaticResource SatelliteNodeLabelStyle}" />
                     </Border>
                     <Border x:Name="LinuxMintToolNode" Tag="Satellite" Canvas.Left="68" Canvas.Top="188" Style="{StaticResource SatelliteNodeStyle}" BorderBrush="#A338BDF8">
-                        <TextBlock Text="Linux Mint" Style="{StaticResource SatelliteNodeLabelStyle}" />
+                        <TextBlock Text="Desktop Live" Style="{StaticResource SatelliteNodeLabelStyle}" />
                     </Border>
 
                     <Grid Tag="CoreNode" Canvas.Left="104" Canvas.Top="385" Width="116" Height="96">
@@ -1199,13 +1199,13 @@
                           Stroke="#8F22C55E"
                           Style="{StaticResource ToolTraceStyle}" />
                     <Border x:Name="MemTestToolNode" Tag="Satellite" Margin="18,74,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Style="{StaticResource SatelliteNodeStyle}" BorderBrush="#9922C55E">
-                        <TextBlock Text="MemTest86+" Style="{StaticResource SatelliteNodeLabelStyle}" />
+                        <TextBlock Text="Memory Check" Style="{StaticResource SatelliteNodeLabelStyle}" />
                     </Border>
                     <Border x:Name="HwInfoToolNode" Tag="Satellite" Margin="92,106,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" MinWidth="72" Style="{StaticResource SatelliteNodeStyle}" BorderBrush="#9922C55E">
-                        <TextBlock Text="HWInfo" Style="{StaticResource SatelliteNodeLabelStyle}" />
+                        <TextBlock Text="Hardware Info" Style="{StaticResource SatelliteNodeLabelStyle}" />
                     </Border>
                     <Border x:Name="CrystalDiskInfoToolNode" Tag="Satellite" Margin="40,140,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" MinWidth="104" Style="{StaticResource SatelliteNodeStyle}" BorderBrush="#9922C55E">
-                        <TextBlock Text="CrystalDiskInfo" Style="{StaticResource SatelliteNodeLabelStyle}" />
+                        <TextBlock Text="Disk Health" Style="{StaticResource SatelliteNodeLabelStyle}" />
                     </Border>
                 </Canvas>
 
@@ -1258,16 +1258,16 @@
                         <Ellipse Width="4" Height="4" Margin="15,19,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Fill="#FF0B0F14" />
                         <Ellipse Width="4" Height="4" Margin="0,19,15,0" HorizontalAlignment="Right" VerticalAlignment="Top" Fill="#FF0B0F14" />
                     </Grid>
-                    <TextBlock VerticalAlignment="Bottom" Text="Rescuezilla" Style="{StaticResource CircuitNodeLabelStyle}" />
+                    <TextBlock VerticalAlignment="Bottom" Text="Imaging" Style="{StaticResource CircuitNodeLabelStyle}" />
                     </Grid>
                     <Border x:Name="ClonezillaToolNode" Tag="Satellite" Margin="102,36,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Style="{StaticResource SatelliteNodeStyle}" BorderBrush="#A3F59E0B">
-                        <TextBlock Text="Clonezilla" Style="{StaticResource SatelliteNodeLabelStyle}" />
+                        <TextBlock Text="Disk Clone" Style="{StaticResource SatelliteNodeLabelStyle}" />
                     </Border>
                     <Border x:Name="GPartedToolNode" Tag="Satellite" Margin="128,72,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Style="{StaticResource SatelliteNodeStyle}" BorderBrush="#A3F59E0B">
-                        <TextBlock Text="GParted" Style="{StaticResource SatelliteNodeLabelStyle}" />
+                        <TextBlock Text="Partition Grid" Style="{StaticResource SatelliteNodeLabelStyle}" />
                     </Border>
                     <Border x:Name="SystemRescueToolNode" Tag="Satellite" Margin="62,112,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" MinWidth="104" Style="{StaticResource SatelliteNodeStyle}" BorderBrush="#A3F59E0B">
-                        <TextBlock Text="SystemRescue" Style="{StaticResource SatelliteNodeLabelStyle}" />
+                        <TextBlock Text="System Rescue" Style="{StaticResource SatelliteNodeLabelStyle}" />
                     </Border>
                 </Canvas>
 
@@ -1346,13 +1346,13 @@
                           Stroke="#99A855F7"
                           Style="{StaticResource ToolTraceStyle}" />
                     <Border x:Name="DriverStoreExplorerToolNode" Tag="Satellite" Margin="28,40,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" MinWidth="132" Style="{StaticResource SatelliteNodeStyle}" BorderBrush="#99A855F7">
-                        <TextBlock Text="DriverStoreExplorer" Style="{StaticResource SatelliteNodeLabelStyle}" />
+                        <TextBlock Text="Driver Store" Style="{StaticResource SatelliteNodeLabelStyle}" />
                     </Border>
                     <Border x:Name="RustDeskToolNode" Tag="Satellite" Margin="74,76,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Style="{StaticResource SatelliteNodeStyle}" BorderBrush="#99A855F7">
-                        <TextBlock Text="RustDesk" Style="{StaticResource SatelliteNodeLabelStyle}" />
+                        <TextBlock Text="Remote Screen" Style="{StaticResource SatelliteNodeLabelStyle}" />
                     </Border>
                     <Border x:Name="AngryIpScannerToolNode" Tag="Satellite" Margin="18,112,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" MinWidth="124" Style="{StaticResource SatelliteNodeStyle}" BorderBrush="#99A855F7">
-                        <TextBlock Text="Angry IP Scanner" Style="{StaticResource SatelliteNodeLabelStyle}" />
+                        <TextBlock Text="Network Radar" Style="{StaticResource SatelliteNodeLabelStyle}" />
                     </Border>
                 </Canvas>
 
@@ -1390,13 +1390,13 @@
                           Stroke="#99E0F2FE"
                           Style="{StaticResource ToolTraceStyle}" />
                     <Border x:Name="RufusToolNode" Tag="Satellite" Margin="0,54,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Style="{StaticResource SatelliteNodeStyle}" BorderBrush="#99E0F2FE">
-                        <TextBlock Text="Rufus" Style="{StaticResource SatelliteNodeLabelStyle}" />
+                        <TextBlock Text="Boot Writer" Style="{StaticResource SatelliteNodeLabelStyle}" />
                     </Border>
                     <Border x:Name="VentoyToolNode" Tag="Satellite" Margin="104,66,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" MinWidth="78" Style="{StaticResource SatelliteNodeStyle}" BorderBrush="#99E0F2FE">
-                        <TextBlock Text="Ventoy" Style="{StaticResource SatelliteNodeLabelStyle}" />
+                        <TextBlock Text="Multiboot USB" Style="{StaticResource SatelliteNodeLabelStyle}" />
                     </Border>
                     <Border x:Name="BalenaEtcherToolNode" Tag="Satellite" Margin="180,54,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" MinWidth="94" Style="{StaticResource SatelliteNodeStyle}" BorderBrush="#99E0F2FE">
-                        <TextBlock Text="balenaEtcher" Style="{StaticResource SatelliteNodeLabelStyle}" />
+                        <TextBlock Text="Image Flasher" Style="{StaticResource SatelliteNodeLabelStyle}" />
                     </Border>
 
                     <Grid Tag="ControllerNode" Margin="74,80,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" Width="126" Height="104">
@@ -1422,7 +1422,7 @@
                             <Rectangle Height="4" Width="18" Fill="#FFE0F2FE" RadiusX="2" RadiusY="2" />
                         </StackPanel>
                     </Grid>
-                    <TextBlock VerticalAlignment="Bottom" Text="Ventoy Core" Style="{StaticResource CircuitNodeLabelStyle}" />
+                    <TextBlock VerticalAlignment="Bottom" Text="Multiboot Core" Style="{StaticResource CircuitNodeLabelStyle}" />
                     </Grid>
                 </Canvas>
             </Canvas>

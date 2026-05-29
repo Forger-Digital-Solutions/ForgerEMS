@@ -6,6 +6,8 @@ For broader regression coverage, see [FINAL_MANUAL_SMOKE_TEST.md](../FINAL_MANUA
 
 **Build under test:** `release/current/ForgerEMS-Setup-v1.2.3-preview.1.exe` or the matching ZIP. Single-file portable exe at `release/current/app/ForgerEMS.exe`.
 
+**Trademark / non-endorsement check:** ForgerEMS is independent and is not affiliated with, sponsored by, or endorsed by Microsoft, Linux distributions, hardware vendors, driver vendors, or third-party tools referenced in the app. Names are used only to identify compatibility, official resources, or supported technician workflows.
+
 ---
 
 ## 1. Launch and identity
@@ -14,6 +16,7 @@ For broader regression coverage, see [FINAL_MANUAL_SMOKE_TEST.md](../FINAL_MANUA
 - [ ] Title bar reads **ForgerEMS**. Main window opens centered, not off-screen.
 - [ ] About / status area shows **1.2.3-preview.1**.
 - [ ] Network Pulse header renders. No "Internet: Paused" without an explicit pause.
+- [ ] Main background art uses ForgerEMS-owned shield/USB/circuit artwork and generic technician glyphs only; no Windows, Linux distro, Ventoy, Rufus, balenaEtcher, HWiNFO, CrystalDiskInfo, Clonezilla, GParted, SystemRescue, RustDesk, Angry IP Scanner, DriverStoreExplorer, or other third-party logos/icons/marks appear as decorative art.
 
 ## 2. Tab smoke
 

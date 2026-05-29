@@ -49,6 +49,8 @@ ForgerEMS includes a **Drive Validator** tool, surfaced as the **Drive Validator
 
 You are responsible for verifying **integrity** (checksums when published) and **legitimacy** of anything you download — including third-party installers, ISOs, and manifest-listed utilities. ForgerEMS may **reference**, **integrate with**, **download**, or **guide** you to third-party tools; those tools remain under their **own licenses and terms**. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
+ForgerEMS is independent and is not affiliated with, sponsored by, or endorsed by Microsoft, Linux distributions, hardware vendors, driver vendors, or third-party tools referenced in the app. Names are used only to identify compatibility, official resources, or supported technician workflows. Third-party logos, icons, and product marks must not be used as decorative ForgerEMS artwork unless explicit written permission or license proof is kept in the repo.
+
 ForgerEMS catalog entries use a fixed set of action labels in their `.url` filenames or display: **DOWNLOAD** / **AUTO DOWNLOAD** (official, redistributable, machine-resolvable source), **MANUAL DOWNLOAD** (official vendor page where the user must choose / sign in / accept terms), **MANUAL MEDIA REQUIRED** (user must supply ISO / installer / IPSW / firmware themselves), **GUIDE** (official how-to instructions), and **INFO** (true reference material). ForgerEMS will not auto-download an item whose source is non-redistributable, requires a license acceptance flow, or requires a device / model / carrier choice.
 
 ---
