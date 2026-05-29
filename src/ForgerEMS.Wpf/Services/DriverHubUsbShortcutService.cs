@@ -48,7 +48,7 @@ public static class DriverHubUsbShortcutService
             return DriverHubShortcutResult.Failure("This Driver Hub card does not define a USB shortcut path.");
         }
 
-        if (!DriverHubUrlSafety.IsSafeOfficialHttpUrl(entry.OfficialUrl))
+        if (!DriverHubUrlSafety.IsSafeOfficialHttpUrl(entry.EffectiveOfficialPageUrl))
         {
             return DriverHubShortcutResult.Failure("Blocked unsafe or identifier-bearing URL.");
         }
@@ -104,7 +104,7 @@ public static class DriverHubUsbShortcutService
 
     private static string BuildInternetShortcutContent(DriverHubEntry entry) =>
         "[InternetShortcut]\r\n" +
-        $"URL={entry.OfficialUrl}\r\n" +
+        $"URL={entry.EffectiveOfficialPageUrl}\r\n" +
         $"Comment=ForgerEMS Driver Hub official vendor source: {entry.Name}\r\n";
 
     private static string ResolveNonOverwritingPath(string candidate, string content)

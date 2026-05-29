@@ -41,6 +41,14 @@ public static class DriverHubFilterEngine
                    HasTag(entry, "graphics");
         }
 
+        if (string.Equals(filter, "Driver Apps", StringComparison.OrdinalIgnoreCase))
+        {
+            return entry.Entry.DownloadKind is DriverHubDownloadKind.OfficialAppPage
+                       or DriverHubDownloadKind.OfficialAppInstaller
+                       or DriverHubDownloadKind.MicrosoftStore ||
+                   HasPlatform(entry, DriverHubPlatform.Utility);
+        }
+
         if (string.Equals(filter, "OEM", StringComparison.OrdinalIgnoreCase))
         {
             return entry.Category == DriverHubCategory.OemSupport ||

@@ -140,11 +140,13 @@ If a related managed download is already installed and checksum-verified, a miss
 
 ## What is Driver Hub?
 
-**Driver Hub** is a curated official-link catalog for GPU utilities, OEM support portals, chipset/network/audio driver pages, BIOS/firmware support links, and Linux driver guidance.
+**Driver Hub** is a curated official-link app-store-style catalog for GPU utilities, OEM support portals, chipset/network/audio driver pages, BIOS/firmware support links, and Linux driver guidance.
 
-It is **not** a sketchy driver-updater clone. ForgerEMS opens official vendor/project pages, copies official URLs, and can add `.url` shortcuts to the selected USB under `Drivers\...`. It does **not** claim a driver is outdated or current unless a real version comparison exists, does **not** auto-install drivers, does **not** auto-download OEM packages, does **not** upload service tags or serial numbers, and does **not** automate BIOS/firmware flashing.
+It is **not** a sketchy driver-updater clone. Each card shows **one clear primary action** — `Get`, `Open Driver Page`, `Open Support Page`, `Open Official Download`, or `Open Firmware Guidance` — that opens the official vendor/project page. Helper actions (**Copy Link**, **Add Shortcut to USB**, and **Open Page** when it differs from the primary URL) are tucked behind a small `⋯` overflow button on each card so the catalog stays scannable like the App Store / Microsoft Store. ForgerEMS does **not** claim a driver is outdated or current unless a real version comparison exists, does **not** auto-run installers, does **not** auto-download model-specific OEM packages, does **not** upload service tags or serial numbers, and does **not** automate BIOS/firmware flashing.
 
-Recommendations are hints only, based on detected manufacturer/GPU/CPU/platform data from System Intelligence when available. Firmware cards remind you to confirm the exact model, power, battery/AC state, and vendor instructions before updates.
+Recommendations are hints only, based on detected manufacturer/GPU/CPU/platform data from System Intelligence when available. Brand tiles are text monograms, not bundled vendor logo assets. Firmware cards remind you to confirm the exact model, power, battery/AC state, and vendor instructions before updates.
+
+Releases run an optional link-health pass via [`tools/Test-DriverHubLinks.ps1`](../tools/Test-DriverHubLinks.ps1), which probes each catalog URL with a reasonable timeout and a real-browser user agent. Some vendor pages reject automated checkers (HTTP 401 / 403 / 429) even when the page opens fine in a real browser — the script reports those as `ForbiddenLikelyOk` and only fails on confirmed 404s. The unit tests never depend on live vendor reachability.
 
 ---
 

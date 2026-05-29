@@ -147,3 +147,39 @@ public static class DriverHubRecommendationEngine
         return false;
     }
 }
+
+public static class DriverHubRecommendationPresentation
+{
+    public static IReadOnlyList<DriverHubRecommendation> SelectFeaturedRecommendations(
+        IEnumerable<DriverHubRecommendation> recommendations,
+        int maxCount = 4)
+    {
+        return recommendations
+            .OrderBy(item => GetFeaturedPriority(item.Entry.Id))
+            .ThenBy(item => item.Entry.Name, StringComparer.OrdinalIgnoreCase)
+            .Take(Math.Max(0, maxCount))
+            .ToArray();
+    }
+
+    private static int GetFeaturedPriority(string id) =>
+        id switch
+        {
+            "nvidia-app" => 0,
+            "amd-adrenalin" => 0,
+            "intel-dsa" => 1,
+            "dell-supportassist" => 2,
+            "hp-support-assistant" => 2,
+            "lenovo-vantage" => 2,
+            "msi-center" => 2,
+            "asus-myasus" => 2,
+            "dell-drivers" => 3,
+            "hp-drivers" => 3,
+            "lenovo-system-update" => 3,
+            "msi-support" => 3,
+            "asus-download-center" => 3,
+            "nvidia-geforce-drivers" => 4,
+            "amd-drivers-support" => 4,
+            "intel-download-center" => 5,
+            _ => 20
+        };
+}

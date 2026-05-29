@@ -18,6 +18,7 @@ public sealed partial class MainViewModel
     private string _driverHubRecommendationSummaryText = "Run System Intelligence to personalize recommendations.";
     private string _driverHubEmptyStateText = string.Empty;
     private string _driverHubStatusText = "Driver Hub is ready. Official links only; no automatic installs or firmware flashing.";
+    private string _driverHubDetectedHardwareText = "Run System Intelligence to personalize Driver Hub.";
 
     public ObservableCollection<DriverHubEntryView> DriverHubVisibleEntries { get; } = [];
 
@@ -30,6 +31,8 @@ public sealed partial class MainViewModel
     public RelayCommand<DriverHubEntryView> CopyDriverHubLinkCommand { get; private set; } = null!;
 
     public RelayCommand<DriverHubEntryView> AddDriverHubShortcutToUsbCommand { get; private set; } = null!;
+
+    public RelayCommand<DriverHubEntryView> ExecuteDriverHubPrimaryActionCommand { get; private set; } = null!;
 
     public RelayCommand<string> ApplyDriverHubFilterCommand { get; private set; } = null!;
 
@@ -69,15 +72,24 @@ public sealed partial class MainViewModel
         private set => SetProperty(ref _driverHubStatusText, value);
     }
 
+    public string DriverHubDetectedHardwareText
+    {
+        get => _driverHubDetectedHardwareText;
+        private set => SetProperty(ref _driverHubDetectedHardwareText, value);
+    }
+
+    public string DriverHubDownloadSafetyText =>
+        "Installer downloads only appear for safe official direct URLs and a selected USB target. Current catalog actions open official pages or add URL shortcuts; installers are never run automatically.";
+
     public string DriverHubUsbTargetStatusText =>
         SelectedUsbTarget is null
-            ? "Select a USB target first."
+            ? "Select a USB target to add Driver Hub shortcuts."
             : $"USB target: {SelectedUsbTarget.RootPath}";
 
     private void InitializeDriverHub()
     {
         DriverHubFilterChips.Clear();
-        foreach (var chip in new[] { "All", "Recommended", "GPU", "OEM", "Network", "Chipset", "BIOS/Firmware", "Linux", "Windows" })
+        foreach (var chip in new[] { "All", "Recommended", "Driver Apps", "GPU", "OEM", "Network", "Chipset", "BIOS/Firmware", "Linux", "Windows" })
         {
             DriverHubFilterChips.Add(chip);
         }
@@ -89,7 +101,10 @@ public sealed partial class MainViewModel
         CopyDriverHubLinkCommand = new RelayCommand<DriverHubEntryView>(CopyDriverHubLink);
         AddDriverHubShortcutToUsbCommand = new RelayCommand<DriverHubEntryView>(
             AddDriverHubShortcutToUsb,
-            entry => entry is not null && CanAddDriverHubShortcutToUsb());
+            entry => entry is not null && entry.Entry.CanAddShortcutToUsb && CanAddDriverHubShortcutToUsb());
+        ExecuteDriverHubPrimaryActionCommand = new RelayCommand<DriverHubEntryView>(
+            ExecuteDriverHubPrimaryAction,
+            CanExecuteDriverHubPrimaryAction);
         ApplyDriverHubFilterCommand = new RelayCommand<string>(ApplyDriverHubFilter);
 
         RefreshDriverHubRecommendations();
@@ -106,6 +121,7 @@ public sealed partial class MainViewModel
                 DriverHubCatalog.All,
                 profile,
                 linuxFilterRequested);
+        var recommendedSection = DriverHubRecommendationPresentation.SelectFeaturedRecommendations(recommendations);
         var recommendationMap = recommendations.ToDictionary(
             item => item.Entry.Id,
             item => item,
@@ -118,7 +134,6 @@ public sealed partial class MainViewModel
             {
                 view.IsRecommended = true;
                 view.RecommendationStatusText = recommendation.StatusText;
-                DriverHubRecommendedEntries.Add(view);
             }
             else
             {
@@ -127,7 +142,18 @@ public sealed partial class MainViewModel
             }
         }
 
+        foreach (var recommendation in recommendedSection)
+        {
+            var view = _driverHubEntryViews.FirstOrDefault(item =>
+                string.Equals(item.Id, recommendation.Entry.Id, StringComparison.OrdinalIgnoreCase));
+            if (view is not null)
+            {
+                DriverHubRecommendedEntries.Add(view);
+            }
+        }
+
         DriverHubRecommendationSummaryText = BuildDriverHubRecommendationSummary(profile, recommendations);
+        DriverHubDetectedHardwareText = BuildDriverHubDetectedHardwareText(profile);
         ApplyDriverHubFilters();
     }
 
@@ -146,6 +172,23 @@ public sealed partial class MainViewModel
         }
 
         return "Recommendations are based on detected vendor/GPU/CPU/OS data only; no driver version comparison is performed.";
+    }
+
+    private static string BuildDriverHubDetectedHardwareText(SystemProfile? profile)
+    {
+        if (profile is null)
+        {
+            return "Run System Intelligence to personalize Driver Hub.";
+        }
+
+        var gpu = profile.Gpus.Count == 0
+            ? "GPU: unknown"
+            : "GPU: " + string.Join(", ", profile.Gpus.Select(item => item.Name).Where(text => !string.IsNullOrWhiteSpace(text)).Take(2));
+        return $"OEM: {profile.Manufacturer} {profile.Model}".Trim() + Environment.NewLine +
+               $"CPU: {profile.Cpu}" + Environment.NewLine +
+               gpu + Environment.NewLine +
+               $"Network: {profile.NetworkStatus}" + Environment.NewLine +
+               $"OS: {profile.OperatingSystem}";
     }
 
     private SystemProfile? TryLoadDriverHubSystemProfile()
@@ -195,7 +238,59 @@ public sealed partial class MainViewModel
             return;
         }
 
-        if (!DriverHubUrlSafety.IsSafeOfficialHttpUrl(view.OfficialUrl))
+        OpenDriverHubUrl(view, view.OfficialUrl, $"Driver Hub opened official page: {view.Name}", $"Opened official page: {view.Name}");
+    }
+
+    private void ExecuteDriverHubPrimaryAction(DriverHubEntryView? view)
+    {
+        if (view is null)
+        {
+            return;
+        }
+
+        if (view.Entry.PrimaryActionKind == DriverHubPrimaryActionKind.DownloadInstaller)
+        {
+            DriverHubStatusText = "Direct installer download is not available for this card. Open the official page and verify the package before running it.";
+            AppendLog(new LogLine(DateTimeOffset.Now, $"Driver Hub installer download unavailable: {view.Name}", LogSeverity.Warning));
+            return;
+        }
+
+        var url = view.EffectivePrimaryUrl;
+        var logText = view.Entry.PrimaryActionKind switch
+        {
+            DriverHubPrimaryActionKind.OpenOfficialDownload => $"Driver Hub opened official app/download page: {view.Name}",
+            DriverHubPrimaryActionKind.OpenGuidance => $"Driver Hub opened official guidance: {view.Name}",
+            _ => $"Driver Hub opened official page: {view.Name}"
+        };
+        var statusText = view.Entry.PrimaryActionKind switch
+        {
+            DriverHubPrimaryActionKind.OpenOfficialDownload => $"Opened official app/download page: {view.Name}",
+            DriverHubPrimaryActionKind.OpenGuidance when view.Entry.IsFirmwareRelated => $"Opened firmware guidance: {view.Name}",
+            DriverHubPrimaryActionKind.OpenGuidance => $"Opened guidance: {view.Name}",
+            _ => $"Opened official page: {view.Name}"
+        };
+
+        OpenDriverHubUrl(view, url, logText, statusText);
+    }
+
+    private bool CanExecuteDriverHubPrimaryAction(DriverHubEntryView? view)
+    {
+        if (view is null || view.Entry.PrimaryActionKind == DriverHubPrimaryActionKind.Unavailable)
+        {
+            return false;
+        }
+
+        if (view.Entry.PrimaryActionKind == DriverHubPrimaryActionKind.DownloadInstaller)
+        {
+            return view.Entry.CanDirectDownloadInstaller && CanAddDriverHubShortcutToUsb();
+        }
+
+        return DriverHubUrlSafety.IsSafeOfficialHttpUrl(view.EffectivePrimaryUrl);
+    }
+
+    private void OpenDriverHubUrl(DriverHubEntryView view, string url, string successLogText, string successStatusText)
+    {
+        if (!DriverHubUrlSafety.IsSafeOfficialHttpUrl(url))
         {
             DriverHubStatusText = "Blocked unsafe or identifier-bearing URL.";
             AppendLog(new LogLine(DateTimeOffset.Now, $"Driver Hub blocked unsafe URL for: {view.Name}", LogSeverity.Warning));
@@ -204,13 +299,9 @@ public sealed partial class MainViewModel
 
         try
         {
-            Process.Start(new ProcessStartInfo(view.OfficialUrl)
-            {
-                UseShellExecute = true
-            });
-
-            DriverHubStatusText = $"Opened official page: {view.Name}";
-            AppendLog(new LogLine(DateTimeOffset.Now, $"Driver Hub opened official page: {view.Name}", LogSeverity.Info));
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            DriverHubStatusText = successStatusText;
+            AppendLog(new LogLine(DateTimeOffset.Now, successLogText, LogSeverity.Info));
         }
         catch (Exception exception)
         {
@@ -272,6 +363,8 @@ public sealed partial class MainViewModel
     private void RaiseDriverHubCommandStates()
     {
         AddDriverHubShortcutToUsbCommand?.RaiseCanExecuteChanged();
+        ExecuteDriverHubPrimaryActionCommand?.RaiseCanExecuteChanged();
         OnPropertyChanged(nameof(DriverHubUsbTargetStatusText));
+        OnPropertyChanged(nameof(DriverHubDownloadSafetyText));
     }
 }

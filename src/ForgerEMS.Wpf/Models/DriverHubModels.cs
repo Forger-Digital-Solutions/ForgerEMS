@@ -39,6 +39,29 @@ public enum DriverHubRecommendationReason
     UniversalStartingPoint
 }
 
+public enum DriverHubDownloadKind
+{
+    None,
+    OfficialAppPage,
+    OfficialAppInstaller,
+    MicrosoftStore,
+    DriverSearchPage,
+    OemSupportPage,
+    ManualVendorPage,
+    LinuxGuidance,
+    FirmwareGuidance
+}
+
+public enum DriverHubPrimaryActionKind
+{
+    OpenOfficialPage,
+    OpenOfficialDownload,
+    DownloadInstaller,
+    OpenGuidance,
+    AddShortcut,
+    Unavailable
+}
+
 public sealed class DriverHubMatchRule
 {
     public IReadOnlyList<string> ManufacturerContains { get; init; } = Array.Empty<string>();
@@ -70,7 +93,45 @@ public sealed class DriverHubEntry
 
     public string Description { get; init; } = string.Empty;
 
+    public string OfficialPageUrl { get; init; } = string.Empty;
+
     public string OfficialUrl { get; init; } = string.Empty;
+
+    public string OfficialDownloadUrl { get; init; } = string.Empty;
+
+    public string MicrosoftStoreUrl { get; init; } = string.Empty;
+
+    public string InstallerFileName { get; init; } = string.Empty;
+
+    public DriverHubDownloadKind DownloadKind { get; init; } = DriverHubDownloadKind.None;
+
+    public bool CanDownloadOfficialApp { get; init; }
+
+    public bool CanDirectDownloadInstaller { get; init; }
+
+    public bool CanOpenOfficialDownload { get; init; }
+
+    public bool CanOpenMicrosoftStore { get; init; }
+
+    public bool CanAddShortcutToUsb { get; init; } = true;
+
+    public bool CanDownloadToUsb { get; init; }
+
+    public bool IsInstallerDownload { get; init; }
+
+    public bool IsGuidanceOnly { get; init; }
+
+    public bool RequiresModelLookup { get; init; }
+
+    public bool DoesNotAutoInstall { get; init; } = true;
+
+    public string PrimaryActionLabel { get; init; } = string.Empty;
+
+    public DriverHubPrimaryActionKind PrimaryActionKind { get; init; } = DriverHubPrimaryActionKind.OpenOfficialPage;
+
+    public string BrandTileText { get; init; } = string.Empty;
+
+    public string BrandAccentHex { get; init; } = "#334B5563";
 
     public IReadOnlyList<DriverHubPlatform> Platforms { get; init; } = Array.Empty<DriverHubPlatform>();
 
@@ -91,6 +152,18 @@ public sealed class DriverHubEntry
     public string SafetyNote { get; init; } = string.Empty;
 
     public string SourceTrust { get; init; } = DriverHubConstants.OfficialVendorSourceTrust;
+
+    public string EffectiveOfficialPageUrl =>
+        !string.IsNullOrWhiteSpace(OfficialPageUrl) ? OfficialPageUrl : OfficialUrl;
+
+    public string EffectivePrimaryUrl =>
+        PrimaryActionKind switch
+        {
+            DriverHubPrimaryActionKind.DownloadInstaller when !string.IsNullOrWhiteSpace(OfficialDownloadUrl) => OfficialDownloadUrl,
+            DriverHubPrimaryActionKind.OpenOfficialDownload when !string.IsNullOrWhiteSpace(MicrosoftStoreUrl) => MicrosoftStoreUrl,
+            DriverHubPrimaryActionKind.OpenOfficialDownload when !string.IsNullOrWhiteSpace(OfficialDownloadUrl) => OfficialDownloadUrl,
+            _ => EffectiveOfficialPageUrl
+        };
 }
 
 public sealed class DriverHubRecommendation
@@ -134,7 +207,54 @@ public sealed class DriverHubEntryView
 
     public string Description => Entry.Description;
 
-    public string OfficialUrl => Entry.OfficialUrl;
+    public string OfficialUrl => Entry.EffectiveOfficialPageUrl;
+
+    public string OfficialDownloadUrl => Entry.OfficialDownloadUrl;
+
+    public string MicrosoftStoreUrl => Entry.MicrosoftStoreUrl;
+
+    public string EffectivePrimaryUrl => Entry.EffectivePrimaryUrl;
+
+    public string PrimaryActionLabel =>
+        !string.IsNullOrWhiteSpace(Entry.PrimaryActionLabel)
+            ? Entry.PrimaryActionLabel
+            : DriverHubDisplay.BuildPrimaryActionLabel(Entry);
+
+    public string PrimaryActionToolTip =>
+        Entry.PrimaryActionKind switch
+        {
+            DriverHubPrimaryActionKind.DownloadInstaller => "Downloads the official installer file to USB only. ForgerEMS does not run installers.",
+            DriverHubPrimaryActionKind.OpenOfficialDownload => "Opens the official app/download page. ForgerEMS does not run installers.",
+            DriverHubPrimaryActionKind.OpenGuidance when Entry.IsFirmwareRelated => "Opens official firmware guidance. Confirm the exact model before using firmware packages.",
+            DriverHubPrimaryActionKind.OpenGuidance => "Opens official Linux driver guidance.",
+            _ => "Opens the official vendor page."
+        };
+
+    public bool HasOfficialDownloadAction =>
+        !string.IsNullOrWhiteSpace(Entry.OfficialDownloadUrl) &&
+        DriverHubUrlLike.IsHttpsUrl(Entry.OfficialDownloadUrl);
+
+    public bool CanShowDownloadOfficialApp =>
+        Entry.CanDownloadOfficialApp &&
+        Entry.DownloadKind is DriverHubDownloadKind.OfficialAppPage
+            or DriverHubDownloadKind.OfficialAppInstaller
+            or DriverHubDownloadKind.MicrosoftStore;
+
+    public bool CanShowDownloadInstaller =>
+        Entry.PrimaryActionKind == DriverHubPrimaryActionKind.DownloadInstaller &&
+        Entry.CanDirectDownloadInstaller &&
+        Entry.IsInstallerDownload;
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "WPF binding requires an instance property.")]
+    public string SecondaryPageActionLabel => "Open Page";
+
+    public bool HasDistinctSecondaryPageAction =>
+        DriverHubUrlLike.IsHttpsUrl(Entry.EffectiveOfficialPageUrl) &&
+        !string.Equals(Entry.EffectiveOfficialPageUrl, Entry.EffectivePrimaryUrl, StringComparison.OrdinalIgnoreCase);
+
+    public string BrandTileText => Entry.BrandTileText;
+
+    public string BrandAccentHex => Entry.BrandAccentHex;
 
     public string PlatformBadgesText => string.Join("  ", Entry.Platforms.Select(DriverHubDisplay.FormatPlatform));
 
@@ -145,6 +265,39 @@ public sealed class DriverHubEntryView
     public string SafetyNote => Entry.SafetyNote;
 
     public bool HasSafetyNote => !string.IsNullOrWhiteSpace(Entry.SafetyNote);
+
+    public string FirmwareBadgeText =>
+        Entry.IsFirmwareRelated
+            ? "Firmware guidance only - confirm exact model and vendor instructions."
+            : string.Empty;
+
+    public string SafetyStatusText
+    {
+        get
+        {
+            if (Entry.IsFirmwareRelated)
+            {
+                return "Firmware guidance only";
+            }
+
+            if (Entry.RequiresModelLookup)
+            {
+                return "Requires model lookup";
+            }
+
+            if (Entry.IsInstallerDownload)
+            {
+                return "Installer is not run automatically";
+            }
+
+            if (Entry.IsGuidanceOnly)
+            {
+                return "Guidance only";
+            }
+
+            return Entry.SourceTrust;
+        }
+    }
 
     public string StatusLine
     {
@@ -162,12 +315,22 @@ public sealed class DriverHubEntryView
 
             if (Entry.IsFirmwareRelated)
             {
+                return "Firmware guidance only";
+            }
+
+            if (Entry.RequiresModelLookup)
+            {
                 return "Requires model lookup";
+            }
+
+            if (Entry.IsInstallerDownload)
+            {
+                return "Installer is not run automatically";
             }
 
             if (Entry.IsManualVendorPortal)
             {
-                return "Manual/vendor shortcut";
+                return "Official vendor page";
             }
 
             return Entry.Platforms.Contains(DriverHubPlatform.Windows)
@@ -187,6 +350,28 @@ public static class DriverHubConstants
 
 public static class DriverHubDisplay
 {
+    public static string BuildPrimaryActionLabel(DriverHubEntry entry)
+    {
+        return entry.PrimaryActionKind switch
+        {
+            DriverHubPrimaryActionKind.DownloadInstaller => "Download Installer",
+            DriverHubPrimaryActionKind.OpenOfficialDownload when entry.CanOpenMicrosoftStore ||
+                                                                 entry.DownloadKind == DriverHubDownloadKind.OfficialAppPage ||
+                                                                 entry.DownloadKind == DriverHubDownloadKind.MicrosoftStore => "Get",
+            DriverHubPrimaryActionKind.OpenOfficialDownload => "Open Official Download",
+            DriverHubPrimaryActionKind.OpenGuidance when entry.IsFirmwareRelated ||
+                                                        entry.DownloadKind == DriverHubDownloadKind.FirmwareGuidance => "Open Firmware Guidance",
+            DriverHubPrimaryActionKind.OpenGuidance => "Open Guidance",
+            DriverHubPrimaryActionKind.AddShortcut => "Add Shortcut",
+            DriverHubPrimaryActionKind.Unavailable => "Unavailable",
+            DriverHubPrimaryActionKind.OpenOfficialPage when entry.Category == DriverHubCategory.OemSupport => "Open Support Page",
+            DriverHubPrimaryActionKind.OpenOfficialPage when entry.Category == DriverHubCategory.Gpu ||
+                                                             entry.DownloadKind == DriverHubDownloadKind.DriverSearchPage ||
+                                                             entry.Name.Contains("Drivers", StringComparison.OrdinalIgnoreCase) => "Open Driver Page",
+            _ => "Open Official Page"
+        };
+    }
+
     public static string FormatCategory(DriverHubCategory category) =>
         category switch
         {
@@ -207,4 +392,11 @@ public static class DriverHubDisplay
             DriverHubPlatform.ManualPortal => "Manual Portal",
             _ => platform.ToString()
         };
+}
+
+public static class DriverHubUrlLike
+{
+    public static bool IsHttpsUrl(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+        string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
 }

@@ -175,6 +175,106 @@
             </Style.Triggers>
         </Style>
 
+        <Style x:Key="DriverHubPrimaryActionButtonStyle" TargetType="Button" BasedOn="{StaticResource FooterButtonStyle}">
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="MinWidth" Value="132" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Background" Value="#FFFFC56D" />
+            <Setter Property="BorderBrush" Value="#FFFFD48A" />
+            <Setter Property="Foreground" Value="#FF101820" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#FFFFD48A" />
+                    <Setter Property="BorderBrush" Value="#FFFFFFFF" />
+                    <Setter Property="Foreground" Value="#FF0B1220" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#FFF59E0B" />
+                    <Setter Property="BorderBrush" Value="#FFFFC56D" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="#FF9CA3AF" />
+                    <Setter Property="BorderBrush" Value="#FF6B7280" />
+                    <Setter Property="Foreground" Value="#FF374151" />
+                    <Setter Property="Opacity" Value="0.72" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="DriverHubSecondaryActionButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+            <Setter Property="Padding" Value="7,3" />
+            <Setter Property="MinHeight" Value="26" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Background" Value="#990B1220" />
+            <Setter Property="BorderBrush" Value="#665B6B7F" />
+        </Style>
+
+        <!-- Compact "⋯" toggle that opens an overflow popup with advanced actions (Copy Link, Add Shortcut to USB).
+             Kept off the primary action row so cards stay store-style and uncluttered. -->
+        <Style x:Key="DriverHubOverflowToggleStyle" TargetType="ToggleButton">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinWidth" Value="32" />
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Background" Value="#660B1220" />
+            <Setter Property="BorderBrush" Value="#665B6B7F" />
+            <Setter Property="Foreground" Value="#FFE7EDF8" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="OverflowBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="16">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="OverflowBorder" Property="Background" Value="#CC182434" />
+                                <Setter TargetName="OverflowBorder" Property="BorderBrush" Value="#88A1C8F0" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="OverflowBorder" Property="Background" Value="#CC1B2A3E" />
+                                <Setter TargetName="OverflowBorder" Property="BorderBrush" Value="#FFFFC56D" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DriverHubOverflowMenuButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="Margin" Value="0,0,0,2" />
+            <Setter Property="MinHeight" Value="30" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="Foreground" Value="#FFE7EDF8" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#33FFC56D" />
+                    <Setter Property="Foreground" Value="#FFFFFFFF" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.5" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
         <Style TargetType="TextBox">
             <Setter Property="BorderBrush" Value="{DynamicResource PanelBorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
@@ -3263,34 +3363,55 @@
                     <TabItem Header="▥  Driver Hub">
                         <StackPanel Margin="24,0,24,16" MaxWidth="1040" HorizontalAlignment="Left">
                             <GroupBox Header="Driver Hub">
-                                <StackPanel>
-                                    <TextBlock FontFamily="Bahnschrift SemiCondensed"
-                                               FontSize="24"
-                                               FontWeight="Bold"
-                                               Foreground="{DynamicResource PanelTextBrush}"
-                                               Text="Driver Hub" />
-                                    <TextBlock Margin="0,4,0,0"
-                                               FontSize="13"
-                                               Foreground="{DynamicResource PanelMutedTextBrush}"
-                                               Text="Official driver tools, OEM support links, firmware helpers, and GPU utilities."
-                                               TextWrapping="Wrap" />
-                                    <TextBlock Margin="0,4,0,0"
-                                               FontSize="12"
-                                               Foreground="{DynamicResource PanelMutedTextBrush}"
-                                               Text="Official driver tools, OEM support links, firmware helpers, and GPU utilities for Windows and Linux."
-                                               TextWrapping="Wrap" />
-                                    <Border Margin="0,12,0,0"
-                                            Padding="10"
-                                            Background="#33197DB6"
-                                            BorderBrush="#667DD3FC"
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="300" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0" Margin="0,0,18,0">
+                                        <TextBlock FontFamily="Bahnschrift SemiCondensed"
+                                                   FontSize="26"
+                                                   FontWeight="Bold"
+                                                   Foreground="{DynamicResource PanelTextBrush}"
+                                                   Text="Driver Hub" />
+                                        <TextBlock Margin="0,4,0,0"
+                                                   FontSize="13"
+                                                   Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                   Text="Official driver apps, OEM support, GPU tools, firmware guidance, and Linux driver help."
+                                                   TextWrapping="Wrap" />
+                                        <Border Margin="0,12,0,0"
+                                                Padding="10,5"
+                                                HorizontalAlignment="Left"
+                                                Background="#3322C55E"
+                                                BorderBrush="#6622C55E"
+                                                BorderThickness="1"
+                                                CornerRadius="14">
+                                            <TextBlock FontSize="12"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       Text="Official links only • No auto BIOS flashing • No driver installs without your action" />
+                                        </Border>
+                                    </StackPanel>
+
+                                    <Border Grid.Column="1"
+                                            Padding="12"
+                                            Background="#330B1220"
+                                            BorderBrush="{DynamicResource PanelBorderBrush}"
                                             BorderThickness="1"
                                             CornerRadius="8">
-                                        <TextBlock FontSize="12"
-                                                   Foreground="{DynamicResource PanelTextBrush}"
-                                                   Text="ForgerEMS opens official vendor pages and does not auto-flash BIOS/firmware or install drivers without your action."
-                                                   TextWrapping="Wrap" />
+                                        <StackPanel>
+                                            <TextBlock FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       Text="Detected hardware" />
+                                            <TextBlock Margin="0,6,0,0"
+                                                       FontSize="11.5"
+                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                       Text="{Binding DriverHubDetectedHardwareText}"
+                                                       TextWrapping="Wrap" />
+                                        </StackPanel>
                                     </Border>
-                                </StackPanel>
+                                </Grid>
                             </GroupBox>
 
                             <GroupBox Header="Recommended for this PC">
@@ -3298,7 +3419,6 @@
                                     <TextBlock FontSize="12"
                                                Foreground="{DynamicResource PanelMutedTextBrush}"
                                                Text="{Binding DriverHubRecommendationSummaryText}"
-                                               ToolTip="Run System Intelligence to personalize recommendations."
                                                TextWrapping="Wrap" />
                                     <ItemsControl Margin="0,10,0,0"
                                                   ItemsSource="{Binding DriverHubRecommendedEntries}">
@@ -3309,29 +3429,145 @@
                                         </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
-                                                <Border Width="310"
-                                                        Margin="0,0,10,10"
-                                                        Padding="10"
+                                                <Border Width="496"
+                                                        MinHeight="154"
+                                                        Margin="0,0,12,12"
+                                                        Padding="12"
                                                         Background="{DynamicResource PanelBackgroundBrush}"
                                                         BorderBrush="{DynamicResource PanelBorderBrush}"
                                                         BorderThickness="1"
                                                         CornerRadius="8">
-                                                    <StackPanel>
-                                                        <TextBlock FontWeight="SemiBold"
-                                                                   Foreground="{DynamicResource PanelTextBrush}"
-                                                                   Text="{Binding Name}"
-                                                                   TextTrimming="CharacterEllipsis" />
-                                                        <TextBlock Margin="0,2,0,0"
-                                                                   FontSize="11"
-                                                                   Foreground="{DynamicResource PanelMutedTextBrush}"
-                                                                   Text="{Binding Vendor}"
-                                                                   TextTrimming="CharacterEllipsis" />
-                                                        <TextBlock Margin="0,6,0,0"
-                                                                   FontSize="11"
-                                                                   Foreground="{DynamicResource PanelLabelBrush}"
-                                                                   Text="{Binding StatusLine}"
-                                                                   TextWrapping="Wrap" />
-                                                    </StackPanel>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="64" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="152" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto" />
+                                                            <RowDefinition Height="Auto" />
+                                                            <RowDefinition Height="Auto" />
+                                                        </Grid.RowDefinitions>
+
+                                                        <Border x:Name="DriverHubRecommendedBrandTile"
+                                                                Grid.RowSpan="3"
+                                                                Width="54"
+                                                                Height="54"
+                                                                HorizontalAlignment="Left"
+                                                                VerticalAlignment="Top"
+                                                                Background="{Binding BrandAccentHex}"
+                                                                BorderBrush="{DynamicResource PanelBorderBrush}"
+                                                                BorderThickness="1"
+                                                                CornerRadius="8">
+                                                            <TextBlock HorizontalAlignment="Center"
+                                                                       VerticalAlignment="Center"
+                                                                       FontSize="12.5"
+                                                                       FontWeight="Bold"
+                                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                                       Text="{Binding BrandTileText}"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                        </Border>
+
+                                                        <StackPanel Grid.Column="1" Grid.Row="0" Margin="0,0,12,0">
+                                                            <TextBlock FontSize="15"
+                                                                       FontWeight="SemiBold"
+                                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                                       Text="{Binding Name}"
+                                                                       TextWrapping="Wrap" />
+                                                            <TextBlock Margin="0,1,0,0"
+                                                                       FontSize="11"
+                                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                                       Text="{Binding Vendor}"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                            <TextBlock Margin="0,5,0,0"
+                                                                       FontSize="11.5"
+                                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                                       Text="{Binding Description}"
+                                                                       TextWrapping="Wrap" />
+                                                        </StackPanel>
+
+                                                        <WrapPanel Grid.Column="1" Grid.Row="1" Margin="0,8,12,0">
+                                                            <Border Margin="0,0,6,6" Padding="6,2" Background="#3338BDF8" BorderBrush="#6638BDF8" BorderThickness="1" CornerRadius="6">
+                                                                <TextBlock FontSize="10.5" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding CategoryDisplayName}" />
+                                                            </Border>
+                                                            <Border Margin="0,0,6,6" Padding="6,2" Background="#3322C55E" BorderBrush="#6622C55E" BorderThickness="1" CornerRadius="6">
+                                                                <TextBlock FontSize="10.5" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding TrustBadgeText}" />
+                                                            </Border>
+                                                            <Border Margin="0,0,6,6" Padding="6,2" Background="#334B5563" BorderBrush="#665B6B7F" BorderThickness="1" CornerRadius="6">
+                                                                <TextBlock FontSize="10.5" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SafetyStatusText}" />
+                                                            </Border>
+                                                        </WrapPanel>
+
+                                                        <StackPanel Grid.Column="1" Grid.Row="2" Margin="0,0,12,0">
+                                                            <TextBlock FontSize="11"
+                                                                       FontWeight="SemiBold"
+                                                                       Foreground="{DynamicResource PanelLabelBrush}"
+                                                                       Text="{Binding StatusLine}"
+                                                                       TextWrapping="Wrap" />
+                                                            <TextBlock Margin="0,5,0,0"
+                                                                       FontSize="11"
+                                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                                       Text="{Binding PlatformBadgesText}"
+                                                                       TextWrapping="Wrap" />
+                                                            <TextBlock Margin="0,5,0,0"
+                                                                       FontSize="11"
+                                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                                       Text="{Binding FirmwareBadgeText}"
+                                                                       TextWrapping="Wrap" />
+                                                        </StackPanel>
+
+                                                        <StackPanel Grid.Column="2"
+                                                                    Grid.RowSpan="3"
+                                                                    HorizontalAlignment="Right"
+                                                                    VerticalAlignment="Top">
+                                                            <Button x:Name="DriverHubRecommendedPrimaryActionButton"
+                                                                    Margin="0,0,0,8"
+                                                                    Style="{StaticResource DriverHubPrimaryActionButtonStyle}"
+                                                                    Content="{Binding PrimaryActionLabel}"
+                                                                    Command="{Binding DataContext.ExecuteDriverHubPrimaryActionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                    CommandParameter="{Binding}"
+                                                                    ToolTip="{Binding PrimaryActionToolTip}" />
+                                                            <Grid HorizontalAlignment="Right">
+                                                                <ToggleButton x:Name="DriverHubRecommendedOverflowToggle"
+                                                                              Style="{StaticResource DriverHubOverflowToggleStyle}"
+                                                                              Content="⋯"
+                                                                              ToolTip="More actions" />
+                                                                <Popup IsOpen="{Binding IsChecked, ElementName=DriverHubRecommendedOverflowToggle}"
+                                                                       PlacementTarget="{Binding ElementName=DriverHubRecommendedOverflowToggle}"
+                                                                       Placement="Bottom"
+                                                                       StaysOpen="False"
+                                                                       AllowsTransparency="True"
+                                                                       PopupAnimation="Fade">
+                                                                    <Border Background="#FF152535"
+                                                                            BorderBrush="#FFD7B18E"
+                                                                            BorderThickness="1"
+                                                                            CornerRadius="6"
+                                                                            Padding="4"
+                                                                            MinWidth="200">
+                                                                        <StackPanel>
+                                                                            <Button x:Name="DriverHubRecommendedMoreOpenPageButton"
+                                                                                    Style="{StaticResource DriverHubOverflowMenuButtonStyle}"
+                                                                                    Content="{Binding SecondaryPageActionLabel}"
+                                                                                    Visibility="{Binding HasDistinctSecondaryPageAction, Converter={StaticResource BoolToVis}}"
+                                                                                    Command="{Binding DataContext.OpenDriverHubOfficialPageCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                    CommandParameter="{Binding}" />
+                                                                            <Button x:Name="DriverHubRecommendedMoreCopyLinkButton"
+                                                                                    Style="{StaticResource DriverHubOverflowMenuButtonStyle}"
+                                                                                    Content="Copy Link"
+                                                                                    Command="{Binding DataContext.CopyDriverHubLinkCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                    CommandParameter="{Binding}" />
+                                                                            <Button x:Name="DriverHubRecommendedMoreAddShortcutButton"
+                                                                                    Style="{StaticResource DriverHubOverflowMenuButtonStyle}"
+                                                                                    Content="Add Shortcut to USB"
+                                                                                    Command="{Binding DataContext.AddDriverHubShortcutToUsbCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                    CommandParameter="{Binding}"
+                                                                                    ToolTip="Select a USB target to add Driver Hub shortcuts." />
+                                                                        </StackPanel>
+                                                                    </Border>
+                                                                </Popup>
+                                                            </Grid>
+                                                        </StackPanel>
+                                                    </Grid>
                                                 </Border>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
@@ -3346,25 +3582,19 @@
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0"
-                                                    Margin="0,0,16,0">
+                                        <StackPanel Grid.Column="0" Margin="0,0,16,0">
                                             <TextBlock FontSize="12"
                                                        FontWeight="SemiBold"
                                                        Foreground="{DynamicResource PanelLabelBrush}"
-                                                       Text="Search drivers, vendors, GPUs, Linux, BIOS..." />
-                                            <TextBox Width="360"
+                                                       Text="Search NVIDIA, Intel, Dell, Wi-Fi, Linux, BIOS..." />
+                                            <TextBox Width="350"
                                                      Margin="0,4,0,0"
                                                      Text="{Binding DriverHubSearchText, UpdateSourceTrigger=PropertyChanged}"
-                                                     ToolTip="Search drivers, vendors, GPUs, Linux, BIOS..." />
+                                                     ToolTip="Search NVIDIA, Intel, Dell, Wi-Fi, Linux, BIOS..." />
                                         </StackPanel>
-                                        <StackPanel Grid.Column="1"
-                                                    VerticalAlignment="Bottom">
-                                            <TextBlock FontSize="12"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource PanelLabelBrush}"
-                                                       Text="Filters" />
-                                            <ItemsControl Margin="0,4,0,0"
-                                                          ItemsSource="{Binding DriverHubFilterChips}">
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Bottom">
+                                            <TextBlock FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Filters" />
+                                            <ItemsControl Margin="0,4,0,0" ItemsSource="{Binding DriverHubFilterChips}">
                                                 <ItemsControl.ItemsPanel>
                                                     <ItemsPanelTemplate>
                                                         <WrapPanel />
@@ -3384,15 +3614,20 @@
                                         </StackPanel>
                                     </Grid>
 
-                                    <TextBlock Margin="0,0,0,8"
+                                    <TextBlock Margin="0,0,0,6"
                                                FontSize="12"
                                                Foreground="{DynamicResource PanelMutedTextBrush}"
                                                Text="{Binding DriverHubUsbTargetStatusText}"
                                                TextWrapping="Wrap" />
-                                    <TextBlock Margin="0,0,0,8"
+                                    <TextBlock Margin="0,0,0,6"
                                                FontSize="12"
                                                Foreground="{DynamicResource PanelMutedTextBrush}"
                                                Text="{Binding DriverHubStatusText}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,0,0,6"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource PanelMutedTextBrush}"
+                                               Text="{Binding DriverHubDownloadSafetyText}"
                                                TextWrapping="Wrap" />
                                     <TextBlock Margin="0,0,0,8"
                                                FontSize="12"
@@ -3409,10 +3644,10 @@
                                         </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
-                                                <Border Width="320"
-                                                        MinHeight="292"
+                                                <Border Width="322"
+                                                        MinHeight="214"
                                                         Margin="0,0,12,12"
-                                                        Padding="12"
+                                                        Padding="11"
                                                         Background="{DynamicResource PanelBackgroundBrush}"
                                                         BorderBrush="{DynamicResource PanelBorderBrush}"
                                                         BorderThickness="1"
@@ -3421,96 +3656,124 @@
                                                         <Grid.RowDefinitions>
                                                             <RowDefinition Height="Auto" />
                                                             <RowDefinition Height="Auto" />
-                                                            <RowDefinition Height="Auto" />
                                                             <RowDefinition Height="*" />
                                                             <RowDefinition Height="Auto" />
                                                         </Grid.RowDefinitions>
 
-                                                        <StackPanel Grid.Row="0">
-                                                            <TextBlock FontSize="15"
-                                                                       FontWeight="SemiBold"
-                                                                       Foreground="{DynamicResource PanelTextBrush}"
-                                                                       Text="{Binding Name}"
-                                                                       TextWrapping="Wrap" />
-                                                            <TextBlock Margin="0,2,0,0"
-                                                                       FontSize="11"
-                                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
-                                                                       Text="{Binding Vendor}"
-                                                                       TextTrimming="CharacterEllipsis" />
-                                                        </StackPanel>
-
-                                                        <WrapPanel Grid.Row="1"
-                                                                   Margin="0,8,0,0">
-                                                            <Border Margin="0,0,6,6"
-                                                                    Padding="6,2"
-                                                                    Background="#3338BDF8"
-                                                                    BorderBrush="#6638BDF8"
+                                                        <DockPanel Grid.Row="0">
+                                                            <Border x:Name="DriverHubCatalogBrandTile"
+                                                                    DockPanel.Dock="Left"
+                                                                    Width="42"
+                                                                    Height="42"
+                                                                    Margin="0,0,9,0"
+                                                                    Background="{Binding BrandAccentHex}"
+                                                                    BorderBrush="{DynamicResource PanelBorderBrush}"
                                                                     BorderThickness="1"
-                                                                    CornerRadius="6">
-                                                                <TextBlock FontSize="10.5"
+                                                                    CornerRadius="8">
+                                                                <TextBlock HorizontalAlignment="Center"
+                                                                           VerticalAlignment="Center"
+                                                                           FontSize="11.5"
+                                                                           FontWeight="Bold"
                                                                            Foreground="{DynamicResource PanelTextBrush}"
-                                                                           Text="{Binding CategoryDisplayName}" />
+                                                                           Text="{Binding BrandTileText}"
+                                                                           TextTrimming="CharacterEllipsis" />
                                                             </Border>
-                                                            <Border Margin="0,0,6,6"
-                                                                    Padding="6,2"
-                                                                    Background="#3322C55E"
-                                                                    BorderBrush="#6622C55E"
-                                                                    BorderThickness="1"
-                                                                    CornerRadius="6">
-                                                                <TextBlock FontSize="10.5"
+                                                            <StackPanel>
+                                                                <TextBlock FontSize="14"
+                                                                           FontWeight="SemiBold"
                                                                            Foreground="{DynamicResource PanelTextBrush}"
-                                                                           Text="{Binding TrustBadgeText}" />
+                                                                           Text="{Binding Name}"
+                                                                           TextWrapping="Wrap" />
+                                                                <TextBlock FontSize="11"
+                                                                           Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                                           Text="{Binding Vendor}"
+                                                                           TextTrimming="CharacterEllipsis" />
+                                                            </StackPanel>
+                                                        </DockPanel>
+
+                                                        <WrapPanel Grid.Row="1" Margin="0,8,0,0">
+                                                            <Border Margin="0,0,6,6" Padding="6,2" Background="#3338BDF8" BorderBrush="#6638BDF8" BorderThickness="1" CornerRadius="6">
+                                                                <TextBlock FontSize="10.5" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding CategoryDisplayName}" />
+                                                            </Border>
+                                                            <Border Margin="0,0,6,6" Padding="6,2" Background="#3322C55E" BorderBrush="#6622C55E" BorderThickness="1" CornerRadius="6">
+                                                                <TextBlock FontSize="10.5" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding TrustBadgeText}" />
+                                                            </Border>
+                                                            <Border Margin="0,0,6,6" Padding="6,2" Background="#334B5563" BorderBrush="#665B6B7F" BorderThickness="1" CornerRadius="6">
+                                                                <TextBlock FontSize="10.5" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding SafetyStatusText}" />
                                                             </Border>
                                                         </WrapPanel>
 
-                                                        <TextBlock Grid.Row="2"
-                                                                   Margin="0,2,0,0"
-                                                                   FontSize="11"
-                                                                   Foreground="{DynamicResource PanelLabelBrush}"
-                                                                   Text="{Binding PlatformBadgesText}"
-                                                                   TextWrapping="Wrap" />
-
-                                                        <StackPanel Grid.Row="3"
-                                                                    Margin="0,8,0,0">
+                                                        <StackPanel Grid.Row="2">
                                                             <TextBlock FontSize="12"
                                                                        Foreground="{DynamicResource PanelTextBrush}"
                                                                        Text="{Binding Description}"
                                                                        TextWrapping="Wrap" />
-                                                            <TextBlock Margin="0,8,0,0"
+                                                            <TextBlock Margin="0,6,0,0"
+                                                                       FontSize="11"
+                                                                       Foreground="{DynamicResource PanelLabelBrush}"
+                                                                       Text="{Binding PlatformBadgesText}"
+                                                                       TextWrapping="Wrap" />
+                                                            <TextBlock Margin="0,5,0,0"
                                                                        FontSize="11"
                                                                        FontWeight="SemiBold"
                                                                        Foreground="{DynamicResource PanelLabelBrush}"
                                                                        Text="{Binding StatusLine}"
                                                                        TextWrapping="Wrap" />
-                                                            <TextBlock Margin="0,6,0,0"
+                                                            <TextBlock Margin="0,5,0,0"
                                                                        FontSize="11"
                                                                        Foreground="{DynamicResource PanelMutedTextBrush}"
-                                                                       Text="{Binding SafetyNote}"
+                                                                       Text="{Binding FirmwareBadgeText}"
                                                                        TextWrapping="Wrap" />
                                                         </StackPanel>
 
-                                                        <WrapPanel Grid.Row="4"
-                                                                   Margin="0,12,0,0">
-                                                            <Button Margin="0,0,6,6"
-                                                                    Padding="8,4"
-                                                                    Style="{StaticResource SecondaryButtonStyle}"
-                                                                    Content="Open Official Page"
-                                                                    Command="{Binding DataContext.OpenDriverHubOfficialPageCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                                    CommandParameter="{Binding}" />
-                                                            <Button Margin="0,0,6,6"
-                                                                    Padding="8,4"
-                                                                    Style="{StaticResource SecondaryButtonStyle}"
-                                                                    Content="Copy Link"
-                                                                    Command="{Binding DataContext.CopyDriverHubLinkCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
-                                                                    CommandParameter="{Binding}" />
-                                                            <Button Margin="0,0,0,6"
-                                                                    Padding="8,4"
-                                                                    Style="{StaticResource SecondaryButtonStyle}"
-                                                                    Content="Add Shortcut to USB"
-                                                                    Command="{Binding DataContext.AddDriverHubShortcutToUsbCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                        <DockPanel x:Name="DriverHubCatalogActionRow" Grid.Row="3" Margin="0,10,0,0" LastChildFill="False">
+                                                            <Button DockPanel.Dock="Left"
+                                                                    Margin="0,0,0,0"
+                                                                    Style="{StaticResource DriverHubPrimaryActionButtonStyle}"
+                                                                    Content="{Binding PrimaryActionLabel}"
+                                                                    Command="{Binding DataContext.ExecuteDriverHubPrimaryActionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                                     CommandParameter="{Binding}"
-                                                                    ToolTip="Select a USB target first." />
-                                                        </WrapPanel>
+                                                                    ToolTip="{Binding PrimaryActionToolTip}" />
+                                                            <Grid DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                                <ToggleButton x:Name="DriverHubCatalogOverflowToggle"
+                                                                              Style="{StaticResource DriverHubOverflowToggleStyle}"
+                                                                              Content="⋯"
+                                                                              ToolTip="More actions" />
+                                                                <Popup IsOpen="{Binding IsChecked, ElementName=DriverHubCatalogOverflowToggle}"
+                                                                       PlacementTarget="{Binding ElementName=DriverHubCatalogOverflowToggle}"
+                                                                       Placement="Bottom"
+                                                                       StaysOpen="False"
+                                                                       AllowsTransparency="True"
+                                                                       PopupAnimation="Fade">
+                                                                    <Border Background="#FF152535"
+                                                                            BorderBrush="#FFD7B18E"
+                                                                            BorderThickness="1"
+                                                                            CornerRadius="6"
+                                                                            Padding="4"
+                                                                            MinWidth="200">
+                                                                        <StackPanel>
+                                                                            <Button x:Name="DriverHubCatalogMoreOpenPageButton"
+                                                                                    Style="{StaticResource DriverHubOverflowMenuButtonStyle}"
+                                                                                    Content="{Binding SecondaryPageActionLabel}"
+                                                                                    Visibility="{Binding HasDistinctSecondaryPageAction, Converter={StaticResource BoolToVis}}"
+                                                                                    Command="{Binding DataContext.OpenDriverHubOfficialPageCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                    CommandParameter="{Binding}" />
+                                                                            <Button x:Name="DriverHubCatalogMoreCopyLinkButton"
+                                                                                    Style="{StaticResource DriverHubOverflowMenuButtonStyle}"
+                                                                                    Content="Copy Link"
+                                                                                    Command="{Binding DataContext.CopyDriverHubLinkCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                    CommandParameter="{Binding}" />
+                                                                            <Button x:Name="DriverHubCatalogMoreAddShortcutButton"
+                                                                                    Style="{StaticResource DriverHubOverflowMenuButtonStyle}"
+                                                                                    Content="Add Shortcut to USB"
+                                                                                    Command="{Binding DataContext.AddDriverHubShortcutToUsbCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                    CommandParameter="{Binding}"
+                                                                                    ToolTip="Select a USB target to add Driver Hub shortcuts." />
+                                                                        </StackPanel>
+                                                                    </Border>
+                                                                </Popup>
+                                                            </Grid>
+                                                        </DockPanel>
                                                     </Grid>
                                                 </Border>
                                             </DataTemplate>

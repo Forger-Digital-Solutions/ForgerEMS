@@ -21,13 +21,15 @@ public static class DriverHubCatalog
                 new[] { DriverHubPlatform.Windows, DriverHubPlatform.Gpu, DriverHubPlatform.Utility },
                 new[] { "gpu", "graphics", "geforce", "nvidia", "windows" },
                 @"Drivers\Graphics\DOWNLOAD - NVIDIA App.url",
+                officialDownloadUrl: "https://www.nvidia.com/en-us/software/nvidia-app/",
+                downloadKind: DriverHubDownloadKind.OfficialAppPage,
                 rules: new[]
                 {
-                    GpuRule("nvidia", "Recommended based on detected GPU"),
-                    GpuRule("geforce", "Recommended based on detected GPU"),
-                    GpuRule("quadro", "Recommended based on detected GPU"),
-                    GpuRule("rtx", "Recommended based on detected GPU"),
-                    GpuRule("gtx", "Recommended based on detected GPU")
+                    GpuRule("nvidia", "Recommended based on detected NVIDIA GPU"),
+                    GpuRule("geforce", "Recommended based on detected NVIDIA GPU"),
+                    GpuRule("quadro", "Recommended based on detected NVIDIA GPU"),
+                    GpuRule("rtx", "Recommended based on detected NVIDIA GPU"),
+                    GpuRule("gtx", "Recommended based on detected NVIDIA GPU")
                 }),
             Entry(
                 "nvidia-geforce-drivers",
@@ -39,8 +41,9 @@ public static class DriverHubCatalog
                 new[] { DriverHubPlatform.Windows, DriverHubPlatform.Gpu, DriverHubPlatform.ManualPortal },
                 new[] { "gpu", "graphics", "geforce", "driver", "nvidia" },
                 @"Drivers\Graphics\DOWNLOAD - NVIDIA Drivers.url",
+                downloadKind: DriverHubDownloadKind.DriverSearchPage,
                 isManualVendorPortal: true,
-                rules: new[] { GpuRule("nvidia", "Recommended based on detected GPU") }),
+                rules: new[] { GpuRule("nvidia", "Recommended based on detected NVIDIA GPU") }),
             Entry(
                 "nvidia-studio-drivers",
                 "NVIDIA Studio Driver",
@@ -51,8 +54,9 @@ public static class DriverHubCatalog
                 new[] { DriverHubPlatform.Windows, DriverHubPlatform.Gpu, DriverHubPlatform.ManualPortal },
                 new[] { "gpu", "graphics", "studio", "creator", "nvidia" },
                 @"Drivers\Graphics\DOWNLOAD - NVIDIA Studio Driver.url",
+                downloadKind: DriverHubDownloadKind.DriverSearchPage,
                 isManualVendorPortal: true,
-                rules: new[] { GpuRule("nvidia", "Recommended based on detected GPU") }),
+                rules: new[] { GpuRule("nvidia", "Recommended based on detected NVIDIA GPU") }),
             Entry(
                 "amd-adrenalin",
                 "AMD Software: Adrenalin Edition",
@@ -63,10 +67,12 @@ public static class DriverHubCatalog
                 new[] { DriverHubPlatform.Windows, DriverHubPlatform.Gpu, DriverHubPlatform.Utility },
                 new[] { "gpu", "graphics", "radeon", "amd", "adrenalin", "windows" },
                 @"Drivers\Graphics\DOWNLOAD - AMD Software Adrenalin.url",
+                officialDownloadUrl: "https://www.amd.com/en/products/software/adrenalin.html",
+                downloadKind: DriverHubDownloadKind.OfficialAppPage,
                 rules: new[]
                 {
-                    GpuRule("amd", "Recommended based on detected GPU"),
-                    GpuRule("radeon", "Recommended based on detected GPU")
+                    GpuRule("amd", "Recommended based on detected AMD/Radeon GPU"),
+                    GpuRule("radeon", "Recommended based on detected AMD/Radeon GPU")
                 }),
             Entry(
                 "amd-drivers-support",
@@ -78,12 +84,13 @@ public static class DriverHubCatalog
                 new[] { DriverHubPlatform.Windows, DriverHubPlatform.Linux, DriverHubPlatform.Gpu, DriverHubPlatform.Chipset, DriverHubPlatform.ManualPortal },
                 new[] { "gpu", "graphics", "radeon", "amd", "chipset", "linux", "windows" },
                 @"Drivers\Graphics\DOWNLOAD - AMD Drivers.url",
+                downloadKind: DriverHubDownloadKind.DriverSearchPage,
                 isManualVendorPortal: true,
                 rules: new[]
                 {
-                    GpuRule("amd", "Recommended based on detected GPU"),
-                    GpuRule("radeon", "Recommended based on detected GPU"),
-                    CpuRule("amd", "Recommended based on detected CPU")
+                    GpuRule("amd", "Recommended based on detected AMD/Radeon GPU"),
+                    GpuRule("radeon", "Recommended based on detected AMD/Radeon GPU"),
+                    CpuRule("amd", "Recommended based on detected AMD CPU")
                 }),
             Entry(
                 "intel-dsa",
@@ -95,12 +102,14 @@ public static class DriverHubCatalog
                 new[] { DriverHubPlatform.Windows, DriverHubPlatform.Chipset, DriverHubPlatform.Network, DriverHubPlatform.Gpu, DriverHubPlatform.Utility },
                 new[] { "intel", "dsa", "chipset", "network", "wireless", "graphics", "windows" },
                 @"Drivers\Chipset\DOWNLOAD - Intel Driver Support Assistant.url",
+                officialDownloadUrl: "https://www.intel.com/content/www/us/en/support/detect.html",
+                downloadKind: DriverHubDownloadKind.OfficialAppPage,
                 rules: new[]
                 {
-                    CpuRule("intel", "Recommended based on detected CPU"),
-                    GpuRule("intel", "Recommended based on detected GPU"),
-                    NetworkRule("intel", "Recommended based on detected network vendor"),
-                    NetworkRule("killer", "Recommended based on detected network vendor")
+                    CpuRule("intel", "Recommended based on detected Intel CPU"),
+                    GpuRule("intel", "Recommended based on detected Intel GPU"),
+                    NetworkRule("intel", "Recommended based on detected Intel network vendor"),
+                    NetworkRule("killer", "Recommended based on detected Intel Killer network vendor")
                 }),
             Entry(
                 "intel-download-center",
@@ -112,24 +121,25 @@ public static class DriverHubCatalog
                 new[] { DriverHubPlatform.Windows, DriverHubPlatform.Linux, DriverHubPlatform.Chipset, DriverHubPlatform.Network, DriverHubPlatform.Storage, DriverHubPlatform.Gpu, DriverHubPlatform.ManualPortal },
                 new[] { "intel", "download center", "chipset", "storage", "network", "wireless", "ethernet", "graphics", "linux" },
                 @"Drivers\Chipset\DOWNLOAD - Intel Drivers.url",
+                downloadKind: DriverHubDownloadKind.DriverSearchPage,
                 isManualVendorPortal: true,
                 rules: new[]
                 {
-                    CpuRule("intel", "Recommended based on detected CPU"),
-                    GpuRule("intel", "Recommended based on detected GPU"),
-                    NetworkRule("intel", "Recommended based on detected network vendor"),
-                    NetworkRule("killer", "Recommended based on detected network vendor")
+                    CpuRule("intel", "Recommended based on detected Intel CPU"),
+                    GpuRule("intel", "Recommended based on detected Intel GPU"),
+                    NetworkRule("intel", "Recommended based on detected Intel network vendor"),
+                    NetworkRule("killer", "Recommended based on detected Intel Killer network vendor")
                 }),
 
             OemEntry("dell-drivers", "Dell Drivers & Downloads", "Dell", "Official Dell support home for service-tag or model-based driver, BIOS, and firmware lookup.", "https://www.dell.com/support/home", @"Drivers\Vendor\DOWNLOAD - Dell Support.url", "dell"),
-            OemEntry("dell-supportassist", "Dell SupportAssist", "Dell", "Official Dell SupportAssist page for Dell PC support, diagnostics, and driver update assistance.", "https://www.dell.com/support/contents/en-us/article/product-support/self-support-knowledgebase/software-and-downloads/support-assist/SupportAssist-for-Home", @"Drivers\Vendor\DOWNLOAD - Dell SupportAssist.url", "dell"),
+            OemAppEntry("dell-supportassist", "Dell SupportAssist", "Dell", "Official Dell SupportAssist page for Dell PC support, diagnostics, and driver update assistance.", "https://www.dell.com/support/contents/en-us/article/product-support/self-support-knowledgebase/software-and-downloads/support-assist/SupportAssist-for-Home", @"Drivers\Vendor\DOWNLOAD - Dell SupportAssist.url", "dell"),
             OemEntry("hp-drivers", "HP Drivers & Software", "HP", "Official HP Software and Drivers portal for model-based driver, software, and firmware lookup.", "https://support.hp.com/us-en/drivers", @"Drivers\Vendor\DOWNLOAD - HP Support.url", "hp", "hewlett-packard"),
-            OemEntry("hp-support-assistant", "HP Support Assistant", "HP", "Official HP Support Assistant page for Windows support and HP device update assistance.", "https://support.hp.com/us-en/help/hp-support-assistant", @"Drivers\Vendor\DOWNLOAD - HP Support Assistant.url", "hp", "hewlett-packard"),
-            OemEntry("lenovo-vantage", "Lenovo Vantage", "Lenovo", "Official Lenovo Vantage guidance for Lenovo PC support, settings, and update assistance.", "https://support.lenovo.com/us/en/solutions/ht505081-lenovo-vantage-using-your-pc-just-got-easier", @"Drivers\Vendor\DOWNLOAD - Lenovo Vantage.url", "lenovo"),
-            OemEntry("lenovo-system-update", "Lenovo System Update / Drivers & Software", "Lenovo", "Official Lenovo System Update and support path for drivers, BIOS, and applications.", "https://support.lenovo.com/us/en/solutions/ht003029-lenovo-system-update-update-drivers-bios-and-applications", @"Drivers\Vendor\DOWNLOAD - Lenovo System Update.url", "lenovo"),
-            OemEntry("msi-center", "MSI Center", "MSI", "Official MSI Center landing page for MSI system utilities and support features.", "https://www.msi.com/Landing/MSI-Center", @"Drivers\Vendor\DOWNLOAD - MSI Center.url", "msi", "micro-star"),
+            OemAppEntry("hp-support-assistant", "HP Support Assistant", "HP", "Official HP Support Assistant page for Windows support and HP device update assistance.", "https://support.hp.com/us-en/help/hp-support-assistant", @"Drivers\Vendor\DOWNLOAD - HP Support Assistant.url", "hp", "hewlett-packard"),
+            OemAppEntry("lenovo-vantage", "Lenovo Vantage", "Lenovo", "Official Lenovo Vantage guidance for Lenovo PC support, settings, and update assistance.", "https://support.lenovo.com/us/en/solutions/ht505081-lenovo-vantage-using-your-pc-just-got-easier", @"Drivers\Vendor\DOWNLOAD - Lenovo Vantage.url", "lenovo"),
+            OemAppEntry("lenovo-system-update", "Lenovo System Update / Drivers & Software", "Lenovo", "Official Lenovo System Update and support path for drivers, BIOS, and applications.", "https://support.lenovo.com/us/en/solutions/ht003029-lenovo-system-update-update-drivers-bios-and-applications", @"Drivers\Vendor\DOWNLOAD - Lenovo System Update.url", "lenovo"),
+            OemAppEntry("msi-center", "MSI Center", "MSI", "Official MSI Center landing page for MSI system utilities and support features.", "https://www.msi.com/Landing/MSI-Center", @"Drivers\Vendor\DOWNLOAD - MSI Center.url", "msi", "micro-star"),
             OemEntry("msi-support", "MSI Support / Downloads", "MSI", "Official MSI support portal for product-specific drivers, utilities, manuals, BIOS, and firmware.", "https://www.msi.com/support", @"Drivers\Vendor\DOWNLOAD - MSI Support.url", "msi", "micro-star"),
-            OemEntry("asus-myasus", "ASUS MyASUS", "ASUS", "Official ASUS support app guidance for ASUS device service, diagnostics, and update assistance.", "https://www.asus.com/support/MyASUS-deeplink/", @"Drivers\Vendor\DOWNLOAD - ASUS MyASUS.url", "asus", "asustek"),
+            OemAppEntry("asus-myasus", "ASUS MyASUS", "ASUS", "Official ASUS support app guidance for ASUS device service, diagnostics, and update assistance.", "https://www.asus.com/support/MyASUS-deeplink/", @"Drivers\Vendor\DOWNLOAD - ASUS MyASUS.url", "asus", "asustek"),
             OemEntry("asus-download-center", "ASUS Download Center", "ASUS", "Official ASUS support portal for model-specific drivers, manuals, BIOS, and utilities.", "https://www.asus.com/support/download-center/", @"Drivers\Vendor\DOWNLOAD - ASUS Support.url", "asus", "asustek"),
             OemEntry("acer-support", "Acer Support / Drivers", "Acer", "Official Acer support portal for drivers, manuals, warranty, and model lookup.", "https://www.acer.com/us-en/support", @"Drivers\Vendor\DOWNLOAD - Acer Support.url", "acer"),
             Entry(
@@ -138,16 +148,18 @@ public static class DriverHubCatalog
                 "Microsoft",
                 DriverHubCategory.BiosFirmware,
                 "Official Microsoft Surface driver and firmware package guidance by Surface model.",
-                "https://learn.microsoft.com/en-us/surface/surface-models-msi",
+                "https://support.microsoft.com/en-us/surface/download-drivers-and-firmware-for-surface-09bb2e09-2a4b-cb69-0951-078a7739e120",
                 new[] { DriverHubPlatform.Windows, DriverHubPlatform.Oem, DriverHubPlatform.BiosFirmware, DriverHubPlatform.ManualPortal },
                 new[] { "microsoft", "surface", "firmware", "bios", "drivers", "oem" },
                 @"Drivers\Vendor\DOWNLOAD - Microsoft Surface Drivers and Firmware.url",
+                downloadKind: DriverHubDownloadKind.FirmwareGuidance,
                 isFirmwareRelated: true,
                 isManualVendorPortal: true,
+                requiresModelLookup: true,
                 rules: new[]
                 {
-                    ManufacturerRule("microsoft", "Recommended based on detected vendor"),
-                    ModelRule("surface", "Recommended based on detected vendor/model")
+                    ManufacturerRule("microsoft", "Recommended based on detected Microsoft/Surface system"),
+                    ModelRule("surface", "Recommended based on detected Surface model")
                 }),
             OemEntry("gigabyte-support", "Gigabyte Support / Downloads", "Gigabyte", "Official Gigabyte support portal for product downloads, drivers, BIOS, utilities, and manuals.", "https://www.gigabyte.com/Support", @"Drivers\Vendor\DOWNLOAD - Gigabyte Support.url", "gigabyte"),
             OemEntry("asrock-support", "ASRock Support / Downloads", "ASRock", "Official ASRock support portal for motherboard, mini PC, networking, BIOS, and driver lookup.", "https://www.asrock.com/support/", @"Drivers\Vendor\DOWNLOAD - ASRock Support.url", "asrock"),
@@ -162,8 +174,9 @@ public static class DriverHubCatalog
                 new[] { DriverHubPlatform.Windows, DriverHubPlatform.Network, DriverHubPlatform.ManualPortal },
                 new[] { "intel", "wireless", "wifi", "network", "windows" },
                 @"Drivers\Network\DOWNLOAD - Intel Wireless Drivers.url",
+                downloadKind: DriverHubDownloadKind.DriverSearchPage,
                 isManualVendorPortal: true,
-                rules: new[] { NetworkRule("intel", "Recommended based on detected network vendor") }),
+                rules: new[] { NetworkRule("intel", "Recommended based on detected Intel network vendor") }),
             Entry(
                 "intel-ethernet-pack",
                 "Intel Ethernet Adapter Driver Pack",
@@ -174,8 +187,9 @@ public static class DriverHubCatalog
                 new[] { DriverHubPlatform.Windows, DriverHubPlatform.Network, DriverHubPlatform.ManualPortal },
                 new[] { "intel", "ethernet", "network", "lan", "windows" },
                 @"Drivers\Network\DOWNLOAD - Intel Ethernet Drivers.url",
+                downloadKind: DriverHubDownloadKind.DriverSearchPage,
                 isManualVendorPortal: true,
-                rules: new[] { NetworkRule("intel", "Recommended based on detected network vendor") }),
+                rules: new[] { NetworkRule("intel", "Recommended based on detected Intel network vendor") }),
             Entry(
                 "intel-killer-networking",
                 "Intel Killer Networking",
@@ -186,8 +200,9 @@ public static class DriverHubCatalog
                 new[] { DriverHubPlatform.Windows, DriverHubPlatform.Network, DriverHubPlatform.ManualPortal },
                 new[] { "intel", "killer", "network", "wireless", "ethernet", "windows" },
                 @"Drivers\Network\DOWNLOAD - Intel Killer Networking.url",
+                downloadKind: DriverHubDownloadKind.DriverSearchPage,
                 isManualVendorPortal: true,
-                rules: new[] { NetworkRule("killer", "Recommended based on detected network vendor") }),
+                rules: new[] { NetworkRule("killer", "Recommended based on detected Intel Killer network vendor") }),
             Entry(
                 "amd-chipset-drivers",
                 "AMD Chipset Drivers",
@@ -198,8 +213,9 @@ public static class DriverHubCatalog
                 new[] { DriverHubPlatform.Windows, DriverHubPlatform.Chipset, DriverHubPlatform.ManualPortal },
                 new[] { "amd", "chipset", "storage", "windows" },
                 @"Drivers\Chipset\DOWNLOAD - AMD Chipset Drivers.url",
+                downloadKind: DriverHubDownloadKind.DriverSearchPage,
                 isManualVendorPortal: true,
-                rules: new[] { CpuRule("amd", "Recommended based on detected CPU") }),
+                rules: new[] { CpuRule("amd", "Recommended based on detected AMD CPU") }),
             Entry(
                 "realtek-downloads",
                 "Realtek Audio and Network Downloads",
@@ -210,8 +226,9 @@ public static class DriverHubCatalog
                 new[] { DriverHubPlatform.Windows, DriverHubPlatform.Audio, DriverHubPlatform.Network, DriverHubPlatform.ManualPortal },
                 new[] { "realtek", "audio", "network", "lan", "windows" },
                 @"Drivers\Audio\DOWNLOAD - Realtek Audio Drivers.url",
+                downloadKind: DriverHubDownloadKind.DriverSearchPage,
                 isManualVendorPortal: true,
-                rules: new[] { NetworkRule("realtek", "Recommended based on detected network vendor") }),
+                rules: new[] { NetworkRule("realtek", "Recommended based on detected Realtek network/audio vendor") }),
 
             LinuxEntry(
                 "nvidia-linux-drivers",
@@ -279,11 +296,73 @@ public static class DriverHubCatalog
         IReadOnlyList<DriverHubPlatform> platforms,
         IReadOnlyList<string> tags,
         string usbShortcutRelativePath,
+        string officialDownloadUrl = "",
+        string microsoftStoreUrl = "",
+        string installerFileName = "",
+        DriverHubDownloadKind downloadKind = DriverHubDownloadKind.None,
+        bool canDirectDownloadInstaller = false,
         bool isFirmwareRelated = false,
         bool isLinuxGuidance = false,
         bool isManualVendorPortal = false,
+        bool requiresModelLookup = false,
         IReadOnlyList<DriverHubMatchRule>? rules = null)
     {
+        var effectiveDownloadKind = isLinuxGuidance
+            ? DriverHubDownloadKind.LinuxGuidance
+            : isFirmwareRelated && downloadKind == DriverHubDownloadKind.None
+                ? DriverHubDownloadKind.FirmwareGuidance
+                : downloadKind;
+        var safeOfficialDownload =
+            !string.IsNullOrWhiteSpace(officialDownloadUrl) &&
+            DriverHubUrlSafety.IsSafeOfficialHttpUrl(officialDownloadUrl);
+        var safeMicrosoftStore =
+            !string.IsNullOrWhiteSpace(microsoftStoreUrl) &&
+            DriverHubUrlSafety.IsSafeOfficialHttpUrl(microsoftStoreUrl);
+        var canDirectDownload =
+            canDirectDownloadInstaller &&
+            !string.IsNullOrWhiteSpace(installerFileName) &&
+            DriverHubUrlSafety.IsSafeOfficialInstallerDownloadUrl(officialDownloadUrl);
+        var canOpenOfficialDownload = safeOfficialDownload && !canDirectDownload;
+        var canOpenMicrosoftStore = safeMicrosoftStore;
+        var canDownloadOfficialApp =
+            canOpenMicrosoftStore ||
+            canOpenOfficialDownload &&
+            (effectiveDownloadKind is DriverHubDownloadKind.OfficialAppPage
+                or DriverHubDownloadKind.OfficialAppInstaller
+                or DriverHubDownloadKind.MicrosoftStore);
+        var isGuidanceOnly =
+            isLinuxGuidance ||
+            isFirmwareRelated ||
+            effectiveDownloadKind is DriverHubDownloadKind.LinuxGuidance or DriverHubDownloadKind.FirmwareGuidance;
+        var resolvedRequiresModelLookup =
+            requiresModelLookup ||
+            isFirmwareRelated ||
+            effectiveDownloadKind is DriverHubDownloadKind.OemSupportPage or DriverHubDownloadKind.DriverSearchPage;
+        var primaryActionKind = ResolvePrimaryActionKind(
+            effectiveDownloadKind,
+            canDirectDownload,
+            canOpenOfficialDownload,
+            canOpenMicrosoftStore,
+            isGuidanceOnly);
+        var primaryActionPrototype = new DriverHubEntry
+        {
+            Name = name,
+            Category = category,
+            IsLinuxGuidance = isLinuxGuidance,
+            IsFirmwareRelated = isFirmwareRelated,
+            OfficialDownloadUrl = officialDownloadUrl,
+            MicrosoftStoreUrl = microsoftStoreUrl,
+            DownloadKind = effectiveDownloadKind,
+            CanDownloadOfficialApp = canDownloadOfficialApp,
+            CanDirectDownloadInstaller = canDirectDownload,
+            CanOpenOfficialDownload = canOpenOfficialDownload,
+            CanOpenMicrosoftStore = canOpenMicrosoftStore,
+            IsInstallerDownload = canDirectDownload,
+            IsGuidanceOnly = isGuidanceOnly,
+            RequiresModelLookup = resolvedRequiresModelLookup,
+            PrimaryActionKind = primaryActionKind
+        };
+
         return new DriverHubEntry
         {
             Id = id,
@@ -291,7 +370,25 @@ public static class DriverHubCatalog
             Vendor = vendor,
             Category = category,
             Description = description,
+            OfficialPageUrl = officialUrl,
             OfficialUrl = officialUrl,
+            OfficialDownloadUrl = officialDownloadUrl,
+            MicrosoftStoreUrl = microsoftStoreUrl,
+            InstallerFileName = installerFileName,
+            DownloadKind = effectiveDownloadKind,
+            CanDownloadOfficialApp = canDownloadOfficialApp,
+            CanDirectDownloadInstaller = canDirectDownload,
+            CanOpenOfficialDownload = canOpenOfficialDownload,
+            CanOpenMicrosoftStore = canOpenMicrosoftStore,
+            CanDownloadToUsb = canDirectDownload,
+            IsInstallerDownload = canDirectDownload,
+            IsGuidanceOnly = isGuidanceOnly,
+            RequiresModelLookup = resolvedRequiresModelLookup,
+            DoesNotAutoInstall = true,
+            PrimaryActionKind = primaryActionKind,
+            PrimaryActionLabel = DriverHubDisplay.BuildPrimaryActionLabel(primaryActionPrototype),
+            BrandTileText = BuildBrandTileText(vendor),
+            BrandAccentHex = BuildBrandAccentHex(vendor),
             Platforms = platforms,
             Tags = tags,
             MatchRules = rules ?? Array.Empty<DriverHubMatchRule>(),
@@ -304,6 +401,53 @@ public static class DriverHubCatalog
         };
     }
 
+    private static DriverHubPrimaryActionKind ResolvePrimaryActionKind(
+        DriverHubDownloadKind downloadKind,
+        bool canDirectDownload,
+        bool canOpenOfficialDownload,
+        bool canOpenMicrosoftStore,
+        bool isGuidanceOnly)
+    {
+        if (canDirectDownload)
+        {
+            return DriverHubPrimaryActionKind.DownloadInstaller;
+        }
+
+        if (isGuidanceOnly)
+        {
+            return DriverHubPrimaryActionKind.OpenGuidance;
+        }
+
+        if (canOpenMicrosoftStore ||
+            canOpenOfficialDownload &&
+            (downloadKind is DriverHubDownloadKind.OfficialAppPage
+                or DriverHubDownloadKind.OfficialAppInstaller
+                or DriverHubDownloadKind.MicrosoftStore))
+        {
+            return DriverHubPrimaryActionKind.OpenOfficialDownload;
+        }
+
+        return DriverHubPrimaryActionKind.OpenOfficialPage;
+    }
+
+    private static DriverHubEntry OemAppEntry(
+        string id,
+        string name,
+        string vendor,
+        string description,
+        string officialUrl,
+        string usbShortcutRelativePath,
+        params string[] manufacturerMatches) =>
+        OemEntryCore(
+            id,
+            name,
+            vendor,
+            description,
+            officialUrl,
+            usbShortcutRelativePath,
+            DriverHubDownloadKind.OfficialAppPage,
+            manufacturerMatches);
+
     private static DriverHubEntry OemEntry(
         string id,
         string name,
@@ -311,6 +455,27 @@ public static class DriverHubCatalog
         string description,
         string officialUrl,
         string usbShortcutRelativePath,
+        params string[] manufacturerMatches)
+    {
+        return OemEntryCore(
+            id,
+            name,
+            vendor,
+            description,
+            officialUrl,
+            usbShortcutRelativePath,
+            DriverHubDownloadKind.OemSupportPage,
+            manufacturerMatches);
+    }
+
+    private static DriverHubEntry OemEntryCore(
+        string id,
+        string name,
+        string vendor,
+        string description,
+        string officialUrl,
+        string usbShortcutRelativePath,
+        DriverHubDownloadKind downloadKind,
         params string[] manufacturerMatches)
     {
         return Entry(
@@ -323,9 +488,12 @@ public static class DriverHubCatalog
             new[] { DriverHubPlatform.Windows, DriverHubPlatform.Oem, DriverHubPlatform.ManualPortal },
             manufacturerMatches.Concat(new[] { "oem", "drivers", "support", "firmware", "bios" }).ToArray(),
             usbShortcutRelativePath,
-            isManualVendorPortal: true,
+            officialDownloadUrl: downloadKind == DriverHubDownloadKind.OfficialAppPage ? officialUrl : string.Empty,
+            downloadKind: downloadKind,
+            isManualVendorPortal: downloadKind != DriverHubDownloadKind.OfficialAppPage,
+            requiresModelLookup: downloadKind == DriverHubDownloadKind.OemSupportPage,
             rules: manufacturerMatches
-                .Select(match => ManufacturerRule(match, "Recommended based on detected vendor"))
+                .Select(match => ManufacturerRule(match, $"Recommended based on detected {vendor} system"))
                 .ToArray());
     }
 
@@ -356,6 +524,7 @@ public static class DriverHubCatalog
             new[] { DriverHubPlatform.Linux, DriverHubPlatform.ManualPortal },
             tags.Concat(new[] { "guidance", "manual" }).ToArray(),
             usbShortcutRelativePath,
+            downloadKind: DriverHubDownloadKind.LinuxGuidance,
             isLinuxGuidance: true,
             isManualVendorPortal: true,
             rules: matchRules.Concat(new[] { linuxRule }).ToArray());
@@ -379,6 +548,7 @@ public static class DriverHubCatalog
             new[] { DriverHubPlatform.Linux, DriverHubPlatform.BiosFirmware, DriverHubPlatform.ManualPortal },
             tags.Concat(new[] { "guidance", "manual" }).ToArray(),
             usbShortcutRelativePath,
+            downloadKind: DriverHubDownloadKind.LinuxGuidance,
             isFirmwareRelated: true,
             isLinuxGuidance: true,
             isManualVendorPortal: true,
@@ -431,4 +601,146 @@ public static class DriverHubCatalog
             Reason = DriverHubRecommendationReason.DetectedNetwork,
             StatusText = status
         };
+
+    private static string BuildBrandTileText(string vendor)
+    {
+        // Brand tiles are text monograms only; do not bundle official vendor logo images
+        // unless logo licensing/usage rights are reviewed for the release.
+        if (vendor.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase))
+        {
+            return "NV";
+        }
+
+        if (vendor.Contains("AMD", StringComparison.OrdinalIgnoreCase))
+        {
+            return "AMD";
+        }
+
+        if (vendor.Contains("Intel", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Intel";
+        }
+
+        if (vendor.Contains("Dell", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Dell";
+        }
+
+        if (vendor.Equals("HP", StringComparison.OrdinalIgnoreCase))
+        {
+            return "HP";
+        }
+
+        if (vendor.Contains("Lenovo", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Lenovo";
+        }
+
+        if (vendor.Contains("MSI", StringComparison.OrdinalIgnoreCase))
+        {
+            return "MSI";
+        }
+
+        if (vendor.Contains("ASUS", StringComparison.OrdinalIgnoreCase))
+        {
+            return "ASUS";
+        }
+
+        if (vendor.Contains("Acer", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Acer";
+        }
+
+        if (vendor.Contains("Microsoft", StringComparison.OrdinalIgnoreCase))
+        {
+            return "MS";
+        }
+
+        if (vendor.Contains("Realtek", StringComparison.OrdinalIgnoreCase))
+        {
+            return "RTL";
+        }
+
+        if (vendor.Contains("fwupd", StringComparison.OrdinalIgnoreCase) ||
+            vendor.Contains("LVFS", StringComparison.OrdinalIgnoreCase))
+        {
+            return "LVFS";
+        }
+
+        if (vendor.Contains("Ubuntu", StringComparison.OrdinalIgnoreCase) ||
+            vendor.Contains("Fedora", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Linux";
+        }
+
+        return vendor.Length <= 6 ? vendor : vendor[..Math.Min(4, vendor.Length)].ToUpperInvariant();
+    }
+
+    private static string BuildBrandAccentHex(string vendor)
+    {
+        if (vendor.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase))
+        {
+            return "#3346A758";
+        }
+
+        if (vendor.Contains("AMD", StringComparison.OrdinalIgnoreCase))
+        {
+            return "#33EF4444";
+        }
+
+        if (vendor.Contains("Intel", StringComparison.OrdinalIgnoreCase))
+        {
+            return "#330078D4";
+        }
+
+        if (vendor.Contains("Dell", StringComparison.OrdinalIgnoreCase))
+        {
+            return "#33007DB8";
+        }
+
+        if (vendor.Equals("HP", StringComparison.OrdinalIgnoreCase))
+        {
+            return "#3338BDF8";
+        }
+
+        if (vendor.Contains("Lenovo", StringComparison.OrdinalIgnoreCase))
+        {
+            return "#33E11B22";
+        }
+
+        if (vendor.Contains("MSI", StringComparison.OrdinalIgnoreCase))
+        {
+            return "#33DC2626";
+        }
+
+        if (vendor.Contains("ASUS", StringComparison.OrdinalIgnoreCase))
+        {
+            return "#334F46E5";
+        }
+
+        if (vendor.Contains("Acer", StringComparison.OrdinalIgnoreCase))
+        {
+            return "#3384CC16";
+        }
+
+        if (vendor.Contains("Microsoft", StringComparison.OrdinalIgnoreCase))
+        {
+            return "#332563EB";
+        }
+
+        if (vendor.Contains("Realtek", StringComparison.OrdinalIgnoreCase))
+        {
+            return "#33F97316";
+        }
+
+        if (vendor.Contains("fwupd", StringComparison.OrdinalIgnoreCase) ||
+            vendor.Contains("LVFS", StringComparison.OrdinalIgnoreCase) ||
+            vendor.Contains("Ubuntu", StringComparison.OrdinalIgnoreCase) ||
+            vendor.Contains("Fedora", StringComparison.OrdinalIgnoreCase))
+        {
+            return "#3316A34A";
+        }
+
+        return "#334B5563";
+    }
 }
