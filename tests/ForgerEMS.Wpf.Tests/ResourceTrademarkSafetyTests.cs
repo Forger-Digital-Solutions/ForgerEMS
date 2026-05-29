@@ -31,7 +31,19 @@ public sealed class ResourceTrademarkSafetyTests
         "driverstoreexplorer-logo",
         "nvidia-logo",
         "intel-logo",
-        "amd-logo"
+        "amd-logo",
+        "dell-logo",
+        "hp-logo",
+        "lenovo-logo",
+        "msi-logo",
+        "asus-logo",
+        "acer-logo",
+        "realtek-logo",
+        "gigabyte-logo",
+        "asrock-logo",
+        "fedora-logo",
+        "fwupd-logo",
+        "lvfs-logo"
     ];
 
     private static readonly string[] UnsafeBackgroundLabels =
@@ -155,6 +167,44 @@ public sealed class ResourceTrademarkSafetyTests
         Assert.DoesNotContain("Archived", projectText, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Unsafe", projectText, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("LegacyBackground", projectText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BackgroundGenerator_UsesSafeLabelZonesAndGenericLabels()
+    {
+        var generatorText = File.ReadAllText(Path.Combine(RepoRoot, "tools", "Generate-SafeCommandCenterBackground.ps1"));
+
+        Assert.Contains("ModuleLabelSafeHeight", generatorText, StringComparison.Ordinal);
+        Assert.Contains("ModuleLabelSafeWidth", generatorText, StringComparison.Ordinal);
+        Assert.Contains("Draw-LabelPill", generatorText, StringComparison.Ordinal);
+        Assert.Contains("Draw-FeShield", generatorText, StringComparison.Ordinal);
+
+        foreach (var label in new[]
+                 {
+                     "Desktop Image",
+                     "Modern Image",
+                     "Server Image",
+                     "Live Terminal",
+                     "Security Live",
+                     "Desktop Live",
+                     "Image Restore",
+                     "Disk Clone",
+                     "Recovery Kit",
+                     "Multiboot USB",
+                     "Boot Writer",
+                     "Image Flasher",
+                     "Memory Check",
+                     "Hardware Info",
+                     "Disk Health",
+                     "Driver Store",
+                     "Remote Screen",
+                     "Network Radar",
+                     "MULTIBOOT`nCORE",
+                     "MEDIC USB"
+                 })
+        {
+            Assert.Contains(label, generatorText, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
