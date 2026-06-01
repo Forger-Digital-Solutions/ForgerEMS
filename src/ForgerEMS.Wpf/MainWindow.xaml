@@ -1835,6 +1835,85 @@
                         </StackPanel>
                     </GroupBox>
 
+                    <GroupBox x:Name="UsbBuilderChargingIntelligenceCard" Header="Charging Intelligence">
+                        <StackPanel>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock FontSize="12"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource PanelTextBrush}"
+                                               Text="{Binding PortPowerSummaryText}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,4,0,0"
+                                               FontSize="11"
+                                               Foreground="{DynamicResource PanelMutedTextBrush}"
+                                               Text="{Binding PortPowerLastUpdatedDisplay}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                                <Button Grid.Column="1"
+                                        Margin="12,0,0,0"
+                                        Padding="12,6"
+                                        VerticalAlignment="Top"
+                                        Style="{StaticResource SecondaryButtonStyle}"
+                                        Content="Refresh"
+                                        Command="{Binding RefreshPortPowerCommand}" />
+                            </Grid>
+
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Grid.Row="0" Margin="0,0,12,4" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Battery" />
+                                <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,0,0,4" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding PortPowerBatteryPercentDisplay}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="1" Margin="0,0,12,4" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Status" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,0,0,4" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding PortPowerBatteryStatusDisplay}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="2" Margin="0,0,12,4" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Power source" />
+                                <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,0,0,4" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding PortPowerSourceDisplay}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="3" Margin="0,0,12,4" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Adapter class" />
+                                <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,0,0,4" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding PortPowerAdapterClassDisplay}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="4" Margin="0,0,12,4" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Estimated charge rate" />
+                                <TextBlock Grid.Row="4" Grid.Column="1" Margin="0,0,0,4" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding PortPowerChargeRateDisplay}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="5" Margin="0,0,12,4" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Estimated full" />
+                                <TextBlock Grid.Row="5" Grid.Column="1" Margin="0,0,0,4" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding PortPowerEstimatedFullDisplay}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="6" Margin="0,0,12,4" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Port voltage/current" />
+                                <TextBlock Grid.Row="6" Grid.Column="1" Margin="0,0,0,4" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding PortPowerVoltageCurrentDisplay}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="7" Margin="0,0,12,0" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Telemetry confidence" />
+                                <TextBlock Grid.Row="7" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding PortPowerTelemetryConfidenceDisplay}" TextWrapping="Wrap" />
+                            </Grid>
+
+                            <TextBlock Margin="0,0,0,4"
+                                       FontSize="11.5"
+                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                       Text="{Binding PortPowerMissingTelemetryReasonDisplay}"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Margin="0,0,0,4"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                       Text="{Binding PortPowerEvidenceSummaryDisplay}"
+                                       TextWrapping="Wrap" />
+                            <TextBlock FontSize="11"
+                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                       Text="{Binding PortPowerWarningsDisplay}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </GroupBox>
+
                     <!--
                         Compact Drive Validator summary card. Heavy actions (validation mode
                         dropdown, Start/Cancel buttons, inline progress, evidence expander,

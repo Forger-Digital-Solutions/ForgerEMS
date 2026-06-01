@@ -72,6 +72,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly ICopilotService _copilotService;
     private readonly ICopilotProviderRegistry _copilotProviderRegistry;
     private readonly IUsbIntelligenceService _usbIntelligenceService;
+    private readonly IPortPowerTelemetryService _portPowerTelemetryService;
     private readonly IAutoIntelligenceOrchestrator _autoIntelligenceOrchestrator;
     private readonly IWslCommandExecutor _wslExecutor;
     private readonly Dictionary<string, UsbBenchmarkResult> _benchmarkResultsByRoot = new(StringComparer.OrdinalIgnoreCase);
@@ -353,6 +354,34 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private string _usbIntelligenceRunBenchmarkHintDisplay = string.Empty;
 
+    private string _portPowerSummaryText = "Charging intelligence has not been refreshed yet.";
+
+    private string _portPowerBatteryPercentDisplay = "Unknown";
+
+    private string _portPowerBatteryStatusDisplay = "Unknown";
+
+    private string _portPowerSourceDisplay = "Unknown";
+
+    private string _portPowerAdapterClassDisplay = "Unknown";
+
+    private string _portPowerChargeRateDisplay = "Unavailable";
+
+    private string _portPowerEstimatedFullDisplay = "Unavailable";
+
+    private string _portPowerVoltageCurrentDisplay =
+        "Unavailable - exact USB-C voltage/current is not exposed by this device.";
+
+    private string _portPowerTelemetryConfidenceDisplay = "Unavailable";
+
+    private string _portPowerEvidenceSummaryDisplay = "Only basic Windows power status was available.";
+
+    private string _portPowerMissingTelemetryReasonDisplay =
+        "This device does not expose per-port USB-C power telemetry. ForgerEMS can still estimate charging from battery behavior.";
+
+    private string _portPowerWarningsDisplay = string.Empty;
+
+    private string _portPowerLastUpdatedDisplay = "Not refreshed";
+
     private string _unifiedDiagnosticsSummaryText = "Unified diagnostics: not generated yet.";
 
     private string _diagnosticsHealthChecklistText =
@@ -432,7 +461,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IWslCommandExecutor? wslExecutor = null,
         IUsbIntelligenceService? usbIntelligenceService = null,
         IAutoIntelligenceOrchestrator? autoIntelligenceOrchestrator = null,
-        IDriveValidationService? driveValidationService = null)
+        IDriveValidationService? driveValidationService = null,
+        IPortPowerTelemetryService? portPowerTelemetryService = null)
     {
         _backendDiscoveryService = backendDiscoveryService;
         _powerShellRunnerService = powerShellRunnerService;
@@ -447,6 +477,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _copilotService = copilotService;
         _copilotProviderRegistry = copilotProviderRegistry;
         _usbIntelligenceService = usbIntelligenceService ?? new UsbIntelligenceService();
+        _portPowerTelemetryService = portPowerTelemetryService ?? new PortPowerTelemetryService();
         _autoIntelligenceOrchestrator = autoIntelligenceOrchestrator ?? new AutoIntelligenceOrchestrator(
             _appRuntimeService,
             _powerShellRunnerService,
@@ -604,6 +635,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         CaptureUsbMappingAfterCommand = new RelayCommand(CaptureUsbMappingAfter, () => SelectedUsbTarget is not null);
         SaveUsbMappingLabelCommand = new RelayCommand(SaveUsbMappingLabel, () => SelectedUsbTarget is not null && !string.IsNullOrWhiteSpace(UsbMappingLabelDraft));
         OpenUsbMappingWizardCommand = new RelayCommand(OpenUsbMappingWizard);
+        RefreshPortPowerCommand = new RelayCommand(RefreshPortPowerTelemetry);
         RunUsbIntelligenceBenchmarkCommand =
             new AsyncRelayCommand(RunUsbIntelligenceBenchmarkAsync, CanRunUsbIntelligenceBenchmark);
         CancelUsbIntelligenceBenchmarkCommand =
@@ -978,6 +1010,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public RelayCommand SaveUsbMappingLabelCommand { get; }
 
     public RelayCommand OpenUsbMappingWizardCommand { get; }
+
+    public RelayCommand RefreshPortPowerCommand { get; }
 
     public AsyncRelayCommand RunUsbIntelligenceBenchmarkCommand { get; }
 
@@ -1647,6 +1681,84 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         get => _usbIntelligenceRunBenchmarkHintDisplay;
         private set => SetProperty(ref _usbIntelligenceRunBenchmarkHintDisplay, value);
+    }
+
+    public string PortPowerSummaryText
+    {
+        get => _portPowerSummaryText;
+        private set => SetProperty(ref _portPowerSummaryText, value);
+    }
+
+    public string PortPowerBatteryPercentDisplay
+    {
+        get => _portPowerBatteryPercentDisplay;
+        private set => SetProperty(ref _portPowerBatteryPercentDisplay, value);
+    }
+
+    public string PortPowerBatteryStatusDisplay
+    {
+        get => _portPowerBatteryStatusDisplay;
+        private set => SetProperty(ref _portPowerBatteryStatusDisplay, value);
+    }
+
+    public string PortPowerSourceDisplay
+    {
+        get => _portPowerSourceDisplay;
+        private set => SetProperty(ref _portPowerSourceDisplay, value);
+    }
+
+    public string PortPowerAdapterClassDisplay
+    {
+        get => _portPowerAdapterClassDisplay;
+        private set => SetProperty(ref _portPowerAdapterClassDisplay, value);
+    }
+
+    public string PortPowerChargeRateDisplay
+    {
+        get => _portPowerChargeRateDisplay;
+        private set => SetProperty(ref _portPowerChargeRateDisplay, value);
+    }
+
+    public string PortPowerEstimatedFullDisplay
+    {
+        get => _portPowerEstimatedFullDisplay;
+        private set => SetProperty(ref _portPowerEstimatedFullDisplay, value);
+    }
+
+    public string PortPowerVoltageCurrentDisplay
+    {
+        get => _portPowerVoltageCurrentDisplay;
+        private set => SetProperty(ref _portPowerVoltageCurrentDisplay, value);
+    }
+
+    public string PortPowerTelemetryConfidenceDisplay
+    {
+        get => _portPowerTelemetryConfidenceDisplay;
+        private set => SetProperty(ref _portPowerTelemetryConfidenceDisplay, value);
+    }
+
+    public string PortPowerEvidenceSummaryDisplay
+    {
+        get => _portPowerEvidenceSummaryDisplay;
+        private set => SetProperty(ref _portPowerEvidenceSummaryDisplay, value);
+    }
+
+    public string PortPowerMissingTelemetryReasonDisplay
+    {
+        get => _portPowerMissingTelemetryReasonDisplay;
+        private set => SetProperty(ref _portPowerMissingTelemetryReasonDisplay, value);
+    }
+
+    public string PortPowerWarningsDisplay
+    {
+        get => _portPowerWarningsDisplay;
+        private set => SetProperty(ref _portPowerWarningsDisplay, value);
+    }
+
+    public string PortPowerLastUpdatedDisplay
+    {
+        get => _portPowerLastUpdatedDisplay;
+        private set => SetProperty(ref _portPowerLastUpdatedDisplay, value);
     }
 
     public string UsbMappingWorkflowStatus
@@ -3244,6 +3356,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             LoadToolkitHealthReport();
             ApplyDiagnosticsFromDisk();
             RefreshUsbIntelligenceFromDisk();
+            RefreshPortPowerTelemetry();
         }
         catch (Exception ex)
         {
@@ -3568,6 +3681,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         LoadToolkitHealthReport();
         ApplyDiagnosticsFromDisk();
         RefreshUsbIntelligenceFromDisk();
+        RefreshPortPowerTelemetry();
 
         if (_backendContext.IsAvailable)
         {
@@ -9049,6 +9163,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         LoadSystemIntelligenceReport();
         ApplyDiagnosticsFromDisk();
         RefreshUsbIntelligenceFromDisk();
+        RefreshPortPowerTelemetry();
         RefreshCopilotContextText();
         RefreshKyraAssistantPanel();
     }
@@ -9163,6 +9278,48 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             DiagnosticsActionCenterItems.Clear();
             DiagnosticsActionCenterItems.Add("[Warning] Diagnostics | Report parse error | Run Refresh Backend Context and retry | source: Diagnostics parser");
         }
+    }
+
+    private void RefreshPortPowerTelemetry()
+    {
+        try
+        {
+            ApplyPortPowerSnapshot(_portPowerTelemetryService.CollectSnapshot());
+        }
+        catch (Exception ex)
+        {
+            PortPowerSummaryText = "Charging intelligence could not read Windows power telemetry.";
+            PortPowerBatteryPercentDisplay = "Unknown";
+            PortPowerBatteryStatusDisplay = "Unknown";
+            PortPowerSourceDisplay = "Unknown";
+            PortPowerAdapterClassDisplay = "Unknown";
+            PortPowerChargeRateDisplay = "Unavailable";
+            PortPowerEstimatedFullDisplay = "Unavailable";
+            PortPowerVoltageCurrentDisplay = "Unavailable - exact USB-C voltage/current is not exposed by this device.";
+            PortPowerTelemetryConfidenceDisplay = "Unavailable";
+            PortPowerEvidenceSummaryDisplay = "Power telemetry read failed.";
+            PortPowerMissingTelemetryReasonDisplay = ex.Message;
+            PortPowerWarningsDisplay = string.Empty;
+            PortPowerLastUpdatedDisplay = $"Updated {DateTimeOffset.Now:g}";
+            AppendDiagnosticsLog($"Port power telemetry refresh failed: {ex.Message}");
+        }
+    }
+
+    private void ApplyPortPowerSnapshot(PortPowerSnapshot snapshot)
+    {
+        PortPowerSummaryText = PortPowerTelemetryFormatter.FormatSummary(snapshot);
+        PortPowerBatteryPercentDisplay = PortPowerTelemetryFormatter.FormatBatteryPercent(snapshot);
+        PortPowerBatteryStatusDisplay = snapshot.BatteryStatus;
+        PortPowerSourceDisplay = PortPowerTelemetryFormatter.FormatPowerSource(snapshot.PowerSourceKind);
+        PortPowerAdapterClassDisplay = PortPowerTelemetryFormatter.FormatAdapterClass(snapshot);
+        PortPowerChargeRateDisplay = PortPowerTelemetryFormatter.FormatChargeRate(snapshot);
+        PortPowerEstimatedFullDisplay = PortPowerTelemetryFormatter.FormatEstimatedFull(snapshot);
+        PortPowerVoltageCurrentDisplay = PortPowerTelemetryFormatter.FormatVoltageCurrent(snapshot);
+        PortPowerTelemetryConfidenceDisplay = PortPowerTelemetryFormatter.FormatConfidence(snapshot.TelemetryConfidence);
+        PortPowerEvidenceSummaryDisplay = snapshot.EvidenceSummary;
+        PortPowerMissingTelemetryReasonDisplay = snapshot.MissingTelemetryReason;
+        PortPowerWarningsDisplay = PortPowerTelemetryFormatter.FormatWarnings(snapshot);
+        PortPowerLastUpdatedDisplay = PortPowerTelemetryFormatter.FormatLastUpdated(snapshot.CollectedAtUtc);
     }
 
     private void RefreshUsbIntelligenceFromDisk()
@@ -14592,6 +14749,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         CaptureUsbMappingAfterCommand.RaiseCanExecuteChanged();
         SaveUsbMappingLabelCommand.RaiseCanExecuteChanged();
         OpenUsbMappingWizardCommand.RaiseCanExecuteChanged();
+        RefreshPortPowerCommand.RaiseCanExecuteChanged();
         RunUsbIntelligenceBenchmarkCommand.RaiseCanExecuteChanged();
         CancelUsbIntelligenceBenchmarkCommand.RaiseCanExecuteChanged();
         RunDriveValidatorCommand.RaiseCanExecuteChanged();
