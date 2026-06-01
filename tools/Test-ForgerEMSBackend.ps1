@@ -20,9 +20,13 @@ Test-PathOrWarn (Join-Path $repoRoot "backend\SystemIntelligence\Invoke-ForgerEM
 Write-Host "PSVersion: $($PSVersionTable.PSVersion)"
 $dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
 if ($dotnet) { Write-Host "[OK] dotnet: $($dotnet.Source)" -ForegroundColor Green } else { Write-Host "[MISS] dotnet SDK on PATH" -ForegroundColor Yellow }
+# Mirror tools\build-release.ps1 Resolve-IsccPath: PATH, per-user LOCALAPPDATA,
+# then Program Files. Otherwise per-user installs report a false "not found".
 $iscc = @(
+  (Get-Command ISCC.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -ErrorAction SilentlyContinue),
+  (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"),
   (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),
   (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe")
-) | Where-Object { Test-Path $_ } | Select-Object -First 1
+) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
 if ($iscc) { Write-Host "[OK] Inno Setup: $iscc" -ForegroundColor Green } else { Write-Host "[INFO] Inno Setup 6 not found (optional unless packaging)" -ForegroundColor DarkGray }
 Write-Host "Done." -ForegroundColor Cyan
