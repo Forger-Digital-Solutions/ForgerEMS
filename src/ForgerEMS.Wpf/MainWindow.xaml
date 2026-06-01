@@ -1773,12 +1773,7 @@
                     -->
                     <GroupBox x:Name="UsbBuilderUsbIntelligenceCompactCard" Header="Port Intelligence">
                         <StackPanel>
-                            <TextBlock FontSize="16"
-                                       FontWeight="SemiBold"
-                                       Foreground="{DynamicResource PanelTextBrush}"
-                                       Text="Port Intelligence"
-                                       TextWrapping="Wrap" />
-                            <TextBlock Margin="0,4,0,10"
+                            <TextBlock Margin="0,0,0,10"
                                        FontSize="11.5"
                                        Foreground="{DynamicResource PanelMutedTextBrush}"
                                        Text="Map USB devices, ports, hubs, charging state, power confidence, and common bottlenecks using safe Windows telemetry."
