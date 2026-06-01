@@ -73,6 +73,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly ICopilotProviderRegistry _copilotProviderRegistry;
     private readonly IUsbIntelligenceService _usbIntelligenceService;
     private readonly IPortPowerTelemetryService _portPowerTelemetryService;
+    private readonly IElevatedScanTelemetryCache _elevatedScanTelemetryCache;
     private readonly IAutoIntelligenceOrchestrator _autoIntelligenceOrchestrator;
     private readonly IWslCommandExecutor _wslExecutor;
     private readonly Dictionary<string, UsbBenchmarkResult> _benchmarkResultsByRoot = new(StringComparer.OrdinalIgnoreCase);
@@ -354,6 +355,36 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private string _usbIntelligenceRunBenchmarkHintDisplay = string.Empty;
 
+    private UsbIntelligencePanelUiState? _lastUsbIntelligencePanelState;
+
+    private PortPowerSnapshot? _lastPortPowerSnapshot;
+
+    private ElevatedScanTelemetrySnapshot? _lastElevatedScanTelemetrySnapshot;
+
+    private string _portIntelligenceOverviewText =
+        "Select a USB target and refresh telemetry to build Port Intelligence.";
+
+    private string _portIntelligencePortMapSummaryText =
+        "Port map unavailable until USB Intelligence has a saved report.";
+
+    private string _portIntelligenceChargingSummaryText =
+        "Charging telemetry has not been refreshed yet.";
+
+    private string _portIntelligencePowerSourceSummaryText =
+        "Power source unknown. Adapter wattage: Unknown.";
+
+    private string _portIntelligenceBottlenecksText =
+        "No obvious cable, hub, port, power, or device bottleneck has been identified yet.";
+
+    private string _portIntelligenceRecommendedFixesText =
+        "Map the current port, run a USB benchmark, and refresh charging telemetry before making hardware changes.";
+
+    private string _portIntelligenceDeepScanSummaryText =
+        ElevatedScanTelemetrySnapshot.RunElevatedScanPrompt;
+
+    private string _portIntelligenceTelemetryLimitationsText =
+        PortIntelligenceSummaryBuilder.DefaultTelemetryLimitations;
+
     private string _portPowerSummaryText = "Charging intelligence has not been refreshed yet.";
 
     private string _portPowerBatteryPercentDisplay = "Unknown";
@@ -462,7 +493,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IUsbIntelligenceService? usbIntelligenceService = null,
         IAutoIntelligenceOrchestrator? autoIntelligenceOrchestrator = null,
         IDriveValidationService? driveValidationService = null,
-        IPortPowerTelemetryService? portPowerTelemetryService = null)
+        IPortPowerTelemetryService? portPowerTelemetryService = null,
+        IElevatedScanTelemetryCache? elevatedScanTelemetryCache = null)
     {
         _backendDiscoveryService = backendDiscoveryService;
         _powerShellRunnerService = powerShellRunnerService;
@@ -478,6 +510,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _copilotProviderRegistry = copilotProviderRegistry;
         _usbIntelligenceService = usbIntelligenceService ?? new UsbIntelligenceService();
         _portPowerTelemetryService = portPowerTelemetryService ?? new PortPowerTelemetryService();
+        _elevatedScanTelemetryCache = elevatedScanTelemetryCache ?? new ElevatedScanTelemetryCache();
         _autoIntelligenceOrchestrator = autoIntelligenceOrchestrator ?? new AutoIntelligenceOrchestrator(
             _appRuntimeService,
             _powerShellRunnerService,
@@ -1681,6 +1714,54 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         get => _usbIntelligenceRunBenchmarkHintDisplay;
         private set => SetProperty(ref _usbIntelligenceRunBenchmarkHintDisplay, value);
+    }
+
+    public string PortIntelligenceOverviewText
+    {
+        get => _portIntelligenceOverviewText;
+        private set => SetProperty(ref _portIntelligenceOverviewText, value);
+    }
+
+    public string PortIntelligencePortMapSummaryText
+    {
+        get => _portIntelligencePortMapSummaryText;
+        private set => SetProperty(ref _portIntelligencePortMapSummaryText, value);
+    }
+
+    public string PortIntelligenceChargingSummaryText
+    {
+        get => _portIntelligenceChargingSummaryText;
+        private set => SetProperty(ref _portIntelligenceChargingSummaryText, value);
+    }
+
+    public string PortIntelligencePowerSourceSummaryText
+    {
+        get => _portIntelligencePowerSourceSummaryText;
+        private set => SetProperty(ref _portIntelligencePowerSourceSummaryText, value);
+    }
+
+    public string PortIntelligenceBottlenecksText
+    {
+        get => _portIntelligenceBottlenecksText;
+        private set => SetProperty(ref _portIntelligenceBottlenecksText, value);
+    }
+
+    public string PortIntelligenceRecommendedFixesText
+    {
+        get => _portIntelligenceRecommendedFixesText;
+        private set => SetProperty(ref _portIntelligenceRecommendedFixesText, value);
+    }
+
+    public string PortIntelligenceDeepScanSummaryText
+    {
+        get => _portIntelligenceDeepScanSummaryText;
+        private set => SetProperty(ref _portIntelligenceDeepScanSummaryText, value);
+    }
+
+    public string PortIntelligenceTelemetryLimitationsText
+    {
+        get => _portIntelligenceTelemetryLimitationsText;
+        private set => SetProperty(ref _portIntelligenceTelemetryLimitationsText, value);
     }
 
     public string PortPowerSummaryText
@@ -4413,6 +4494,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (result is not null)
         {
             LoadSystemIntelligenceReport();
+            RefreshPortPowerTelemetry();
+            if (SelectedUsbTarget is not null)
+            {
+                await RefreshUsbIntelligenceReportForSelectedTargetAsync().ConfigureAwait(true);
+            }
+            else
+            {
+                RefreshUsbIntelligenceFromDisk();
+            }
+
             TryRecordKyraSystemScanLearning();
         }
     }
@@ -7007,7 +7098,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private void CaptureUsbMappingBefore()
     {
-        var snap = _usbIntelligenceService.BuildTopologySnapshot(SelectedUsbTarget);
+        var snap = _usbIntelligenceService.BuildTopologySnapshot(
+            SelectedUsbTarget,
+            BuildUsbTopologyOptions(machineProfile: _usbMachineProfileStore.LoadOrCreate()));
         _usbGuidedMappingWorkflow.CaptureBeforeSnapshot(snap);
         UsbMappingWorkflowStatus =
             "Step 3: Move the USB to the port you want to label, wait for it to mount, then click Detect Port Change.";
@@ -7016,7 +7109,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private void CaptureUsbMappingAfter()
     {
-        var snap = _usbIntelligenceService.BuildTopologySnapshot(SelectedUsbTarget);
+        var snap = _usbIntelligenceService.BuildTopologySnapshot(
+            SelectedUsbTarget,
+            BuildUsbTopologyOptions(machineProfile: _usbMachineProfileStore.LoadOrCreate()));
         _usbGuidedMappingWorkflow.CaptureAfterSnapshot(snap);
         UsbMappingWorkflowStatus =
             "Step 4: Enter a short label for that port. Step 5: Click Save Port Label (writes to your local profile).";
@@ -7032,7 +7127,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _usbIntelligenceService,
             _usbMachineProfileStore,
             () => UsbTargets.ToList(),
-            RunWizardUsbBenchmarkAsync);
+            RunWizardUsbBenchmarkAsync,
+            buildTopologyOptions: () => BuildUsbTopologyOptions(machineProfile: _usbMachineProfileStore.LoadOrCreate()));
         var win = new UsbMappingWizardWindow(vm);
         if (Application.Current?.MainWindow is { } owner)
         {
@@ -7069,11 +7165,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             var profile = _usbMachineProfileStore.LoadOrCreate();
             var snapshot = _usbIntelligenceService.BuildTopologySnapshot(
                 SelectedUsbTarget,
-                new UsbTopologyBuildOptions
-                {
-                    PreviousSnapshot = previousUsb,
-                    MachineProfile = profile
-                });
+                BuildUsbTopologyOptions(previousUsb, profile));
             _usbMachineProfileStore.ApplySnapshot(profile, snapshot);
             _usbMachineProfileStore.Save(profile);
             await _usbIntelligenceService.WriteLatestReportAsync(reports, snapshot).ConfigureAwait(true);
@@ -9284,7 +9376,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         try
         {
-            ApplyPortPowerSnapshot(_portPowerTelemetryService.CollectSnapshot());
+            var elevatedTelemetry = GetLatestElevatedScanTelemetry();
+            _lastElevatedScanTelemetrySnapshot = elevatedTelemetry;
+            ApplyPortPowerSnapshot(_portPowerTelemetryService.CollectSnapshot(elevatedTelemetry));
         }
         catch (Exception ex)
         {
@@ -9301,12 +9395,31 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             PortPowerMissingTelemetryReasonDisplay = ex.Message;
             PortPowerWarningsDisplay = string.Empty;
             PortPowerLastUpdatedDisplay = $"Updated {DateTimeOffset.Now:g}";
+            ApplyPortIntelligenceSummary();
             AppendDiagnosticsLog($"Port power telemetry refresh failed: {ex.Message}");
         }
     }
 
+    private ElevatedScanTelemetrySnapshot GetLatestElevatedScanTelemetry()
+    {
+        var snapshot = _elevatedScanTelemetryCache.GetLatest(GetRuntimeReportsDirectory());
+        _lastElevatedScanTelemetrySnapshot = snapshot;
+        return snapshot;
+    }
+
+    private UsbTopologyBuildOptions BuildUsbTopologyOptions(
+        UsbTopologySnapshot? previousSnapshot = null,
+        UsbMachineProfile? machineProfile = null) =>
+        new()
+        {
+            PreviousSnapshot = previousSnapshot,
+            MachineProfile = machineProfile,
+            ElevatedScanTelemetry = GetLatestElevatedScanTelemetry()
+        };
+
     private void ApplyPortPowerSnapshot(PortPowerSnapshot snapshot)
     {
+        _lastPortPowerSnapshot = snapshot;
         PortPowerSummaryText = PortPowerTelemetryFormatter.FormatSummary(snapshot);
         PortPowerBatteryPercentDisplay = PortPowerTelemetryFormatter.FormatBatteryPercent(snapshot);
         PortPowerBatteryStatusDisplay = snapshot.BatteryStatus;
@@ -9320,6 +9433,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         PortPowerMissingTelemetryReasonDisplay = snapshot.MissingTelemetryReason;
         PortPowerWarningsDisplay = PortPowerTelemetryFormatter.FormatWarnings(snapshot);
         PortPowerLastUpdatedDisplay = PortPowerTelemetryFormatter.FormatLastUpdated(snapshot.CollectedAtUtc);
+        ApplyPortIntelligenceSummary();
     }
 
     private void RefreshUsbIntelligenceFromDisk()
@@ -9333,6 +9447,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             UsbIntelligenceBuilderHintText =
                 "USB Intelligence: waiting for a saved report. Select a USB target in USB Builder, then run USB Benchmark or refresh intelligence when available.";
             ResetUsbIntelligencePanelFieldsForMissingReport(targetLine, showBenchmarkHint: true);
+            _lastUsbIntelligencePanelState = null;
+            ApplyPortIntelligenceSummary();
             return;
         }
 
@@ -9340,6 +9456,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             var json = File.ReadAllText(path);
             var state = UsbIntelligenceLatestPanelReader.Parse(json);
+            _lastUsbIntelligencePanelState = state;
 
             UsbIntelligencePanelTargetDisplay = targetLine;
             UsbIntelligenceDetectedClassDisplay = state.DetectedClassDisplay;
@@ -9357,12 +9474,45 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             UsbIntelligenceBuilderHintText = string.IsNullOrWhiteSpace(state.BuilderSummaryLine)
                 ? UsbIntelligencePanelUiCopy.GuidanceIntro
                 : state.BuilderSummaryLine;
+            ApplyPortIntelligenceSummary();
         }
         catch
         {
             UsbIntelligenceBuilderHintText = "USB Intelligence: could not read the latest topology file.";
             ResetUsbIntelligencePanelFieldsForMissingReport(targetLine, showBenchmarkHint: true);
+            _lastUsbIntelligencePanelState = null;
+            ApplyPortIntelligenceSummary();
         }
+    }
+
+    private void ApplyPortIntelligenceSummary()
+    {
+        var elevated = _lastElevatedScanTelemetrySnapshot;
+        if (elevated is null)
+        {
+            try
+            {
+                elevated = GetLatestElevatedScanTelemetry();
+            }
+            catch
+            {
+                elevated = ElevatedScanTelemetrySnapshot.Missing();
+            }
+        }
+
+        var summary = PortIntelligenceSummaryBuilder.Build(
+            _lastUsbIntelligencePanelState,
+            _lastPortPowerSnapshot,
+            elevated,
+            SelectedUsbTarget);
+        PortIntelligenceOverviewText = summary.Overview;
+        PortIntelligencePortMapSummaryText = summary.PortMapSummary;
+        PortIntelligenceChargingSummaryText = summary.ChargingSummary;
+        PortIntelligencePowerSourceSummaryText = summary.PowerSourceSummary;
+        PortIntelligenceBottlenecksText = summary.BottlenecksSummary;
+        PortIntelligenceRecommendedFixesText = summary.RecommendedFixesSummary;
+        PortIntelligenceDeepScanSummaryText = summary.DeepScanSummary;
+        PortIntelligenceTelemetryLimitationsText = summary.TelemetryLimitationsSummary;
     }
 
     private static string FormatUsbIntelligenceTargetLine(UsbTargetInfo? target)

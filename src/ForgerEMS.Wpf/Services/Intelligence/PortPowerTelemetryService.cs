@@ -134,6 +134,8 @@ public interface IPortPowerTelemetryService
 {
     PortPowerSnapshot CollectSnapshot();
 
+    PortPowerSnapshot CollectSnapshot(ElevatedScanTelemetrySnapshot? elevatedTelemetry);
+
     void ResetSamples();
 }
 
@@ -162,7 +164,13 @@ public sealed class PortPowerTelemetryService : IPortPowerTelemetryService
 
     public PortPowerSnapshot CollectSnapshot()
     {
+        return CollectSnapshot(null);
+    }
+
+    public PortPowerSnapshot CollectSnapshot(ElevatedScanTelemetrySnapshot? elevatedTelemetry)
+    {
         var raw = _source.Read();
+        raw = MergeElevatedTelemetry(raw, elevatedTelemetry);
         var collectedAt = raw.CollectedAtUtc == default ? DateTimeOffset.UtcNow : raw.CollectedAtUtc;
 
         if (!raw.HasAnyPowerData)
@@ -172,8 +180,9 @@ public sealed class PortPowerTelemetryService : IPortPowerTelemetryService
                 CollectedAtUtc = collectedAt,
                 BatteryStatus = "Unknown",
                 TelemetryConfidence = PortPowerTelemetryConfidence.Unavailable,
-                MissingTelemetryReason = "Windows did not expose battery or power status to user-mode APIs.",
-                EvidenceSummary = "No user-mode battery, AC, USB-C, or direct electrical telemetry was available."
+                MissingTelemetryReason = BuildNoPowerDataReason(elevatedTelemetry),
+                EvidenceSummary = BuildNoPowerDataEvidence(elevatedTelemetry),
+                Warnings = BuildElevatedTelemetryWarnings(elevatedTelemetry).ToArray()
             };
         }
 
@@ -200,9 +209,9 @@ public sealed class PortPowerTelemetryService : IPortPowerTelemetryService
         var estimate = PortPowerEstimator.BuildEstimate(recentSamples, raw.BatteryPercent, isCharging);
         var adapterClass = PortPowerEstimator.ClassifyAdapterWattage(raw.DirectAdapterWattageWatts);
         var directRate = NormalizeDirectWatts(raw.DirectEffectiveChargeRateWatts);
-        var warnings = BuildWarnings(raw, estimate, isCharging, directRate.HasValue).ToArray();
+        var warnings = BuildWarnings(raw, estimate, isCharging, directRate.HasValue, elevatedTelemetry).ToArray();
         var confidence = PortPowerEstimator.SelectConfidence(raw, estimate, directRate.HasValue, adapterClass.HasValue);
-        var evidence = BuildEvidenceSummary(raw, estimate, directRate.HasValue, adapterClass.HasValue);
+        var evidence = BuildEvidenceSummary(raw, estimate, directRate.HasValue, adapterClass.HasValue, elevatedTelemetry);
 
         return new PortPowerSnapshot
         {
@@ -221,7 +230,7 @@ public sealed class PortPowerTelemetryService : IPortPowerTelemetryService
             CurrentAmps = raw.CurrentAmps,
             TelemetryConfidence = confidence,
             EvidenceSummary = evidence,
-            MissingTelemetryReason = BuildMissingTelemetryReason(raw, adapterClass.HasValue, directRate.HasValue),
+            MissingTelemetryReason = BuildMissingTelemetryReason(raw, adapterClass.HasValue, directRate.HasValue, elevatedTelemetry),
             Warnings = warnings,
             RateIsEstimatedFromBatterySamples = !directRate.HasValue && estimate.PercentPerHour.HasValue
         };
@@ -282,13 +291,67 @@ public sealed class PortPowerTelemetryService : IPortPowerTelemetryService
         return watts.Value;
     }
 
+    private static PortPowerRawTelemetry MergeElevatedTelemetry(
+        PortPowerRawTelemetry raw,
+        ElevatedScanTelemetrySnapshot? elevatedTelemetry)
+    {
+        if (elevatedTelemetry is not { State: ElevatedScanTelemetryState.Fresh, PortPower: { } elevated })
+        {
+            return raw;
+        }
+
+        var evidence = raw.Evidence.Concat(elevated.Evidence).ToList();
+        evidence.Add($"Elevated Scan telemetry cache used ({elevated.Source}; confidence {elevated.Confidence}).");
+        var sourceHints = raw.SourceHints.Concat(elevated.SourceHints).ToArray();
+        var warnings = raw.Warnings.ToList();
+        if (!elevated.HasDirectElectricalTelemetry)
+        {
+            warnings.Add("Elevated Scan did not expose deeper port or charging electrical telemetry on this device.");
+        }
+
+        return new PortPowerRawTelemetry
+        {
+            CollectedAtUtc = raw.CollectedAtUtc,
+            HasBattery = raw.HasBattery,
+            BatteryPercent = raw.BatteryPercent,
+            BatteryStatusCode = raw.BatteryStatusCode,
+            BatteryStatusText = raw.BatteryStatusText,
+            IsCharging = raw.IsCharging,
+            IsPluggedIn = raw.IsPluggedIn,
+            DirectEffectiveChargeRateWatts = raw.DirectEffectiveChargeRateWatts ?? elevated.EffectiveChargeRateWatts,
+            DirectAdapterWattageWatts = raw.DirectAdapterWattageWatts ??
+                                        elevated.AdapterWattageWatts ??
+                                        elevated.AdapterWattageClassWatts,
+            VoltageVolts = raw.VoltageVolts ?? elevated.VoltageVolts,
+            CurrentAmps = raw.CurrentAmps ?? elevated.CurrentAmps,
+            Evidence = evidence
+                .Where(item => !string.IsNullOrWhiteSpace(item))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
+            SourceHints = sourceHints
+                .Where(item => !string.IsNullOrWhiteSpace(item))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
+            Warnings = warnings
+                .Where(item => !string.IsNullOrWhiteSpace(item))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray()
+        };
+    }
+
     private static IEnumerable<string> BuildWarnings(
         PortPowerRawTelemetry raw,
         PortPowerEstimate estimate,
         bool isCharging,
-        bool hasDirectRate)
+        bool hasDirectRate,
+        ElevatedScanTelemetrySnapshot? elevatedTelemetry)
     {
         foreach (var warning in raw.Warnings.Where(item => !string.IsNullOrWhiteSpace(item)))
+        {
+            yield return warning;
+        }
+
+        foreach (var warning in BuildElevatedTelemetryWarnings(elevatedTelemetry))
         {
             yield return warning;
         }
@@ -313,7 +376,8 @@ public sealed class PortPowerTelemetryService : IPortPowerTelemetryService
         PortPowerRawTelemetry raw,
         PortPowerEstimate estimate,
         bool hasDirectRate,
-        bool hasAdapterClass)
+        bool hasAdapterClass,
+        ElevatedScanTelemetrySnapshot? elevatedTelemetry)
     {
         var parts = new List<string>();
         parts.AddRange(raw.Evidence.Where(item => !string.IsNullOrWhiteSpace(item)));
@@ -333,6 +397,12 @@ public sealed class PortPowerTelemetryService : IPortPowerTelemetryService
             parts.Add($"Battery sample estimate from {estimate.SampleCount.ToString(CultureInfo.InvariantCulture)} samples over {FormatDuration(estimate.SampleWindow)}.");
         }
 
+        var elevatedEvidence = BuildElevatedTelemetryEvidence(elevatedTelemetry);
+        if (!string.IsNullOrWhiteSpace(elevatedEvidence))
+        {
+            parts.Add(elevatedEvidence);
+        }
+
         return parts.Count == 0
             ? "Only basic Windows power status was available."
             : string.Join(" ", parts.Distinct(StringComparer.OrdinalIgnoreCase));
@@ -341,16 +411,22 @@ public sealed class PortPowerTelemetryService : IPortPowerTelemetryService
     private static string BuildMissingTelemetryReason(
         PortPowerRawTelemetry raw,
         bool hasAdapterClass,
-        bool hasDirectRate)
+        bool hasDirectRate,
+        ElevatedScanTelemetrySnapshot? elevatedTelemetry)
     {
+        var elevatedReason = BuildElevatedAvailabilityReason(elevatedTelemetry);
         if (!raw.HasBattery)
         {
-            return "No internal battery detected. Port power telemetry is limited on desktops.";
+            return AppendReason(
+                "No internal battery detected. Port power telemetry is limited on desktops.",
+                elevatedReason);
         }
 
         if (!raw.VoltageVolts.HasValue && !raw.CurrentAmps.HasValue)
         {
-            return "This device does not expose per-port USB-C power telemetry. ForgerEMS can still estimate charging from battery behavior.";
+            return AppendReason(
+                elevatedReason,
+                "This device does not expose per-port USB-C power telemetry. ForgerEMS can still estimate charging from battery behavior.");
         }
 
         if (!hasAdapterClass && !hasDirectRate)
@@ -364,6 +440,100 @@ public sealed class PortPowerTelemetryService : IPortPowerTelemetryService
         }
 
         return string.Empty;
+    }
+
+    private static string BuildNoPowerDataReason(ElevatedScanTelemetrySnapshot? elevatedTelemetry)
+    {
+        var elevatedReason = BuildElevatedAvailabilityReason(elevatedTelemetry);
+        return AppendReason(
+            string.IsNullOrWhiteSpace(elevatedReason)
+                ? "Windows did not expose battery or power status to user-mode APIs."
+                : elevatedReason,
+            "Windows did not expose battery or power status to user-mode APIs.");
+    }
+
+    private static string BuildNoPowerDataEvidence(ElevatedScanTelemetrySnapshot? elevatedTelemetry)
+    {
+        var elevatedEvidence = BuildElevatedTelemetryEvidence(elevatedTelemetry);
+        return AppendReason(
+            "No user-mode battery, AC, USB-C, or direct electrical telemetry was available.",
+            elevatedEvidence);
+    }
+
+    private static string BuildElevatedAvailabilityReason(ElevatedScanTelemetrySnapshot? elevatedTelemetry)
+    {
+        if (elevatedTelemetry is null || elevatedTelemetry.IsMissing)
+        {
+            return ElevatedScanTelemetrySnapshot.RunElevatedScanPrompt;
+        }
+
+        if (elevatedTelemetry.IsStale)
+        {
+            return elevatedTelemetry.MissingTelemetryReason;
+        }
+
+        if (elevatedTelemetry.PortPower?.HasDirectElectricalTelemetry != true)
+        {
+            if (!string.IsNullOrWhiteSpace(elevatedTelemetry.PortPower?.MissingTelemetryReason))
+            {
+                return elevatedTelemetry.PortPower!.MissingTelemetryReason;
+            }
+
+            return string.IsNullOrWhiteSpace(elevatedTelemetry.MissingTelemetryReason) ||
+                   string.Equals(
+                       elevatedTelemetry.MissingTelemetryReason,
+                       ElevatedScanTelemetrySnapshot.RunElevatedScanPrompt,
+                       StringComparison.Ordinal)
+                ? "Elevated Scan completed, but this device did not expose deeper port or charging telemetry."
+                : elevatedTelemetry.MissingTelemetryReason;
+        }
+
+        return string.Empty;
+    }
+
+    private static string BuildElevatedTelemetryEvidence(ElevatedScanTelemetrySnapshot? elevatedTelemetry)
+    {
+        if (elevatedTelemetry is null || elevatedTelemetry.IsMissing)
+        {
+            return "No cached Elevated Scan telemetry was available.";
+        }
+
+        if (elevatedTelemetry.IsStale)
+        {
+            return $"Cached Elevated Scan telemetry is stale/expired (source: {elevatedTelemetry.Source}; confidence {elevatedTelemetry.Confidence}).";
+        }
+
+        return $"Cached Elevated Scan telemetry is available from {elevatedTelemetry.Source} with {elevatedTelemetry.Confidence} confidence.";
+    }
+
+    private static IEnumerable<string> BuildElevatedTelemetryWarnings(ElevatedScanTelemetrySnapshot? elevatedTelemetry)
+    {
+        if (elevatedTelemetry is null || elevatedTelemetry.IsMissing)
+        {
+            yield return ElevatedScanTelemetrySnapshot.RunElevatedScanPrompt;
+            yield break;
+        }
+
+        if (elevatedTelemetry.IsStale)
+        {
+            yield return elevatedTelemetry.MissingTelemetryReason;
+        }
+    }
+
+    private static string AppendReason(string first, string second)
+    {
+        if (string.IsNullOrWhiteSpace(first))
+        {
+            return second.Trim();
+        }
+
+        if (string.IsNullOrWhiteSpace(second) ||
+            first.Contains(second, StringComparison.OrdinalIgnoreCase))
+        {
+            return first.Trim();
+        }
+
+        return first.TrimEnd('.', ' ') + ". " + second.Trim();
     }
 
     internal static string FormatDuration(TimeSpan duration)
@@ -717,7 +887,6 @@ internal sealed class WindowsPortPowerTelemetrySource : IPortPowerTelemetrySourc
         TryReadSystemPowerStatus(builder);
         TryReadWin32Battery(builder);
         TryReadWin32PortableBattery(builder);
-        TryReadRootWmiBatteryTelemetry(builder);
         TryReadPnpSourceHints(builder);
 
         return builder.Build();
@@ -808,50 +977,6 @@ internal sealed class WindowsPortPowerTelemetrySource : IPortPowerTelemetrySourc
         catch (Exception ex) when (IsExpectedManagementFailure(ex))
         {
             builder.AddEvidence("Win32_PortableBattery did not expose usable battery details.");
-        }
-    }
-
-    private static void TryReadRootWmiBatteryTelemetry(RawPortPowerBuilder builder)
-    {
-        try
-        {
-            var scope = new ManagementScope(@"\\.\root\wmi");
-            using var searcher = new ManagementObjectSearcher(scope, new ObjectQuery("SELECT * FROM BatteryStatus"));
-            foreach (ManagementObject battery in searcher.Get())
-            {
-                builder.HasBattery = true;
-                builder.IsPluggedIn ??= TryGetBool(battery, "PowerOnline");
-                builder.IsCharging ??= TryGetBool(battery, "Charging");
-
-                var isDischarging = TryGetBool(battery, "Discharging");
-                if (builder.IsCharging is null && isDischarging == true)
-                {
-                    builder.IsCharging = false;
-                }
-
-                var chargeRateMw = TryGetDouble(battery, "ChargeRate");
-                if (chargeRateMw is > 0d)
-                {
-                    builder.DirectEffectiveChargeRateWatts ??= chargeRateMw.Value / 1000d;
-                }
-                else
-                {
-                    var dischargeRateMw = TryGetDouble(battery, "DischargeRate");
-                    if (dischargeRateMw is > 0d)
-                    {
-                        builder.DirectEffectiveChargeRateWatts ??= -(dischargeRateMw.Value / 1000d);
-                    }
-                }
-
-                builder.VoltageVolts ??= NormalizeVoltage(TryGetDouble(battery, "Voltage"));
-                builder.CurrentAmps ??= NormalizeCurrent(TryGetDouble(battery, "Current"));
-                builder.AddEvidence("root\\wmi BatteryStatus exposed direct battery telemetry.");
-                break;
-            }
-        }
-        catch (Exception ex) when (IsExpectedManagementFailure(ex))
-        {
-            builder.AddEvidence("root\\wmi BatteryStatus did not expose direct watt/voltage/current telemetry.");
         }
     }
 
@@ -962,28 +1087,6 @@ internal sealed class WindowsPortPowerTelemetrySource : IPortPowerTelemetrySourc
         {
             return null;
         }
-    }
-
-    private static double? NormalizeVoltage(double? voltage)
-    {
-        if (!voltage.HasValue || voltage.Value <= 0d)
-        {
-            return null;
-        }
-
-        var normalized = voltage.Value > 100d ? voltage.Value / 1000d : voltage.Value;
-        return normalized is > 0d and < 60d ? normalized : null;
-    }
-
-    private static double? NormalizeCurrent(double? current)
-    {
-        if (!current.HasValue || current.Value <= 0d)
-        {
-            return null;
-        }
-
-        var normalized = current.Value > 100d ? current.Value / 1000d : current.Value;
-        return normalized is > 0d and < 30d ? normalized : null;
     }
 
     private sealed class RawPortPowerBuilder

@@ -1765,14 +1765,24 @@
                     </GroupBox>
 
                     <!--
-                        Compact USB Intelligence Pro summary card. Heavy actions (Run USB
-                        Benchmark, port mapping capture/detect/save, legacy advanced expander)
-                        intentionally moved out of the USB Builder tab into the USB Mapping
-                        Wizard. ViewModel benchmark/mapping commands remain available so
+                        Port Intelligence summary card. Heavy actions (Run USB Benchmark,
+                        port mapping capture/detect/save, legacy advanced expander)
+                        intentionally stay in the USB Mapping Wizard. ViewModel benchmark,
+                        mapping, and charging telemetry commands remain available so
                         wizards and tests can still reach them.
                     -->
-                    <GroupBox x:Name="UsbBuilderUsbIntelligenceCompactCard" Header="USB Intelligence Pro">
+                    <GroupBox x:Name="UsbBuilderUsbIntelligenceCompactCard" Header="Port Intelligence">
                         <StackPanel>
+                            <TextBlock FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource PanelTextBrush}"
+                                       Text="Port Intelligence"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Margin="0,4,0,10"
+                                       FontSize="11.5"
+                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                       Text="Map USB devices, ports, hubs, charging state, power confidence, and common bottlenecks using safe Windows telemetry."
+                                       TextWrapping="Wrap" />
                             <Grid Margin="0,0,0,8">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -1822,6 +1832,142 @@
                                 <TextBlock Grid.Row="4" Margin="0,0,12,0" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Recommendation" />
                                 <TextBlock Grid.Row="4" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding UsbIntelligenceRecommendationQualityDisplay}" />
                             </Grid>
+                            <Border Margin="0,0,0,8"
+                                    Padding="10"
+                                    Background="#142A3A"
+                                    BorderBrush="{DynamicResource PanelBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6">
+                                <StackPanel>
+                                    <TextBlock FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource PanelLabelBrush}"
+                                               Text="Summary" />
+                                    <TextBlock Margin="0,4,0,0"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource PanelTextBrush}"
+                                               Text="{Binding PortIntelligenceOverviewText}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Border Grid.Row="0"
+                                        Grid.Column="0"
+                                        Margin="0,0,6,6"
+                                        Padding="10"
+                                        Background="#101F2D"
+                                        BorderBrush="{DynamicResource PanelBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="6">
+                                    <StackPanel>
+                                        <TextBlock FontSize="11"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource PanelLabelBrush}"
+                                                   Text="Port Map" />
+                                        <TextBlock Margin="0,4,0,0"
+                                                   FontSize="11.5"
+                                                   Foreground="{DynamicResource PanelTextBrush}"
+                                                   Text="{Binding PortIntelligencePortMapSummaryText}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Grid.Row="0"
+                                        Grid.Column="1"
+                                        Margin="6,0,0,6"
+                                        Padding="10"
+                                        Background="#101F2D"
+                                        BorderBrush="{DynamicResource PanelBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="6">
+                                    <StackPanel>
+                                        <TextBlock FontSize="11"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource PanelLabelBrush}"
+                                                   Text="Charging" />
+                                        <TextBlock Margin="0,4,0,0"
+                                                   FontSize="11.5"
+                                                   Foreground="{DynamicResource PanelTextBrush}"
+                                                   Text="{Binding PortIntelligenceChargingSummaryText}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Grid.Row="1"
+                                        Grid.Column="0"
+                                        Margin="0,0,6,6"
+                                        Padding="10"
+                                        Background="#101F2D"
+                                        BorderBrush="{DynamicResource PanelBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="6">
+                                    <StackPanel>
+                                        <TextBlock FontSize="11"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource PanelLabelBrush}"
+                                                   Text="Power Source" />
+                                        <TextBlock Margin="0,4,0,0"
+                                                   FontSize="11.5"
+                                                   Foreground="{DynamicResource PanelTextBrush}"
+                                                   Text="{Binding PortIntelligencePowerSourceSummaryText}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Grid.Row="1"
+                                        Grid.Column="1"
+                                        Margin="6,0,0,6"
+                                        Padding="10"
+                                        Background="#101F2D"
+                                        BorderBrush="{DynamicResource PanelBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="6">
+                                    <StackPanel>
+                                        <TextBlock FontSize="11"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource PanelLabelBrush}"
+                                                   Text="Bottlenecks" />
+                                        <TextBlock Margin="0,4,0,0"
+                                                   FontSize="11.5"
+                                                   Foreground="{DynamicResource PanelTextBrush}"
+                                                   Text="{Binding PortIntelligenceBottlenecksText}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                            <Border Margin="0,0,0,8"
+                                    Padding="10"
+                                    Background="#101F2D"
+                                    BorderBrush="{DynamicResource PanelBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="6">
+                                <StackPanel>
+                                    <TextBlock FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource PanelLabelBrush}"
+                                               Text="Recommended Fixes" />
+                                    <TextBlock Margin="0,4,0,0"
+                                               FontSize="11.5"
+                                               Foreground="{DynamicResource PanelTextBrush}"
+                                               Text="{Binding PortIntelligenceRecommendedFixesText}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                            <TextBlock Margin="0,0,0,6"
+                                       FontSize="11"
+                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                       Text="{Binding PortIntelligenceDeepScanSummaryText}"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Margin="0,0,0,8"
+                                       FontSize="10.5"
+                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                       Text="{Binding PortIntelligenceTelemetryLimitationsText}"
+                                       TextWrapping="Wrap" />
                             <TextBlock Margin="0,0,0,8"
                                        FontSize="11.5"
                                        Foreground="{DynamicResource PanelMutedTextBrush}"
@@ -1835,7 +1981,7 @@
                         </StackPanel>
                     </GroupBox>
 
-                    <GroupBox x:Name="UsbBuilderChargingIntelligenceCard" Header="Charging Intelligence">
+                    <GroupBox x:Name="UsbBuilderPortPowerDetailsCard" Header="Port Power Details">
                         <StackPanel>
                             <Grid Margin="0,0,0,8">
                                 <Grid.ColumnDefinitions>

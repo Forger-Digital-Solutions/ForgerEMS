@@ -119,6 +119,61 @@ public sealed class UsbMappingWizardAndResolutionTests
             _inner.GetVentoyPreflight(selectedTarget, snapshot);
     }
 
+    private sealed class CapturingOptionsUsbIntelligence : IUsbIntelligenceService
+    {
+        public UsbTopologyBuildOptions? LastOptions { get; private set; }
+
+        public int BuildCount { get; private set; }
+
+        public UsbTopologySnapshot BuildTopologySnapshot(UsbTargetInfo? selectedTarget, UsbTopologyBuildOptions? options = null)
+        {
+            LastOptions = options;
+            BuildCount++;
+            return new UsbTopologySnapshot
+            {
+                GeneratedUtc = DateTimeOffset.UtcNow,
+                CombinedConfidenceScore = 50,
+                CombinedConfidenceReason = "captured",
+                Devices =
+                [
+                    new UsbDeviceInfo
+                    {
+                        FriendlyName = "USB Disk",
+                        DriveLetter = "E:",
+                        StableDeviceKey = "dev-1",
+                        StablePortKey = "port-a",
+                        ControllerKey = "c1",
+                        HubKey = "h0",
+                        IsRemovableMassStorage = true
+                    }
+                ],
+                SelectedTargetRecommendation = new UsbBuilderRecommendation
+                {
+                    ClassificationLine = "Quality: Good",
+                    Summary = "ok",
+                    Detail = "",
+                    Risk = UsbPortRiskLevel.Low,
+                    Speed = UsbSpeedClassification.Usb3,
+                    Quality = UsbBuilderQuality.Good,
+                    ConfidenceScore = 50,
+                    ConfidenceReason = "captured"
+                }
+            };
+        }
+
+        public Task WriteLatestReportAsync(string reportsDirectory, UsbTopologySnapshot snapshot) => Task.CompletedTask;
+
+        public UsbBuilderPreflightResult GetVentoyPreflight(UsbTargetInfo? selectedTarget, UsbTopologySnapshot? snapshot) =>
+            new()
+            {
+                ShouldWarn = false,
+                Message = "",
+                Speed = UsbSpeedClassification.Unknown,
+                Risk = UsbPortRiskLevel.Unknown,
+                Quality = UsbBuilderQuality.Unknown
+            };
+    }
+
     /// <summary>Alternates port key on each snapshot build so before/after capture yields a topology change.</summary>
     private sealed class AlternatingPortIntelligence : IUsbIntelligenceService
     {
@@ -1177,6 +1232,73 @@ public sealed class UsbMappingWizardAndResolutionTests
         Assert.NotNull(snapshot.Devices);
     }
 
+    [Fact]
+    public void UsbIntelligenceService_EmbedsFreshElevatedTelemetrySummary()
+    {
+        var svc = new UsbIntelligenceService();
+        var elevated = FreshElevatedTelemetry();
+
+        var snapshot = svc.BuildTopologySnapshot(
+            MakeRemovable("E:", "Data"),
+            new UsbTopologyBuildOptions { ElevatedScanTelemetry = elevated });
+
+        Assert.Equal(ElevatedScanTelemetryState.Fresh, snapshot.ElevatedTelemetryState);
+        Assert.NotNull(snapshot.UsbDiagnostics);
+        Assert.Contains("Cached Elevated Scan telemetry", snapshot.UsbDiagnostics!.ElevatedTelemetrySummary, StringComparison.Ordinal);
+        Assert.Contains("USB4", snapshot.UsbDiagnostics.ElevatedTelemetrySummary, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void UsbMappingWizard_ReusesElevatedTelemetryOptionsForPortMapping()
+    {
+        var intel = new CapturingOptionsUsbIntelligence();
+        var root = Path.Combine(Path.GetTempPath(), $"fe-wiz-elevated-{Guid.NewGuid():N}");
+        try
+        {
+            var elevated = FreshElevatedTelemetry();
+            var target = MakeRemovable("E:", "Data");
+            var vm = new UsbMappingWizardViewModel(
+                intel,
+                new UsbMachineProfileStore(root),
+                () => [target],
+                buildTopologyOptions: () => new UsbTopologyBuildOptions { ElevatedScanTelemetry = elevated });
+
+            vm.StartMappingCommand.Execute(null);
+
+            Assert.True(intel.BuildCount > 0);
+            Assert.Same(elevated, intel.LastOptions?.ElevatedScanTelemetry);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(root, true);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public void PortMappingAndPortPower_DoNotStartSeparateElevationHandoff()
+    {
+        var source = File.ReadAllText(FindRepoFile("src/ForgerEMS.Wpf/ViewModels/MainViewModel.cs"));
+        var portMappingStart = source.IndexOf("private void CaptureUsbMappingBefore", StringComparison.Ordinal);
+        var portMappingEnd = source.IndexOf("private void SaveUsbMappingLabel", StringComparison.Ordinal);
+        var portMappingBlock = source[portMappingStart..portMappingEnd];
+        var portPowerStart = source.IndexOf("private void RefreshPortPowerTelemetry", StringComparison.Ordinal);
+        var portPowerEnd = source.IndexOf("private void ApplyPortPowerSnapshot", StringComparison.Ordinal);
+        var portPowerBlock = source[portPowerStart..portPowerEnd];
+
+        Assert.Contains("BuildUsbTopologyOptions", portMappingBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("RequestElevatedRelaunchAndRunScan", portMappingBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("RunElevatedSystemScanCommand", portMappingBlock, StringComparison.Ordinal);
+        Assert.Contains("GetLatestElevatedScanTelemetry", portPowerBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("RequestElevatedRelaunchAndRunScan", portPowerBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("RunElevatedSystemScanCommand", portPowerBlock, StringComparison.Ordinal);
+    }
+
     private static string FindRepoFile(string relativePath)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
@@ -1192,6 +1314,31 @@ public sealed class UsbMappingWizardAndResolutionTests
         }
 
         throw new FileNotFoundException($"Could not find repo file {relativePath}");
+    }
+
+    private static ElevatedScanTelemetrySnapshot FreshElevatedTelemetry()
+    {
+        var at = DateTimeOffset.Parse(
+            "2026-05-31T12:00:00Z",
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal);
+        return new ElevatedScanTelemetrySnapshot
+        {
+            State = ElevatedScanTelemetryState.Fresh,
+            CollectedAtUtc = at,
+            Source = "System Intelligence Elevated Scan",
+            Confidence = PortPowerTelemetryConfidence.High,
+            UsbThunderboltDockSummary = "Elevated Scan source hints: USB4 UCSI Type-C controller",
+            PortPower = new ElevatedPortPowerTelemetry
+            {
+                CollectedAtUtc = at,
+                Source = "System Intelligence Elevated Scan",
+                Confidence = PortPowerTelemetryConfidence.High,
+                EffectiveChargeRateWatts = 22,
+                SourceHints = ["USB4 UCSI Type-C controller"],
+                Evidence = ["Elevated test telemetry."]
+            }
+        };
     }
 
     [Fact]

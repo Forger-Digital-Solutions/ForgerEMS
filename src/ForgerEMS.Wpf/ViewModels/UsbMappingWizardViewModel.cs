@@ -35,6 +35,7 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
     private readonly Func<IReadOnlyList<UsbTargetInfo>> _getUsbTargets;
     private readonly Func<UsbTargetInfo, Task>? _runBenchmarkForTargetAsync;
     private readonly Func<string?, bool> _isDriveRootMounted;
+    private readonly Func<UsbTopologyBuildOptions>? _buildTopologyOptions;
     private readonly TimeSpan _detectOperationTimeout;
     private readonly UsbGuidedMappingWorkflow _workflow = new();
     private UsbMappingWizardStep _step = UsbMappingWizardStep.Welcome;
@@ -69,13 +70,15 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         Func<IReadOnlyList<UsbTargetInfo>> getUsbTargets,
         Func<UsbTargetInfo, Task>? runBenchmarkForTargetAsync = null,
         TimeSpan? detectOperationTimeoutOverride = null,
-        Func<string?, bool>? isDriveRootMounted = null)
+        Func<string?, bool>? isDriveRootMounted = null,
+        Func<UsbTopologyBuildOptions>? buildTopologyOptions = null)
     {
         _intelligence = intelligence;
         _profileStore = profileStore;
         _getUsbTargets = getUsbTargets;
         _runBenchmarkForTargetAsync = runBenchmarkForTargetAsync;
         _isDriveRootMounted = isDriveRootMounted ?? DefaultDriveRootMounted;
+        _buildTopologyOptions = buildTopologyOptions;
         _detectOperationTimeout = detectOperationTimeoutOverride ?? TimeSpan.FromSeconds(28);
 
         StartMappingCommand = new RelayCommand(StartMapping, () => Step == UsbMappingWizardStep.Welcome);
@@ -418,7 +421,7 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
             var profile = _profileStore.LoadOrCreate();
             var snap = _intelligence.BuildTopologySnapshot(
                 t,
-                new UsbTopologyBuildOptions { MachineProfile = profile });
+                BuildTopologyOptions(profile));
             var rec = snap.SelectedTargetRecommendation;
             var bench = snap.SelectedTargetBenchmark;
             var benchLine = bench?.Succeeded == true
@@ -441,6 +444,17 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         }
     }
 
+    private UsbTopologyBuildOptions BuildTopologyOptions(UsbMachineProfile? profile)
+    {
+        var baseOptions = _buildTopologyOptions?.Invoke();
+        return new UsbTopologyBuildOptions
+        {
+            PreviousSnapshot = baseOptions?.PreviousSnapshot,
+            MachineProfile = profile ?? baseOptions?.MachineProfile,
+            ElevatedScanTelemetry = baseOptions?.ElevatedScanTelemetry
+        };
+    }
+
     private void GoConfirmPort()
     {
         Step = UsbMappingWizardStep.ConfirmCurrentPort;
@@ -458,7 +472,9 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
             return;
         }
 
-        _beforeSnap = _intelligence.BuildTopologySnapshot(SelectedUsbTarget);
+        _beforeSnap = _intelligence.BuildTopologySnapshot(
+            SelectedUsbTarget,
+            BuildTopologyOptions(_profileStore.LoadOrCreate()));
         _workflow.CaptureBeforeSnapshot(_beforeSnap);
         _beforeCaptured = true;
         CaptureSummary =
@@ -633,7 +649,9 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
                 "Comparing available Windows topology fields for the selected drive.");
             DetectionPhase = UsbMappingWizardDetectionPhase.CheckingTopology;
 
-            _afterSnap = await Task.Run(() => _intelligence.BuildTopologySnapshot(liveTarget), token).ConfigureAwait(true);
+            _afterSnap = await Task.Run(
+                () => _intelligence.BuildTopologySnapshot(liveTarget, BuildTopologyOptions(_profileStore.LoadOrCreate())),
+                token).ConfigureAwait(true);
             _workflow.CaptureAfterSnapshot(_afterSnap);
             _lastResolution = UsbMappingPortResolution.Resolve(_beforeSnap, _afterSnap, SelectedUsbTarget);
 
@@ -792,7 +810,8 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         var liveTarget = FindSelectedLiveTarget();
         if (liveTarget is not null)
         {
-            _afterSnap = await Task.Run(() => _intelligence.BuildTopologySnapshot(liveTarget)).ConfigureAwait(true);
+            _afterSnap = await Task.Run(
+                () => _intelligence.BuildTopologySnapshot(liveTarget, BuildTopologyOptions(_profileStore.LoadOrCreate()))).ConfigureAwait(true);
             _workflow.CaptureAfterSnapshot(_afterSnap);
         }
 

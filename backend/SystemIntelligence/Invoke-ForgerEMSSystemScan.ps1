@@ -447,6 +447,126 @@ function Get-BatteryReportData {
     }
 }
 
+function Convert-PortPowerMilliValue {
+    param(
+        [object]$Value,
+        [double]$UpperBound
+    )
+
+    if ($null -eq $Value) {
+        return $null
+    }
+
+    try {
+        $number = [double]$Value
+    }
+    catch {
+        return $null
+    }
+
+    if ($number -le 0) {
+        return $null
+    }
+
+    $normalized = if ($number -gt 100) { $number / 1000.0 } else { $number }
+    if ($normalized -gt 0 -and $normalized -lt $UpperBound) {
+        return [math]::Round($normalized, 3)
+    }
+
+    return $null
+}
+
+function Get-PortPowerDeepTelemetry {
+    param([bool]$IsElevated)
+
+    $collectedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
+    if (-not $IsElevated) {
+        return [ordered]@{
+            collectedAtUtc = $collectedAtUtc
+            source = "System Intelligence standard scan"
+            status = "NotRun"
+            confidence = "Unavailable"
+            effectiveChargeRateWatts = $null
+            adapterWattageWatts = $null
+            adapterWattageClassWatts = $null
+            voltageVolts = $null
+            currentAmps = $null
+            sourceHints = @()
+            evidence = @("Standard scan intentionally does not collect admin-gated port power telemetry.")
+            missingTelemetryReason = "Run Elevated Scan to unlock deeper port and charging telemetry."
+        }
+    }
+
+    Write-ScanLog "Checking read-only port power telemetry exposed to elevated Windows APIs."
+    $evidence = New-Object System.Collections.Generic.List[string]
+    $sourceHints = New-Object System.Collections.Generic.List[string]
+    $effectiveWatts = $null
+    $voltageVolts = $null
+    $currentAmps = $null
+
+    $batteryStatuses = @(Invoke-Optional {
+        Get-CimInstance -Namespace "root\wmi" -ClassName BatteryStatus -ErrorAction Stop
+    } @() -ProviderName "Battery charge telemetry" -Category "Battery" -RequiresElevation $true)
+    foreach ($batteryStatus in @($batteryStatuses | Select-Object -First 1)) {
+        $chargeRate = if ($batteryStatus.PSObject.Properties.Name -contains "ChargeRate") { $batteryStatus.ChargeRate } else { $null }
+        $dischargeRate = if ($batteryStatus.PSObject.Properties.Name -contains "DischargeRate") { $batteryStatus.DischargeRate } else { $null }
+        if ($null -ne $chargeRate -and [double]$chargeRate -gt 0) {
+            $effectiveWatts = [math]::Round(([double]$chargeRate / 1000.0), 3)
+        }
+        elseif ($null -ne $dischargeRate -and [double]$dischargeRate -gt 0) {
+            $effectiveWatts = [math]::Round(-([double]$dischargeRate / 1000.0), 3)
+        }
+
+        $voltageVolts = Convert-PortPowerMilliValue -Value $(if ($batteryStatus.PSObject.Properties.Name -contains "Voltage") { $batteryStatus.Voltage } else { $null }) -UpperBound 60
+        $currentAmps = Convert-PortPowerMilliValue -Value $(if ($batteryStatus.PSObject.Properties.Name -contains "Current") { $batteryStatus.Current } else { $null }) -UpperBound 30
+        [void]$evidence.Add("root\wmi BatteryStatus exposed read-only battery charge telemetry.")
+        break
+    }
+
+    $pnpPowerDevices = @(Invoke-Optional {
+        Get-CimInstance -ClassName Win32_PnPEntity -Filter "Name LIKE '%USB%' OR Name LIKE '%Thunderbolt%' OR Name LIKE '%UCSI%' OR Name LIKE '%Dock%'" -ErrorAction Stop |
+            Select-Object -First 12 Name, Description
+    } @() -ProviderName "USB/Thunderbolt dock telemetry" -Category "USB" -RequiresElevation $true)
+    foreach ($device in $pnpPowerDevices) {
+        $label = ("{0} {1}" -f $device.Name, $device.Description).Trim()
+        if ([string]::IsNullOrWhiteSpace($label)) {
+            continue
+        }
+
+        if ($label -match "(?i)dock|docking station|usb-c|type-c|usb4|thunderbolt|ucsi|power delivery") {
+            [void]$sourceHints.Add($label)
+        }
+    }
+
+    if ($sourceHints.Count -gt 0) {
+        [void]$evidence.Add("Elevated PnP enumeration exposed USB-C/Thunderbolt/dock source hints.")
+    }
+
+    $hasDirect = $null -ne $effectiveWatts -or $null -ne $voltageVolts -or $null -ne $currentAmps
+    $confidence = if ($hasDirect) { "High" } elseif ($sourceHints.Count -gt 0) { "Medium" } else { "Unavailable" }
+    $missing = if ($hasDirect) {
+        ""
+    }
+    else {
+        "Elevated Scan completed, but this device did not expose deeper port or charging telemetry. ForgerEMS can still estimate charging from battery behavior."
+    }
+
+    return [ordered]@{
+        collectedAtUtc = $collectedAtUtc
+        source = "System Intelligence Elevated Scan"
+        status = if ($hasDirect -or $sourceHints.Count -gt 0) { "Ready" } else { "NotExposed" }
+        confidence = $confidence
+        effectiveChargeRateWatts = $effectiveWatts
+        adapterWattageWatts = $null
+        adapterWattageClassWatts = $null
+        voltageVolts = $voltageVolts
+        currentAmps = $currentAmps
+        sourceHints = @($sourceHints.ToArray())
+        evidence = @($evidence.ToArray())
+        missingTelemetryReason = $missing
+    }
+}
+
 function ConvertTo-StatusRank {
     param([string]$Status)
 
@@ -1461,6 +1581,7 @@ $licenseProduct = Invoke-Optional {
 $wifiInterfaceText = Invoke-Optional { netsh wlan show interfaces 2>$null | Out-String } "" -ProviderName "Wi-Fi interface status" -Category "Network"
 $wifiState = Get-WifiState -NetshText $wifiInterfaceText
 $batteryReportFallback = Get-BatteryReportData
+$portPowerDeepTelemetry = Get-PortPowerDeepTelemetry -IsElevated (Test-IsAdministrator)
 Write-PhaseTiming -PhaseName "OS/CPU/RAM/GPU" -Stopwatch $scanStopwatch -LastMs ([ref]$lastPhaseMs)
 
 $lastBoot = Invoke-Optional {
@@ -2219,6 +2340,7 @@ try {
     $report["batteryPresent"] = ($batteryReports.Count -gt 0)
     $report["batteries"] = $batteryReports
     $report["batteryStatus"] = $batteryOverallStatus
+    $report["portPowerTelemetry"] = $portPowerDeepTelemetry
     $report["displays"] = $displayReport
     $report["network"] = $network
     $report["security"] = $securityReport

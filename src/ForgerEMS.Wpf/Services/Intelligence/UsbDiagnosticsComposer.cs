@@ -143,6 +143,20 @@ public static class UsbDiagnosticsComposer
             });
         }
 
+        if (!string.IsNullOrWhiteSpace(snapshot.ElevatedTelemetrySummary))
+        {
+            issues.Add(new UsbDiagnosticIssue
+            {
+                Severity = snapshot.ElevatedTelemetryState switch
+                {
+                    ElevatedScanTelemetryState.Fresh => DiagnosticSeverityLevel.Ok,
+                    ElevatedScanTelemetryState.Stale => DiagnosticSeverityLevel.Warning,
+                    _ => DiagnosticSeverityLevel.Info
+                },
+                Message = snapshot.ElevatedTelemetrySummary
+            });
+        }
+
         var overall = MapOverall(issues);
         var portCount = profile?.KnownPorts?.Count > 0
             ? profile.KnownPorts.Count
@@ -197,7 +211,12 @@ public static class UsbDiagnosticsComposer
                 ? (rec?.ConfidenceReason ?? string.Empty)
                 : snapshot.CombinedConfidenceReason,
             UsbCurrentTargetRiskSummary = riskSummary,
-            UsbBestKnownPortSummary = bestPort
+            UsbBestKnownPortSummary = bestPort,
+            ElevatedTelemetrySummary = snapshot.ElevatedTelemetrySummary,
+            ElevatedTelemetrySource = snapshot.ElevatedTelemetrySource,
+            ElevatedTelemetryConfidence = snapshot.ElevatedTelemetryConfidence,
+            ElevatedTelemetryCollectedAtUtc = snapshot.ElevatedTelemetryCollectedAtUtc,
+            ElevatedTelemetryIsStale = snapshot.ElevatedTelemetryState == ElevatedScanTelemetryState.Stale
         };
     }
 

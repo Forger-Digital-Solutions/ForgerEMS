@@ -64,6 +64,7 @@ public sealed class AutoIntelligenceOrchestrator : IAutoIntelligenceOrchestrator
             var siPath = Path.Combine(reports, "system-intelligence-latest.json");
             var usbPath = Path.Combine(reports, "usb-intelligence-latest.json");
             var toolkitPath = Path.Combine(reports, "toolkit-health-latest.json");
+            var elevatedScanTelemetry = new ElevatedScanTelemetryCache().GetLatest(reports);
 
             SystemIntelligenceAutomationMerger.TryMerge(siPath);
 
@@ -90,7 +91,8 @@ public sealed class AutoIntelligenceOrchestrator : IAutoIntelligenceOrchestrator
                 new UsbTopologyBuildOptions
                 {
                     PreviousSnapshot = previousUsb,
-                    MachineProfile = machineProfile
+                    MachineProfile = machineProfile,
+                    ElevatedScanTelemetry = elevatedScanTelemetry
                 });
             profileStore.ApplySnapshot(machineProfile, usbSnapshot);
             profileStore.Save(machineProfile);

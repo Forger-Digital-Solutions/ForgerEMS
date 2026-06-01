@@ -418,13 +418,10 @@ public sealed class MainWindowXamlLoadTests
     }
 
     [Fact]
-    public void UsbBuilder_UsbIntelligenceCard_IsCompactAndDelegatesToMappingWizard()
+    public void UsbBuilder_PortIntelligenceCard_ComposesUsbAndPowerAndDelegatesHeavyActions()
     {
-        // The USB Intelligence Pro card on the USB Builder tab is intentionally compact:
-        // header + confidence pill, target / class / speed / port / recommendation lines,
-        // and a single "Open USB Mapping Wizard" button. Run/Cancel benchmark buttons,
-        // the legacy advanced inline port-mapping expander, the workflow help box, and the
-        // confidence detail paragraph were moved into the wizard.
+        // The Port Intelligence card keeps USB mapping and charging summary copy together,
+        // while still delegating heavy benchmark/mapping workflows to the wizard.
         var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
         var text = File.ReadAllText(xamlPath);
 
@@ -441,6 +438,14 @@ public sealed class MainWindowXamlLoadTests
         Assert.Contains("UsbIntelligenceConfidenceScoreDisplay", card, StringComparison.Ordinal);
         Assert.Contains("UsbIntelligenceRecommendationQualityDisplay", card, StringComparison.Ordinal);
         Assert.Contains("UsbIntelligenceMappingLabelDisplay", card, StringComparison.Ordinal);
+        Assert.Contains("PortIntelligenceOverviewText", card, StringComparison.Ordinal);
+        Assert.Contains("PortIntelligencePortMapSummaryText", card, StringComparison.Ordinal);
+        Assert.Contains("PortIntelligenceChargingSummaryText", card, StringComparison.Ordinal);
+        Assert.Contains("PortIntelligencePowerSourceSummaryText", card, StringComparison.Ordinal);
+        Assert.Contains("PortIntelligenceBottlenecksText", card, StringComparison.Ordinal);
+        Assert.Contains("PortIntelligenceRecommendedFixesText", card, StringComparison.Ordinal);
+        Assert.Contains("PortIntelligenceDeepScanSummaryText", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("Header=\"Charging Intelligence\"", text, StringComparison.Ordinal);
 
         // Single primary action: opens the wizard.
         Assert.Contains("Open USB Mapping Wizard", card, StringComparison.Ordinal);

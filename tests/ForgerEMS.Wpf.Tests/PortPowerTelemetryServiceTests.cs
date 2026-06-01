@@ -54,6 +54,73 @@ public sealed class PortPowerTelemetryServiceTests
     }
 
     [Fact]
+    public void NoElevatedScan_ShowsUnlockPromptButKeepsUserModeEstimate()
+    {
+        var t0 = At("2026-05-31T12:00:00Z");
+        var service = new PortPowerTelemetryService(new SequenceSource(
+            RawBattery(t0, 50, isCharging: true),
+            RawBattery(t0.AddMinutes(30), 61, isCharging: true)));
+
+        service.CollectSnapshot(ElevatedScanTelemetrySnapshot.Missing());
+        var snapshot = service.CollectSnapshot(ElevatedScanTelemetrySnapshot.Missing());
+
+        Assert.NotNull(snapshot.PercentPerHour);
+        Assert.True(snapshot.RateIsEstimatedFromBatterySamples);
+        Assert.Contains(
+            ElevatedScanTelemetrySnapshot.RunElevatedScanPrompt,
+            snapshot.MissingTelemetryReason,
+            StringComparison.Ordinal);
+        Assert.Contains("Estimated", PortPowerTelemetryFormatter.FormatChargeRate(snapshot), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void FreshElevatedTelemetry_SuppliesDirectElectricalFieldsWithHighConfidence()
+    {
+        var service = new PortPowerTelemetryService(new SequenceSource(
+            RawBattery(At("2026-05-31T12:00:00Z"), 66, isCharging: true)));
+        var elevated = FreshElevatedTelemetry(
+            At("2026-05-31T11:58:00Z"),
+            directRateWatts: 38,
+            adapterClassWatts: 65,
+            voltageVolts: 20,
+            currentAmps: 1.9);
+
+        var snapshot = service.CollectSnapshot(elevated);
+
+        Assert.Equal(PortPowerTelemetryConfidence.High, snapshot.TelemetryConfidence);
+        Assert.Equal(65, snapshot.AdapterWattageClassWatts);
+        Assert.Equal(38, snapshot.EffectiveChargeRateWatts);
+        Assert.Equal(20, snapshot.VoltageVolts);
+        Assert.Equal(1.9, snapshot.CurrentAmps);
+        Assert.Contains("Elevated Scan telemetry cache used", snapshot.EvidenceSummary, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void StaleElevatedTelemetry_DoesNotUseExpiredDirectFields()
+    {
+        var service = new PortPowerTelemetryService(new SequenceSource(
+            RawBattery(At("2026-05-31T12:00:00Z"), 66, isCharging: true)));
+        var elevated = FreshElevatedTelemetry(
+            At("2026-05-31T09:00:00Z"),
+            directRateWatts: 38,
+            adapterClassWatts: 65,
+            voltageVolts: 20,
+            currentAmps: 1.9) with
+            {
+                State = ElevatedScanTelemetryState.Stale,
+                MissingTelemetryReason =
+                    "Elevated Scan telemetry is stale/expired; last scan 5/31/2026 9:00 AM. Run Elevated Scan to refresh deeper port and charging telemetry."
+            };
+
+        var snapshot = service.CollectSnapshot(elevated);
+
+        Assert.Null(snapshot.EffectiveChargeRateWatts);
+        Assert.Null(snapshot.VoltageVolts);
+        Assert.Null(snapshot.CurrentAmps);
+        Assert.Contains("stale/expired", snapshot.MissingTelemetryReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void DesktopNoBatteryState_IsLimitedAndUnavailable()
     {
         var service = new PortPowerTelemetryService(new SequenceSource(
@@ -183,6 +250,20 @@ public sealed class PortPowerTelemetryServiceTests
     }
 
     [Fact]
+    public void FreshElevatedTelemetryWithoutDirectFields_SaysTelemetryLimited()
+    {
+        var service = new PortPowerTelemetryService(new SequenceSource(
+            RawBattery(At("2026-05-31T12:00:00Z"), 88, isCharging: false)));
+        var elevated = FreshElevatedTelemetry(At("2026-05-31T11:58:00Z"));
+
+        var snapshot = service.CollectSnapshot(elevated);
+
+        Assert.Null(snapshot.VoltageVolts);
+        Assert.Null(snapshot.CurrentAmps);
+        Assert.Contains("did not expose deeper port or charging telemetry", snapshot.MissingTelemetryReason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void PowerSource_UsesDockAndUsbCPdHintsWithoutClaimingExactTelemetry()
     {
         Assert.Equal(
@@ -218,6 +299,38 @@ public sealed class PortPowerTelemetryServiceTests
 
     private static DateTimeOffset At(string value) =>
         DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal);
+
+    private static ElevatedScanTelemetrySnapshot FreshElevatedTelemetry(
+        DateTimeOffset at,
+        double? directRateWatts = null,
+        int? adapterClassWatts = null,
+        double? voltageVolts = null,
+        double? currentAmps = null) =>
+        new()
+        {
+            State = ElevatedScanTelemetryState.Fresh,
+            CollectedAtUtc = at,
+            Source = "System Intelligence Elevated Scan",
+            Confidence = directRateWatts.HasValue || adapterClassWatts.HasValue || voltageVolts.HasValue || currentAmps.HasValue
+                ? PortPowerTelemetryConfidence.High
+                : PortPowerTelemetryConfidence.Unavailable,
+            PortPower = new ElevatedPortPowerTelemetry
+            {
+                CollectedAtUtc = at,
+                Source = "System Intelligence Elevated Scan",
+                Confidence = directRateWatts.HasValue || adapterClassWatts.HasValue || voltageVolts.HasValue || currentAmps.HasValue
+                    ? PortPowerTelemetryConfidence.High
+                    : PortPowerTelemetryConfidence.Unavailable,
+                EffectiveChargeRateWatts = directRateWatts,
+                AdapterWattageClassWatts = adapterClassWatts,
+                VoltageVolts = voltageVolts,
+                CurrentAmps = currentAmps,
+                SourceHints = ["USB4 UCSI Type-C controller"],
+                Evidence = ["Elevated test telemetry."],
+                MissingTelemetryReason =
+                    "Elevated Scan completed, but this device did not expose deeper port or charging telemetry. ForgerEMS can still estimate charging from battery behavior."
+            }
+        };
 
     private sealed class SequenceSource : IPortPowerTelemetrySource
     {
