@@ -40,11 +40,50 @@ public sealed class ElevatedScanTelemetryCacheTests
             var snapshot = cache.GetLatest(reports);
 
             Assert.Equal(ElevatedScanTelemetryState.Fresh, snapshot.State);
+            Assert.Equal(ElevatedScanParseQuality.Complete, snapshot.ParseQuality);
+            Assert.Equal("Elevated scan complete", snapshot.UserMessage);
             Assert.Equal(PortPowerTelemetryConfidence.High, snapshot.Confidence);
             Assert.NotNull(snapshot.PortPower);
             Assert.Equal(42.5, snapshot.PortPower!.EffectiveChargeRateWatts);
             Assert.Equal(20.0, snapshot.PortPower.VoltageVolts);
             Assert.Contains("USB4", snapshot.UsbThunderboltDockSummary, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(reports, true);
+        }
+    }
+
+    [Fact]
+    public void GetLatest_MarksFreshElevatedReportPartialWhenDeepTelemetryUnavailable()
+    {
+        var now = At("2026-05-31T12:00:00Z");
+        var reports = CreateReportsDirectory();
+        try
+        {
+            WriteElevatedMarker(reports, now.AddMinutes(-2));
+            File.WriteAllText(
+                Path.Combine(reports, "system-intelligence-latest.json"),
+                """
+                {
+                  "generatedUtc": "2026-05-31T11:58:00Z",
+                  "scanMode": "Elevated",
+                  "portPowerTelemetry": {
+                    "collectedAtUtc": "2026-05-31T11:58:00Z",
+                    "source": "System Intelligence Elevated Scan",
+                    "confidence": "Unavailable",
+                    "missingTelemetryReason": "Elevated Scan completed, but this device did not expose deeper port or charging telemetry."
+                  }
+                }
+                """);
+            var cache = new ElevatedScanTelemetryCache(() => now, TimeSpan.FromHours(1));
+
+            var snapshot = cache.GetLatest(reports);
+
+            Assert.Equal(ElevatedScanTelemetryState.CompletePartial, snapshot.State);
+            Assert.Equal(ElevatedScanParseQuality.Partial, snapshot.ParseQuality);
+            Assert.Equal("Elevated scan complete — some deep telemetry was unavailable on this device.", snapshot.UserMessage);
+            Assert.Equal(ElevatedScanSeverity.Success, snapshot.Severity);
         }
         finally
         {
@@ -88,6 +127,134 @@ public sealed class ElevatedScanTelemetryCacheTests
     }
 
     [Fact]
+    public void GetLatest_DoesNotMarkCompleteWhenReportIsNotElevated()
+    {
+        var now = At("2026-05-31T12:00:00Z");
+        var reports = CreateReportsDirectory();
+        try
+        {
+            WriteElevatedMarker(reports, now.AddMinutes(-1));
+            File.WriteAllText(
+                Path.Combine(reports, "system-intelligence-latest.json"),
+                """
+                {
+                  "generatedUtc": "2026-05-31T11:59:00Z",
+                  "scanMode": "Standard"
+                }
+                """);
+            var cache = new ElevatedScanTelemetryCache(() => now, TimeSpan.FromHours(1));
+
+            var snapshot = cache.GetLatest(reports);
+
+            Assert.Equal(ElevatedScanTelemetryState.Failed, snapshot.State);
+            Assert.Equal(ElevatedScanParseQuality.Failed, snapshot.ParseQuality);
+            Assert.Equal("Elevated scan failed", snapshot.UserMessage);
+            Assert.NotEqual(ElevatedScanSeverity.Success, snapshot.Severity);
+        }
+        finally
+        {
+            Directory.Delete(reports, true);
+        }
+    }
+
+    [Fact]
+    public void GetLatest_ParseFailureDoesNotFallBackToGreen()
+    {
+        var now = At("2026-05-31T12:00:00Z");
+        var reports = CreateReportsDirectory();
+        try
+        {
+            WriteElevatedMarker(reports, now.AddMinutes(-1));
+            File.WriteAllText(Path.Combine(reports, "system-intelligence-latest.json"), "{ bad json");
+            var cache = new ElevatedScanTelemetryCache(() => now, TimeSpan.FromHours(1));
+
+            var snapshot = cache.GetLatest(reports);
+
+            Assert.Equal(ElevatedScanTelemetryState.Failed, snapshot.State);
+            Assert.Equal(ElevatedScanParseQuality.Failed, snapshot.ParseQuality);
+            Assert.Contains("parsing failed", snapshot.MissingTelemetryReason, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(reports, true);
+        }
+    }
+
+    [Fact]
+    public void GetLatest_NewerErrorMarkerSupersedesOldSuccess()
+    {
+        var now = At("2026-05-31T12:00:00Z");
+        var reports = CreateReportsDirectory();
+        try
+        {
+            WriteElevatedMarker(reports, now.AddMinutes(-20));
+            File.WriteAllText(
+                Path.Combine(reports, "system-intelligence-latest.json"),
+                """
+                {
+                  "generatedUtc": "2026-05-31T11:40:00Z",
+                  "scanMode": "Elevated",
+                  "portPowerTelemetry": {
+                    "collectedAtUtc": "2026-05-31T11:40:00Z",
+                    "source": "System Intelligence Elevated Scan",
+                    "confidence": "High",
+                    "voltageVolts": 20.0
+                  }
+                }
+                """);
+            WriteElevatedError(reports, now.AddMinutes(-1), "UacCancelled");
+            var cache = new ElevatedScanTelemetryCache(() => now, TimeSpan.FromHours(1));
+
+            var snapshot = cache.GetLatest(reports);
+
+            Assert.Equal(ElevatedScanTelemetryState.Cancelled, snapshot.State);
+            Assert.Equal(ElevatedScanSeverity.Warning, snapshot.Severity);
+            Assert.Equal("Elevated scan cancelled", snapshot.UserMessage);
+        }
+        finally
+        {
+            Directory.Delete(reports, true);
+        }
+    }
+
+    [Fact]
+    public void GetLatest_NewerPendingMarkerSupersedesOldSuccess()
+    {
+        var now = At("2026-05-31T12:00:00Z");
+        var reports = CreateReportsDirectory();
+        try
+        {
+            WriteElevatedMarker(reports, now.AddMinutes(-20));
+            File.WriteAllText(
+                Path.Combine(reports, "system-intelligence-latest.json"),
+                """
+                {
+                  "generatedUtc": "2026-05-31T11:40:00Z",
+                  "scanMode": "Elevated",
+                  "portPowerTelemetry": {
+                    "collectedAtUtc": "2026-05-31T11:40:00Z",
+                    "source": "System Intelligence Elevated Scan",
+                    "confidence": "High",
+                    "voltageVolts": 20.0
+                  }
+                }
+                """);
+            WriteElevatedHeartbeat(reports, now.AddSeconds(-10));
+            var cache = new ElevatedScanTelemetryCache(() => now, TimeSpan.FromHours(1));
+
+            var snapshot = cache.GetLatest(reports);
+
+            Assert.Equal(ElevatedScanTelemetryState.Running, snapshot.State);
+            Assert.Equal("Elevated scan running", snapshot.UserMessage);
+            Assert.NotEqual(ElevatedScanSeverity.Success, snapshot.Severity);
+        }
+        finally
+        {
+            Directory.Delete(reports, true);
+        }
+    }
+
+    [Fact]
     public void GetLatest_ReturnsUnlockPromptWhenNoElevatedScanHasRun()
     {
         var reports = CreateReportsDirectory();
@@ -122,6 +289,28 @@ public sealed class ElevatedScanTelemetryCacheTests
               "utc": "{{utc.ToString("o", CultureInfo.InvariantCulture)}}",
               "ok": true,
               "json": "system-intelligence-latest.json"
+            }
+            """);
+
+    private static void WriteElevatedHeartbeat(string reports, DateTimeOffset utc) =>
+        File.WriteAllText(
+            Path.Combine(reports, "elevated-scan-heartbeat.json"),
+            $$"""
+            {
+              "kind": "elevated-scan-heartbeat",
+              "utc": "{{utc.ToString("o", CultureInfo.InvariantCulture)}}"
+            }
+            """);
+
+    private static void WriteElevatedError(string reports, DateTimeOffset utc, string failureKind) =>
+        File.WriteAllText(
+            Path.Combine(reports, "elevated-scan-error.json"),
+            $$"""
+            {
+              "kind": "elevated-scan-error",
+              "utc": "{{utc.ToString("o", CultureInfo.InvariantCulture)}}",
+              "failureKind": "{{failureKind}}",
+              "advanced": "test"
             }
             """);
 

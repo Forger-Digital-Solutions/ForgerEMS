@@ -77,10 +77,10 @@ public sealed class SystemIntelligenceCardSummaryTests
                 "liveSensorsSummary":"Live sensors available for inventory only",
                 "statusGuide":"guide",
                 "sensorProviders":[
-                  { "providerName":"Windows Native", "isEnabled":true, "isBundled":true, "runtimeMode":"DefaultSafe" },
+                  { "providerName":"Forger Sensor Core", "isEnabled":true, "isBundled":true, "runtimeMode":"DefaultSafe" },
                   { "providerName":"LibreHardwareMonitor", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled", "failureReason":"Not packaged / unavailable — LibreHardwareMonitorLib.dll was not found under providers/sensors." },
-                  { "providerName":"ForgerEMS Admin Sensor Bridge", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled" },
-                  { "providerName":"ForgerEMS Signed Driver Provider", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled" }
+                  { "providerName":"Forger Sensor Service", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled" },
+                  { "providerName":"Forger Deep Sensor Driver", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled" }
                 ],
                 "deepSensorMode": { "mode":"Off", "source":"BuiltInDefault", "isEnabled":false },
                 "groups":[
@@ -98,16 +98,18 @@ public sealed class SystemIntelligenceCardSummaryTests
             """).RootElement);
 
         Assert.Contains("Limited:", text);
-        Assert.Contains("Sensor Providers: Windows Native: Active", text);
+        Assert.Contains("Forger Sensor Stack: Core active", text);
+        Assert.Contains("Sensor Sources: Forger Sensor Core: Active", text);
         Assert.Contains("Deep Sensor Mode: Off via built-in default", text);
         Assert.Contains("no fan/voltage/clock/firmware control", text);
         Assert.Contains("LibreHardwareMonitor: Not packaged / unavailable", text);
-        Assert.Contains("Admin Bridge: Off", text);
-        Assert.Contains("Driver Provider: Not included", text);
+        Assert.Contains("Forger Sensor Service: Not installed", text);
+        Assert.Contains("Forger Deep Sensor Driver: Not included", text);
         Assert.Contains("may require deep/vendor sensor support", text);
         Assert.DoesNotContain("RequiresExternalProvider", text, StringComparison.Ordinal);
         Assert.DoesNotContain("RequiresVendorDriver", text, StringComparison.Ordinal);
         Assert.DoesNotContain("NotExposedByFirmware", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("NotExposed is not failure", text, StringComparison.Ordinal);
         Assert.DoesNotContain("UnsupportedHardware", text, StringComparison.Ordinal);
     }
 
@@ -123,10 +125,10 @@ public sealed class SystemIntelligenceCardSummaryTests
                 "liveSensorsSummary":"CPU Package temperature",
                 "statusGuide":"guide",
                 "sensorProviders":[
-                  { "providerName":"Windows Native", "isEnabled":true, "isBundled":true, "runtimeMode":"DefaultSafe" },
+                  { "providerName":"Forger Sensor Core", "isEnabled":true, "isBundled":true, "runtimeMode":"DefaultSafe" },
                   { "providerName":"LibreHardwareMonitor", "isEnabled":true, "isBundled":true, "runtimeMode":"DeepSensorReadOnly" },
-                  { "providerName":"ForgerEMS Admin Sensor Bridge", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled" },
-                  { "providerName":"ForgerEMS Signed Driver Provider", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled" }
+                  { "providerName":"Forger Sensor Service", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled" },
+                  { "providerName":"Forger Deep Sensor Driver", "isEnabled":false, "isBundled":false, "runtimeMode":"Disabled" }
                 ],
                 "deepSensorMode": { "mode":"ReadOnly", "source":"InstallerDefault", "isEnabled":true },
                 "groups":[]
@@ -135,7 +137,7 @@ public sealed class SystemIntelligenceCardSummaryTests
             """).RootElement);
 
         Assert.Contains("LibreHardwareMonitor: Active read-only", text);
-        Assert.Contains("Windows Native: Active", text);
+        Assert.Contains("Forger Sensor Core: Active", text);
         Assert.Contains("Deep Sensor Mode: ReadOnly via installer default", text);
     }
 
@@ -268,11 +270,11 @@ public sealed class SystemIntelligenceCardSummaryTests
             }
             """).RootElement);
 
-        Assert.Contains("Optional providers:", text);
+        Assert.Contains("Sensor limits:", text);
         Assert.Contains("Permission required: 1", text);
-        Assert.Contains("Not exposed by firmware/driver: 1", text);
-        Assert.Contains("Provider unavailable: 1", text);
-        Assert.Contains("Elevated scan unlocks extra detail when needed.", text);
+        Assert.Contains("Firmware/driver-limited: 1", text);
+        Assert.Contains("Provider blocked/errors: 1", text);
+        Assert.Contains("Elevated Scan unlocks extra detail when Windows allows it.", text);
     }
 
     [Fact]
@@ -294,6 +296,8 @@ public sealed class SystemIntelligenceCardSummaryTests
         Assert.Contains("OpenSystemIntelligenceFilesCommand", systemIntelligence, StringComparison.Ordinal);
         Assert.Contains("SystemIntelligenceScanStatusText", systemIntelligence, StringComparison.Ordinal);
         Assert.Contains("SystemIntelligenceHealthStatusText", systemIntelligence, StringComparison.Ordinal);
+        Assert.Contains("SystemIntelligenceSensorStackStatusText", systemIntelligence, StringComparison.Ordinal);
+        Assert.Contains("Forger Sensor Stack", systemIntelligence, StringComparison.Ordinal);
         Assert.DoesNotContain("Run Standard Scan", systemIntelligence, StringComparison.Ordinal);
         Assert.DoesNotContain("Refresh Results", systemIntelligence, StringComparison.Ordinal);
     }
@@ -345,6 +349,63 @@ public sealed class SystemIntelligenceCardSummaryTests
         Assert.Contains("ForgerEMS is still not running as administrator", source, StringComparison.Ordinal);
         Assert.DoesNotContain("RequestElevatedRelaunchAndRunScan(reportsDir, correlationId);", source[
             source.IndexOf("private async Task ConsumeElevatedScanStartupRequestAsync", StringComparison.Ordinal)..], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void StartupRefresh_IsScheduledAndGuarded()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "ViewModels", "MainViewModel.cs"));
+        var initializeBlock = source[
+            source.IndexOf("public Task InitializeAsync()", StringComparison.Ordinal)..
+            source.IndexOf("private async Task RunStartupInitializationAsync", StringComparison.Ordinal)];
+        var startupBlock = source[source.IndexOf("private async Task RunStartupInitializationAsync", StringComparison.Ordinal)..];
+
+        Assert.Contains("_ = RunStartupInitializationAsync();", initializeBlock, StringComparison.Ordinal);
+        Assert.Contains("Startup refresh failed without closing ForgerEMS", startupBlock, StringComparison.Ordinal);
+        Assert.Contains("HydrateFromCachedReportsEarlyAsync", startupBlock, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ElevatedScanLifecycle_UsesTruthfulUiCopy()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "ViewModels", "MainViewModel.cs"));
+
+        Assert.Contains("Elevated scan complete", source, StringComparison.Ordinal);
+        Assert.Contains("Deep hardware and port telemetry is available.", source, StringComparison.Ordinal);
+        Assert.Contains("Elevated scan complete — some deep telemetry was unavailable on this device.", source, StringComparison.Ordinal);
+        Assert.Contains("Elevated scan recommended", source, StringComparison.Ordinal);
+        Assert.Contains("Run elevated scan for deeper port and hardware telemetry.", source, StringComparison.Ordinal);
+        Assert.Contains("Elevated scan failed", source, StringComparison.Ordinal);
+        Assert.Contains("ForgerEMS stayed open. Check logs or retry as administrator.", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UiCopy_UsesForgerOwnedSensorStackAndDoesNotRequireExternalTools()
+    {
+        var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
+        var source = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "ViewModels", "MainViewModel.cs"));
+        var combined = xaml + Environment.NewLine + source;
+
+        Assert.Contains("Forger Sensor Stack", combined, StringComparison.Ordinal);
+        Assert.Contains("Core: Active", combined, StringComparison.Ordinal);
+        Assert.Contains("Sensor Service: Not installed", combined, StringComparison.Ordinal);
+        Assert.Contains("Deep Sensor Driver: Not included", combined, StringComparison.Ordinal);
+        Assert.Contains("External tools: Not required", combined, StringComparison.Ordinal);
+        Assert.DoesNotContain("install HWiNFO", combined, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("install AIDA64", combined, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("install CPU-Z", combined, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void DispatcherUnhandledException_IsLoggedAndMarkedHandled()
+    {
+        var app = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "App.xaml.cs"));
+        var handlerBlock = app[app.IndexOf("Current.DispatcherUnhandledException", StringComparison.Ordinal)..];
+
+        Assert.Contains("LogStartupException(\"Unhandled dispatcher exception\"", handlerBlock, StringComparison.Ordinal);
+        Assert.Contains("args.Handled = true;", handlerBlock, StringComparison.Ordinal);
+        Assert.Contains("TaskScheduler.UnobservedTaskException", app, StringComparison.Ordinal);
+        Assert.Contains("args.SetObserved();", app, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -34,7 +34,7 @@ These files can contain **paths**, **device names**, **diagnostics**, and simila
 
 ## System Intelligence, Hardware X-Ray, and Deep Sensor Mode
 
-ForgerEMS runs diagnostics locally. **Deep Sensor Mode** reads supported local hardware sensor data only while the app is running or System Intelligence / Hardware X-Ray scans are executed.
+ForgerEMS runs diagnostics locally through the **Forger Sensor Stack**. **Forger Sensor Core** is active by default and uses local Windows/native sources. **Deep Sensor Mode** reads supported local hardware sensor data only while the app is running or System Intelligence / Hardware X-Ray scans are executed.
 
 - Sensor data is **not sold**.
 - Sensor data is **not automatically uploaded**.
@@ -42,8 +42,11 @@ ForgerEMS runs diagnostics locally. **Deep Sensor Mode** reads supported local h
 - You choose when to copy, export, or share reports.
 - Deep Sensor Mode is read-only. It does not control fans, voltage, clocks, overclocking, undervolting, BIOS, firmware, or device settings.
 - Deep Sensor Mode is not permanent administrator permission. Windows may ask for UAC approval at runtime when you choose Elevated Scan, and security policy can still block that approval.
+- Forger Sensor Service is a future optional local component and is not installed in this build.
+- Forger Deep Sensor Driver is roadmap only and is not included in this build.
+- ForgerEMS does not require user-downloaded HWiNFO, AIDA64, CPU-Z, or paid third-party sensor tools for hardware intelligence.
 
-Reports may include hardware model, CPU/GPU/RAM/storage info, battery info, network adapter details, USB device details, Windows version, provider status, and diagnostic notes.
+Reports may include hardware model, CPU/GPU/RAM/storage info, battery info, network adapter details, USB device details, Windows version, Forger Sensor Stack state, source labels, provider status, sensor limitations, and diagnostic notes.
 
 Default support reports should be redacted where supported, but you should still review reports before sharing. Do not send product keys, serial numbers, service tags, API keys, tokens, passwords, private documents, or sensitive personal files to support.
 

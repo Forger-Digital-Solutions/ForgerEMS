@@ -181,8 +181,9 @@ public sealed class MainWindowXamlLoadTests
         Assert.True(settingsStart >= 0);
         var settings = text[settingsStart..];
 
-        Assert.Contains("System Intelligence sensors / Deep Sensor Mode", settings, StringComparison.Ordinal);
-        Assert.Contains("Mode: Off / Read-only local sensors", settings, StringComparison.Ordinal);
+        Assert.Contains("Forger Sensor Stack / Deep Sensor Mode", settings, StringComparison.Ordinal);
+        Assert.Contains("Core: Active", settings, StringComparison.Ordinal);
+        Assert.Contains("Service: Future optional", settings, StringComparison.Ordinal);
         Assert.Contains("Safety: read-only", settings, StringComparison.Ordinal);
         Assert.Contains("No fan, voltage, clock, BIOS, or firmware control.", settings, StringComparison.Ordinal);
         Assert.Contains("Keep Local Only", settings, StringComparison.Ordinal);

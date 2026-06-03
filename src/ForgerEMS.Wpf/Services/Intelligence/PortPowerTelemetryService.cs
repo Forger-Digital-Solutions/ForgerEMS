@@ -295,7 +295,7 @@ public sealed class PortPowerTelemetryService : IPortPowerTelemetryService
         PortPowerRawTelemetry raw,
         ElevatedScanTelemetrySnapshot? elevatedTelemetry)
     {
-        if (elevatedTelemetry is not { State: ElevatedScanTelemetryState.Fresh, PortPower: { } elevated })
+        if (elevatedTelemetry is not { IsFresh: true, PortPower: { } elevated })
         {
             return raw;
         }
@@ -467,6 +467,16 @@ public sealed class PortPowerTelemetryService : IPortPowerTelemetryService
             return ElevatedScanTelemetrySnapshot.RunElevatedScanPrompt;
         }
 
+        if (elevatedTelemetry.State == ElevatedScanTelemetryState.Running)
+        {
+            return elevatedTelemetry.MissingTelemetryReason;
+        }
+
+        if (elevatedTelemetry.IsFailure)
+        {
+            return elevatedTelemetry.MissingTelemetryReason;
+        }
+
         if (elevatedTelemetry.IsStale)
         {
             return elevatedTelemetry.MissingTelemetryReason;
@@ -498,6 +508,16 @@ public sealed class PortPowerTelemetryService : IPortPowerTelemetryService
             return "No cached Elevated Scan telemetry was available.";
         }
 
+        if (elevatedTelemetry.State == ElevatedScanTelemetryState.Running)
+        {
+            return "Elevated Scan is running; cached elevated telemetry is not available yet.";
+        }
+
+        if (elevatedTelemetry.IsFailure)
+        {
+            return $"Cached Elevated Scan telemetry is unavailable ({elevatedTelemetry.UserMessage}).";
+        }
+
         if (elevatedTelemetry.IsStale)
         {
             return $"Cached Elevated Scan telemetry is stale/expired (source: {elevatedTelemetry.Source}; confidence {elevatedTelemetry.Confidence}).";
@@ -511,6 +531,12 @@ public sealed class PortPowerTelemetryService : IPortPowerTelemetryService
         if (elevatedTelemetry is null || elevatedTelemetry.IsMissing)
         {
             yield return ElevatedScanTelemetrySnapshot.RunElevatedScanPrompt;
+            yield break;
+        }
+
+        if (elevatedTelemetry.State == ElevatedScanTelemetryState.Running || elevatedTelemetry.IsFailure)
+        {
+            yield return elevatedTelemetry.MissingTelemetryReason;
             yield break;
         }
 

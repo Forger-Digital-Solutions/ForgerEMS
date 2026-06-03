@@ -227,6 +227,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private string _systemIntelligenceFlipValueCardText = "Run a system scan to generate local flip-value guidance.";
     private string _systemIntelligenceDeviceFitCardText = "Run a system scan to estimate best-use/device fit.";
     private string _systemIntelligenceHardwareXrayCardText = "Run a system scan to build machine class and sensor exposure coverage.";
+    private string _systemIntelligenceSensorStackStatusText =
+        "Forger Sensor Stack\nCore: Active\nElevated Scan: Recommended\nSensor Service: Not installed / Future optional component\nDeep Sensor Driver: Not included / Roadmap\nExternal tools: Not required";
     private string _systemIntelligenceScanModeHintText = "Standard scan runs automatically. Elevated scan unlocks extra detail when needed.";
     private string _systemIntelligenceStaleBannerText = string.Empty;
     private string _systemIntelligenceAutomationLineText = string.Empty;
@@ -1286,6 +1288,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             var resolution = ForgerEmsEnvironmentConfiguration.DeepSensorModeResolution;
             return
+                "Forger Sensor Core: Active. Sensor Service: not installed / future optional component. Deep Sensor Driver: not included in this build. " +
                 $"Deep Sensor Mode: {resolution.Mode}. Current source: {resolution.DisplaySource}. " +
                 "Read-only local sensors may improve Hardware X-Ray sensor coverage while ForgerEMS is running or scanning. " +
                 "Running Elevated Scan as administrator may improve sensor/security coverage. " +
@@ -2043,6 +2046,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         get => _systemIntelligenceHardwareXrayCardText;
         private set => SetProperty(ref _systemIntelligenceHardwareXrayCardText, value);
+    }
+
+    public string SystemIntelligenceSensorStackStatusText
+    {
+        get => _systemIntelligenceSensorStackStatusText;
+        private set => SetProperty(ref _systemIntelligenceSensorStackStatusText, value);
     }
 
     public string SystemIntelligenceScanModeHintText
@@ -3415,29 +3424,52 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _toolkitStatusForeground, value);
     }
 
-    public async Task InitializeAsync()
+    public Task InitializeAsync()
     {
         if (_initialized)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         _initialized = true;
-        HydrateFromCachedReportsEarly();
-        await RefreshAllAsync();
         StartUsbAutoDetectionMonitor();
-        await ConsumeElevatedScanStartupRequestAsync();
+        _ = RunStartupInitializationAsync();
+        return Task.CompletedTask;
     }
 
-    private void HydrateFromCachedReportsEarly()
+    private async Task RunStartupInitializationAsync()
     {
         try
         {
+            await Task.Yield();
+            await HydrateFromCachedReportsEarlyAsync().ConfigureAwait(true);
+            await RefreshAllAsync().ConfigureAwait(true);
+            await ConsumeElevatedScanStartupRequestAsync().ConfigureAwait(true);
+        }
+        catch (Exception exception)
+        {
+            StartupDiagnosticLog.AppendException("MainViewModel.StartupInitialization", exception);
+            AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Startup refresh failed without closing ForgerEMS: {exception.Message}", LogSeverity.Warning));
+            SetStatus(
+                "Startup refresh needs attention",
+                "ForgerEMS stayed open. Use Refresh Backend Context or retry the last action.",
+                WarningBackground,
+                WarningBorder,
+                WarningForeground);
+        }
+    }
+
+    private async Task HydrateFromCachedReportsEarlyAsync()
+    {
+        try
+        {
+            var portPowerTask = RefreshPortPowerTelemetryAsync();
+            await Task.Yield();
             LoadSystemIntelligenceReport();
             LoadToolkitHealthReport();
             ApplyDiagnosticsFromDisk();
             RefreshUsbIntelligenceFromDisk();
-            RefreshPortPowerTelemetry();
+            await portPowerTask.ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -3762,7 +3794,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         LoadToolkitHealthReport();
         ApplyDiagnosticsFromDisk();
         RefreshUsbIntelligenceFromDisk();
-        RefreshPortPowerTelemetry();
+        await RefreshPortPowerTelemetryAsync().ConfigureAwait(true);
 
         if (_backendContext.IsAvailable)
         {
@@ -4406,6 +4438,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             });
 
         LoadSystemIntelligenceReport();
+        await RefreshPortPowerTelemetryAsync().ConfigureAwait(true);
         TryRecordKyraSystemScanLearning();
     }
 
@@ -4490,11 +4523,19 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             var analysis = ElevatedScanLaunchClassifier.Analyze(result.RawRun, inferMissing(result.RawRun));
             ElevatedScanDiagnostics.WriteErrorMarker(reportsDir, analysis, correlationId);
         }
+        else if (result is null)
+        {
+            var analysis = ElevatedScanLaunchClassifier.AnalyzeReasonLine(
+                "Elevated scan failed to start before a process result was available.",
+                exitCode: -1);
+            ElevatedScanDiagnostics.WriteErrorMarker(reportsDir, analysis, correlationId);
+            ApplyLatestElevatedScanMarkerToUi(reportsDir);
+        }
 
         if (result is not null)
         {
             LoadSystemIntelligenceReport();
-            RefreshPortPowerTelemetry();
+            await RefreshPortPowerTelemetryAsync().ConfigureAwait(true);
             if (SelectedUsbTarget is not null)
             {
                 await RefreshUsbIntelligenceReportForSelectedTargetAsync().ConfigureAwait(true);
@@ -4530,6 +4571,19 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             ClearLogs();
             AppendLog(new LogLine(DateTimeOffset.Now, "[ERROR] Elevated Scan resume request was received, but ForgerEMS is still not running as administrator.", LogSeverity.Error));
             AppendLog(new LogLine(DateTimeOffset.Now, "[ACTION] Retry Elevated Scan and approve the Windows UAC prompt. Standard Scan results are still available.", LogSeverity.Warning));
+            ApplyElevatedScanLifecycleToSystemIntelligence(new ElevatedScanTelemetrySnapshot
+            {
+                State = ElevatedScanTelemetryState.NeedsAdmin,
+                CollectedAtUtc = DateTimeOffset.UtcNow,
+                Freshness = "Unavailable",
+                ParseQuality = ElevatedScanParseQuality.Failed,
+                Severity = ElevatedScanSeverity.Warning,
+                UserMessage = "Elevated scan needs administrator approval",
+                MissingTelemetryReason =
+                    "ForgerEMS was relaunched for Elevated Scan, but Windows did not grant administrator permission.",
+                UnavailableReason =
+                    "ForgerEMS was relaunched for Elevated Scan, but Windows did not grant administrator permission."
+            });
             SetStatus(
                 "Elevated Scan could not resume",
                 "ForgerEMS was relaunched for Elevated Scan, but Windows did not grant administrator permission. Standard Scan results are still available.",
@@ -4588,6 +4642,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 "Elevation handoff failed: UAC cancelled NativeError=1223",
                 exitCode: 1223);
             ElevatedScanDiagnostics.WriteErrorMarker(reportsDir, analysis, correlationId);
+            ApplyLatestElevatedScanMarkerToUi(reportsDir);
             AppendLog(new LogLine(DateTimeOffset.Now, "[WARN] Elevated Scan was cancelled before administrator permission was approved. Standard Scan results are still available.", LogSeverity.Warning));
             SetStatus(
                 "Elevated Scan cancelled",
@@ -4602,6 +4657,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 $"Elevation handoff failed: {ex.Message} NativeError={ex.NativeErrorCode}",
                 exitCode: ex.NativeErrorCode);
             ElevatedScanDiagnostics.WriteErrorMarker(reportsDir, analysis, correlationId);
+            ApplyLatestElevatedScanMarkerToUi(reportsDir);
             AppendLog(new LogLine(DateTimeOffset.Now, "[ERROR] " + analysis.PrimaryUserMessage, LogSeverity.Error));
             AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] " + analysis.AdvancedDiagnosticsLine, LogSeverity.Info, channel: LiveLogChannel.Diagnostics));
             SetStatus(
@@ -4617,6 +4673,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 $"Elevation handoff failed: {ex.Message}",
                 exitCode: -1);
             ElevatedScanDiagnostics.WriteErrorMarker(reportsDir, analysis, correlationId);
+            ApplyLatestElevatedScanMarkerToUi(reportsDir);
             AppendLog(new LogLine(DateTimeOffset.Now, "[ERROR] " + analysis.PrimaryUserMessage, LogSeverity.Error));
             AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] " + analysis.AdvancedDiagnosticsLine, LogSeverity.Info, channel: LiveLogChannel.Diagnostics));
             SetStatus(
@@ -8006,6 +8063,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             SystemIntelligenceAutomationLineText = string.Empty;
             SystemIntelligenceWarningReasonText = "Warning reason: waiting for first scan.";
             SystemIntelligenceScanStatusText = $"Scan status: Not scanned · App elevation: {ProcessElevationHelper.DescribeElevationUiShort()}";
+            SystemIntelligenceSensorStackStatusText = BuildForgerSensorStackStatus(elevatedScanState: "Recommended");
             SystemIntelligenceHealthStatusText = "Health status: Unknown";
             SystemIntelligenceWindowsReadinessText = "Windows readiness: Needs verification";
             SystemIntelligenceReportSafePathText = @"Runtime\reports\system-intelligence-latest.json";
@@ -8132,6 +8190,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             SystemIntelligenceFlipValueCardText = BuildFlipValueSummary(root);
             SystemIntelligenceDeviceFitCardText = BuildDeviceFitSummary(root);
             SystemIntelligenceHardwareXrayCardText = BuildHardwareXraySummary(root) + BuildHardwareXrayElevationFooter();
+            SystemIntelligenceSensorStackStatusText = BuildForgerSensorStackStatus(root, _lastElevatedScanTelemetrySnapshot);
             SystemIntelligenceWarningReasonText = BuildSystemIntelligenceWarningReason(root, UnifiedDiagnosticsSummaryText);
             var scanMode = GetJsonString(root, "scanMode", "Standard");
             var permissionLimitedProviders = CountOptionalProviderStatuses(root, "PermissionRequired");
@@ -8179,6 +8238,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             SystemIntelligenceStatusText = "Needs attention";
             SystemIntelligenceWarningReasonText = "Warning: scan report needs regeneration.";
             SystemIntelligenceScanStatusText = $"Scan status: Needs attention · App elevation: {ProcessElevationHelper.DescribeElevationUiShort()}";
+            SystemIntelligenceSensorStackStatusText = BuildForgerSensorStackStatus(elevatedScanState: "Failed");
             SystemIntelligenceHealthStatusText = "Health status: Warning";
             SystemIntelligenceWindowsReadinessText = "Windows readiness: Needs verification";
             SystemIntelligenceSummaryText =
@@ -9378,6 +9438,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             var elevatedTelemetry = GetLatestElevatedScanTelemetry();
             _lastElevatedScanTelemetrySnapshot = elevatedTelemetry;
+            ApplyElevatedScanLifecycleToSystemIntelligence(elevatedTelemetry);
             ApplyPortPowerSnapshot(_portPowerTelemetryService.CollectSnapshot(elevatedTelemetry));
         }
         catch (Exception ex)
@@ -9400,11 +9461,141 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    private async Task RefreshPortPowerTelemetryAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var elevatedTelemetry = await GetLatestElevatedScanTelemetryAsync(cancellationToken).ConfigureAwait(true);
+            var snapshot = await Task.Run(
+                    () => _portPowerTelemetryService.CollectSnapshot(elevatedTelemetry),
+                    cancellationToken)
+                .ConfigureAwait(true);
+
+            cancellationToken.ThrowIfCancellationRequested();
+            _lastElevatedScanTelemetrySnapshot = elevatedTelemetry;
+            ApplyElevatedScanLifecycleToSystemIntelligence(elevatedTelemetry);
+            ApplyPortPowerSnapshot(snapshot);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            PortPowerSummaryText = "Charging intelligence could not read Windows power telemetry.";
+            PortPowerBatteryPercentDisplay = "Unknown";
+            PortPowerBatteryStatusDisplay = "Unknown";
+            PortPowerSourceDisplay = "Unknown";
+            PortPowerAdapterClassDisplay = "Unknown";
+            PortPowerChargeRateDisplay = "Unavailable";
+            PortPowerEstimatedFullDisplay = "Unavailable";
+            PortPowerVoltageCurrentDisplay = "Unavailable - exact USB-C voltage/current is not exposed by this device.";
+            PortPowerTelemetryConfidenceDisplay = "Unavailable";
+            PortPowerEvidenceSummaryDisplay = "Power telemetry read failed.";
+            PortPowerMissingTelemetryReasonDisplay = ex.Message;
+            PortPowerWarningsDisplay = string.Empty;
+            PortPowerLastUpdatedDisplay = $"Updated {DateTimeOffset.Now:g}";
+            ApplyPortIntelligenceSummary();
+            AppendDiagnosticsLog($"Port power telemetry async refresh failed: {ex.Message}");
+            StartupDiagnosticLog.AppendException("RefreshPortPowerTelemetryAsync", ex);
+        }
+    }
+
     private ElevatedScanTelemetrySnapshot GetLatestElevatedScanTelemetry()
     {
         var snapshot = _elevatedScanTelemetryCache.GetLatest(GetRuntimeReportsDirectory());
         _lastElevatedScanTelemetrySnapshot = snapshot;
         return snapshot;
+    }
+
+    private async Task<ElevatedScanTelemetrySnapshot> GetLatestElevatedScanTelemetryAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var snapshot = await _elevatedScanTelemetryCache
+            .GetLatestAsync(GetRuntimeReportsDirectory(), cancellationToken)
+            .ConfigureAwait(false);
+        return snapshot;
+    }
+
+    private void ApplyLatestElevatedScanMarkerToUi(string reportsDirectory)
+    {
+        try
+        {
+            var snapshot = _elevatedScanTelemetryCache.GetLatest(reportsDirectory);
+            _lastElevatedScanTelemetrySnapshot = snapshot;
+            ApplyElevatedScanLifecycleToSystemIntelligence(snapshot);
+            ApplyPortIntelligenceSummary();
+        }
+        catch (Exception exception)
+        {
+            StartupDiagnosticLog.AppendException("ApplyLatestElevatedScanMarkerToUi", exception);
+        }
+    }
+
+    private void ApplyElevatedScanLifecycleToSystemIntelligence(ElevatedScanTelemetrySnapshot snapshot)
+    {
+        switch (snapshot.State)
+        {
+            case ElevatedScanTelemetryState.Fresh:
+                SystemIntelligenceScanStatusText = "Elevated scan complete";
+                SystemIntelligenceScanModeHintText = "Deep hardware and port telemetry is available.";
+                SystemIntelligenceStaleBannerText = string.Empty;
+                SystemIntelligenceStatusBackground = ReadyBackground;
+                SystemIntelligenceStatusBorderBrush = ReadyBorder;
+                SystemIntelligenceStatusForeground = ReadyForeground;
+                break;
+            case ElevatedScanTelemetryState.CompletePartial:
+                SystemIntelligenceScanStatusText =
+                    "Elevated scan complete — some deep telemetry was unavailable on this device.";
+                SystemIntelligenceScanModeHintText =
+                    "Elevated scan complete — some deep telemetry was unavailable on this device.";
+                SystemIntelligenceStaleBannerText = string.Empty;
+                SystemIntelligenceStatusBackground = ReadyBackground;
+                SystemIntelligenceStatusBorderBrush = ReadyBorder;
+                SystemIntelligenceStatusForeground = ReadyForeground;
+                break;
+            case ElevatedScanTelemetryState.Running:
+                SystemIntelligenceScanStatusText = "Elevated scan running";
+                SystemIntelligenceScanModeHintText = "Waiting for the elevated report to finish.";
+                SystemIntelligenceStatusBackground = RunningBackground;
+                SystemIntelligenceStatusBorderBrush = RunningBorder;
+                SystemIntelligenceStatusForeground = RunningForeground;
+                break;
+            case ElevatedScanTelemetryState.Stale:
+            case ElevatedScanTelemetryState.Missing:
+                SystemIntelligenceScanStatusText = "Elevated scan recommended";
+                SystemIntelligenceScanModeHintText = "Run elevated scan for deeper port and hardware telemetry.";
+                SystemIntelligenceStatusBackground = WarningBackground;
+                SystemIntelligenceStatusBorderBrush = WarningBorder;
+                SystemIntelligenceStatusForeground = WarningForeground;
+                break;
+            case ElevatedScanTelemetryState.Cancelled:
+                SystemIntelligenceScanStatusText = "Elevated scan cancelled";
+                SystemIntelligenceScanModeHintText =
+                    "Retry Elevated Scan and approve the Windows UAC prompt, or continue with Standard Scan results.";
+                SystemIntelligenceStatusBackground = WarningBackground;
+                SystemIntelligenceStatusBorderBrush = WarningBorder;
+                SystemIntelligenceStatusForeground = WarningForeground;
+                break;
+            case ElevatedScanTelemetryState.NeedsAdmin:
+                SystemIntelligenceScanStatusText = "Elevated scan needs administrator approval";
+                SystemIntelligenceScanModeHintText =
+                    "Retry Elevated Scan and approve the Windows UAC prompt, or start ForgerEMS as administrator.";
+                SystemIntelligenceStatusBackground = WarningBackground;
+                SystemIntelligenceStatusBorderBrush = WarningBorder;
+                SystemIntelligenceStatusForeground = WarningForeground;
+                break;
+            case ElevatedScanTelemetryState.Failed:
+                SystemIntelligenceScanStatusText = "Elevated scan failed";
+                SystemIntelligenceScanModeHintText = "ForgerEMS stayed open. Check logs or retry as administrator.";
+                SystemIntelligenceStatusBackground = ErrorBackground;
+                SystemIntelligenceStatusBorderBrush = ErrorBorder;
+                SystemIntelligenceStatusForeground = ErrorForeground;
+                break;
+        }
+
+        SystemIntelligenceSensorStackStatusText =
+            BuildForgerSensorStackStatus(elevatedScanState: MapElevatedScanStateForSensorStack(snapshot) ?? "Recommended");
     }
 
     private UsbTopologyBuildOptions BuildUsbTopologyOptions(
@@ -9919,26 +10110,27 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             coverage = ApplyUsbCoverageFromIntelligence(root, coverage);
 
             var live = FindLiveSensorNames(sensorMatrix);
-            var deepNote = GetJsonString(sensorMatrix, "deepSensorModeNote", "Some sensors require admin access, firmware support, vendor drivers, or optional reviewed providers.");
+            var deepNote = GetJsonString(sensorMatrix, "deepSensorModeNote", "Some board-level sensors require the future Forger Deep Sensor Driver.");
             var limited = BuildLimitedSensorCompactSummary(sensorMatrix);
             var storage = BuildStorageSensorCompactSummary(sensorMatrix);
             var usb = BuildUsbSensorCompactSummary(root, sensorMatrix);
-            var optionalProviders = BuildOptionalProviderStatusSummary(root);
+            var sensorLimits = BuildOptionalProviderStatusSummary(root);
 
             return
                 $"Machine: {primary} ({confidence}){Environment.NewLine}" +
                 (secondary.Equals("none", StringComparison.OrdinalIgnoreCase) ? string.Empty : $"Secondary: {secondary}{Environment.NewLine}") +
                 $"Coverage: {CompactCoverageSummary(coverage)}{Environment.NewLine}" +
                 $"Live: {live}{Environment.NewLine}" +
-                $"Sensor Providers: {BuildSensorProviderCompactSummary(sensorMatrix)}{Environment.NewLine}" +
+                $"Forger Sensor Stack: Core active; Sensor Service not installed; Deep Sensor Driver not included; External tools not required{Environment.NewLine}" +
+                $"Sensor Sources: {BuildSensorProviderCompactSummary(sensorMatrix)}{Environment.NewLine}" +
                 $"Deep Sensor Mode: {BuildDeepSensorModeCompactSummary(root, sensorMatrix)}{Environment.NewLine}" +
                 $"Inventory: {GetInventoryDataSummary(sensorMatrix)}{Environment.NewLine}" +
                 $"USB: {usb}{Environment.NewLine}" +
-                $"Optional providers: {optionalProviders}{Environment.NewLine}" +
+                $"Sensor limits: {sensorLimits}{Environment.NewLine}" +
                 $"Limited: {limited}{Environment.NewLine}" +
                 $"Storage: {storage}{Environment.NewLine}" +
-                "Guide: NotExposed is not failure. Unknown lowers confidence; NotExposed means firmware/driver/permission limit; a true failure requires explicit evidence." + Environment.NewLine +
-                "Why missing? Common reasons: firmware does not expose the sensor, vendor driver does not expose it, admin not granted, deep provider not packaged or off, optional vendor probe (e.g. ACPI thermal zones, NVIDIA SMI) unavailable on this machine." + Environment.NewLine +
+                "Guide: missing readings are coverage limits, not failures. Unknown lowers confidence; ForgerEMS does not invent sensor values." + Environment.NewLine +
+                "Why missing? Common reasons: firmware does not expose the sensor, vendor driver does not expose it, admin was not granted, bundled deep provider is not packaged or is off, or the future Forger Deep Sensor Driver is required." + Environment.NewLine +
                 $"Note: {note} {deepNote}";
         }
 
@@ -9952,7 +10144,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 $"Secondary: {FormatList(classification.SecondaryClasses.Take(3), "none")}{Environment.NewLine}" +
                 $"Sensor coverage: {CompactCoverageSummary(sensors.CoverageSummary)}{Environment.NewLine}" +
                 $"Live sensors: {FormatList(sensors.Groups.SelectMany(g => g.Readings).Where(r => r.IsLive).Select(r => r.Name).Take(5), "none exposed in safe scan")}{Environment.NewLine}" +
-                $"Sensor Providers: {BuildSensorProviderCompactSummary(sensors)}{Environment.NewLine}" +
+                $"Forger Sensor Stack: Core active; Sensor Service not installed; Deep Sensor Driver not included; External tools not required{Environment.NewLine}" +
+                $"Sensor Sources: {BuildSensorProviderCompactSummary(sensors)}{Environment.NewLine}" +
                 $"Deep Sensor Mode: {sensors.DeepSensorMode.Mode} via {sensors.DeepSensorMode.DisplaySource}; Safety: read-only; no fan/voltage/clock/firmware control.{Environment.NewLine}" +
                 $"Limited: CPU/GPU temps, fan RPM, package power may require deep/vendor sensor support.{Environment.NewLine}" +
                 $"Note: {classification.TechnicianNote} {sensors.DeepSensorModeNote}";
@@ -9974,6 +10167,67 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         return lines;
     }
+
+    private static string BuildForgerSensorStackStatus(
+        JsonElement root,
+        ElevatedScanTelemetrySnapshot? elevatedSnapshot)
+    {
+        if (root.TryGetProperty("forgerSensorStack", out var stack) &&
+            stack.ValueKind == JsonValueKind.Object)
+        {
+            return BuildForgerSensorStackStatus(
+                GetJsonString(stack, "forgerSensorCore", "Active"),
+                MapElevatedScanStateForSensorStack(elevatedSnapshot) ??
+                    GetJsonString(stack, "elevatedScan", "Recommended"),
+                GetJsonString(stack, "sensorService", "Not installed"),
+                GetJsonString(stack, "deepSensorDriver", "Not included"),
+                GetJsonString(stack, "externalTools", "Not required"));
+        }
+
+        var scanMode = GetJsonString(root, "scanMode", "Standard");
+        var state = MapElevatedScanStateForSensorStack(elevatedSnapshot) ??
+                    (scanMode.Equals("Elevated", StringComparison.OrdinalIgnoreCase) ? "Complete" : "Recommended");
+        return BuildForgerSensorStackStatus(elevatedScanState: state);
+    }
+
+    private static string BuildForgerSensorStackStatus(
+        string core = "Active",
+        string elevatedScanState = "Recommended",
+        string sensorService = "Not installed",
+        string deepSensorDriver = "Not included",
+        string externalTools = "Not required")
+    {
+        var serviceDisplay = sensorService.Equals("Not installed", StringComparison.OrdinalIgnoreCase)
+            ? "Not installed / Future optional component"
+            : sensorService;
+        var driverDisplay = deepSensorDriver.Equals("Not included", StringComparison.OrdinalIgnoreCase)
+            ? "Not included / Roadmap"
+            : deepSensorDriver;
+
+        return
+            "Forger Sensor Stack" + Environment.NewLine +
+            $"Core: {core}" + Environment.NewLine +
+            $"Elevated Scan: {ForgerSensorStackState.NormalizeElevatedScanState(elevatedScanState)}" + Environment.NewLine +
+            $"Sensor Service: {serviceDisplay}" + Environment.NewLine +
+            $"Deep Sensor Driver: {driverDisplay}" + Environment.NewLine +
+            $"External tools: {externalTools}" + Environment.NewLine +
+            "Some board-level sensors require the future Forger Deep Sensor Driver." + Environment.NewLine +
+            "This is not a failure. Many laptops do not expose CPU package power, fan speed, VRM, or EC telemetry through standard Windows APIs.";
+    }
+
+    private static string? MapElevatedScanStateForSensorStack(ElevatedScanTelemetrySnapshot? snapshot) =>
+        snapshot?.State switch
+        {
+            ElevatedScanTelemetryState.Fresh => "Complete",
+            ElevatedScanTelemetryState.CompletePartial => "Partial",
+            ElevatedScanTelemetryState.Running => "Running",
+            ElevatedScanTelemetryState.Failed => "Failed",
+            ElevatedScanTelemetryState.Cancelled => "Recommended",
+            ElevatedScanTelemetryState.NeedsAdmin => "Recommended",
+            ElevatedScanTelemetryState.Stale => "Recommended",
+            ElevatedScanTelemetryState.Missing => "Recommended",
+            _ => null
+        };
 
     private static string FindLiveSensorNames(JsonElement sensorMatrix)
     {
@@ -10033,7 +10287,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         if (!sensorMatrix.TryGetProperty("sensorProviders", out var providers) || providers.ValueKind != JsonValueKind.Array)
         {
-            return "Windows Native: Active; LibreHardwareMonitor: Off; Admin Bridge: Off; Driver Provider: Not included";
+            return "Forger Sensor Core: Active; LibreHardwareMonitor: Off; Forger Sensor Service: Not installed; Forger Deep Sensor Driver: Not included";
         }
 
         var rows = new List<string>();
@@ -10046,25 +10300,29 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             var failure = GetJsonString(provider, "failureReason", string.Empty);
             var label = name switch
             {
-                var n when n.Contains("Windows", StringComparison.OrdinalIgnoreCase) => "Windows Native",
+                var n when n.Contains("Forger Sensor Core", StringComparison.OrdinalIgnoreCase) => "Forger Sensor Core",
+                var n when n.Contains("Windows", StringComparison.OrdinalIgnoreCase) => "Forger Sensor Core",
                 var n when n.Contains("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase) => "LibreHardwareMonitor",
                 var n when n.Contains("ACPI", StringComparison.OrdinalIgnoreCase) => "ACPI Thermal Zones",
                 var n when n.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) => "NVIDIA SMI",
+                var n when n.Contains("Sensor Service", StringComparison.OrdinalIgnoreCase) => "Forger Sensor Service",
+                var n when n.Contains("Admin", StringComparison.OrdinalIgnoreCase) => "Forger Sensor Service",
+                var n when n.Contains("Driver", StringComparison.OrdinalIgnoreCase) => "Forger Deep Sensor Driver",
                 var n when n.Contains("Deep", StringComparison.OrdinalIgnoreCase) => "Deep Sensor Provider",
-                var n when n.Contains("Admin", StringComparison.OrdinalIgnoreCase) => "Admin Bridge",
-                var n when n.Contains("Driver", StringComparison.OrdinalIgnoreCase) => "Driver Provider",
                 _ => name
             };
             var status = enabled
                 ? label.Equals("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase) ? "Active read-only" : "Active"
                 : bundled
                     ? "Bundled but disabled"
-                    : label.Equals("Driver Provider", StringComparison.OrdinalIgnoreCase)
+                    : label.Equals("Forger Deep Sensor Driver", StringComparison.OrdinalIgnoreCase)
                         ? "Not included"
                         : label.Equals("NVIDIA SMI", StringComparison.OrdinalIgnoreCase)
                             ? "Not detected"
                             : label.Equals("ACPI Thermal Zones", StringComparison.OrdinalIgnoreCase)
                                 ? "No zones exposed"
+                                : label.Equals("Forger Sensor Service", StringComparison.OrdinalIgnoreCase)
+                                    ? "Not installed"
                                 : "Off";
             if (!enabled &&
                 (label.Equals("Deep Sensor Provider", StringComparison.OrdinalIgnoreCase) ||
@@ -10078,7 +10336,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             rows.Add($"{label}: {status}");
         }
 
-        return FormatList(rows.Take(6), "Windows Native: Active; LibreHardwareMonitor: Off; ACPI Thermal Zones: No zones exposed; NVIDIA SMI: Not detected; Admin Bridge: Off; Driver Provider: Not included");
+        return FormatList(rows.Take(6), "Forger Sensor Core: Active; LibreHardwareMonitor: Off; ACPI Thermal Zones: No zones exposed; NVIDIA SMI: Not detected; Forger Sensor Service: Not installed; Forger Deep Sensor Driver: Not included");
     }
 
     private static string BuildSensorProviderCompactSummary(SensorMatrixResult sensors)
@@ -10087,25 +10345,29 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             var label = provider.ProviderName switch
             {
-                var n when n.Contains("Windows", StringComparison.OrdinalIgnoreCase) => "Windows Native",
+                var n when n.Contains("Forger Sensor Core", StringComparison.OrdinalIgnoreCase) => "Forger Sensor Core",
+                var n when n.Contains("Windows", StringComparison.OrdinalIgnoreCase) => "Forger Sensor Core",
                 var n when n.Contains("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase) => "LibreHardwareMonitor",
                 var n when n.Contains("ACPI", StringComparison.OrdinalIgnoreCase) => "ACPI Thermal Zones",
                 var n when n.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) => "NVIDIA SMI",
+                var n when n.Contains("Sensor Service", StringComparison.OrdinalIgnoreCase) => "Forger Sensor Service",
+                var n when n.Contains("Admin", StringComparison.OrdinalIgnoreCase) => "Forger Sensor Service",
+                var n when n.Contains("Driver", StringComparison.OrdinalIgnoreCase) => "Forger Deep Sensor Driver",
                 var n when n.Contains("Deep", StringComparison.OrdinalIgnoreCase) => "Deep Sensor Provider",
-                var n when n.Contains("Admin", StringComparison.OrdinalIgnoreCase) => "Admin Bridge",
-                var n when n.Contains("Driver", StringComparison.OrdinalIgnoreCase) => "Driver Provider",
                 _ => provider.ProviderName
             };
             var status = provider.IsEnabled
                 ? label.Equals("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase) ? "Active read-only" : "Active"
                 : provider.IsBundled
                     ? "Bundled but disabled"
-                    : label.Equals("Driver Provider", StringComparison.OrdinalIgnoreCase)
+                    : label.Equals("Forger Deep Sensor Driver", StringComparison.OrdinalIgnoreCase)
                         ? "Not included"
                         : label.Equals("NVIDIA SMI", StringComparison.OrdinalIgnoreCase)
                             ? "Not detected"
                             : label.Equals("ACPI Thermal Zones", StringComparison.OrdinalIgnoreCase)
                                 ? "No zones exposed"
+                                : label.Equals("Forger Sensor Service", StringComparison.OrdinalIgnoreCase)
+                                    ? "Not installed"
                                 : "Off";
             if (!provider.IsEnabled &&
                 (label.Equals("Deep Sensor Provider", StringComparison.OrdinalIgnoreCase) ||
@@ -10118,14 +10380,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             return $"{label}: {status}";
         });
-        return FormatList(rows.Take(6), "Windows Native: Active; LibreHardwareMonitor: Off; ACPI Thermal Zones: No zones exposed; NVIDIA SMI: Not detected; Admin Bridge: Off; Driver Provider: Not included");
+        return FormatList(rows.Take(6), "Forger Sensor Core: Active; LibreHardwareMonitor: Off; ACPI Thermal Zones: No zones exposed; NVIDIA SMI: Not detected; Forger Sensor Service: Not installed; Forger Deep Sensor Driver: Not included");
     }
 
     private static string BuildOptionalProviderStatusSummary(JsonElement root)
     {
         if (!root.TryGetProperty("optionalProviderStatus", out var providers) || providers.ValueKind != JsonValueKind.Array)
         {
-            return "Available: n/a; Permission required: n/a; Not exposed: n/a; Provider unavailable: n/a";
+            return "No additional source limits were recorded. Missing board-level sensors are coverage limits, not failures.";
         }
 
         var available = 0;
@@ -10153,7 +10415,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             }
         }
 
-        return $"Available: {available}; Permission required: {permissionRequired}; Not exposed by firmware/driver: {notExposed}; Provider unavailable: {providerUnavailable}. Elevated scan unlocks extra detail when needed.";
+        return $"Available: {available}; Permission required: {permissionRequired}; Firmware/driver-limited: {notExposed}; Provider blocked/errors: {providerUnavailable}. Elevated Scan unlocks extra detail when Windows allows it.";
     }
 
     private static string BuildSystemIntelligenceWarningReason(JsonElement root, string diagnosticsSummary)
@@ -10617,7 +10879,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         return reason switch
         {
-            "RequiresExternalProvider" => "Requires deep sensor provider",
+            "RequiresExternalProvider" => "Requires Forger deep sensor layer",
             "RequiresVendorDriver" => "Requires vendor driver/support",
             "NotExposedByFirmware" => "Not exposed by firmware",
             _ => reason

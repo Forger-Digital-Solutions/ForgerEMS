@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using VentoyToolkitSetup.Wpf.Services;
 using VentoyToolkitSetup.Wpf.ViewModels;
 
 namespace VentoyToolkitSetup.Wpf;
@@ -79,13 +80,20 @@ public partial class MainWindow : Window
         _initialized = true;
         if (DataContext is MainViewModel viewModel)
         {
-            // Install the WM_DEVICECHANGE hook before initialization so the
-            // debounced refresh path is ready as soon as the first device
-            // arrival/removal arrives. This is required for the "no USB at
-            // launch + later plug-in" flow: the hook will refresh the target
-            // list automatically once Windows broadcasts the volume mount.
-            viewModel.AttachUsbDeviceChangeNotifier(this);
-            await viewModel.InitializeAsync();
+            try
+            {
+                // Install the WM_DEVICECHANGE hook before initialization so the
+                // debounced refresh path is ready as soon as the first device
+                // arrival/removal arrives. This is required for the "no USB at
+                // launch + later plug-in" flow: the hook will refresh the target
+                // list automatically once Windows broadcasts the volume mount.
+                viewModel.AttachUsbDeviceChangeNotifier(this);
+                await viewModel.InitializeAsync();
+            }
+            catch (Exception exception)
+            {
+                StartupDiagnosticLog.AppendException("MainWindow.OnLoaded.Initialize", exception);
+            }
         }
 
         UpdateSidebarSelection();

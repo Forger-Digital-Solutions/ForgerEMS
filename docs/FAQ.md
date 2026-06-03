@@ -261,9 +261,9 @@ There is **no automatic upload** to Forger Digital Solutions when you run local 
 
 ---
 
-## Does ForgerEMS require HWiNFO, LibreHardwareMonitor, CPU-Z, or vendor tools?
+## Does ForgerEMS require HWiNFO, AIDA64, CPU-Z, or vendor tools?
 
-No. ForgerEMS ships its approved local providers with the app where legally allowed. Deep Sensor Mode uses bundled read-only providers and does not require separate user downloads.
+No. ForgerEMS uses its own local **Forger Sensor Stack**. Forger Sensor Core is active by default, and approved bundled providers are used only where legally allowed. There is no paid third-party tool requirement and no user-required HWiNFO, AIDA64, CPU-Z, or vendor-tool download for System Intelligence.
 
 ---
 
@@ -281,7 +281,9 @@ If Windows or your security policy blocks the admin handoff (UAC cancelled, endp
 
 ## What is Deep Sensor Mode?
 
-Deep Sensor Mode is an optional local read-only sensor mode that may improve **Hardware X-Ray** sensor coverage for temperatures, clocks, load, fan RPM, and storage wear when supported. It enables the bundled LibreHardwareMonitorLib provider where packaged; it is not permanent administrator permission.
+Deep Sensor Mode is an optional local read-only sensor mode inside the Forger Sensor Stack. It may improve **Hardware X-Ray** coverage for temperatures, clocks, load, fan RPM, and storage wear when supported. It enables bundled reviewed sensor providers where packaged and does not require separate user downloads; it is not permanent administrator permission and it is not an external tool bridge.
+
+Forger Sensor Service is a future optional local service and is not installed in this build. Forger Deep Sensor Driver is roadmap only and is not included in this build.
 
 ---
 
@@ -305,7 +307,9 @@ No automatic upload. Reports and logs stay local unless you choose to copy, expo
 
 ## Can Deep Sensor Mode require administrator access?
 
-Some sensors may require admin access, vendor drivers, or firmware support, but Deep Sensor Mode itself is not the same as admin permission. Windows may ask for UAC approval when you run Elevated Scan; ForgerEMS reports unavailable readings honestly when approval or hardware support is not available.
+Some sensors may require admin access, vendor drivers, firmware support, or the future Forger Deep Sensor Driver, but Deep Sensor Mode itself is not the same as admin permission. Windows may ask for UAC approval when you run Elevated Scan. ForgerEMS reports unavailable readings honestly when approval or hardware support is not available.
+
+This is not a failure. Many laptops do not expose CPU package power, fan speed, VRM, or EC telemetry through standard Windows APIs.
 
 ---
 
@@ -318,6 +322,8 @@ Yes, where packaged, ForgerEMS includes **LibreHardwareMonitorLib** as a bundled
 ## Can I turn Deep Sensor Mode off?
 
 Yes. Deep Sensor Mode can be **Off** or **Read-only local sensors**. Environment variable/testing overrides may also be supported.
+
+Related docs: [FORGER-SENSOR-STACK.md](FORGER-SENSOR-STACK.md), [SENSOR-LIMITATIONS.md](SENSOR-LIMITATIONS.md), and [FORGER-DEEP-SENSOR-DRIVER-ROADMAP.md](FORGER-DEEP-SENSOR-DRIVER-ROADMAP.md).
 
 ---
 

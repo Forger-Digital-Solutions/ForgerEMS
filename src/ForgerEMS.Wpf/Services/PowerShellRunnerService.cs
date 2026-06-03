@@ -62,24 +62,38 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
 
         process.OutputDataReceived += (_, eventArgs) =>
         {
-            if (eventArgs.Data is null)
+            try
             {
-                return;
-            }
+                if (eventArgs.Data is null)
+                {
+                    return;
+                }
 
-            stdoutBuilder.AppendLine(eventArgs.Data);
-            PublishLine(eventArgs.Data, isErrorStream: false);
+                stdoutBuilder.AppendLine(eventArgs.Data);
+                PublishLine(eventArgs.Data, isErrorStream: false);
+            }
+            catch (Exception exception)
+            {
+                StartupDiagnosticLog.AppendException("PowerShellRunnerService.OutputDataReceived", exception);
+            }
         };
 
         process.ErrorDataReceived += (_, eventArgs) =>
         {
-            if (eventArgs.Data is null)
+            try
             {
-                return;
-            }
+                if (eventArgs.Data is null)
+                {
+                    return;
+                }
 
-            stderrBuilder.AppendLine(eventArgs.Data);
-            PublishLine(eventArgs.Data, isErrorStream: true);
+                stderrBuilder.AppendLine(eventArgs.Data);
+                PublishLine(eventArgs.Data, isErrorStream: true);
+            }
+            catch (Exception exception)
+            {
+                StartupDiagnosticLog.AppendException("PowerShellRunnerService.ErrorDataReceived", exception);
+            }
         };
 
         if (!process.Start())
@@ -212,20 +226,34 @@ public sealed class PowerShellRunnerService : IPowerShellRunnerService
 
         void PublishLine(string text, bool isErrorStream)
         {
-            var line = new LogLine(DateTimeOffset.Now, text, Classify(text, isErrorStream), isErrorStream);
-            lock (sync)
+            try
             {
-                if (!IsSyntheticProgressHeartbeat(text))
+                var line = new LogLine(DateTimeOffset.Now, text, Classify(text, isErrorStream), isErrorStream);
+                lock (sync)
                 {
-                    lastHeartbeatText = null;
+                    if (!IsSyntheticProgressHeartbeat(text))
+                    {
+                        lastHeartbeatText = null;
+                    }
+
+                    outputLines.Add(line);
                 }
 
-                outputLines.Add(line);
+                lastOutputUtc = DateTimeOffset.UtcNow;
+
+                try
+                {
+                    onOutput?.Invoke(line);
+                }
+                catch (Exception exception)
+                {
+                    StartupDiagnosticLog.AppendException("PowerShellRunnerService.onOutput", exception);
+                }
             }
-
-            lastOutputUtc = DateTimeOffset.UtcNow;
-
-            onOutput?.Invoke(line);
+            catch (Exception exception)
+            {
+                StartupDiagnosticLog.AppendException("PowerShellRunnerService.PublishLine", exception);
+            }
         }
     }
 

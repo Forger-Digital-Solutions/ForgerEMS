@@ -75,7 +75,9 @@ ForgerEMS is Windows-first. The macOS, Android, and iOS / iPadOS USB Builder pac
 
 ---
 
-## LibreHardwareMonitor and sensor provider notices
+## Forger Sensor Stack and sensor provider notices
+
+ForgerEMS hardware intelligence is based on the local **Forger Sensor Stack**. **Forger Sensor Core** is active by default and uses Windows/native read-only sources. **Forger Sensor Service** is a future optional local service and is not installed in this build. **Forger Deep Sensor Driver** is roadmap only and is not included in this build.
 
 ForgerEMS may include **LibreHardwareMonitorLib** as a bundled local read-only sensor provider for **Hardware X-Ray** when **Deep Sensor Mode** is enabled.
 
@@ -86,9 +88,9 @@ ForgerEMS may include **LibreHardwareMonitorLib** as a bundled local read-only s
 
 ForgerEMS proprietary code remains separate from MPL-covered LibreHardwareMonitor code. If ForgerEMS modifies MPL-covered LibreHardwareMonitor files and distributes them, those modified files must be made available as required by MPL-2.0.
 
-ForgerEMS does **not** redistribute HWiNFO, AIDA64, CPU-Z, or other proprietary sensor tools unless a license explicitly allows it.
+ForgerEMS does **not** require or redistribute HWiNFO, AIDA64, CPU-Z, or other proprietary sensor tools unless a license explicitly allows it.
 
-Sensor providers are read-only. ForgerEMS does **not** control fans, voltage, clocks, overclocking, undervolting, BIOS, or firmware. There is no warranty that every sensor is exposed; firmware/vendor/admin limitations may prevent some readings. Unavailable readings are coverage limits, not hardware failures.
+Sensor providers are read-only. ForgerEMS does **not** control fans, voltage, clocks, overclocking, undervolting, BIOS, or firmware. There is no warranty that every sensor is exposed; firmware/vendor/admin limitations may prevent some readings. Unavailable readings are coverage limits, not hardware failures, and ForgerEMS must not generate fake sensor values.
 
 ---
 

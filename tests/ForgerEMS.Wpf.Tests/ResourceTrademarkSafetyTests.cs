@@ -122,13 +122,41 @@ public sealed class ResourceTrademarkSafetyTests
 
         Assert.Contains("x:Name=\"CommandCenterBackgroundImage\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Source=\"Assets/ForgerEMS_CommandCenterBackground.png\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Stretch=\"UniformToFill\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"BackgroundReadabilityVeil\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("x:Name=\"CircuitBackgroundLayer\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("x:Name=\"TraceLightCanvas\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("CircuitPulseTraceStyle", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("BackgroundDetailComboBox", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("ComboBoxItem Content=\"Animated\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainWindow_ShowsEntireStaticBackgroundWithoutCropping()
+    {
+        var xaml = File.ReadAllText(Path.Combine(RepoRoot, "src", "ForgerEMS.Wpf", "MainWindow.xaml"));
+
+        // The named main background image must display the entire artwork
+        // (Uniform, centered, never cropped). An optional blurred filler element
+        // may use UniformToFill behind it, so we scope assertions to the named
+        // element only.
+        const string nameMarker = "x:Name=\"CommandCenterBackgroundImage\"";
+        var start = xaml.IndexOf(nameMarker, StringComparison.Ordinal);
+        Assert.True(start >= 0, "CommandCenterBackgroundImage was not found in MainWindow.xaml.");
+        var end = xaml.IndexOf("/>", start, StringComparison.Ordinal);
+        Assert.True(end > start, "Could not find the self-closing end of CommandCenterBackgroundImage.");
+        var element = xaml[start..end];
+
+        Assert.Contains("Stretch=\"Uniform\"", element, StringComparison.Ordinal);
+        Assert.DoesNotContain("Stretch=\"UniformToFill\"", element, StringComparison.Ordinal);
+        Assert.Contains("HorizontalAlignment=\"Center\"", element, StringComparison.Ordinal);
+        Assert.Contains("VerticalAlignment=\"Center\"", element, StringComparison.Ordinal);
+        Assert.Contains("IsHitTestVisible=\"False\"", element, StringComparison.Ordinal);
+        Assert.Contains("Source=\"Assets/ForgerEMS_CommandCenterBackground.png\"", element, StringComparison.Ordinal);
+
+        // No animation systems may sneak back in around the background.
+        Assert.DoesNotContain("BeginAnimation", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<Storyboard", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("DoubleAnimation", xaml, StringComparison.Ordinal);
     }
 
     [Fact]

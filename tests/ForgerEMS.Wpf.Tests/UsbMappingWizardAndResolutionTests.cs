@@ -1244,7 +1244,7 @@ public sealed class UsbMappingWizardAndResolutionTests
 
         Assert.Equal(ElevatedScanTelemetryState.Fresh, snapshot.ElevatedTelemetryState);
         Assert.NotNull(snapshot.UsbDiagnostics);
-        Assert.Contains("Cached Elevated Scan telemetry", snapshot.UsbDiagnostics!.ElevatedTelemetrySummary, StringComparison.Ordinal);
+        Assert.Contains("Elevated scan complete. Cached telemetry", snapshot.UsbDiagnostics!.ElevatedTelemetrySummary, StringComparison.Ordinal);
         Assert.Contains("USB4", snapshot.UsbDiagnostics.ElevatedTelemetrySummary, StringComparison.OrdinalIgnoreCase);
     }
 

@@ -169,13 +169,19 @@ public sealed class HardwareIntelligenceEngineTests
             Assert.Contains("CPU:", sensorMatrix.GetProperty("coverageSummary").GetString());
             Assert.True(sensorMatrix.TryGetProperty("sensorProviders", out var providers));
             Assert.Contains(providers.EnumerateArray(), provider =>
-                provider.GetProperty("providerName").GetString() == "Windows Native" &&
+                provider.GetProperty("providerName").GetString() == "Forger Sensor Core" &&
                 provider.GetProperty("isEnabled").GetBoolean());
             Assert.Contains(providers.EnumerateArray(), provider =>
                 provider.GetProperty("providerName").GetString() == "LibreHardwareMonitor" &&
                 !provider.GetProperty("isEnabled").GetBoolean());
             Assert.DoesNotContain("USB: 0/3 fields known", sensorMatrix.GetProperty("coverageSummary").GetString(), StringComparison.OrdinalIgnoreCase);
             Assert.Contains("USB: 5/5 fields known", sensorMatrix.GetProperty("coverageSummary").GetString(), StringComparison.OrdinalIgnoreCase);
+            Assert.True(doc.RootElement.TryGetProperty("forgerSensorStack", out var stack));
+            Assert.Equal("Active", stack.GetProperty("forgerSensorCore").GetString());
+            Assert.Equal("Recommended", stack.GetProperty("elevatedScan").GetString());
+            Assert.Equal("Not installed", stack.GetProperty("sensorService").GetString());
+            Assert.Equal("Not included", stack.GetProperty("deepSensorDriver").GetString());
+            Assert.Equal("Not required", stack.GetProperty("externalTools").GetString());
             Assert.Equal("Mobile Workstation", doc.RootElement.GetProperty("deviceFit").GetProperty("machineClass").GetString());
             Assert.Contains("Scan Confidence", doc.RootElement.GetProperty("forgerAutomation").GetProperty("summaryLine").GetString());
         });
@@ -206,7 +212,7 @@ public sealed class HardwareIntelligenceEngineTests
     public void SensorProviderHost_EnablesWindowsNativeByDefaultAndDoesNotRequireDownloads()
     {
         var sensors = SensorMatrixBuilder.Build(Profile("Dell", "Precision 5540", "Intel Core i7-9850H", 32, "NVIDIA Quadro T2000", hasBattery: true));
-        var windows = Assert.Single(sensors.SensorProviders, provider => provider.ProviderName == "Windows Native");
+        var windows = Assert.Single(sensors.SensorProviders, provider => provider.ProviderName == "Forger Sensor Core");
 
         Assert.True(windows.IsEnabled);
         Assert.True(windows.IsBundled);
@@ -217,6 +223,11 @@ public sealed class HardwareIntelligenceEngineTests
         Assert.Contains(windows.TechnicianNotes, note => note.Contains("No internet", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(windows.TechnicianNotes, note => note.Contains("user-downloaded", StringComparison.OrdinalIgnoreCase));
         Assert.NotEmpty(windows.Readings);
+        Assert.Equal("Active", sensors.ForgerSensorStack.ForgerSensorCore);
+        Assert.Equal("Not installed", sensors.ForgerSensorStack.SensorService);
+        Assert.Equal("Not included", sensors.ForgerSensorStack.DeepSensorDriver);
+        Assert.Equal("Not required", sensors.ForgerSensorStack.ExternalTools);
+        Assert.False(sensors.ForgerSensorStack.GeneratesFakeSensorValues);
     }
 
     [Fact]
@@ -327,12 +338,14 @@ public sealed class HardwareIntelligenceEngineTests
         Assert.Contains("## Machine Class / Hardware X-Ray", text);
         Assert.Contains("### Sensor Availability Matrix", text);
         Assert.Contains("New-SensorProviderReport", text);
-        Assert.Contains("### Sensor Provider Host", text);
-        Assert.Contains("Windows Native", text);
+        Assert.Contains("### Forger Sensor Stack", text);
+        Assert.Contains("### Sensor Sources", text);
+        Assert.Contains("Forger Sensor Core", text);
         Assert.Contains("LibreHardwareMonitor", text);
         Assert.Contains("providers/sensors/LibreHardwareMonitorLib.dll", text);
-        Assert.Contains("ForgerEMS Admin Sensor Bridge", text);
-        Assert.Contains("ForgerEMS Signed Driver Provider", text);
+        Assert.Contains("Forger Sensor Service", text);
+        Assert.Contains("Forger Deep Sensor Driver", text);
+        Assert.Contains("New-ForgerSensorStackState", text);
         Assert.Contains("$tpmSensorStatus", text, StringComparison.Ordinal);
         Assert.Contains("$secureBootSensorStatus", text, StringComparison.Ordinal);
         Assert.Contains("Unknown TPM state should be verified in BIOS/UEFI before calling it failed.", text, StringComparison.Ordinal);

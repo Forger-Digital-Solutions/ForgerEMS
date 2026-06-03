@@ -24,7 +24,7 @@ ForgerEMS is a **Windows desktop technician workbench** centered on **USB toolki
 - **Kyra** for grounded local assistance, with optional online providers only when configured; after a System Intelligence scan, Kyra can answer many **hardware, upgrade, and parts** questions from local evidence, and use sanitized gateway research for current compatibility/pricing when enabled
 - **Kyra Intelligence Network** for local-first repair memory and optional anonymous community learning foundations
 
-Hardware X-Ray uses local read-only providers to show detected hardware and available sensor coverage. Deep Sensor Mode may use bundled LibreHardwareMonitor technology where packaged and enabled. The command-center background is a packaged static image so the preview app stays responsive.
+Hardware X-Ray uses the local Forger Sensor Stack and local read-only providers to show detected hardware and available sensor coverage. Forger Sensor Core is active by default; Deep Sensor Mode may use bundled reviewed local sensor technology, including LibreHardwareMonitor where packaged and enabled. Forger Sensor Service and Forger Deep Sensor Driver are future ForgerEMS-owned roadmap layers, not external tool requirements. The command-center background is a packaged static image so the preview app stays responsive.
 
 ---
 

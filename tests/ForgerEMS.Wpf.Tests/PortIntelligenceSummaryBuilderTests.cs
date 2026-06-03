@@ -160,6 +160,44 @@ public sealed class PortIntelligenceSummaryBuilderTests
     }
 
     [Fact]
+    public void CompletePartialElevatedScan_RemovesRunPromptButKeepsLimitationHonest()
+    {
+        var elevated = new ElevatedScanTelemetrySnapshot
+        {
+            State = ElevatedScanTelemetryState.CompletePartial,
+            CollectedAtUtc = At("2026-05-31T12:00:00Z"),
+            Source = "System Intelligence Elevated Scan",
+            ParseQuality = ElevatedScanParseQuality.Partial,
+            UserMessage = "Elevated scan complete — some deep telemetry was unavailable on this device.",
+            Confidence = PortPowerTelemetryConfidence.Unavailable
+        };
+
+        var summary = PortIntelligenceSummaryBuilder.Build(TypicalUsbState(), null, elevated, Target(), At("2026-05-31T12:01:00Z"));
+
+        Assert.Equal("Elevated scan complete — some deep telemetry was unavailable on this device.", summary.DeepScanSummary);
+        Assert.DoesNotContain("Run Elevated Scan", summary.DeepScanSummary, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void FailedElevatedScan_UsesActionableFailureCopyNotGreen()
+    {
+        var elevated = new ElevatedScanTelemetrySnapshot
+        {
+            State = ElevatedScanTelemetryState.Failed,
+            UserMessage = "Elevated scan failed",
+            MissingTelemetryReason = "ForgerEMS stayed open. Check logs or retry as administrator.",
+            ParseQuality = ElevatedScanParseQuality.Failed,
+            Severity = ElevatedScanSeverity.Error
+        };
+
+        var summary = PortIntelligenceSummaryBuilder.Build(TypicalUsbState(), null, elevated, Target());
+
+        Assert.Contains("Elevated scan failed", summary.DeepScanSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ForgerEMS stayed open", summary.DeepScanSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("cached elevated inventory", summary.DeepScanSummary, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void LimitationsCopy_CoversTruthAndWorkloadCaveats()
     {
         var summary = PortIntelligenceSummaryBuilder.Build(

@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media;
 using VentoyToolkitSetup.Wpf.Models;
+using VentoyToolkitSetup.Wpf.Services;
 using VentoyToolkitSetup.Wpf.ViewModels;
 
 namespace VentoyToolkitSetup.Wpf.Services.NetworkPulse;
@@ -801,13 +802,25 @@ public sealed class NetworkPulseService : IDisposable
 
     private void Post(Action action)
     {
+        void SafeAction()
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception exception)
+            {
+                StartupDiagnosticLog.AppendException("NetworkPulseService.Post", exception);
+            }
+        }
+
         if (_ui is null)
         {
-            action();
+            SafeAction();
             return;
         }
 
-        _ui.Post(_ => action(), null);
+        _ui.Post(_ => SafeAction(), null);
     }
 
     private static string ChipForSnapshot(NetworkPulseStatus status) =>

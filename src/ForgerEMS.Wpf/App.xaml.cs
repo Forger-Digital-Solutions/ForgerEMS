@@ -156,6 +156,7 @@ public partial class App : Application
         {
             LogStartupException("Unhandled dispatcher exception", args.Exception);
             WriteStartupCrashReport(args.Exception);
+            args.Handled = true;
         };
 
         // Unobserved Task faults can otherwise tear the process down on

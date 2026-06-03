@@ -37,7 +37,7 @@ public sealed class SensorProviderExpansionTests
     public void CapabilityMatrix_WindowsNative_IncludesTypedDataClasses()
     {
         var sensors = SensorMatrixBuilder.Build(MinimalProfile());
-        var windows = Assert.Single(sensors.SensorProviders, p => p.ProviderName == "Windows Native");
+        var windows = Assert.Single(sensors.SensorProviders, p => p.ProviderName == "Forger Sensor Core");
 
         Assert.NotEmpty(windows.Capabilities.DataClasses);
         Assert.Contains(windows.Capabilities.DataClasses, d => d.DataClass == SensorDataClass.CpuLoad && d.Status == SensorDataClassStatus.Available);

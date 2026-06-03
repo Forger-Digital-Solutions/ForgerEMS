@@ -806,12 +806,36 @@
           ClipToBounds="True"
           HorizontalAlignment="Stretch"
           VerticalAlignment="Stretch">
-        <Image x:Name="CommandCenterBackgroundImage"
+        <!--
+            Static blurred filler so the letterbox edges (when the window aspect
+            does not match the artwork) look like a premium dashboard frame
+            instead of plain bars. Same PNG, dimmed + blurred, no motion.
+        -->
+        <Image x:Name="CommandCenterBackgroundFiller"
                Panel.ZIndex="1"
                Source="Assets/ForgerEMS_CommandCenterBackground.png"
                Stretch="UniformToFill"
                HorizontalAlignment="Stretch"
                VerticalAlignment="Stretch"
+               Opacity="0.45"
+               IsHitTestVisible="False"
+               RenderOptions.BitmapScalingMode="LowQuality"
+               CacheMode="BitmapCache">
+            <Image.Effect>
+                <BlurEffect Radius="28" KernelType="Gaussian" RenderingBias="Performance" />
+            </Image.Effect>
+        </Image>
+
+        <!--
+            Full static command-center artwork — entire image always visible,
+            centered, fit with Uniform (never cropped). Single source of truth.
+        -->
+        <Image x:Name="CommandCenterBackgroundImage"
+               Panel.ZIndex="2"
+               Source="Assets/ForgerEMS_CommandCenterBackground.png"
+               Stretch="Uniform"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center"
                Opacity="1"
                IsHitTestVisible="False"
                RenderOptions.BitmapScalingMode="Fant"
@@ -819,7 +843,7 @@
 
         <Rectangle x:Name="BackgroundReadabilityVeil"
                    Panel.ZIndex="3"
-                   Opacity="0.62"
+                   Opacity="0.45"
                    IsHitTestVisible="False"
                    CacheMode="BitmapCache">
             <Rectangle.Fill>
@@ -2360,6 +2384,24 @@
                                                Text="{Binding SystemIntelligenceScanModeHintText}"
                                                TextWrapping="Wrap" />
 
+                                    <Border Margin="0,0,0,10"
+                                            Padding="12"
+                                            Background="#B80A101A"
+                                            BorderBrush="{DynamicResource PanelBorderBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="10">
+                                        <StackPanel>
+                                            <TextBlock FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource PanelLabelBrush}"
+                                                       Text="Forger Sensor Stack" />
+                                            <TextBlock Margin="0,6,0,0"
+                                                       FontSize="12"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       Text="{Binding SystemIntelligenceSensorStackStatusText}"
+                                                       TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Border>
+
                                     <TextBlock Margin="0,4,0,6"
                                                FontSize="12"
                                                Foreground="#C2410C"
@@ -3892,10 +3934,11 @@
                                             </ScrollViewer>
                                         </StackPanel>
                                     </GroupBox>
-                                    <GroupBox Margin="0,0,0,14" Header="System Intelligence sensors / Deep Sensor Mode">
+                                    <GroupBox Margin="0,0,0,14" Header="Forger Sensor Stack / Deep Sensor Mode">
                                         <StackPanel>
                                             <WrapPanel Margin="0,0,0,8">
-                                                <Border Style="{StaticResource DiagnosticsStatusChipNeutralStyle}"><TextBlock Text="Mode: Off / Read-only local sensors" Style="{StaticResource DiagnosticsStatusChipTextStyle}" /></Border>
+                                                <Border Style="{StaticResource DiagnosticsStatusChipReadyStyle}"><TextBlock Text="Core: Active" Style="{StaticResource DiagnosticsStatusChipTextStyle}" /></Border>
+                                                <Border Style="{StaticResource DiagnosticsStatusChipNeutralStyle}"><TextBlock Text="Service: Future optional" Style="{StaticResource DiagnosticsStatusChipTextStyle}" /></Border>
                                                 <Border Style="{StaticResource DiagnosticsStatusChipReadyStyle}"><TextBlock Text="Safety: read-only" Style="{StaticResource DiagnosticsStatusChipTextStyle}" /></Border>
                                             </WrapPanel>
                                             <Grid>

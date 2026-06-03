@@ -253,8 +253,31 @@ public static class PortIntelligenceSummaryBuilder
             return "Run Elevated Scan to include permission-limited controller, hub, and driver details.";
         }
 
+        if (elevated.State == ElevatedScanTelemetryState.Running)
+        {
+            return "Elevated Scan is running. Port Intelligence will refresh when the elevated report is complete.";
+        }
+
+        if (elevated.IsFailure)
+        {
+            return elevated.State switch
+            {
+                ElevatedScanTelemetryState.Cancelled =>
+                    "Elevated Scan was cancelled. Port Intelligence is using standard telemetry until you approve an elevated run.",
+                ElevatedScanTelemetryState.NeedsAdmin =>
+                    "Elevated Scan needs administrator approval. Port Intelligence is using standard telemetry until an elevated report is available.",
+                _ =>
+                    "Elevated scan failed. ForgerEMS stayed open. Port Intelligence is using standard telemetry until the elevated run succeeds."
+            };
+        }
+
         if (elevated.IsFresh)
         {
+            if (elevated.State == ElevatedScanTelemetryState.CompletePartial)
+            {
+                return "Elevated scan complete — some deep telemetry was unavailable on this device.";
+            }
+
             var age = FormatAge(elevated.CollectedAtUtc, nowUtc);
             return $"Deep scan data collected {age}. Port Intelligence is using cached elevated inventory where available. Source: {elevated.Source}; confidence {elevated.Confidence}.";
         }

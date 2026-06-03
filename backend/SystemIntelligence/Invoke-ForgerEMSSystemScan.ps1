@@ -1292,7 +1292,7 @@ function New-SensorProviderReport {
     $deepEnabled = $deepPackaged -and [bool]$deepModeResolution.enabled
     @(
         New-SensorProviderManifest `
-            -ProviderName "Windows Native" `
+            -ProviderName "Forger Sensor Core" `
             -ProviderVersion "1.0" `
             -ProviderKind "WindowsBuiltInSensorProvider" `
             -IsBundled $true `
@@ -1302,11 +1302,11 @@ function New-SensorProviderReport {
             -TrustLevel "BuiltInWindows" `
             -RuntimeMode "DefaultSafe" `
             -Capabilities (New-SensorProviderCapabilities `
-                -SupportedCapabilities @("WMI/CIM hardware inventory", "MSFT_PhysicalDisk and MSFT_StorageReliabilityCounter where exposed", "powercfg and Win32_Battery fields", "safe performance counters", "DX/WMI GPU inventory", "security posture APIs", "ForgerEMS USB Intelligence evidence") `
+                -SupportedCapabilities @("Forger Sensor Core local user-mode/elevated safe provider", "WMI/CIM hardware inventory", "MSFT_PhysicalDisk and MSFT_StorageReliabilityCounter where exposed", "powercfg and Win32_Battery fields", "safe performance counters", "DX/WMI GPU inventory", "security posture APIs", "ForgerEMS USB Intelligence evidence") `
                 -MissingCapabilities @("CPU/GPU temperatures on many systems", "Fan RPM without vendor/deep provider support", "Package power without vendor/deep provider support")) `
             -FailureReason "" `
             -Readings @($BuiltInReadings) `
-            -TechnicianNotes @("Active by default. Uses local Windows APIs and ForgerEMS reports only.", "No internet, cloud service, or user-downloaded sensor tool is required.")
+            -TechnicianNotes @("Forger Sensor Core active.", "Active by default. Uses local Windows APIs and ForgerEMS reports only.", "No internet, cloud service, or user-downloaded sensor tool is required.")
 
         New-SensorProviderManifest `
             -ProviderName "LibreHardwareMonitor" `
@@ -1327,22 +1327,22 @@ function New-SensorProviderReport {
             -ThirdPartyNotice (New-ThirdPartyNotice "LibreHardwareMonitor" "0.9.6" "MPL-2.0" "https://github.com/LibreHardwareMonitor/LibreHardwareMonitor" "providers/sensors/LibreHardwareMonitorLib.dll" "ForgerEMS uses the unmodified NuGet package LibreHardwareMonitorLib and ships MPL-2.0 notices with installed and portable builds." $false)
 
         New-SensorProviderManifest `
-            -ProviderName "ForgerEMS Admin Sensor Bridge" `
-            -ProviderVersion "0.1-design" `
-            -ProviderKind "AdminReadOnlyBridgeShell" `
+            -ProviderName "Forger Sensor Service" `
+            -ProviderVersion "0.1-roadmap" `
+            -ProviderKind "FutureLocalReadOnlySensorService" `
             -IsBundled $false `
             -IsEnabled $false `
             -RequiresAdmin $true `
             -RequiresThirdPartyLicenseNotice $false `
             -TrustLevel "AdminRequired" `
             -RuntimeMode "Disabled" `
-            -Capabilities (New-SensorProviderCapabilities -SupportedCapabilities @("Future on-demand admin read-only deep scan IPC") -MissingCapabilities @("Signed bridge binary not included", "UAC opt-in not implemented")) `
-            -FailureReason "Design scaffold only; not enabled in this beta." `
+            -Capabilities (New-SensorProviderCapabilities -SupportedCapabilities @("Future central elevated read-only telemetry broker", "Future repeated-scan UAC reduction after explicit install consent") -MissingCapabilities @("Service binary not included", "Installer consent and repair flow not implemented")) `
+            -FailureReason "Not installed. Future optional ForgerEMS-owned local service; no network endpoints by default." `
             -Readings @() `
-            -TechnicianNotes @("Deep Sensor Mode may require admin access. It only reads supported sensors and does not change fan, voltage, clock, or firmware settings.")
+            -TechnicianNotes @("Deep Sensor Service not installed.", "This is the future deeper built-in sensor layer, not an external tool bridge.", "Local only by design; no network service endpoint is exposed by default.")
 
         New-SensorProviderManifest `
-            -ProviderName "ForgerEMS Signed Driver Provider" `
+            -ProviderName "Forger Deep Sensor Driver" `
             -ProviderVersion "roadmap" `
             -ProviderKind "FutureReadOnlyDriver" `
             -IsBundled $false `
@@ -1351,11 +1351,81 @@ function New-SensorProviderReport {
             -RequiresThirdPartyLicenseNotice $false `
             -TrustLevel "ExperimentalDisabled" `
             -RuntimeMode "Disabled" `
-            -Capabilities (New-SensorProviderCapabilities -SupportedCapabilities @("Future read-only sensors unavailable to user-mode providers") -MissingCapabilities @("No driver included in current beta")) `
-            -FailureReason "Not included. Future releases would require Microsoft driver signing and installer-managed distribution." `
+            -Capabilities (New-SensorProviderCapabilities -SupportedCapabilities @("Future read-only board-level sensors unavailable to user-mode providers") -MissingCapabilities @("No driver included in this build", "No signing/revocation/update pipeline implemented")) `
+            -FailureReason "Deep Sensor Driver not included in this build. Roadmap only; future releases would require driver signing, explicit consent, and release gates." `
             -Readings @() `
-            -TechnicianNotes @("Driver path is documentation-only for this beta. Users do not need to download it separately.")
+            -TechnicianNotes @("Deep Sensor Driver not included in this build.", "Some board-level sensors require the future Forger Deep Sensor Driver.", "Driver path is documentation-only for this beta. Users do not need to download it separately.")
     )
+}
+
+function Test-HasPortPowerDirectTelemetry {
+    param([object]$PortPowerTelemetry)
+
+    if ($null -eq $PortPowerTelemetry) {
+        return $false
+    }
+
+    foreach ($name in @("effectiveChargeRateWatts", "adapterWattageWatts", "adapterWattageClassWatts", "voltageVolts", "currentAmps")) {
+        if ($PortPowerTelemetry -is [System.Collections.IDictionary] -and $PortPowerTelemetry.Contains($name) -and $null -ne $PortPowerTelemetry[$name]) {
+            return $true
+        }
+
+        if ($PortPowerTelemetry.PSObject.Properties.Name -contains $name -and $null -ne $PortPowerTelemetry.$name) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Resolve-ForgerSensorStackElevatedScanState {
+    param(
+        [string]$ScanMode,
+        [object]$PortPowerTelemetry
+    )
+
+    if ($ScanMode -ne "Elevated") {
+        return "Recommended"
+    }
+
+    if (Test-HasPortPowerDirectTelemetry -PortPowerTelemetry $PortPowerTelemetry) {
+        return "Complete"
+    }
+
+    return "Partial"
+}
+
+function New-ForgerSensorStackState {
+    param([string]$ElevatedScanState = "Recommended")
+
+    [ordered]@{
+        name = "Forger Sensor Stack"
+        forgerSensorCore = "Active"
+        forgerSensorCoreActive = $true
+        elevatedScan = $ElevatedScanState
+        sensorService = "Not installed"
+        sensorServiceDescription = "Future optional ForgerEMS-owned local elevated service; not a network service."
+        deepSensorDriver = "Not included"
+        deepSensorDriverDescription = "Roadmap only in this build; future signed read-only driver would require explicit install consent."
+        externalTools = "Not required"
+        generatesFakeSensorValues = $false
+        sourcePolicy = @(
+            "Windows/native APIs"
+            "WMI/CIM where useful"
+            "SetupAPI/device inventory where available"
+            "power/battery APIs and reports"
+            "storage/NVMe/SMART paths where exposed"
+            "USB topology paths already supported"
+            "GPU/vendor-safe paths already supported"
+            "ACPI thermal zones where available"
+            "bundled reviewed LibreHardwareMonitor provider only when packaged and enabled"
+        )
+        sensorLimitations = @(
+            "Some board-level sensors require the future Forger Deep Sensor Driver."
+            "Many laptops do not expose CPU package power, fan speed, VRM, or EC telemetry through standard Windows APIs."
+            "This is not a failure; unavailable readings are source-labeled coverage limits and ForgerEMS does not invent values."
+        )
+    }
 }
 
 function New-SensorMatrixReport {
@@ -1377,7 +1447,7 @@ function New-SensorMatrixReport {
         New-SensorReading "CPU model" "CPU" (Get-ProcessorName -Processor $Processor) "" "Ready" "High" "WMI/CIM Win32_Processor" $false $false $false "" "Processor identity is inventory data, not a live sensor."
         New-SensorReading "CPU cores" "CPU" $(if ($null -ne $Processor) { [string]$Processor.NumberOfCores } else { "" }) "cores" $(if ($null -ne $Processor) { "Ready" } else { "Unknown" }) $(if ($null -ne $Processor) { "High" } else { "Low" }) "WMI/CIM Win32_Processor.NumberOfCores" $false $false ($null -eq $Processor) "ProbeFailed" "Core count is unavailable only if the processor probe failed."
         New-SensorReading "CPU temperature" "CPU" "" "C" "Unknown" "Low" "ForgerEMS safe scan" $false $false $true "RequiresExternalProvider" "Windows did not expose CPU package temperature in the safe scan."
-        New-SensorReading "CPU package power" "CPU" "" "W" "Unknown" "Low" "ForgerEMS safe scan" $false $false $true "RequiresExternalProvider" "Package power usually needs vendor counters or optional deep sensor provider."
+        New-SensorReading "CPU package power" "CPU" "" "W" "Unknown" "Low" "ForgerEMS safe scan" $false $false $true "RequiresExternalProvider" "Package power usually needs vendor counters or the Forger deep sensor layer."
     )
 
     $gpuReadings = New-Object System.Collections.Generic.List[object]
@@ -1388,7 +1458,7 @@ function New-SensorMatrixReport {
         [void]$gpuReadings.Add((New-SensorReading "GPU inventory" "GPU" "" "" "Unknown" "Low" "WMI/CIM Win32_VideoController" $false $false $true "NotExposedByFirmware" "No GPU list was exposed in the scan."))
     }
     [void]$gpuReadings.Add((New-SensorReading "GPU temperature" "GPU" "" "C" "Unknown" "Low" "ForgerEMS safe scan" $false $false $true "RequiresVendorDriver" "GPU temperature often requires vendor driver counters or deep sensor mode."))
-    [void]$gpuReadings.Add((New-SensorReading "GPU clocks/load" "GPU" "" "" "Unknown" "Low" "ForgerEMS safe scan" $false $false $true "RequiresExternalProvider" "GPU clocks/load need driver counters or optional deep sensor provider."))
+    [void]$gpuReadings.Add((New-SensorReading "GPU clocks/load" "GPU" "" "" "Unknown" "Low" "ForgerEMS safe scan" $false $false $true "RequiresExternalProvider" "GPU clocks/load need driver counters or the Forger deep sensor layer."))
 
     $batteryReadings = New-Object System.Collections.Generic.List[object]
     if ($BatteryReports.Count -eq 0) {
@@ -1480,7 +1550,7 @@ function New-SensorMatrixReport {
         deepSensorMode = $deepSensorMode
         confidence = $confidence
         coverageSummary = (($groups | ForEach-Object { ("{0}: {1}/{2} fields known" -f $_.category, $_.knownFields, $_.totalFields) }) -join "; ")
-        deepSensorModeNote = "Some sensors require admin access, firmware support, vendor drivers, or an optional reviewed sensor provider."
+        deepSensorModeNote = "Some board-level sensors require the future Forger Deep Sensor Driver. Many laptops do not expose CPU package power, fan speed, VRM, or EC telemetry through standard Windows APIs."
     }
 }
 
@@ -2197,6 +2267,9 @@ if (Test-IsAdministrator) {
     $scanModeValue = "Elevated"
 }
 
+$forgerSensorStack = New-ForgerSensorStackState -ElevatedScanState (Resolve-ForgerSensorStackElevatedScanState -ScanMode $scanModeValue -PortPowerTelemetry $portPowerDeepTelemetry)
+$sensorMatrix["forgerSensorStack"] = $forgerSensorStack
+
 $cpuCoreCount = $null
 $cpuLogicalProcessors = $null
 $cpuBaseClock = $null
@@ -2350,6 +2423,7 @@ try {
     $report["sensorMatrix"] = $sensorMatrix
     $report["deepSensorMode"] = $sensorMatrix.deepSensorMode
     $report["sensorProviders"] = $sensorMatrix.sensorProviders
+    $report["forgerSensorStack"] = $forgerSensorStack
     $report["optionalProviderStatus"] = if ($null -eq $script:OptionalProviderDiagnostics) { @() } else { [object[]]$script:OptionalProviderDiagnostics.ToArray() }
     $report["deviceFit"] = $deviceFit
     $report["recommendations"] = @($recommendations)
@@ -2418,13 +2492,24 @@ $markdown = New-Object System.Collections.Generic.List[string]
 [void]$markdown.Add(("- Technician note: {0}" -f $report.machineClass.technicianNote))
 [void]$markdown.Add(("- Sensor coverage: {0}" -f $report.sensorMatrix.coverageSummary))
 [void]$markdown.Add(("- Sensor confidence: {0}" -f $report.sensorMatrix.confidence))
+[void]$markdown.Add("")
+[void]$markdown.Add("### Forger Sensor Stack")
+[void]$markdown.Add(("- Core: {0}" -f $report.forgerSensorStack.forgerSensorCore))
+[void]$markdown.Add(("- Elevated Scan: {0}" -f $report.forgerSensorStack.elevatedScan))
+[void]$markdown.Add(("- Sensor Service: {0} / Future optional component" -f $report.forgerSensorStack.sensorService))
+[void]$markdown.Add(("- Deep Sensor Driver: {0} / Roadmap" -f $report.forgerSensorStack.deepSensorDriver))
+[void]$markdown.Add(("- External tools: {0}" -f $report.forgerSensorStack.externalTools))
+foreach ($limit in $report.forgerSensorStack.sensorLimitations) {
+    [void]$markdown.Add(("- {0}" -f $limit))
+}
+[void]$markdown.Add("")
 [void]$markdown.Add(("- Deep Sensor Mode: {0} via {1}; enabled {2}; read-only {3}" -f $report.deepSensorMode.value, $report.deepSensorMode.source, $report.deepSensorMode.enabled, $report.deepSensorMode.readOnly))
 [void]$markdown.Add(("- Safety: {0}" -f $report.deepSensorMode.noticeText))
 [void]$markdown.Add(("- Deep sensor note: {0}" -f $report.sensorMatrix.deepSensorModeNote))
 [void]$markdown.Add("")
-[void]$markdown.Add("### Sensor Provider Host")
+[void]$markdown.Add("### Sensor Sources")
 foreach ($provider in $report.sensorProviders) {
-    $status = if ($provider.isEnabled) { "Active" } elseif ($provider.isBundled) { "Bundled but disabled" } elseif ($provider.providerName -match "Driver") { "Not included" } else { "Off" }
+    $status = if ($provider.isEnabled) { "Active" } elseif ($provider.isBundled) { "Bundled but disabled" } elseif ($provider.providerName -match "Driver") { "Not included" } elseif ($provider.providerName -match "Service") { "Not installed" } else { "Off" }
     [void]$markdown.Add(("- {0}: {1}; trust {2}; mode {3}; read-only {4}; admin required {5}; bundled {6}" -f $provider.providerName, $status, $provider.trustLevel, $provider.runtimeMode, $provider.isReadOnly, $provider.requiresAdmin, $provider.isBundled))
     if ($provider.failureReason) {
         [void]$markdown.Add(("  - Note: {0}" -f $provider.failureReason))
@@ -2434,7 +2519,7 @@ foreach ($provider in $report.sensorProviders) {
     }
 }
 [void]$markdown.Add("")
-[void]$markdown.Add("### Optional Provider Status")
+[void]$markdown.Add("### Additional Source Limitations")
 if ($report.optionalProviderStatus.Count -gt 0) {
     foreach ($provider in $report.optionalProviderStatus) {
         [void]$markdown.Add(("- {0} ({1}): {2} | elevation required: {3}" -f $provider.providerName, $provider.category, $provider.status, $provider.requiresElevation))
@@ -2442,7 +2527,7 @@ if ($report.optionalProviderStatus.Count -gt 0) {
     }
 }
 else {
-    [void]$markdown.Add("- No optional provider limitations were recorded.")
+    [void]$markdown.Add("- No additional source limitations were recorded.")
 }
 [void]$markdown.Add("")
 [void]$markdown.Add("### Machine Class Signals")

@@ -4,6 +4,8 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace VentoyToolkitSetup.Wpf.Services.Intelligence;
 
@@ -11,7 +13,28 @@ public enum ElevatedScanTelemetryState
 {
     Missing = 0,
     Fresh = 1,
-    Stale = 2
+    Stale = 2,
+    Running = 3,
+    CompletePartial = 4,
+    Failed = 5,
+    NeedsAdmin = 6,
+    Cancelled = 7
+}
+
+public enum ElevatedScanParseQuality
+{
+    None = 0,
+    Complete = 1,
+    Partial = 2,
+    Failed = 3
+}
+
+public enum ElevatedScanSeverity
+{
+    Info = 0,
+    Success = 1,
+    Warning = 2,
+    Error = 3
 }
 
 public sealed record ElevatedPortPowerTelemetry
@@ -55,6 +78,20 @@ public sealed record ElevatedScanTelemetrySnapshot
 
     public DateTimeOffset? CollectedAtUtc { get; init; }
 
+    public DateTimeOffset? LastRunLocal => CollectedAtUtc?.ToLocalTime();
+
+    public string ReportPath { get; init; } = string.Empty;
+
+    public string Freshness { get; init; } = "Unknown";
+
+    public ElevatedScanParseQuality ParseQuality { get; init; }
+
+    public string UnavailableReason { get; init; } = string.Empty;
+
+    public string UserMessage { get; init; } = RunElevatedScanPrompt;
+
+    public ElevatedScanSeverity Severity { get; init; } = ElevatedScanSeverity.Warning;
+
     public string Source { get; init; } = "Elevated Scan";
 
     public PortPowerTelemetryConfidence Confidence { get; init; } = PortPowerTelemetryConfidence.Unavailable;
@@ -65,19 +102,34 @@ public sealed record ElevatedScanTelemetrySnapshot
 
     public string MissingTelemetryReason { get; init; } = RunElevatedScanPrompt;
 
-    public bool IsFresh => State == ElevatedScanTelemetryState.Fresh;
+    public bool IsFresh => State is ElevatedScanTelemetryState.Fresh or ElevatedScanTelemetryState.CompletePartial;
 
     public bool IsStale => State == ElevatedScanTelemetryState.Stale;
 
     public bool IsMissing => State == ElevatedScanTelemetryState.Missing;
 
+    public bool IsFailure =>
+        State is ElevatedScanTelemetryState.Failed or
+            ElevatedScanTelemetryState.NeedsAdmin or
+            ElevatedScanTelemetryState.Cancelled;
+
     public string StatusLine =>
         State switch
         {
             ElevatedScanTelemetryState.Fresh =>
-                $"Cached Elevated Scan telemetry from {FormatLocalTime(CollectedAtUtc)} ({Source}; confidence {Confidence}).",
+                $"Elevated scan complete. Cached telemetry from {FormatLocalTime(CollectedAtUtc)} ({Source}; confidence {Confidence}).",
+            ElevatedScanTelemetryState.CompletePartial =>
+                "Elevated scan complete — some deep telemetry was unavailable on this device.",
             ElevatedScanTelemetryState.Stale =>
-                $"Elevated Scan telemetry is stale/expired; last scan {FormatLocalTime(CollectedAtUtc)}. Run Elevated Scan to refresh deeper port and charging telemetry.",
+                $"Elevated scan recommended. Deep scan data is stale/expired; last scan {FormatLocalTime(CollectedAtUtc)}.",
+            ElevatedScanTelemetryState.Running =>
+                "Elevated scan running. Waiting for the elevated report to finish.",
+            ElevatedScanTelemetryState.Failed =>
+                "Elevated scan failed. ForgerEMS stayed open. Check logs or retry as administrator.",
+            ElevatedScanTelemetryState.NeedsAdmin =>
+                "Elevated scan needs administrator approval. Retry and approve the Windows UAC prompt.",
+            ElevatedScanTelemetryState.Cancelled =>
+                "Elevated scan cancelled. Standard Scan results are still available.",
             _ => RunElevatedScanPrompt
         };
 
@@ -85,7 +137,12 @@ public sealed record ElevatedScanTelemetrySnapshot
         new()
         {
             State = ElevatedScanTelemetryState.Missing,
-            MissingTelemetryReason = RunElevatedScanPrompt
+            Freshness = "Missing",
+            ParseQuality = ElevatedScanParseQuality.None,
+            Severity = ElevatedScanSeverity.Warning,
+            UserMessage = "Elevated scan recommended",
+            MissingTelemetryReason = RunElevatedScanPrompt,
+            UnavailableReason = RunElevatedScanPrompt
         };
 
     private static string FormatLocalTime(DateTimeOffset? value) =>
@@ -97,11 +154,16 @@ public sealed record ElevatedScanTelemetrySnapshot
 public interface IElevatedScanTelemetryCache
 {
     ElevatedScanTelemetrySnapshot GetLatest(string reportsDirectory);
+
+    Task<ElevatedScanTelemetrySnapshot> GetLatestAsync(string reportsDirectory, CancellationToken cancellationToken = default);
 }
 
 public sealed class ElevatedScanTelemetryCache : IElevatedScanTelemetryCache
 {
     public static readonly TimeSpan DefaultFreshnessWindow = TimeSpan.FromHours(1);
+
+    private const string PartialCompletionMessage =
+        "Elevated scan complete — some deep telemetry was unavailable on this device.";
 
     private readonly Func<DateTimeOffset> _utcNow;
     private readonly TimeSpan _freshnessWindow;
@@ -122,13 +184,14 @@ public sealed class ElevatedScanTelemetryCache : IElevatedScanTelemetryCache
     public ElevatedScanTelemetrySnapshot GetLatest(string reportsDirectory)
     {
         var now = _utcNow();
-        var snapshot = TryReadLatestFromDisk(reportsDirectory);
+        var snapshot = TryReadLatestFromDisk(reportsDirectory, now);
         lock (_gate)
         {
             if (snapshot is not null)
             {
-                _lastSnapshot = snapshot;
-                return ApplyFreshness(snapshot, now);
+                var current = ApplyFreshness(snapshot, now);
+                _lastSnapshot = current;
+                return current;
             }
 
             if (_lastSnapshot is not null)
@@ -140,33 +203,62 @@ public sealed class ElevatedScanTelemetryCache : IElevatedScanTelemetryCache
         return ElevatedScanTelemetrySnapshot.Missing();
     }
 
+    public Task<ElevatedScanTelemetrySnapshot> GetLatestAsync(
+        string reportsDirectory,
+        CancellationToken cancellationToken = default) =>
+        Task.Run(() => GetLatest(reportsDirectory), cancellationToken);
+
     private ElevatedScanTelemetrySnapshot ApplyFreshness(ElevatedScanTelemetrySnapshot snapshot, DateTimeOffset now)
     {
+        if (!snapshot.IsFresh && !snapshot.IsStale)
+        {
+            return snapshot;
+        }
+
         if (!snapshot.CollectedAtUtc.HasValue)
         {
             return snapshot with
             {
                 State = ElevatedScanTelemetryState.Stale,
+                Freshness = "Stale",
+                Severity = ElevatedScanSeverity.Warning,
+                UserMessage = "Elevated scan recommended",
                 MissingTelemetryReason =
-                    "Elevated Scan telemetry is stale/expired because no collection timestamp was recorded. Run Elevated Scan to refresh deeper port and charging telemetry."
+                    "Elevated Scan telemetry is stale/expired because no collection timestamp was recorded. Run Elevated Scan to refresh deeper port and charging telemetry.",
+                UnavailableReason =
+                    "No elevated scan collection timestamp was recorded."
             };
         }
 
         var age = now - snapshot.CollectedAtUtc.Value;
         if (age <= _freshnessWindow)
         {
+            var state = snapshot.ParseQuality == ElevatedScanParseQuality.Partial
+                ? ElevatedScanTelemetryState.CompletePartial
+                : ElevatedScanTelemetryState.Fresh;
             return snapshot with
             {
-                State = ElevatedScanTelemetryState.Fresh,
-                MissingTelemetryReason = BuildFreshMissingReason(snapshot)
+                State = state,
+                Freshness = "Fresh",
+                Severity = ElevatedScanSeverity.Success,
+                UserMessage = state == ElevatedScanTelemetryState.CompletePartial
+                    ? PartialCompletionMessage
+                    : "Elevated scan complete",
+                MissingTelemetryReason = BuildFreshMissingReason(snapshot),
+                UnavailableReason = BuildFreshUnavailableReason(snapshot)
             };
         }
 
+        var staleMessage =
+            $"Elevated Scan telemetry is stale/expired; last scan {snapshot.CollectedAtUtc.Value.ToLocalTime():g}. Run Elevated Scan to refresh deeper port and charging telemetry.";
         return snapshot with
         {
             State = ElevatedScanTelemetryState.Stale,
-            MissingTelemetryReason =
-                $"Elevated Scan telemetry is stale/expired; last scan {snapshot.CollectedAtUtc.Value.ToLocalTime():g}. Run Elevated Scan to refresh deeper port and charging telemetry."
+            Freshness = "Stale",
+            Severity = ElevatedScanSeverity.Warning,
+            UserMessage = "Elevated scan recommended",
+            MissingTelemetryReason = staleMessage,
+            UnavailableReason = staleMessage
         };
     }
 
@@ -182,23 +274,72 @@ public sealed class ElevatedScanTelemetryCache : IElevatedScanTelemetryCache
             : snapshot.PortPower!.MissingTelemetryReason;
     }
 
-    private static ElevatedScanTelemetrySnapshot? TryReadLatestFromDisk(string reportsDirectory)
+    private static string BuildFreshUnavailableReason(ElevatedScanTelemetrySnapshot snapshot)
     {
-        if (string.IsNullOrWhiteSpace(reportsDirectory))
+        if (snapshot.ParseQuality == ElevatedScanParseQuality.Partial)
+        {
+            return PartialCompletionMessage;
+        }
+
+        return BuildFreshMissingReason(snapshot);
+    }
+
+    private static ElevatedScanTelemetrySnapshot? TryReadLatestFromDisk(string reportsDirectory, DateTimeOffset now)
+    {
+        if (string.IsNullOrWhiteSpace(reportsDirectory) || !Directory.Exists(reportsDirectory))
         {
             return null;
         }
 
         var resultPath = Path.Combine(reportsDirectory, "elevated-scan-result.json");
-        if (!File.Exists(resultPath))
+        var errorPath = Path.Combine(reportsDirectory, "elevated-scan-error.json");
+        var resultTimestamp = GetMarkerUtc(resultPath);
+        var errorTimestamp = GetMarkerUtc(errorPath);
+        var pendingTimestamp = GetPendingMarkerUtc(reportsDirectory);
+
+        if (errorTimestamp.HasValue &&
+            (!resultTimestamp.HasValue || errorTimestamp.Value >= resultTimestamp.Value) &&
+            (!pendingTimestamp.HasValue || errorTimestamp.Value >= pendingTimestamp.Value))
         {
-            return null;
+            return ReadErrorMarker(errorPath);
         }
 
+        if (pendingTimestamp.HasValue &&
+            (!resultTimestamp.HasValue || pendingTimestamp.Value > resultTimestamp.Value) &&
+            (!errorTimestamp.HasValue || pendingTimestamp.Value > errorTimestamp.Value))
+        {
+            return ReadPendingMarkerIfAny(reportsDirectory, now);
+        }
+
+        if (File.Exists(resultPath))
+        {
+            return ReadResultMarkerAndReport(reportsDirectory, resultPath);
+        }
+
+        if (File.Exists(errorPath))
+        {
+            return ReadErrorMarker(errorPath);
+        }
+
+        return ReadPendingMarkerIfAny(reportsDirectory, now);
+    }
+
+    private static ElevatedScanTelemetrySnapshot ReadResultMarkerAndReport(string reportsDirectory, string resultPath)
+    {
         try
         {
             using var marker = JsonDocument.Parse(File.ReadAllText(resultPath));
             var markerRoot = marker.RootElement;
+            if (ReadBool(markerRoot, "ok") != true)
+            {
+                return Failure(
+                    "Elevated scan failed",
+                    "Elevated Scan result marker did not report success. ForgerEMS stayed open. Check logs or retry as administrator.",
+                    ElevatedScanTelemetryState.Failed,
+                    GetMarkerUtc(resultPath) ?? GetFileTimestamp(resultPath),
+                    resultPath);
+            }
+
             var markerUtc = ReadDateTimeOffset(markerRoot, "utc");
             var reportFileName = GetString(markerRoot, "json");
             if (string.IsNullOrWhiteSpace(reportFileName))
@@ -209,18 +350,37 @@ public sealed class ElevatedScanTelemetryCache : IElevatedScanTelemetryCache
             var reportPath = Path.Combine(reportsDirectory, reportFileName);
             if (!File.Exists(reportPath))
             {
-                return new ElevatedScanTelemetrySnapshot
-                {
-                    State = ElevatedScanTelemetryState.Stale,
-                    CollectedAtUtc = markerUtc ?? GetFileTimestamp(resultPath),
-                    Source = "Elevated Scan marker",
-                    MissingTelemetryReason =
-                        "Elevated Scan marker exists, but the system report was not found. Run Elevated Scan to refresh deeper port and charging telemetry."
-                };
+                return Failure(
+                    "Elevated scan failed",
+                    "Elevated Scan completed marker exists, but the System Intelligence report was not found. ForgerEMS stayed open. Check logs or retry as administrator.",
+                    ElevatedScanTelemetryState.Failed,
+                    markerUtc ?? GetFileTimestamp(resultPath),
+                    resultPath);
             }
 
             using var report = JsonDocument.Parse(File.ReadAllText(reportPath));
             var root = report.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return Failure(
+                    "Elevated scan failed",
+                    "Elevated Scan report parsing failed. ForgerEMS stayed open. Check logs or retry as administrator.",
+                    ElevatedScanTelemetryState.Failed,
+                    markerUtc ?? GetFileTimestamp(reportPath),
+                    reportPath);
+            }
+
+            var scanMode = GetString(root, "scanMode");
+            if (!string.Equals(scanMode, "Elevated", StringComparison.OrdinalIgnoreCase))
+            {
+                return Failure(
+                    "Elevated scan failed",
+                    "Elevated Scan result did not point to a fresh elevated report. ForgerEMS stayed open. Retry as administrator.",
+                    ElevatedScanTelemetryState.Failed,
+                    markerUtc ?? GetFileTimestamp(reportPath),
+                    reportPath);
+            }
+
             var collectedAt = ReadDateTimeOffset(root, "generatedUtc") ??
                               markerUtc ??
                               GetFileTimestamp(reportPath) ??
@@ -229,24 +389,158 @@ public sealed class ElevatedScanTelemetryCache : IElevatedScanTelemetryCache
             var source = portPower?.Source ?? "System Intelligence Elevated Scan";
             var confidence = portPower?.Confidence ?? ParseConfidence(GetString(root, "sensorMatrix", "confidence"));
             var usbSummary = BuildUsbThunderboltDockSummary(portPower);
+            var partial = portPower?.HasDirectElectricalTelemetry != true;
+            var unavailableReason = partial
+                ? PartialCompletionMessage
+                : string.Empty;
 
             return new ElevatedScanTelemetrySnapshot
             {
-                State = ElevatedScanTelemetryState.Fresh,
+                State = partial ? ElevatedScanTelemetryState.CompletePartial : ElevatedScanTelemetryState.Fresh,
                 CollectedAtUtc = collectedAt,
+                ReportPath = reportPath,
+                Freshness = "Fresh",
+                ParseQuality = partial ? ElevatedScanParseQuality.Partial : ElevatedScanParseQuality.Complete,
+                Severity = ElevatedScanSeverity.Success,
+                UserMessage = partial ? PartialCompletionMessage : "Elevated scan complete",
                 Source = source,
                 Confidence = confidence,
                 PortPower = portPower,
                 UsbThunderboltDockSummary = usbSummary,
                 MissingTelemetryReason = portPower?.MissingTelemetryReason ??
-                                         "Elevated Scan completed, but this device did not expose deeper port or charging telemetry."
+                                         "Elevated Scan completed, but this device did not expose deeper port or charging telemetry.",
+                UnavailableReason = unavailableReason
             };
+        }
+        catch (JsonException)
+        {
+            return Failure(
+                "Elevated scan failed",
+                "Elevated Scan report parsing failed. ForgerEMS stayed open. Check logs or retry as administrator.",
+                ElevatedScanTelemetryState.Failed,
+                GetMarkerUtc(resultPath) ?? GetFileTimestamp(resultPath),
+                resultPath);
+        }
+        catch (IOException)
+        {
+            return Failure(
+                "Elevated scan failed",
+                "Elevated Scan report could not be read. ForgerEMS stayed open. Check logs or retry as administrator.",
+                ElevatedScanTelemetryState.Failed,
+                GetMarkerUtc(resultPath) ?? GetFileTimestamp(resultPath),
+                resultPath);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Failure(
+                "Elevated scan failed",
+                "Elevated Scan report could not be read because Windows denied file access. ForgerEMS stayed open. Check logs or retry as administrator.",
+                ElevatedScanTelemetryState.Failed,
+                GetMarkerUtc(resultPath) ?? GetFileTimestamp(resultPath),
+                resultPath);
+        }
+    }
+
+    private static ElevatedScanTelemetrySnapshot ReadErrorMarker(string errorPath)
+    {
+        try
+        {
+            using var marker = JsonDocument.Parse(File.ReadAllText(errorPath));
+            var root = marker.RootElement;
+            var failureKind = GetString(root, "failureKind");
+            var utc = ReadDateTimeOffset(root, "utc") ?? GetFileTimestamp(errorPath);
+            var state = failureKind switch
+            {
+                nameof(ElevatedScanFailureKind.UacCancelled) => ElevatedScanTelemetryState.Cancelled,
+                nameof(ElevatedScanFailureKind.UacBlockedOrDenied) => ElevatedScanTelemetryState.NeedsAdmin,
+                nameof(ElevatedScanFailureKind.ElevatedProcessDidNotStart) => ElevatedScanTelemetryState.NeedsAdmin,
+                _ => ElevatedScanTelemetryState.Failed
+            };
+            var title = state switch
+            {
+                ElevatedScanTelemetryState.Cancelled => "Elevated scan cancelled",
+                ElevatedScanTelemetryState.NeedsAdmin => "Elevated scan needs administrator approval",
+                _ => "Elevated scan failed"
+            };
+            var detail = state switch
+            {
+                ElevatedScanTelemetryState.Cancelled =>
+                    "Elevated Scan was cancelled before administrator permission was approved. Standard Scan results are still available.",
+                ElevatedScanTelemetryState.NeedsAdmin =>
+                    "Windows blocked or denied administrator elevation. Retry Elevated Scan and approve the UAC prompt, or start ForgerEMS as administrator.",
+                _ =>
+                    "ForgerEMS stayed open. Check logs or retry as administrator."
+            };
+
+            return Failure(title, detail, state, utc, errorPath);
         }
         catch
         {
-            return null;
+            return Failure(
+                "Elevated scan failed",
+                "Elevated Scan error marker could not be parsed. ForgerEMS stayed open. Check logs or retry as administrator.",
+                ElevatedScanTelemetryState.Failed,
+                GetFileTimestamp(errorPath),
+                errorPath);
         }
     }
+
+    private static ElevatedScanTelemetrySnapshot? ReadPendingMarkerIfAny(string reportsDirectory, DateTimeOffset now)
+    {
+        var startedPath = Path.Combine(reportsDirectory, "elevated-scan-started.json");
+        var heartbeatPath = Path.Combine(reportsDirectory, "elevated-scan-heartbeat.json");
+        var lastUtc = GetPendingMarkerUtc(reportsDirectory);
+        if (!lastUtc.HasValue)
+        {
+            return null;
+        }
+
+        if (now - lastUtc.Value <= ElevatedScanDiagnostics.ElevatedScanWaitTimeout)
+        {
+            return new ElevatedScanTelemetrySnapshot
+            {
+                State = ElevatedScanTelemetryState.Running,
+                CollectedAtUtc = lastUtc.Value,
+                ReportPath = File.Exists(heartbeatPath) ? heartbeatPath : startedPath,
+                Freshness = "Running",
+                ParseQuality = ElevatedScanParseQuality.None,
+                Severity = ElevatedScanSeverity.Info,
+                UserMessage = "Elevated scan running",
+                MissingTelemetryReason = "Elevated Scan is still running. Waiting for the elevated report to finish.",
+                UnavailableReason = "Elevated Scan is still running."
+            };
+        }
+
+        return Failure(
+            "Elevated scan failed",
+            "Elevated Scan started but did not produce a completed report before the wait window expired. ForgerEMS stayed open. Check logs or retry as administrator.",
+            ElevatedScanTelemetryState.Failed,
+            lastUtc.Value,
+            File.Exists(heartbeatPath) ? heartbeatPath : startedPath);
+    }
+
+    private static ElevatedScanTelemetrySnapshot Failure(
+        string title,
+        string detail,
+        ElevatedScanTelemetryState state,
+        DateTimeOffset? at,
+        string path) =>
+        new()
+        {
+            State = state,
+            CollectedAtUtc = at,
+            ReportPath = path,
+            Freshness = "Unavailable",
+            ParseQuality = ElevatedScanParseQuality.Failed,
+            Severity = state is ElevatedScanTelemetryState.Cancelled or ElevatedScanTelemetryState.NeedsAdmin
+                ? ElevatedScanSeverity.Warning
+                : ElevatedScanSeverity.Error,
+            UserMessage = title,
+            Source = "Elevated Scan",
+            Confidence = PortPowerTelemetryConfidence.Unavailable,
+            MissingTelemetryReason = detail,
+            UnavailableReason = detail
+        };
 
     private static ElevatedPortPowerTelemetry? TryReadPortPowerTelemetry(JsonElement root, DateTimeOffset collectedAt)
     {
@@ -313,11 +607,47 @@ public sealed class ElevatedScanTelemetryCache : IElevatedScanTelemetryCache
         return "Elevated Scan source hints: " + string.Join("; ", hints);
     }
 
+    private static DateTimeOffset? GetMarkerUtc(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var marker = JsonDocument.Parse(File.ReadAllText(path));
+            return ReadDateTimeOffset(marker.RootElement, "utc") ?? GetFileTimestamp(path);
+        }
+        catch
+        {
+            return GetFileTimestamp(path);
+        }
+    }
+
+    private static DateTimeOffset? GetPendingMarkerUtc(string reportsDirectory)
+    {
+        var timestamps = new[]
+            {
+                GetMarkerUtc(Path.Combine(reportsDirectory, "elevated-scan-started.json")),
+                GetMarkerUtc(Path.Combine(reportsDirectory, "elevated-scan-heartbeat.json"))
+            }
+            .Where(item => item.HasValue)
+            .Select(item => item!.Value)
+            .ToArray();
+
+        return timestamps.Length == 0
+            ? null
+            : timestamps.Max();
+    }
+
     private static DateTimeOffset? GetFileTimestamp(string path)
     {
         try
         {
-            return new DateTimeOffset(File.GetLastWriteTimeUtc(path), TimeSpan.Zero);
+            return File.Exists(path)
+                ? new DateTimeOffset(File.GetLastWriteTimeUtc(path), TimeSpan.Zero)
+                : null;
         }
         catch
         {
@@ -344,6 +674,21 @@ public sealed class ElevatedScanTelemetryCache : IElevatedScanTelemetryCache
         }
 
         return string.Empty;
+    }
+
+    private static bool? ReadBool(JsonElement element, string name)
+    {
+        if (!TryGetProperty(element, name, out var value))
+        {
+            return null;
+        }
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => null
+        };
     }
 
     private static double? GetDouble(JsonElement element, string name)

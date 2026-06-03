@@ -6,7 +6,7 @@ This document tracks reviewed local sensor-provider licensing for ForgerEMS.
 
 ForgerEMS may bundle the reviewed `LibreHardwareMonitorLib` package in installer and portable builds under `providers/sensors/`.
 
-The default safe provider remains **Windows Native**, which uses local Windows and ForgerEMS data sources only. LibreHardwareMonitor is available when packaged and runs only when ForgerEMS Deep Sensor Mode resolves to `ReadOnly` through installer consent, Settings, or the testing environment variable.
+The default safe provider is **Forger Sensor Core**, which uses local Windows/native and ForgerEMS data sources only. LibreHardwareMonitor is available when packaged and runs only when ForgerEMS Deep Sensor Mode resolves to `ReadOnly` through installer consent, Settings, or the testing environment variable.
 
 ## Bundled Reviewed Provider: LibreHardwareMonitor
 
@@ -30,7 +30,7 @@ Release packaging must include:
 - keep ForgerEMS proprietary code in separate files/projects
 - verify the provider is read-only inside ForgerEMS
 
-The provider is local and read-only. ForgerEMS does not expose fan control, voltage control, clock control, overclocking, undervolting, BIOS writes, or firmware writes. ForgerEMS does not redistribute HWiNFO, AIDA64, CPU-Z, or vendor tools, and users do not download sensor providers manually.
+The provider is local and read-only. ForgerEMS does not expose fan control, voltage control, clock control, overclocking, undervolting, BIOS writes, or firmware writes. ForgerEMS does not require or redistribute HWiNFO, AIDA64, CPU-Z, or vendor tools for hardware intelligence, and users do not download sensor providers manually.
 
 ## Optional Vendor-Detected Providers (no redistribution)
 

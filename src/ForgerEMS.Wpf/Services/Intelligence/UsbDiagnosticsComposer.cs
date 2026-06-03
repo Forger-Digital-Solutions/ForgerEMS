@@ -150,7 +150,11 @@ public static class UsbDiagnosticsComposer
                 Severity = snapshot.ElevatedTelemetryState switch
                 {
                     ElevatedScanTelemetryState.Fresh => DiagnosticSeverityLevel.Ok,
+                    ElevatedScanTelemetryState.CompletePartial => DiagnosticSeverityLevel.Ok,
                     ElevatedScanTelemetryState.Stale => DiagnosticSeverityLevel.Warning,
+                    ElevatedScanTelemetryState.Failed => DiagnosticSeverityLevel.Warning,
+                    ElevatedScanTelemetryState.NeedsAdmin => DiagnosticSeverityLevel.Warning,
+                    ElevatedScanTelemetryState.Cancelled => DiagnosticSeverityLevel.Warning,
                     _ => DiagnosticSeverityLevel.Info
                 },
                 Message = snapshot.ElevatedTelemetrySummary
