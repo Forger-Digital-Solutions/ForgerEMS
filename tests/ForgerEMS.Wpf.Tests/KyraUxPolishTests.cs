@@ -56,21 +56,37 @@ public sealed class KyraUxPolishTests
     }
 
     [Fact]
-    public void MainWindow_VisualEffectsDefaultIsStaticLowPower()
+    public void MainWindow_UsesStaticBackgroundWithoutAnimationControls()
     {
         var root = FindRepoRoot();
         var xaml = File.ReadAllText(Path.Combine(root, "src", "ForgerEMS.Wpf", "MainWindow.xaml"));
         var code = File.ReadAllText(Path.Combine(root, "src", "ForgerEMS.Wpf", "MainWindow.xaml.cs"));
 
-        Assert.Contains("Text=\"Visual Effects\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Off / Plain dark", xaml, StringComparison.Ordinal);
-        Assert.Contains("Static / Low Power", xaml, StringComparison.Ordinal);
-        Assert.Contains("Animated", xaml, StringComparison.Ordinal);
-        Assert.Contains("private VisualEffectsMode _visualEffectsMode = VisualEffectsMode.Static;", code, StringComparison.Ordinal);
-        Assert.Contains("private bool _animatedBackgroundEnabled;", code, StringComparison.Ordinal);
-        Assert.Contains("CanRunBackgroundAnimation()", code, StringComparison.Ordinal);
-        Assert.Contains("WindowState != WindowState.Minimized", code, StringComparison.Ordinal);
-        Assert.DoesNotContain("private bool _animatedBackgroundEnabled = true;", code, StringComparison.Ordinal);
+        Assert.Contains("Source=\"Assets/ForgerEMS_CommandCenterBackground.png\"", xaml, StringComparison.Ordinal);
+
+        // The named main background image must render the full artwork uncropped
+        // (Uniform + centered). A separate blurred filler element may use
+        // UniformToFill, so we scope the Stretch assertion to the named element.
+        var mainImage = ExtractElementByName(xaml, "CommandCenterBackgroundImage");
+        Assert.Contains("Stretch=\"Uniform\"", mainImage, StringComparison.Ordinal);
+        Assert.DoesNotContain("Stretch=\"UniformToFill\"", mainImage, StringComparison.Ordinal);
+
+        Assert.DoesNotContain("BackgroundDetailComboBox", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ComboBoxItem Content=\"Animated\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("_animatedBackgroundEnabled", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("_backgroundAnimationTimer", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("CanRunBackgroundAnimation", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("TraceParticle", code, StringComparison.Ordinal);
+    }
+
+    private static string ExtractElementByName(string xaml, string elementName)
+    {
+        var marker = $"x:Name=\"{elementName}\"";
+        var start = xaml.IndexOf(marker, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"Could not find x:Name=\"{elementName}\" in MainWindow.xaml.");
+        var end = xaml.IndexOf("/>", start, StringComparison.Ordinal);
+        Assert.True(end > start, $"Could not find self-closing end of {elementName} element.");
+        return xaml[start..end];
     }
 
     [Fact]

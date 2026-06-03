@@ -83,6 +83,7 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
             diff,
             refinedBench,
             portRec);
+        var elevatedTelemetry = BuildElevatedTelemetrySummary(options.ElevatedScanTelemetry);
 
         var withRec = new UsbTopologySnapshot
         {
@@ -103,7 +104,12 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
             SelectedTargetPortLabelReasonLine = portLabelStatus.ReasonLine,
             SelectedTargetMappingConfidence = portLabelStatus.CanUseCurrentLabel ? portRec?.MappingConfidenceScore ?? 0 : 0,
             CombinedConfidenceScore = combinedScore,
-            CombinedConfidenceReason = combinedReason
+            CombinedConfidenceReason = combinedReason,
+            ElevatedTelemetryState = elevatedTelemetry.State,
+            ElevatedTelemetryCollectedAtUtc = elevatedTelemetry.CollectedAtUtc,
+            ElevatedTelemetrySource = elevatedTelemetry.Source,
+            ElevatedTelemetryConfidence = elevatedTelemetry.Confidence,
+            ElevatedTelemetrySummary = elevatedTelemetry.Summary
         };
 
         var usbDiag = UsbDiagnosticsComposer.Build(withRec, options.MachineProfile);
@@ -148,9 +154,47 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
             SelectedTargetPortLabelReasonLine = portLabelStatus.ReasonLine,
             SelectedTargetMappingConfidence = portLabelStatus.CanUseCurrentLabel ? portRec?.MappingConfidenceScore ?? 0 : 0,
             CombinedConfidenceScore = combinedScore,
-            CombinedConfidenceReason = combinedReason
+            CombinedConfidenceReason = combinedReason,
+            ElevatedTelemetryState = elevatedTelemetry.State,
+            ElevatedTelemetryCollectedAtUtc = elevatedTelemetry.CollectedAtUtc,
+            ElevatedTelemetrySource = elevatedTelemetry.Source,
+            ElevatedTelemetryConfidence = elevatedTelemetry.Confidence,
+            ElevatedTelemetrySummary = elevatedTelemetry.Summary
         };
     }
+
+    private static ElevatedUsbTelemetrySummary BuildElevatedTelemetrySummary(ElevatedScanTelemetrySnapshot? telemetry)
+    {
+        if (telemetry is null || telemetry.IsMissing)
+        {
+            return new ElevatedUsbTelemetrySummary(
+                ElevatedScanTelemetryState.Missing,
+                null,
+                "Elevated Scan",
+                PortPowerTelemetryConfidence.Unavailable.ToString(),
+                ElevatedScanTelemetrySnapshot.RunElevatedScanPrompt);
+        }
+
+        var summary = telemetry.StatusLine;
+        if (!string.IsNullOrWhiteSpace(telemetry.UsbThunderboltDockSummary))
+        {
+            summary = $"{summary} {telemetry.UsbThunderboltDockSummary}";
+        }
+
+        return new ElevatedUsbTelemetrySummary(
+            telemetry.State,
+            telemetry.CollectedAtUtc,
+            telemetry.Source,
+            telemetry.Confidence.ToString(),
+            summary);
+    }
+
+    private sealed record ElevatedUsbTelemetrySummary(
+        ElevatedScanTelemetryState State,
+        DateTimeOffset? CollectedAtUtc,
+        string Source,
+        string Confidence,
+        string Summary);
 
     private static UsbIntelligenceBenchmarkResult? ResolveBenchmark(
         UsbDeviceInfo? match,

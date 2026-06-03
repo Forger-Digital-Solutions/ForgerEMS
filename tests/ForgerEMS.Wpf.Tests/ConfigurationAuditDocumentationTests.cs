@@ -49,6 +49,7 @@ public sealed class ConfigurationAuditDocumentationTests
             "FORGEREMS_UPDATE_CHANNEL",
             "FORGEREMS_UPDATE_INCLUDE_PRERELEASE",
             "FORGEREMS_UPDATE_USER_AGENT",
+            "FORGEREMS_GITHUB_TOKEN",
             "FORGEREMS_UPDATE_TIMEOUT_SECONDS",
             "FORGEREMS_KYRA_MODE",
             "FORGEREMS_KYRA_PROVIDER",

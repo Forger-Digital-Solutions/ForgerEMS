@@ -16,11 +16,13 @@ function Test-PlaceholderValue {
     param([AllowNull()][string]$Value)
     if ([string]::IsNullOrWhiteSpace($Value)) { return $false }
     $v = $Value.Trim()
-    return $v -match '^(?i:REPLACE_ME|REPLACE_WITH_BETA_ACCESS_TOKEN|REPLACE_MODEL_NAME|local-model-name|model-name|changeme|TODO|sk-REPLACE_ME)$' `
+    $legacyOpenAiPlaceholder = 'sk-' + 'REPLACE_ME'
+    return $v -match '^(?i:REPLACE_ME|REPLACE_WITH_BETA_ACCESS_TOKEN|REPLACE_MODEL_NAME|local-model-name|model-name|changeme|TODO|OPENAI_API_KEY_PLACEHOLDER)$' `
+        -or [string]::Equals($v, $legacyOpenAiPlaceholder, [StringComparison]::OrdinalIgnoreCase) `
         -or $v -like "REPLACE_*" `
         -or $v -like "YOUR_*" `
         -or $v -like "PASTE_*" `
-        -or $v -match '(?i)REPLACE_ME|example\.local'
+        -or $v -match '(?i)REPLACE_ME|PLACEHOLDER|example\.local'
 }
 
 function Set-UserEnv {

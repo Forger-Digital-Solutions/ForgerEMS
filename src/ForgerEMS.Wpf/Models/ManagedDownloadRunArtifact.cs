@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using VentoyToolkitSetup.Wpf.Services;
 
 namespace VentoyToolkitSetup.Wpf.Models;
 
@@ -45,7 +46,8 @@ public sealed class ManagedDownloadRunArtifact
             return null;
         }
 
-        var path = Path.Combine(usbRootPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), "ForgerEMS-managed-download-result.json");
+        var path = UsbInternalLayout.ResolveManagedDownloadResultPath(
+            usbRootPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         if (!File.Exists(path))
         {
             return null;

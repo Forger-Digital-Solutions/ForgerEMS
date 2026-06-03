@@ -6,7 +6,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Markup;
+using System.Windows.Media;
 using VentoyToolkitSetup.Wpf.Configuration;
 using VentoyToolkitSetup.Wpf.Infrastructure;
 using VentoyToolkitSetup.Wpf.Models;
@@ -19,6 +21,13 @@ namespace VentoyToolkitSetup.Wpf;
 public partial class App : Application
 {
 
+    /// <summary>
+    /// Snapshot detected once at startup. Static so other components (views,
+    /// view models, diagnostic exporters) can read the same decision without
+    /// re-running detection or threading a parameter through every layer.
+    /// </summary>
+    public static CompatibilityEnvironment? CompatibilityEnvironment { get; private set; }
+
     protected override async void OnStartup(StartupEventArgs e)
     {
         RegisterStartupExceptionHandlers();
@@ -29,6 +38,8 @@ public partial class App : Application
             AppendStartupLog($"ExecutablePath: {GetExecutablePath()}");
             AppendStartupLog($"ExecutableBase: {GetExecutableBaseDirectory()}");
             AppendStartupLog($"CurrentDirectory: {Directory.GetCurrentDirectory()}");
+
+            ApplyCompatibilityEnvironment();
 
             base.OnStartup(e);
 
@@ -77,12 +88,45 @@ public partial class App : Application
                 copilotService,
                 copilotProviderRegistry);
             mainViewModel.ElevatedScanStartupRequest = elevatedScanStartupRequest;
+            mainViewModel.CompatibilityEnvironment = CompatibilityEnvironment;
 
             var mainWindow = new MainWindow(mainViewModel);
             AppendStartupLog("MainWindow constructed");
             MainWindow = mainWindow;
             mainWindow.Show();
             AppendStartupLog("MainWindow shown");
+
+            // Background, read-only probe of the optional Linux helper. Never
+            // blocks startup and never throws into the dispatcher — failure
+            // paths return typed results that we log and surface in the UI.
+            if (CompatibilityEnvironment is { IsCompatibilityMode: true })
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var result = await new VentoyToolkitSetup.Wpf.Services.Compatibility.LinuxHelperService().ProbeAsync().ConfigureAwait(false);
+                        AppendStartupLog($"LinuxHelper.Availability: {result.Availability}");
+                        AppendStartupLog($"LinuxHelper.ScriptPath: {(string.IsNullOrEmpty(result.ScriptPath) ? "(not found)" : result.ScriptPath)}");
+                        AppendStartupLog($"LinuxHelper.Elapsed: {result.Elapsed.TotalMilliseconds:0} ms");
+                        if (!string.IsNullOrEmpty(result.FailureReason))
+                        {
+                            AppendStartupLog($"LinuxHelper.FailureReason: {result.FailureReason}");
+                        }
+
+                        foreach (var diagnostic in result.Diagnostics)
+                        {
+                            AppendStartupLog($"LinuxHelper: {diagnostic}");
+                        }
+
+                        _ = Dispatcher.BeginInvoke(new Action(() => mainViewModel.LinuxHelperResult = result));
+                    }
+                    catch (Exception helperException)
+                    {
+                        AppendStartupLog($"LinuxHelper probe threw safely: {helperException.GetType().Name}: {helperException.Message}");
+                    }
+                });
+            }
         }
         catch (Exception exception)
         {
@@ -112,7 +156,86 @@ public partial class App : Application
         {
             LogStartupException("Unhandled dispatcher exception", args.Exception);
             WriteStartupCrashReport(args.Exception);
+            args.Handled = true;
         };
+
+        // Unobserved Task faults can otherwise tear the process down on
+        // finalization with no log. Mark observed so the GC does not
+        // re-raise, but record everything before continuing.
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            LogStartupException("UnobservedTaskException", args.Exception);
+            args.SetObserved();
+        };
+    }
+
+    /// <summary>
+    /// Runs runtime detection and applies the very small number of decisions
+    /// that must happen BEFORE the first WPF window is constructed (today:
+    /// forcing software rendering under Wine to dodge a wpfgfx_cor3 crash).
+    /// All other state is recorded so later layers can react.
+    /// </summary>
+    private static void ApplyCompatibilityEnvironment()
+    {
+        CompatibilityEnvironment env;
+        try
+        {
+            env = RuntimeCompatibilityService.Detect();
+        }
+        catch (Exception detectionException)
+        {
+            // Detection itself must never crash startup. Fall back to a
+            // conservative "unknown native Windows" result.
+            AppendStartupLog($"Compatibility detection failed: {detectionException.GetType().FullName}: {detectionException.Message}");
+            env = new CompatibilityEnvironment(
+                RuntimePlatformKind.Unknown,
+                isWine: false,
+                wineVersion: null,
+                hostKernel: null,
+                linuxDistro: null,
+                isCompatibilityMode: false,
+                forceSoftwareRendering: false,
+                unsupportedFeatures: Array.Empty<string>(),
+                limitedFeatures: Array.Empty<string>(),
+                detectionSignals: new[] { $"detection-error:{detectionException.GetType().Name}" });
+        }
+
+        CompatibilityEnvironment = env;
+        AppendCompatibilityDiagnostics(env);
+
+        if (env.ForceSoftwareRendering)
+        {
+            try
+            {
+                RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
+                AppendStartupLog("RenderMode forced to SoftwareOnly (Wine compatibility)");
+            }
+            catch (Exception renderException)
+            {
+                AppendStartupLog($"Failed to force SoftwareOnly render mode: {renderException.Message}");
+            }
+        }
+    }
+
+    private static void AppendCompatibilityDiagnostics(CompatibilityEnvironment env)
+    {
+        AppendStartupLog($"Compatibility.Platform: {env.Platform}");
+        AppendStartupLog($"Compatibility.IsWine: {env.IsWine}");
+        AppendStartupLog($"Compatibility.WineVersion: {env.WineVersion ?? "(unknown)"}");
+        AppendStartupLog($"Compatibility.HostKernel: {env.HostKernel ?? "(unknown)"}");
+        AppendStartupLog($"Compatibility.LinuxDistro: {env.LinuxDistro ?? "(unknown)"}");
+        AppendStartupLog($"Compatibility.IsCompatibilityMode: {env.IsCompatibilityMode}");
+        AppendStartupLog($"Compatibility.ForceSoftwareRendering: {env.ForceSoftwareRendering}");
+        AppendStartupLog($"Compatibility.DetectionSignals: {string.Join("; ", env.DetectionSignals)}");
+        if (env.UnsupportedFeatures.Count > 0)
+        {
+            AppendStartupLog($"Compatibility.Unsupported: {string.Join("; ", env.UnsupportedFeatures)}");
+        }
+
+        if (env.LimitedFeatures.Count > 0)
+        {
+            AppendStartupLog($"Compatibility.Limited: {string.Join("; ", env.LimitedFeatures)}");
+        }
     }
 
     private static bool HasArgument(IEnumerable<string> args, string target)

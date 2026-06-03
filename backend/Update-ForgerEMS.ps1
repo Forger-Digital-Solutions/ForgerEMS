@@ -64,7 +64,9 @@ param(
     # CI / release validation: keep terminating failure when managed items fail (including fallback-covered).
     [switch]$StrictManagedDownloads,
     # Retry only items recorded as retryable in the latest ForgerEMS-managed-download-result.json on the USB root.
-    [switch]$RetryFailedManagedDownloads
+    [switch]$RetryFailedManagedDownloads,
+    # Comma-separated or repeated USB Builder profile category IDs to include for this run.
+    [string[]]$IncludedCategories = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -88,6 +90,18 @@ if (-not $runtimeHelperImported) {
     throw "ForgerEMS runtime helper was not found. Checked: $($runtimeHelperCandidates -join '; ')"
 }
 
+$checksumResolverCandidates = @(
+    (Join-Path $PSScriptRoot "ToolkitManager\ChecksumResolver.ps1"),
+    (Join-Path $PSScriptRoot "backend\ToolkitManager\ChecksumResolver.ps1")
+) | Select-Object -Unique
+
+foreach ($checksumResolverCandidate in $checksumResolverCandidates) {
+    if (Test-Path -LiteralPath $checksumResolverCandidate) {
+        . $checksumResolverCandidate
+        break
+    }
+}
+
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
 
 $script:LogFile = $null
@@ -109,6 +123,10 @@ $script:Summary = [ordered]@{
     FallbackShortcutsReused  = 0
     UpToDateSkipped          = 0
     WarnEvents               = 0
+    ExtrasDirsCreated        = 0
+    ExtrasDirsSkipped        = 0
+    ExtrasReadmesCreated     = 0
+    ExtrasReadmesSkipped     = 0
 }
 
 $script:ManagedFailureLines = [System.Collections.Generic.List[string]]::new()
@@ -116,15 +134,50 @@ $script:ManagedDownloadFailedRecords = [System.Collections.Generic.List[hashtabl
 $script:ManagedDownloadRunId = [guid]::NewGuid().ToString('N')
 $script:ManagedDownloadRunStartedUtc = (Get-Date).ToUniversalTime().ToString('o')
 $script:RetryManagedDestinations = $null
+$script:NormalizeManifestMatchTextCallCount = 0
+$script:ManagedPlaceholderShadowMatchCallCount = 0
+$script:ProgressLogFile = $env:FORGEREMS_UPDATE_PROGRESS_LOG
+if ([string]::IsNullOrWhiteSpace($script:ProgressLogFile)) {
+    $script:ProgressLogFile = Join-Path $env:TEMP ("ForgerEMS-Update-progress-{0}.log" -f $PID)
+}
+
+function Write-ProgressLog {
+    param([Parameter(Mandatory)][string]$Message)
+
+    if ([string]::IsNullOrWhiteSpace($script:ProgressLogFile)) {
+        return
+    }
+
+    try {
+        $progressParent = Split-Path -Parent $script:ProgressLogFile
+        if (-not [string]::IsNullOrWhiteSpace($progressParent)) {
+            [IO.Directory]::CreateDirectory($progressParent) | Out-Null
+        }
+
+        $line = "[{0}] {1}" -f (Get-Date).ToString("yyyy-MM-dd HH:mm:ss.fff"), $Message
+        [IO.File]::AppendAllText($script:ProgressLogFile, $line + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+    }
+    catch {
+        # Progress logging must never change updater behavior.
+    }
+}
+
+Write-ProgressLog ("startup / args parsed: DriveLetter='{0}' UsbRoot='{1}' ManifestName='{2}' WhatIf={3} VerifyOnly={4} IncludedCategories='{5}'" -f `
+    $DriveLetter, $UsbRoot, $ManifestName, [bool]$WhatIfPreference, [bool]$VerifyOnly, ($IncludedCategories -join ","))
 
 function Write-Log {
     param(
         [Parameter(Mandatory)][string]$Message,
-        [ValidateSet("INIT","INFO","OK","WARN","ERROR","ACTION","COMPLETE")][string]$Level = "INFO"
+        [ValidateSet("INIT","INFO","OK","WARN","ERROR","ACTION","COMPLETE","PROGRESS")][string]$Level = "INFO"
     )
 
     $ts = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-    $line = "[$ts][$Level] $Message"
+    # PROGRESS lines are user-facing "live" ticks (download progress, etc.). They are
+    # written to Write-Host so the WPF UI can advance its live-status fields, but they
+    # are intentionally NOT persisted to the backend update_*.log — checkpoint INFO
+    # entries (download start / every >=30s / >=10% / completion) carry that history.
+    $displayLevel = if ($Level -eq "PROGRESS") { "INFO" } else { $Level }
+    $line = "[$ts][$displayLevel] $Message"
 
     switch ($Level) {
         "INFO"  { Write-Host $line -ForegroundColor Cyan }
@@ -137,6 +190,11 @@ function Write-Log {
         "ACTION" { Write-Host $line -ForegroundColor Yellow }
         "INIT" { Write-Host $line -ForegroundColor Cyan }
         "COMPLETE" { Write-Host $line -ForegroundColor Green }
+        "PROGRESS" { Write-Host $line -ForegroundColor Cyan }
+    }
+
+    if ($Level -eq "PROGRESS") {
+        return
     }
 
     if ($script:LogFile -and -not $WhatIfPreference) {
@@ -144,6 +202,57 @@ function Write-Log {
         if ($logParent -and (Test-Path -LiteralPath $logParent)) {
             Add-Content -LiteralPath $script:LogFile -Value $line -Encoding UTF8
         }
+    }
+}
+
+function Format-ByteSize {
+    param([Parameter(Mandatory)][int64]$Bytes)
+    if ($Bytes -lt 0) { $Bytes = 0 }
+    $units = @('B','KB','MB','GB','TB')
+    $value = [double]$Bytes
+    $unitIndex = 0
+    while ($value -ge 1024 -and $unitIndex -lt ($units.Length - 1)) {
+        $value = $value / 1024
+        $unitIndex++
+    }
+    if ($unitIndex -le 1) {
+        '{0:0} {1}' -f $value, $units[$unitIndex]
+    }
+    else {
+        '{0:0.0} {1}' -f $value, $units[$unitIndex]
+    }
+}
+
+function Format-ElapsedDuration {
+    param([Parameter(Mandatory)][TimeSpan]$Elapsed)
+    $totalSeconds = [int][Math]::Round($Elapsed.TotalSeconds)
+    if ($totalSeconds -lt 0) { $totalSeconds = 0 }
+    if ($totalSeconds -ge 3600) {
+        '{0}h {1}m {2}s' -f [int]($totalSeconds / 3600), [int](($totalSeconds % 3600) / 60), [int]($totalSeconds % 60)
+    }
+    elseif ($totalSeconds -ge 60) {
+        '{0}m {1}s' -f [int]($totalSeconds / 60), [int]($totalSeconds % 60)
+    }
+    else {
+        '{0}s' -f $totalSeconds
+    }
+}
+
+function Invoke-TimedReleasePhase {
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][scriptblock]$ScriptBlock
+    )
+
+    Write-ProgressLog ("{0} start" -f $Name)
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    try {
+        & $ScriptBlock
+    }
+    finally {
+        $sw.Stop()
+        Write-ProgressLog ("{0} end elapsedMs={1:n0}" -f $Name, $sw.Elapsed.TotalMilliseconds)
+        Write-Log ("Timing: {0} completed in {1:n0} ms" -f $Name, $sw.Elapsed.TotalMilliseconds) "INFO"
     }
 }
 
@@ -215,7 +324,7 @@ function Write-ForgerEmsManagedDownloadResultJson {
         retryFailedModeActive  = ($null -ne $script:RetryManagedDestinations)
     }
 
-    $path = Join-Path $RootPath "ForgerEMS-managed-download-result.json"
+    $path = Resolve-ForgerEMSUsbMetadataPath -Root $RootPath -FileName "ForgerEMS-managed-download-result.json"
     if ($WhatIfPreference) {
         Write-Log "WhatIf: skipping managed download result JSON: $path" "INFO"
         return
@@ -260,6 +369,14 @@ function Get-Sha256 {
     return $hash
 }
 
+function Get-Sha512 {
+    param([Parameter(Mandatory)][string]$Path)
+
+    $hash = Get-ForgerSha512 -LiteralPath $Path
+    Write-Log ("SHA512 hash provider: {0} file={1}" -f (Get-ForgerLastHashProvider), (Get-ForgerSafePathForLog -Path $Path)) "INFO"
+    return $hash
+}
+
 function Safe-FileName {
     param([Parameter(Mandatory)][string]$Text)
     (($Text -replace '[\\/:*?"<>|]+', '_').Trim())
@@ -292,6 +409,7 @@ function Get-ManifestDestinationKey {
 function Normalize-ManifestMatchText {
     param([AllowNull()][string]$Text)
 
+    $script:NormalizeManifestMatchTextCallCount++
     if ([string]::IsNullOrWhiteSpace($Text)) {
         return ""
     }
@@ -320,6 +438,7 @@ function Test-ManagedPlaceholderShadowMatch {
         [Parameter(Mandatory)]$ManagedItem
     )
 
+    $script:ManagedPlaceholderShadowMatchCallCount++
     $pageDest = ([string]$(if ($PageItem.dest) { $PageItem.dest } else { "" })).Trim()
     $managedDest = ([string]$(if ($ManagedItem.dest) { $ManagedItem.dest } else { "" })).Trim()
 
@@ -355,67 +474,178 @@ function Test-ManagedPlaceholderShadowMatch {
     return $false
 }
 
+function Get-ManifestItemEnabled {
+    param([AllowNull()]$Item)
+
+    if ($null -eq $Item) {
+        return $false
+    }
+
+    if ($null -ne $Item.enabled) {
+        return [bool]$Item.enabled
+    }
+
+    return $true
+}
+
+function Get-ManifestItemType {
+    param([AllowNull()]$Item)
+
+    if ($null -eq $Item) {
+        return "file"
+    }
+
+    return ([string]$(if ($Item.type) { $Item.type } else { "file" })).Trim().ToLowerInvariant()
+}
+
+function Get-UniqueNonEmptyManifestMatchText {
+    param([object[]]$Values)
+
+    $seen = @{}
+    $result = New-Object System.Collections.Generic.List[string]
+    foreach ($value in @($Values)) {
+        $normalized = Normalize-ManifestMatchText -Text ([string]$value)
+        if ([string]::IsNullOrWhiteSpace($normalized)) {
+            continue
+        }
+
+        if (-not $seen.ContainsKey($normalized)) {
+            $seen[$normalized] = $true
+            [void]$result.Add($normalized)
+        }
+    }
+
+    return $result.ToArray()
+}
+
+function New-ManagedPlaceholderMatchInfo {
+    param(
+        [Parameter(Mandatory)]$Item,
+        [Parameter(Mandatory)][ValidateSet("page", "file")][string]$Kind
+    )
+
+    $dest = ([string]$(if ($Item.dest) { $Item.dest } else { "" })).Trim()
+    $dir = if ([string]::IsNullOrWhiteSpace($dest)) { "" } else { [string](Split-Path -Parent $dest) }
+    $name = [string]$(if ($Item.name) { $Item.name } else { "" })
+
+    if ($Kind -eq "page") {
+        $matchTexts = Get-UniqueNonEmptyManifestMatchText -Values @(
+            (Get-PlaceholderDisplayLabelFromDestination -RelativePath $dest),
+            $name
+        )
+    }
+    else {
+        $matchTexts = Get-UniqueNonEmptyManifestMatchText -Values @(
+            $name,
+            ([IO.Path]::GetFileNameWithoutExtension($dest))
+        )
+    }
+
+    return [PSCustomObject]@{
+        Item       = $Item
+        Dest       = $dest
+        DestKey    = Get-ManifestDestinationKey -RelativePath $dest
+        Directory  = $dir
+        MatchTexts = $matchTexts
+    }
+}
+
+function Test-ManagedPlaceholderShadowMatchInfo {
+    param(
+        [Parameter(Mandatory)]$PageInfo,
+        [Parameter(Mandatory)]$ManagedInfo
+    )
+
+    $script:ManagedPlaceholderShadowMatchCallCount++
+    if ([string]::IsNullOrWhiteSpace($PageInfo.Dest) -or [string]::IsNullOrWhiteSpace($ManagedInfo.Dest)) {
+        return $false
+    }
+
+    if (-not [string]::Equals([string]$PageInfo.Directory, [string]$ManagedInfo.Directory, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $false
+    }
+
+    foreach ($pageLabel in @($PageInfo.MatchTexts)) {
+        foreach ($managedTarget in @($ManagedInfo.MatchTexts)) {
+            if ($managedTarget.Contains($pageLabel) -or $pageLabel.Contains($managedTarget)) {
+                return $true
+            }
+        }
+    }
+
+    return $false
+}
+
 function Get-ActiveManagedPlaceholderPlan {
     param([Parameter(Mandatory)][object[]]$Items)
 
-    $enabledManagedFileItems = @(
-        $Items | Where-Object {
-            $itemEnabled = $true
-            if ($null -ne $_.enabled) {
-                $itemEnabled = [bool]$_.enabled
-            }
-
-            $itemType = ([string]$(if ($_.type) { $_.type } else { "file" })).Trim().ToLowerInvariant()
-            $itemEnabled -and $itemType -eq "file"
-        }
-    )
-
+    $managedByDirectory = @{}
+    $pageInfos = New-Object System.Collections.Generic.List[object]
     $byPlaceholderDest = @{}
     $byManagedDest = @{}
 
     foreach ($item in $Items) {
         if ($null -eq $item) { continue }
 
-        $itemEnabled = $true
-        if ($null -ne $item.enabled) {
-            $itemEnabled = [bool]$item.enabled
-        }
-
-        $itemType = ([string]$(if ($item.type) { $item.type } else { "file" })).Trim().ToLowerInvariant()
-        if (-not $itemEnabled -or $itemType -ne "page") {
+        if (-not (Get-ManifestItemEnabled -Item $item)) {
             continue
         }
 
-        $matchedManagedItem = @(
-            $enabledManagedFileItems | Where-Object {
-                Test-ManagedPlaceholderShadowMatch -PageItem $item -ManagedItem $_
+        $itemType = Get-ManifestItemType -Item $item
+        if ($itemType -eq "file") {
+            $managedInfo = New-ManagedPlaceholderMatchInfo -Item $item -Kind "file"
+            if ([string]::IsNullOrWhiteSpace($managedInfo.Dest)) {
+                continue
             }
-        ) | Select-Object -First 1
 
-        if ($null -eq $matchedManagedItem) {
+            $dirKey = ([string]$managedInfo.Directory).ToLowerInvariant()
+            if (-not $managedByDirectory.ContainsKey($dirKey)) {
+                $managedByDirectory[$dirKey] = New-Object System.Collections.Generic.List[object]
+            }
+
+            [void]($managedByDirectory[$dirKey]).Add($managedInfo)
             continue
         }
 
-        $placeholderDest = ([string]$item.dest).Trim()
-        $managedDest = ([string]$matchedManagedItem.dest).Trim()
-        $placeholderKey = Get-ManifestDestinationKey -RelativePath $placeholderDest
-        $managedKey = Get-ManifestDestinationKey -RelativePath $managedDest
+        if ($itemType -eq "page") {
+            [void]$pageInfos.Add((New-ManagedPlaceholderMatchInfo -Item $item -Kind "page"))
+        }
+    }
+
+    foreach ($pageInfo in $pageInfos) {
+        $dirKey = ([string]$pageInfo.Directory).ToLowerInvariant()
+        if (-not $managedByDirectory.ContainsKey($dirKey)) {
+            continue
+        }
+
+        $matchedManagedInfo = $null
+        foreach ($managedInfo in $managedByDirectory[$dirKey]) {
+            if (Test-ManagedPlaceholderShadowMatchInfo -PageInfo $pageInfo -ManagedInfo $managedInfo) {
+                $matchedManagedInfo = $managedInfo
+                break
+            }
+        }
+
+        if ($null -eq $matchedManagedInfo) {
+            continue
+        }
+
         $entry = [PSCustomObject]@{
-            PlaceholderDest = $placeholderDest
-            ManagedDest     = $managedDest
-            PlaceholderItem = $item
-            ManagedItem     = $matchedManagedItem
+            PlaceholderDest = $pageInfo.Dest
+            ManagedDest     = $matchedManagedInfo.Dest
+            PlaceholderItem = $pageInfo.Item
+            ManagedItem     = $matchedManagedInfo.Item
         }
 
-        if (-not $byPlaceholderDest.ContainsKey($placeholderKey)) {
-            $byPlaceholderDest[$placeholderKey] = $entry
+        if (-not $byPlaceholderDest.ContainsKey($pageInfo.DestKey)) {
+            $byPlaceholderDest[$pageInfo.DestKey] = $entry
         }
 
-        if (-not $byManagedDest.ContainsKey($managedKey)) {
-            $byManagedDest[$managedKey] = New-Object System.Collections.Generic.List[object]
+        if (-not $byManagedDest.ContainsKey($matchedManagedInfo.DestKey)) {
+            $byManagedDest[$matchedManagedInfo.DestKey] = New-Object System.Collections.Generic.List[object]
         }
 
-        [void]$byManagedDest[$managedKey].Add($entry)
+        [void]($byManagedDest[$matchedManagedInfo.DestKey]).Add($entry)
     }
 
     return [PSCustomObject]@{
@@ -701,24 +931,58 @@ function Invoke-HttpClientDownload {
         $lastLogBytes = [int64]0
         $lastLogUtc = [DateTime]::UtcNow
         $lastProgressUtc = [DateTime]::UtcNow
+        $lastCheckpointUtc = [DateTime]::MinValue
+        $lastCheckpointPercent = -1.0
+        $checkpointEmitted = $false
+        # Rolling-speed state: we calculate (delta bytes) / (delta seconds) per sample
+        # interval, then smooth with an exponential moving average so the displayed
+        # MB/s reflects RECENT throughput, not total-bytes / total-elapsed-time. The
+        # cumulative average is kept separately and only surfaced on the completion line.
+        $emaMbps = 0.0
+        $emaAlpha = 0.3
+        $emaPrimed = $false
+        $sampleStartBytes = [int64]0
+        $sampleStartUtc = [DateTime]::UtcNow
         $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+        $itemStartUtc = [DateTime]::UtcNow
 
         while (($read = $responseStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
             $fileStream.Write($buffer, 0, $read)
             $downloadedBytes += [int64]$read
 
             $nowUtc = [DateTime]::UtcNow
-            if (($nowUtc - $lastLogUtc).TotalSeconds -ge 2 -or ($totalBytes -gt 0 -and $downloadedBytes -ge $totalBytes)) {
-                $elapsedSeconds = [Math]::Max($stopwatch.Elapsed.TotalSeconds, 0.001)
-                $speedMbps = ($downloadedBytes / 1MB) / $elapsedSeconds
-                $downloadedMb = [Math]::Round($downloadedBytes / 1MB, 0)
+            $isFinalByte = ($totalBytes -gt 0 -and $downloadedBytes -ge $totalBytes)
+            if (($nowUtc - $lastLogUtc).TotalSeconds -ge 2 -or $isFinalByte) {
+                $sampleSeconds = [Math]::Max(($nowUtc - $sampleStartUtc).TotalSeconds, 0.001)
+                $deltaBytes = $downloadedBytes - $sampleStartBytes
+                $sampleMbps = if ($deltaBytes -gt 0) { ($deltaBytes / 1MB) / $sampleSeconds } else { 0.0 }
+                if (-not $emaPrimed) {
+                    $emaMbps = $sampleMbps
+                    $emaPrimed = $true
+                }
+                else {
+                    $emaMbps = ($emaAlpha * $sampleMbps) + ((1 - $emaAlpha) * $emaMbps)
+                }
+                if ($emaMbps -lt 0) { $emaMbps = 0.0 }
+                $sampleStartUtc = $nowUtc
+                $sampleStartBytes = $downloadedBytes
 
+                $totalElapsedSeconds = [Math]::Max($stopwatch.Elapsed.TotalSeconds, 0.001)
+                $avgMbps = ($downloadedBytes / 1MB) / $totalElapsedSeconds
+                if ($avgMbps -lt 0) { $avgMbps = 0.0 }
+
+                $downloadedSizeText = Format-ByteSize $downloadedBytes
+                $totalSizeText = if ($totalBytes -gt 0) { Format-ByteSize $totalBytes } else { "" }
+
+                $percent = -1.0
                 if ($totalBytes -gt 0) {
-                    $totalMb = [Math]::Round($totalBytes / 1MB, 0)
                     $percent = [Math]::Min(100, [Math]::Round(($downloadedBytes / [double]$totalBytes) * 100, 1))
                     $remainingBytes = [Math]::Max(0, $totalBytes - $downloadedBytes)
-                    $etaSeconds = if ($speedMbps -gt 0) { [int][Math]::Round(($remainingBytes / 1MB) / $speedMbps) } else { 0 }
-                    $eta = if ($etaSeconds -ge 3600) {
+                    $etaSeconds = if ($emaMbps -gt 0.05) { [int][Math]::Round(($remainingBytes / 1MB) / $emaMbps) } else { 0 }
+                    $eta = if ($emaMbps -le 0.05) {
+                        'unknown'
+                    }
+                    elseif ($etaSeconds -ge 3600) {
                         '{0}h {1}m {2}s' -f [int]($etaSeconds / 3600), [int](($etaSeconds % 3600) / 60), [int]($etaSeconds % 60)
                     }
                     elseif ($etaSeconds -ge 60) {
@@ -728,10 +992,35 @@ function Invoke-HttpClientDownload {
                         '{0}s' -f $etaSeconds
                     }
 
-                    Write-Log ("Downloading {0}... {1}% | {2} MB / {3} MB | {4:0.0} MB/s | ETA {5}" -f $ItemName, $percent, $downloadedMb, $totalMb, $speedMbps, $eta) "INFO"
+                    $progressMessage = "Downloading {0}... {1} of {2} | {3}% | {4:0.0} MB/s current | ETA {5}" -f $ItemName, $downloadedSizeText, $totalSizeText, $percent, $emaMbps, $eta
                 }
                 else {
-                    Write-Log ("Downloading {0}... {1} MB downloaded | {2:0.0} MB/s" -f $ItemName, $downloadedMb, $speedMbps) "INFO"
+                    $progressMessage = "Downloading {0}... {1} downloaded | {2:0.0} MB/s current" -f $ItemName, $downloadedSizeText, $emaMbps
+                }
+
+                # Promote a tick to a persistent checkpoint only on: first tick, every >=30s,
+                # every >=10% progress, or final byte. All other ticks go out as PROGRESS so
+                # the UI advances its live status but the log file is not flooded.
+                $checkpointDue = (-not $checkpointEmitted) -or $isFinalByte
+                if (-not $checkpointDue) {
+                    if (($nowUtc - $lastCheckpointUtc).TotalSeconds -ge 30) {
+                        $checkpointDue = $true
+                    }
+                    elseif ($percent -ge 0 -and ($percent - $lastCheckpointPercent) -ge 10) {
+                        $checkpointDue = $true
+                    }
+                }
+
+                if ($checkpointDue) {
+                    Write-Log $progressMessage "INFO"
+                    $checkpointEmitted = $true
+                    $lastCheckpointUtc = $nowUtc
+                    if ($percent -ge 0) {
+                        $lastCheckpointPercent = $percent
+                    }
+                }
+                else {
+                    Write-Log $progressMessage "PROGRESS"
                 }
 
                 if ($downloadedBytes -gt $lastLogBytes) {
@@ -749,6 +1038,13 @@ function Invoke-HttpClientDownload {
 
         $fileStream.Flush($true)
         $stopwatch.Stop()
+
+        $finalTotalBytes = if ($totalBytes -gt 0) { $totalBytes } else { $downloadedBytes }
+        $finalElapsedSec = [Math]::Max($stopwatch.Elapsed.TotalSeconds, 0.001)
+        $finalAvgMbps = ($finalTotalBytes / 1MB) / $finalElapsedSec
+        $finalSizeText = Format-ByteSize $finalTotalBytes
+        $finalElapsedText = Format-ElapsedDuration $stopwatch.Elapsed
+        Write-Log ("Download complete: {0} {1} in {2} | avg {3:0.0} MB/s" -f $ItemName, $finalSizeText, $finalElapsedText, $finalAvgMbps) "OK"
 
         return [PSCustomObject]@{
             Method      = "HttpClient"
@@ -1047,6 +1343,8 @@ function Download-File {
 function Get-ShaFromUrl {
     param(
         [Parameter(Mandatory)][string]$ShaUrl,
+        [ValidateSet("SHA256", "SHA512")][string]$Algorithm = "SHA256",
+        [string]$TargetFileName = "",
         [int]$TimeoutSec = 60,
         [string]$UserAgent = "ForgerEMS-Updater/3.1"
     )
@@ -1054,22 +1352,32 @@ function Get-ShaFromUrl {
     try {
         $response = Get-UrlText -Url $ShaUrl -TimeoutSec $TimeoutSec -UserAgent $UserAgent
         $txt = ([string]$response.Text).Trim()
-        $m = [regex]::Match($txt, '([a-fA-F0-9]{64})')
-        if ($m.Success) {
+        if (Get-Command -Name Resolve-ChecksumFromChecksumText -ErrorAction SilentlyContinue) {
+            $resolution = Resolve-ChecksumFromChecksumText -Content $txt -TargetFileName $TargetFileName -Algorithm $Algorithm
+            $hash = [string]$resolution.Hash
             return [PSCustomObject]@{
-                Sha256       = $m.Groups[1].Value.ToLowerInvariant()
+                Sha256       = if ($Algorithm -eq "SHA256") { $hash } else { $null }
+                Sha512       = if ($Algorithm -eq "SHA512") { $hash } else { $null }
                 Method       = [string]$response.Method
                 StatusCode   = Get-HttpStatusCodeDisplayText -Value $response.StatusCode
                 ReasonPhrase = Get-NormalizedDisplayText -Value $response.ReasonPhrase
                 FinalUri     = Get-NormalizedDisplayText -Value $response.FinalUri
+                ResolverReason = [string]$resolution.Reason
+                ResolverFormat = [string]$resolution.SourceFormat
+                ResolverCandidates = [int]$resolution.Candidates
             }
         }
+
         return [PSCustomObject]@{
             Sha256       = $null
+            Sha512       = $null
             Method       = [string]$response.Method
             StatusCode   = Get-HttpStatusCodeDisplayText -Value $response.StatusCode
             ReasonPhrase = Get-NormalizedDisplayText -Value $response.ReasonPhrase
             FinalUri     = Get-NormalizedDisplayText -Value $response.FinalUri
+            ResolverReason = "NotFound"
+            ResolverFormat = ""
+            ResolverCandidates = 0
         }
     }
     finally {
@@ -1117,15 +1425,18 @@ function Resolve-UsbRoot {
         [string]$Root
     )
 
+    Write-ProgressLog ("Resolve-UsbRoot start: Drive='{0}' Root='{1}'" -f $Drive, $Root)
     if ($Drive -and $Root) {
         throw "Use either -DriveLetter or -UsbRoot, not both."
     }
 
     if ($Root) {
         $candidate = $Root.Trim()
+        Write-ProgressLog ("Resolve-UsbRoot root candidate trimmed: {0}" -f $candidate)
         if (-not (Test-Path -LiteralPath $candidate)) {
             throw "Path not found: $candidate"
         }
+        Write-ProgressLog "Resolve-UsbRoot root candidate exists"
         return Resolve-SelectedUsbRoot -Path $candidate -Source "-UsbRoot"
     }
 
@@ -1212,19 +1523,22 @@ function Test-IsReleaseBundleRoot {
 function Find-ReleaseBundleRoot {
     param([Parameter(Mandatory)][string]$Path)
 
-    $current = (Resolve-Path -LiteralPath $Path).Path.TrimEnd('\')
+    Write-ProgressLog ("Find-ReleaseBundleRoot start: {0}" -f $Path)
+    $current = [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $Path).Path)
 
     while (-not [string]::IsNullOrWhiteSpace($current)) {
+        Write-ProgressLog ("Find-ReleaseBundleRoot checking: {0}" -f $current)
         if (Test-IsReleaseBundleRoot -Path $current) {
+            Write-ProgressLog ("Find-ReleaseBundleRoot found: {0}" -f $current)
             return $current
         }
 
-        $parentInfo = [IO.Directory]::GetParent($current + '\')
+        $parentInfo = [IO.Directory]::GetParent($current)
         if ($null -eq $parentInfo) {
             break
         }
 
-        $parent = $parentInfo.FullName.TrimEnd('\')
+        $parent = [IO.Path]::GetFullPath($parentInfo.FullName)
         if ($parent -eq $current) {
             break
         }
@@ -1232,6 +1546,7 @@ function Find-ReleaseBundleRoot {
         $current = $parent
     }
 
+    Write-ProgressLog ("Find-ReleaseBundleRoot none: {0}" -f $Path)
     return $null
 }
 
@@ -1265,11 +1580,15 @@ function Resolve-SelectedUsbRoot {
         [Parameter(Mandatory)][string]$Source
     )
 
+    Write-ProgressLog ("Resolve-SelectedUsbRoot start: Source='{0}' Path='{1}'" -f $Source, $Path)
     $resolvedPath = (Resolve-Path -LiteralPath $Path).Path.TrimEnd('\')
+    Write-ProgressLog ("Resolve-SelectedUsbRoot resolved path: {0}" -f $resolvedPath)
     $bundleRoot = Find-ReleaseBundleRoot -Path $resolvedPath
     if (-not $bundleRoot) {
+        Write-ProgressLog "Resolve-SelectedUsbRoot checking script root for release bundle"
         $bundleRoot = Find-ReleaseBundleRoot -Path $PSScriptRoot
     }
+    Write-ProgressLog ("Resolve-SelectedUsbRoot bundle root: {0}" -f $(if ($bundleRoot) { $bundleRoot } else { "<none>" }))
 
     if ($bundleRoot -and (Test-PathWithinRoot -Path $resolvedPath -Root $bundleRoot)) {
         if (Test-IsReleaseBundleScratchPath -Path $resolvedPath -BundleRoot $bundleRoot) {
@@ -1291,14 +1610,17 @@ function Resolve-SelectedUsbRoot {
 function Assert-UsbRootIsSafe {
     param([Parameter(Mandatory)][string]$Root)
 
+    Write-ProgressLog ("Assert-UsbRootIsSafe start: {0}" -f $Root)
     $driveRoot = [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($Root))
     if ([string]::IsNullOrWhiteSpace($driveRoot)) {
         throw "Could not resolve a drive root for selected USB target '$Root'."
     }
 
     if ($driveRoot.TrimEnd('\') -ieq "C:") {
+        Write-ProgressLog ("Assert-UsbRootIsSafe rejecting protected drive: {0}" -f $driveRoot)
         throw "C:\ is the protected Windows system drive and can never be used by ForgerEMS."
     }
+    Write-ProgressLog ("Assert-UsbRootIsSafe accepted: {0}" -f $Root)
 }
 
 function Resolve-RootChildPath {
@@ -1326,6 +1648,127 @@ function Resolve-RootChildPath {
     return $fullPath
 }
 
+function Get-DefaultUsbBuilderCategoryIds {
+    return @(
+        "core",
+        "windows",
+        "legacy-windows",
+        "linux-rescue",
+        "diagnostics",
+        "oem-tools"
+    )
+}
+
+function Get-NormalizedUsbBuilderCategoryIds {
+    param([string[]]$CategoryIds)
+
+    $tokens = @()
+    foreach ($raw in @($CategoryIds)) {
+        foreach ($part in (([string]$raw) -split ",")) {
+            $trimmed = $part.Trim().ToLowerInvariant()
+            if (-not [string]::IsNullOrWhiteSpace($trimmed)) {
+                $tokens += $trimmed
+            }
+        }
+    }
+
+    if ($tokens.Count -eq 0) {
+        $tokens = @(Get-DefaultUsbBuilderCategoryIds)
+    }
+
+    if ("core" -notin $tokens) {
+        $tokens += "core"
+    }
+
+    return @($tokens | Select-Object -Unique)
+}
+
+function New-UsbBuilderCategorySet {
+    param([string[]]$CategoryIds)
+
+    $set = @{}
+    foreach ($id in (Get-NormalizedUsbBuilderCategoryIds -CategoryIds $CategoryIds)) {
+        $set[$id] = $true
+    }
+
+    return $set
+}
+
+function Get-ManifestStringProperty {
+    param(
+        [AllowNull()]$Object,
+        [Parameter(Mandatory)][string]$Name
+    )
+
+    if ($null -eq $Object) { return "" }
+    if ($Object.PSObject.Properties.Name -notcontains $Name) { return "" }
+    return ([string]$Object.$Name).Trim()
+}
+
+function Get-UsbBuilderCategoryIdForPath {
+    param(
+        [string]$RelativePath,
+        [string]$Name = "",
+        [string]$Family = ""
+    )
+
+    $path = (([string]$RelativePath).Trim() -replace '/', '\').ToLowerInvariant()
+    $nameText = ([string]$Name).Trim().ToLowerInvariant()
+    $familyText = ([string]$Family).Trim().ToLowerInvariant()
+
+    if ($path.Contains("ventoy") -or $nameText.Contains("ventoy")) { return "core" }
+    if ($path.StartsWith("iso\macos\")) { return "macos" }
+    if ($path.StartsWith("iso\android\") -or $path.StartsWith("tools\android\")) { return "android" }
+    if ($path.StartsWith("iso\ios-ipados\") -or $path.StartsWith("tools\apple-mobile\")) { return "ios-ipados" }
+    if ($path.StartsWith("drivers\")) { return "oem-tools" }
+    if ($path.StartsWith("iso\windows-legacy\")) { return "legacy-windows" }
+    if ($path.StartsWith("iso\windows\windows-manual-iso-drop\windows 8.1") -or
+        $path.StartsWith("iso\windows\windows-manual-iso-drop\windows 8") -or
+        $path.StartsWith("iso\windows\windows-manual-iso-drop\windows 7") -or
+        $path.StartsWith("iso\windows\windows-manual-iso-drop\windows vista") -or
+        $path.StartsWith("iso\windows\windows-manual-iso-drop\windows xp") -or
+        $path.StartsWith("iso\windows\windows-manual-iso-drop\windows 2000") -or
+        $path.StartsWith("iso\windows\windows-manual-iso-drop\windows me") -or
+        $path.StartsWith("iso\windows\windows-manual-iso-drop\windows 98") -or
+        $path.StartsWith("iso\windows\windows-manual-iso-drop\windows 95")) {
+        return "legacy-windows"
+    }
+    if ($path.StartsWith("iso\windows\") -or $familyText -eq "windows") { return "windows" }
+    if ($path.StartsWith("iso\linux\") -or $familyText -eq "linux") { return "linux-rescue" }
+    if ($path.StartsWith("iso\tools\") -or $path.StartsWith("tools\portable\") -or $path.StartsWith("medicat.usb\")) { return "diagnostics" }
+
+    return "diagnostics"
+}
+
+function Get-UsbBuilderCategoryIdForManifestEntry {
+    param(
+        [AllowNull()]$Entry,
+        [string]$RelativePath = ""
+    )
+
+    $explicit = Get-ManifestStringProperty -Object $Entry -Name "categoryId"
+    if (-not [string]::IsNullOrWhiteSpace($explicit)) {
+        return $explicit.Trim().ToLowerInvariant()
+    }
+
+    $path = if ([string]::IsNullOrWhiteSpace($RelativePath)) { Get-ManifestStringProperty -Object $Entry -Name "dest" } else { $RelativePath }
+    return Get-UsbBuilderCategoryIdForPath `
+        -RelativePath $path `
+        -Name (Get-ManifestStringProperty -Object $Entry -Name "name") `
+        -Family (Get-ManifestStringProperty -Object $Entry -Name "family")
+}
+
+function Test-UsbBuilderCategoryIncluded {
+    param(
+        [Parameter(Mandatory)]$CategorySet,
+        [AllowNull()]$Entry,
+        [string]$RelativePath = ""
+    )
+
+    $categoryId = Get-UsbBuilderCategoryIdForManifestEntry -Entry $Entry -RelativePath $RelativePath
+    return $CategorySet.ContainsKey($categoryId)
+}
+
 function Resolve-ManifestPath {
     param(
         [Parameter(Mandatory)][string]$Root,
@@ -1335,13 +1778,22 @@ function Resolve-ManifestPath {
     $candidates = @()
 
     if ([IO.Path]::IsPathRooted($ManifestSpecifier)) {
+        # Absolute path: honor user-supplied location exactly.
         $candidates += [IO.Path]::GetFullPath($ManifestSpecifier)
     }
     else {
-        $candidates += Resolve-RootChildPath -Root $Root -RelativePath $ManifestSpecifier
+        # Why: a Setup-USB pass from an older release seeds ForgerEMS.updates.json
+        # at the USB root. If Update-USB resolved that USB-side copy first, a freshly
+        # packaged 30-managed-download catalog would be shadowed by a stale 16-item
+        # one already on the USB. The packaged bundled catalog must win so Update
+        # actually upgrades the USB. USB-side stays as a final fallback for
+        # offline/portable scenarios where the script is run from a USB-only layout.
         $candidates += [IO.Path]::GetFullPath((Join-Path $PSScriptRoot $ManifestSpecifier))
         $candidates += [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ("manifests\" + $ManifestSpecifier)))
         $candidates += [IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $PSScriptRoot) ("manifests\" + $ManifestSpecifier)))
+        $metadataRelative = Join-Path "_forgerems/metadata" $ManifestSpecifier
+        $candidates += Resolve-RootChildPath -Root $Root -RelativePath $metadataRelative
+        $candidates += Resolve-RootChildPath -Root $Root -RelativePath $ManifestSpecifier
     }
 
     foreach ($candidate in ($candidates | Select-Object -Unique)) {
@@ -1472,6 +1924,19 @@ function Assert-ManifestSha256Field {
     }
 }
 
+function Assert-ManifestSha512Field {
+    param(
+        [AllowNull()]$Value,
+        [Parameter(Mandatory)][string]$FieldName
+    )
+
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) { return }
+
+    if (-not ([string]$Value -match '^[a-fA-F0-9]{128}$')) {
+        throw "$FieldName must be a 128-character SHA-512 hex string."
+    }
+}
+
 function Assert-ManifestSourceTypeField {
     param(
         [AllowNull()]$Value,
@@ -1497,6 +1962,33 @@ function Assert-ManifestFragilityLevelField {
     $normalized = ([string]$Value).Trim().ToLowerInvariant()
     if ($normalized -notin @("low", "medium", "high")) {
         throw "$FieldName must be 'low', 'medium', or 'high'."
+    }
+}
+
+function Assert-ManifestDownloadModeField {
+    param(
+        [AllowNull()]$Value,
+        [Parameter(Mandatory)][string]$FieldName
+    )
+
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) { return }
+
+    $normalized = ([string]$Value).Trim()
+    if ($normalized -notin @(
+            "ManagedDownload",
+            "OfficialDownloadPage",
+            "ManualMediaRequired",
+            "ReviewFirst",
+            "VendorPortal",
+            "LicenseRestricted",
+            "DynamicMirrorOnly",
+            "OEMSpecific",
+            "FirmwareBlocked",
+            "CommunityToolkit",
+            "Unsupported",
+            "InfoOnly"
+        )) {
+        throw "$FieldName has an unsupported downloadMode value."
     }
 }
 
@@ -1577,8 +2069,10 @@ function Assert-ManifestContract {
         Assert-ManifestBooleanField -Value $item.archive -FieldName "$prefix.archive"
         Assert-ManifestPositiveIntegerField -Value $item.timeoutSec -FieldName "$prefix.timeoutSec"
         Assert-ManifestSha256Field -Value $item.sha256 -FieldName "$prefix.sha256"
+        Assert-ManifestSha512Field -Value $item.sha512 -FieldName "$prefix.sha512"
         Assert-ManifestSourceTypeField -Value $item.sourceType -FieldName "$prefix.sourceType"
         Assert-ManifestFragilityLevelField -Value $item.fragilityLevel -FieldName "$prefix.fragilityLevel"
+        Assert-ManifestDownloadModeField -Value $item.downloadMode -FieldName "$prefix.downloadMode"
         Assert-ManifestStringField -Value $item.fallbackRule -FieldName "$prefix.fallbackRule"
         Assert-ManifestPositiveIntegerField -Value $item.maintenanceRank -FieldName "$prefix.maintenanceRank"
         Assert-ManifestBooleanField -Value $item.borderline -FieldName "$prefix.borderline"
@@ -1589,16 +2083,21 @@ function Assert-ManifestContract {
             }
         }
 
+        if ($null -ne $item.sha512Url -and -not [string]::IsNullOrWhiteSpace([string]$item.sha512Url)) {
+            if ($type -ne "file") {
+                throw "$prefix.sha512Url is only valid for file items."
+            }
+        }
+
         $hasResilienceMetadata = (
             ($null -ne $item.sourceType -and -not [string]::IsNullOrWhiteSpace([string]$item.sourceType)) -or
             ($null -ne $item.fragilityLevel -and -not [string]::IsNullOrWhiteSpace([string]$item.fragilityLevel)) -or
-            ($null -ne $item.fallbackRule -and -not [string]::IsNullOrWhiteSpace([string]$item.fallbackRule)) -or
             ($null -ne $item.maintenanceRank -and -not [string]::IsNullOrWhiteSpace([string]$item.maintenanceRank)) -or
             ($null -ne $item.borderline)
         )
 
         if ($hasResilienceMetadata -and $type -ne "file") {
-            throw "$prefix.sourceType, $prefix.fragilityLevel, $prefix.fallbackRule, $prefix.maintenanceRank, and $prefix.borderline are only valid for file items."
+            throw "$prefix.sourceType, $prefix.fragilityLevel, $prefix.maintenanceRank, and $prefix.borderline are only valid for file items."
         }
     }
 }
@@ -1655,14 +2154,23 @@ if ($ShowVersion) {
 }
 
 $root = Resolve-UsbRoot -Drive $DriveLetter -Root $UsbRoot
+Write-ProgressLog ("UsbRoot safety resolved: {0}" -f $root)
 $manifestPath = Resolve-ManifestPath -Root $root -ManifestSpecifier $ManifestName
+Write-ProgressLog ("manifest file found: {0}" -f $manifestPath)
 
-$manifestRaw = Get-Content -LiteralPath $manifestPath -Raw
-$manifest = $manifestRaw | ConvertFrom-Json
-Assert-ManifestContract -Manifest $manifest -Root $root -SourceName $manifestPath
+$manifestRaw = Invoke-TimedReleasePhase -Name "Manifest load" -ScriptBlock {
+    Get-Content -LiteralPath $manifestPath -Raw
+}
+$manifest = Invoke-TimedReleasePhase -Name "Manifest ConvertFrom-Json" -ScriptBlock {
+    $manifestRaw | ConvertFrom-Json
+}
+Write-ProgressLog "ConvertFrom-Json complete"
+Invoke-TimedReleasePhase -Name "Manifest contract validation" -ScriptBlock {
+    Assert-ManifestContract -Manifest $manifest -Root $root -SourceName $manifestPath
+}
 
 if ($RetryFailedManagedDownloads) {
-    $priorResultPath = Join-Path $root "ForgerEMS-managed-download-result.json"
+    $priorResultPath = Resolve-ForgerEMSUsbManagedDownloadResultPath -Root $root
     if (-not (Test-Path -LiteralPath $priorResultPath)) {
         throw "RetryFailedManagedDownloads requires prior result file: $priorResultPath"
     }
@@ -1682,17 +2190,14 @@ if ($RetryFailedManagedDownloads) {
 
 $dlDir     = Resolve-RootChildPath -Root $root -RelativePath ($(if ($manifest.settings.downloadFolder) { [string]$manifest.settings.downloadFolder } else { "_downloads" }))
 $arcDir    = Resolve-RootChildPath -Root $root -RelativePath ($(if ($manifest.settings.archiveFolder)  { [string]$manifest.settings.archiveFolder }  else { "_archive" }))
-$logDir    = Resolve-RootChildPath -Root $root -RelativePath ($(if ($manifest.settings.logFolder)      { [string]$manifest.settings.logFolder }      else { "_logs" }))
+$logDir    = Resolve-ForgerEMSUsbRawLogDirectory -Root $root
 $timeout   = [int]($(if ($manifest.settings.timeoutSec) { $manifest.settings.timeoutSec } else { 180 }))
 $userAgent = $(if ($manifest.settings.userAgent) { [string]$manifest.settings.userAgent } else { "ForgerEMS-Updater/3.1" })
 $maxKeep   = [int]($(if ($manifest.settings.maxArchivePerItem) { $manifest.settings.maxArchivePerItem } else { 3 }))
 $retries   = [int]($(if ($manifest.settings.retryCount) { $manifest.settings.retryCount } else { 3 }))
 
-Ensure-Dir -Path $dlDir
 Ensure-Dir -Path $logDir
-if (-not $NoArchive) {
-    Ensure-Dir -Path $arcDir
-}
+Ensure-Dir -Path (Resolve-RootChildPath -Root $root -RelativePath "_logs")
 
 $script:LogFile = Join-Path $logDir ("update_" + (Get-Date -Format "yyyyMMdd_HHmmss") + ".log")
 
@@ -1700,18 +2205,155 @@ Write-Log ("Ventoy core: {0} {1} ({2})" -f $(if ($manifest.coreName) { [string]$
 Write-Log ("Release: " + $(if ($manifest.releaseType) { ([string]$manifest.releaseType).Trim().ToLowerInvariant() } else { "dev" })) "INFO"
 Write-Log "Root: $root" "INFO"
 Write-Log "Manifest: $manifestPath" "INFO"
+try {
+    $manifestHash = Get-ForgerSha256 -LiteralPath $manifestPath
+    $manifestTotalItems = @($manifest.items).Count
+    $manifestFileItems = @($manifest.items | Where-Object { ([string]$(if ($_.type) { $_.type } else { "file" })).Trim().ToLowerInvariant() -eq "file" }).Count
+    Write-Log ("Manifest SHA256: {0}" -f $manifestHash) "INFO"
+    Write-Log ("Manifest items: total={0} file-type={1}" -f $manifestTotalItems, $manifestFileItems) "INFO"
+}
+catch {
+    Write-Log ("Could not summarize manifest: {0}" -f $_.Exception.Message) "WARN"
+}
 Write-Log "Force=$Force VerifyOnly=$VerifyOnly NoArchive=$NoArchive" "INFO"
 
 if (-not $manifest.items) {
     throw "Manifest has no items."
 }
 
-$orderedItems = @($manifest.items) | Sort-Object `
-    @{ Expression = { Get-ManifestItemExecutionOrder -Item $_ } }, `
-    @{ Expression = { ([string]$(if ($_.dest) { $_.dest } else { "" })).Trim() } }, `
-    @{ Expression = { ([string]$(if ($_.name) { $_.name } else { "" })).Trim() } }
+$builderCategorySet = New-UsbBuilderCategorySet -CategoryIds $IncludedCategories
+$builderCategoriesText = (($builderCategorySet.Keys | Sort-Object) -join ", ")
+Write-Log "USB Builder profile categories included: $builderCategoriesText" "INFO"
+Write-Log "Unchecked categories are skipped for this run only; existing USB files are not deleted." "INFO"
 
-$activeManagedPlaceholderPlan = Get-ActiveManagedPlaceholderPlan -Items $orderedItems
+function Invoke-ManifestExtras {
+    param(
+        [Parameter(Mandatory)]$Manifest,
+        [Parameter(Mandatory)][string]$Root,
+        [Parameter(Mandatory)]$IncludedCategorySet,
+        [switch]$Force
+    )
+
+    $extras = $Manifest.extras
+    if ($null -eq $extras) {
+        return
+    }
+
+    Write-Log "Manifest extras phase started." "INFO"
+
+    $seedDirs = @()
+    if ($extras.PSObject.Properties.Name -contains 'seedDirectories') {
+        $seedDirs = @($extras.seedDirectories | Where-Object {
+                -not [string]::IsNullOrWhiteSpace([string]$_) -and
+                (Test-UsbBuilderCategoryIncluded -CategorySet $IncludedCategorySet -Entry $null -RelativePath ([string]$_))
+            })
+    }
+    foreach ($relDir in $seedDirs) {
+        $rel = ([string]$relDir).Trim()
+        if ([string]::IsNullOrWhiteSpace($rel)) { continue }
+        $fullDir = Resolve-RootChildPath -Root $Root -RelativePath $rel
+        if (Test-Path -LiteralPath $fullDir -PathType Container) {
+            Write-Log "Extras: directory exists, skipping: $rel" "INFO"
+            $script:Summary.ExtrasDirsSkipped++
+            continue
+        }
+        if ($PSCmdlet.ShouldProcess($fullDir, "Create manual-ISO drop directory")) {
+            New-Item -ItemType Directory -Path $fullDir -Force | Out-Null
+            Write-Log "Extras: created directory: $rel" "OK"
+            $script:Summary.ExtrasDirsCreated++
+        }
+        else {
+            Write-Log "Extras: would create directory: $rel" "INFO"
+        }
+    }
+
+    $readmes = @()
+    if ($extras.PSObject.Properties.Name -contains 'readmes') {
+        $readmes = @($extras.readmes | Where-Object {
+                $null -ne $_ -and
+                -not [string]::IsNullOrWhiteSpace([string]$_.dest) -and
+                (Test-UsbBuilderCategoryIncluded -CategorySet $IncludedCategorySet -Entry $_ -RelativePath ([string]$_.dest))
+            })
+    }
+    foreach ($readme in $readmes) {
+        $dest = ([string]$readme.dest).Trim()
+        if ([string]::IsNullOrWhiteSpace($dest)) { continue }
+        # Never let extras pretend to be ISOs or executables.
+        $extension = [IO.Path]::GetExtension($dest)
+        if (-not [string]::Equals($extension, ".txt", [System.StringComparison]::OrdinalIgnoreCase) -and
+            -not [string]::Equals($extension, ".md", [System.StringComparison]::OrdinalIgnoreCase)) {
+            Write-Log "Extras: refusing to write non-text README dest: $dest" "WARN"
+            continue
+        }
+
+        $fullPath = Resolve-RootChildPath -Root $Root -RelativePath $dest
+        $parent = Split-Path -Parent $fullPath
+        if (-not (Test-Path -LiteralPath $parent -PathType Container)) {
+            if ($PSCmdlet.ShouldProcess($parent, "Create parent directory for README")) {
+                New-Item -ItemType Directory -Path $parent -Force | Out-Null
+            }
+        }
+
+        $bodyLines = @()
+        if ($readme.PSObject.Properties.Name -contains 'body') {
+            $rawBody = $readme.body
+            if ($rawBody -is [System.Array] -or $rawBody -is [System.Collections.IEnumerable] -and -not ($rawBody -is [string])) {
+                $bodyLines = @($rawBody | ForEach-Object { [string]$_ })
+            }
+            else {
+                $bodyLines = @([string]$rawBody)
+            }
+        }
+        $bodyText = ($bodyLines -join [System.Environment]::NewLine)
+
+        if ((Test-Path -LiteralPath $fullPath -PathType Leaf) -and -not $Force) {
+            Write-Log "Extras: README exists, skipping (use -Force to overwrite): $dest" "INFO"
+            $script:Summary.ExtrasReadmesSkipped++
+            continue
+        }
+
+        if ($PSCmdlet.ShouldProcess($fullPath, "Write README")) {
+            [System.IO.File]::WriteAllText($fullPath, $bodyText, [System.Text.UTF8Encoding]::new($false))
+            Write-Log "Extras: wrote README: $dest" "OK"
+            $script:Summary.ExtrasReadmesCreated++
+        }
+        else {
+            Write-Log "Extras: would write README: $dest" "INFO"
+        }
+    }
+
+    Write-Log ("Extras summary: dirs created={0} skipped={1}, readmes created={2} skipped={3}" -f `
+        $script:Summary.ExtrasDirsCreated, $script:Summary.ExtrasDirsSkipped, `
+        $script:Summary.ExtrasReadmesCreated, $script:Summary.ExtrasReadmesSkipped) "INFO"
+}
+
+Invoke-TimedReleasePhase -Name "Manifest extras processing" -ScriptBlock {
+    Invoke-ManifestExtras -Manifest $manifest -Root $root -IncludedCategorySet $builderCategorySet -Force:$Force
+}
+
+$profileItems = @(Invoke-TimedReleasePhase -Name "USB Builder profile item filtering" -ScriptBlock {
+    $manifest.items | Where-Object {
+        Test-UsbBuilderCategoryIncluded -CategorySet $builderCategorySet -Entry $_
+    }
+})
+$skippedByProfileCount = @($manifest.items).Count - $profileItems.Count
+Write-Log "Manifest items selected by USB Builder profile: $($profileItems.Count)" "INFO"
+Write-Log "Manifest items skipped by USB Builder profile: $skippedByProfileCount" "INFO"
+
+$orderedItems = @(Invoke-TimedReleasePhase -Name "Manifest managed item ordering" -ScriptBlock {
+    $profileItems | Sort-Object `
+        @{ Expression = { Get-ManifestItemExecutionOrder -Item $_ } }, `
+        @{ Expression = { ([string]$(if ($_.dest) { $_.dest } else { "" })).Trim() } }, `
+        @{ Expression = { ([string]$(if ($_.name) { $_.name } else { "" })).Trim() } }
+})
+
+$script:NormalizeManifestMatchTextCallCount = 0
+$script:ManagedPlaceholderShadowMatchCallCount = 0
+$activeManagedPlaceholderPlan = Invoke-TimedReleasePhase -Name "Get-ActiveManagedPlaceholderPlan" -ScriptBlock {
+    Get-ActiveManagedPlaceholderPlan -Items $orderedItems
+}
+Write-Log ("Placeholder planner counters: Normalize-ManifestMatchText={0}, Test-ManagedPlaceholderShadowMatch={1}" -f `
+    $script:NormalizeManifestMatchTextCallCount, $script:ManagedPlaceholderShadowMatchCallCount) "INFO"
 
 $enabledManagedFileItems = @(
     $orderedItems | Where-Object {
@@ -1755,13 +2397,19 @@ foreach ($queuedPlaceholder in $enabledPlaceholderItems) {
     Write-Log "Queued placeholder item: $queuedName -> $queuedDest" "INFO"
 }
 
+$managedItemLoopStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+Write-ProgressLog ("Managed item loop start count={0}" -f @($orderedItems).Count)
+$managedItemLoopIndex = 0
 foreach ($item in $orderedItems) {
+    $managedItemLoopIndex++
     $script:Summary.Total++
 
     $name = ([string]$item.name).Trim()
     $type = ([string]$(if ($item.type) { $item.type } else { "file" })).Trim().ToLowerInvariant()
     $url  = ([string]$item.url).Trim()
     $destRel = ([string]$item.dest).Trim()
+    Write-ProgressLog ("Managed item loop item {0}/{1}: type={2} name='{3}' dest='{4}'" -f `
+        $managedItemLoopIndex, @($orderedItems).Count, $type, $name, $destRel)
     $enabled = $true
     if ($null -ne $item.enabled) { $enabled = [bool]$item.enabled }
 
@@ -1837,8 +2485,14 @@ foreach ($item in $orderedItems) {
         try {
             Write-UrlShortcut -ShortcutPath $dest -Url $url
             Write-Log "Shortcut updated: $destRel" "OK"
+            # v1.2.3-preview.1: track manual/vendor shortcut writes via Summary.Shortcut only.
+            # The legacy double-bump of Summary.PlaceholderOnly here caused the misleading
+            # "Placeholder-only / skipped manifest lines: $total" counter where the value would
+            # match the total manifest count when every item shipped a shortcut. PlaceholderOnly
+            # is now reserved for items that were genuinely skipped/placeholder, not for the
+            # successful manual/vendor shortcut writes that Toolkit Manager surfaces under the
+            # "Manual / Vendor links" chip.
             $script:Summary.Shortcut++
-            $script:Summary.PlaceholderOnly++
         }
         catch {
             Write-Log "Shortcut write failed: $($_.Exception.Message)" "ERROR"
@@ -1857,15 +2511,29 @@ foreach ($item in $orderedItems) {
     $preferredFallbackShortcutPath = Get-PreferredFallbackShortcutPath -Root $root -ManagedDestination $destRel -ManagedPlaceholderPlan $activeManagedPlaceholderPlan
     $sha = ([string]$item.sha256).Trim().ToLowerInvariant()
     $shaUrl = ([string]$item.sha256Url).Trim()
+    $sha512 = ([string]$item.sha512).Trim().ToLowerInvariant()
+    $sha512Url = ([string]$item.sha512Url).Trim()
+    $checksumAlgorithm = if ($sha) { "SHA256" } elseif ($sha512) { "SHA512" } elseif ($shaUrl) { "SHA256" } elseif ($sha512Url) { "SHA512" } else { "" }
+    $expectedChecksum = if ($checksumAlgorithm -eq "SHA512") { $sha512 } else { $sha }
+    $checksumUrl = if ($checksumAlgorithm -eq "SHA512") { $sha512Url } else { $shaUrl }
     $shaResult = $null
 
-    if (-not $sha -and $shaUrl -and ($VerifyOnly -or -not $WhatIfPreference)) {
-        Write-Log "Checksum source URL: $shaUrl" "INFO"
+    $targetFileName = ""
+    try { $targetFileName = [IO.Path]::GetFileName($destRel) } catch { $targetFileName = "" }
+
+    if (-not $expectedChecksum -and $checksumUrl -and ($VerifyOnly -or -not $WhatIfPreference)) {
+        Write-Log "$checksumAlgorithm checksum source URL: $checksumUrl" "INFO"
         try {
-            $shaResult = Get-ShaFromUrl -ShaUrl $shaUrl -TimeoutSec $itemTimeout -UserAgent $userAgent
-            $sha = ([string]$shaResult.Sha256).Trim().ToLowerInvariant()
-            if ($sha) {
+            $shaResult = Get-ShaFromUrl -ShaUrl $checksumUrl -Algorithm $checksumAlgorithm -TargetFileName $targetFileName -TimeoutSec $itemTimeout -UserAgent $userAgent
+            $expectedChecksum = if ($checksumAlgorithm -eq "SHA512") {
+                ([string]$shaResult.Sha512).Trim().ToLowerInvariant()
+            }
+            else {
+                ([string]$shaResult.Sha256).Trim().ToLowerInvariant()
+            }
+            if ($expectedChecksum) {
                 Write-Log "Checksum source resolved via $($shaResult.Method)." "OK"
+                Write-Log "Checksum resolver: algorithm=$checksumAlgorithm reason=$($shaResult.ResolverReason) format=$($shaResult.ResolverFormat) candidates=$($shaResult.ResolverCandidates)" "INFO"
                 if (-not [string]::IsNullOrWhiteSpace([string]$shaResult.StatusCode)) {
                     Write-Log (("Checksum source HTTP status: $($shaResult.StatusCode) $($shaResult.ReasonPhrase)").TrimEnd()) "INFO"
                 }
@@ -1873,12 +2541,13 @@ foreach ($item in $orderedItems) {
                     Write-Log "Checksum source final URL: $($shaResult.FinalUri)" "INFO"
                     Write-Log "Resolved checksum source URL: $($shaResult.FinalUri)" "INFO"
                 }
-                Write-Log "Fetched SHA256 from sha256Url: $sha" "OK"
+                Write-Log "Fetched $checksumAlgorithm from checksum URL: $expectedChecksum" "OK"
             }
             else {
-                Write-Log "sha256Url was provided but no valid hash was parsed." "WARN"
+                Write-Log "$checksumAlgorithm checksum URL was provided but no valid hash was parsed." "WARN"
                 if ($shaResult) {
                     Write-Log "Checksum source method result: $($shaResult.Method)" "INFO"
+                    Write-Log "Checksum resolver: algorithm=$checksumAlgorithm reason=$($shaResult.ResolverReason) format=$($shaResult.ResolverFormat) candidates=$($shaResult.ResolverCandidates)" "INFO"
                     if (-not [string]::IsNullOrWhiteSpace([string]$shaResult.StatusCode)) {
                         Write-Log (("Checksum source HTTP status: $($shaResult.StatusCode) $($shaResult.ReasonPhrase)").TrimEnd()) "INFO"
                     }
@@ -1890,20 +2559,20 @@ foreach ($item in $orderedItems) {
             }
         }
         catch {
-            Write-Log "Failed fetching sha256Url: $(Get-ExceptionDiagnostic -ErrorRecord $_)" "WARN"
+            Write-Log "Failed fetching checksum URL: $(Get-ExceptionDiagnostic -ErrorRecord $_)" "WARN"
         }
     }
-    elseif (-not $sha -and $shaUrl -and $WhatIfPreference) {
-        Write-Log "Checksum source URL: $shaUrl" "INFO"
-        Write-Log "WhatIf: would fetch SHA256 from sha256Url during a real run." "INFO"
+    elseif (-not $expectedChecksum -and $checksumUrl -and $WhatIfPreference) {
+        Write-Log "$checksumAlgorithm checksum source URL: $checksumUrl" "INFO"
+        Write-Log "WhatIf: would fetch $checksumAlgorithm from checksum URL during a real run." "INFO"
     }
-    elseif ($sha) {
-        Write-Log "Pinned SHA256 from manifest: $sha" "INFO"
-        if ($shaUrl) {
-            Write-Log "Checksum source URL available for maintenance: $shaUrl" "INFO"
+    elseif ($expectedChecksum) {
+        Write-Log "Pinned $checksumAlgorithm from manifest: $expectedChecksum" "INFO"
+        if ($checksumUrl) {
+            Write-Log "Checksum source URL available for maintenance: $checksumUrl" "INFO"
         }
         else {
-            Write-Log "Checksum source URL: not provided (using pinned manifest SHA256 only)." "INFO"
+            Write-Log "Checksum source URL: not provided (using pinned manifest $checksumAlgorithm only)." "INFO"
         }
     }
 
@@ -1914,23 +2583,23 @@ foreach ($item in $orderedItems) {
             continue
         }
 
-        if ($sha) {
-            $cur = Get-Sha256 -Path $dest
-            Write-Log "Checksum expected vs actual: expected=$sha actual=$cur" "INFO"
-            if ($cur -eq $sha) {
-                Write-Log "Verified OK (sha256 match)." "OK"
+        if ($expectedChecksum) {
+            $cur = if ($checksumAlgorithm -eq "SHA512") { Get-Sha512 -Path $dest } else { Get-Sha256 -Path $dest }
+            Write-Log "Checksum expected vs actual: algorithm=$checksumAlgorithm expected=$expectedChecksum actual=$cur" "INFO"
+            if ($cur -eq $expectedChecksum) {
+                Write-Log "Verified OK ($checksumAlgorithm match)." "OK"
                 Write-Log "Checksum verified: $cur" "OK"
                 Write-Log "Destination state after verify: $(Get-FileStateDescription -Path $dest)" "INFO"
                 $script:Summary.Verified++
                 $script:Summary.UpToDateSkipped++
             }
             else {
-                Write-Log "Verify failed: sha256 mismatch. Expected=$sha Got=$cur" "ERROR"
+                Write-Log "Verify failed: $checksumAlgorithm mismatch. Expected=$expectedChecksum Got=$cur" "ERROR"
                 $script:Summary.Failed++
             }
         }
         else {
-            Write-Log "No sha256 provided; cannot verify '$name'." "WARN"
+            Write-Log "No supported checksum provided; cannot verify '$name'." "WARN"
             $script:Summary.Skipped++
         }
 
@@ -1939,20 +2608,20 @@ foreach ($item in $orderedItems) {
 
     if ($WhatIfPreference) {
         if (-not $Force -and (Test-Path -LiteralPath $dest)) {
-            if ($sha) {
-                Write-Log "WhatIf: destination exists; would calculate SHA256 and skip if it already matches." "INFO"
+            if ($expectedChecksum) {
+                Write-Log "WhatIf: destination exists; would calculate $checksumAlgorithm and skip if it already matches." "INFO"
             }
             else {
-                Write-Log "Destination exists and no sha256 is provided. Would skip to avoid blind overwrite." "WARN"
+                Write-Log "Destination exists and no supported checksum is provided. Would skip to avoid blind overwrite." "WARN"
                 $script:Summary.Skipped++
                 continue
             }
         }
     }
-    elseif (-not $Force -and $sha -and (Test-Path -LiteralPath $dest)) {
-        $cur = Get-Sha256 -Path $dest
-        if ($cur -eq $sha) {
-            Write-Log "Up-to-date (sha256 match). Skipping." "OK"
+    elseif (-not $Force -and $expectedChecksum -and (Test-Path -LiteralPath $dest)) {
+        $cur = if ($checksumAlgorithm -eq "SHA512") { Get-Sha512 -Path $dest } else { Get-Sha256 -Path $dest }
+        if ($cur -eq $expectedChecksum) {
+            Write-Log "Up-to-date ($checksumAlgorithm match). Skipping." "OK"
             [void](Remove-ManagedSuccessPlaceholders -Root $root -ManagedDestination $destRel -ManagedPlaceholderPlan $activeManagedPlaceholderPlan)
             $script:Summary.Verified++
             $script:Summary.Skipped++
@@ -1960,8 +2629,8 @@ foreach ($item in $orderedItems) {
             continue
         }
     }
-    elseif (-not $Force -and -not $sha -and (Test-Path -LiteralPath $dest)) {
-        Write-Log "Destination exists and no sha256 is provided. Skipping to avoid blind overwrite." "WARN"
+    elseif (-not $Force -and -not $expectedChecksum -and (Test-Path -LiteralPath $dest)) {
+        Write-Log "Destination exists and no supported checksum is provided. Skipping to avoid blind overwrite." "WARN"
         $script:Summary.Skipped++
         continue
     }
@@ -1973,6 +2642,7 @@ foreach ($item in $orderedItems) {
     }
 
     $tmpName = Safe-FileName -Text $name
+    Ensure-Dir -Path $dlDir
     $tmpPath = Join-Path $dlDir ($tmpName + ".download")
     $downloadResult = $null
 
@@ -2022,18 +2692,18 @@ foreach ($item in $orderedItems) {
 
     try {
         $verifiedHash = $null
-        if ($sha) {
-            $verifiedHash = Get-Sha256 -Path $tmpPath
-            Write-Log "Checksum expected vs actual: expected=$sha actual=$verifiedHash" "INFO"
-            if ($verifiedHash -ne $sha) {
-                throw "SHA256 mismatch. Expected=$sha Got=$verifiedHash"
+        if ($expectedChecksum) {
+            $verifiedHash = if ($checksumAlgorithm -eq "SHA512") { Get-Sha512 -Path $tmpPath } else { Get-Sha256 -Path $tmpPath }
+            Write-Log "Checksum expected vs actual: algorithm=$checksumAlgorithm expected=$expectedChecksum actual=$verifiedHash" "INFO"
+            if ($verifiedHash -ne $expectedChecksum) {
+                throw "$checksumAlgorithm mismatch. Expected=$expectedChecksum Got=$verifiedHash"
             }
             Write-Log "Checksum verification passed: $name" "OK"
             Write-Log "Checksum verified: $verifiedHash" "OK"
             $script:Summary.Verified++
         }
         else {
-            Write-Log "Checksum verification skipped: no sha256 set for '$name' (recommended for important ISOs/tools)." "WARN"
+            Write-Log "Checksum verification skipped: no supported checksum set for '$name' (recommended for important ISOs/tools)." "WARN"
         }
 
         if (-not $NoArchive -and $archiveItem -and (Test-Path -LiteralPath $dest)) {
@@ -2048,8 +2718,8 @@ foreach ($item in $orderedItems) {
 
         Write-Log "Final file written: $dest" "OK"
         Write-Log "Final destination write result: success -> $(Get-FileStateDescription -Path $dest)" "INFO"
-        if ($sha) {
-            Write-Log "Verified payload ready at destination with expected SHA256: $sha" "OK"
+        if ($expectedChecksum) {
+            Write-Log "Verified payload ready at destination with expected ${checksumAlgorithm}: $expectedChecksum" "OK"
         }
         [void](Remove-ManagedSuccessPlaceholders -Root $root -ManagedDestination $destRel -ManagedPlaceholderPlan $activeManagedPlaceholderPlan)
         Write-Log "Updated: $name" "OK"
@@ -2085,6 +2755,9 @@ foreach ($item in $orderedItems) {
         Write-Log "Staged file existence and size after cleanup: $(Get-FileStateDescription -Path $tmpPath)" "INFO"
     }
 }
+$managedItemLoopStopwatch.Stop()
+Write-ProgressLog ("Managed item loop end elapsedMs={0:n0}" -f $managedItemLoopStopwatch.Elapsed.TotalMilliseconds)
+Write-Log ("Timing: Managed item loop completed in {0:n0} ms" -f $managedItemLoopStopwatch.Elapsed.TotalMilliseconds) "INFO"
 
 $skippedOrPlaceholderOnly = $script:Summary.Skipped + $script:Summary.PlaceholderOnly
 $finalFailureMessage = $null
@@ -2094,21 +2767,33 @@ Write-Log "Total manifest items: $($script:Summary.Total)" "INFO"
 Write-Log "Managed downloads selected (auto): $($script:Summary.ManagedFileItems)" "INFO"
 Write-Log "Managed downloads completed (written/updated): $($script:Summary.Downloaded)" "INFO"
 Write-Log "Managed downloads failed with fallback shortcut: $($script:Summary.FailedWithFallback)" "INFO"
-Write-Log "Manual/info shortcut items (expected, not failed downloads): $($script:Summary.PlaceholderItems)" "INFO"
+# v1.2.3-preview.1: "Manual/info shortcut" was renamed to "Manual/vendor shortcut" so the log
+# matches the Toolkit Manager "Manual / Vendor links" chip and Profile card wording. These are
+# OEM support pages, model-specific drivers, firmware lookup, and licensed/manual tools — not
+# failed managed downloads.
+Write-Log "Manual/vendor shortcut items in manifest (expected, not failed downloads): $($script:Summary.PlaceholderItems)" "INFO"
+Write-Log "Manual/vendor shortcuts updated on USB: $($script:Summary.Shortcut)" "INFO"
+Write-Log "Manual/vendor shortcuts reused (already current): $($script:Summary.FallbackShortcutsReused)" "INFO"
 Write-Log "Verified successfully: $($script:Summary.Verified)" "INFO"
-Write-Log "Placeholder-only / skipped manifest lines: $skippedOrPlaceholderOnly" "INFO"
-Write-Log "Fallback shortcuts created: $($script:Summary.FallbackShortcutsCreated)" "INFO"
-Write-Log "Fallback shortcuts reused: $($script:Summary.FallbackShortcutsReused)" "INFO"
+# Truly skipped/placeholder items: manifest lines that did not produce a managed download AND
+# did not write a manual/vendor shortcut (covered by managed, disabled, etc). This is no longer
+# double-counted against successful shortcut writes.
+Write-Log "Truly skipped / placeholder-only manifest lines: $skippedOrPlaceholderOnly" "INFO"
+Write-Log "Fallback shortcuts created (managed failure -> shortcut): $($script:Summary.FallbackShortcutsCreated)" "INFO"
 Write-Log "Archived prior files: $($script:Summary.Archived)" "INFO"
 Write-Log "Disabled manifest items: $($script:Summary.Disabled)" "INFO"
 Write-Log "Total failed managed items: $($script:Summary.Failed)" "INFO"
 
 Write-Log "--- ACTION SUMMARY ---" "OK"
-Write-Log ("Items downloaded: $($script:Summary.Downloaded)") "OK"
+Write-Log ("Managed tools ready: $($script:Summary.Downloaded + $script:Summary.UpToDateSkipped)") "OK"
+Write-Log ("Items downloaded this run: $($script:Summary.Downloaded)") "OK"
 Write-Log ("Items already up to date: $($script:Summary.UpToDateSkipped)") "OK"
-Write-Log ("Shortcuts updated: $($script:Summary.Shortcut)") "OK"
+Write-Log ("Manual/vendor shortcuts updated: $($script:Summary.Shortcut)") "OK"
+Write-Log ("Manual/vendor shortcuts reused: $($script:Summary.FallbackShortcutsReused)") "OK"
+Write-Log ("Optional manual/vendor links are available in Toolkit Manager (Manual / Vendor links chip) and on the USB.") "OK"
+Write-Log ("Review manual/vendor links for model-specific drivers, OEM support, firmware lookup, and licensed tools.") "OK"
 Write-Log ("Failures: $($script:Summary.Failed)") $(if ($script:Summary.Failed -gt 0) { "WARN" } else { "OK" })
-Write-Log ("Warnings: $($script:Summary.WarnEvents)") $(if ($script:Summary.WarnEvents -gt 0) { "WARN" } else { "OK" })
+Write-Log ("Warnings: $($script:Summary.WarnEvents)") "INFO"
 $actionUsbReadiness = if ($script:Summary.Failed -eq 0) {
     "READY"
 }
@@ -2130,7 +2815,7 @@ else {
 Write-Log ("USB readiness: $actionUsbReadiness") $actionReadinessLevel
 
 if ($script:Summary.Failed -gt 0) {
-    Write-Log "USB readiness: PARTIALLY STAGED - USB layout is present; one or more managed downloads need attention. Manual/info shortcuts above are normal and are not failed downloads." "WARN"
+    Write-Log "USB readiness: PARTIALLY STAGED - USB layout is present; one or more managed downloads need attention. Manual/vendor shortcuts above are normal and are not failed downloads." "WARN"
     Write-Log "------ FAILED MANAGED ITEMS (DETAIL) ------" "WARN"
     if ($script:ManagedFailureLines.Count -gt 0) {
         foreach ($line in $script:ManagedFailureLines) {
@@ -2178,7 +2863,20 @@ if ($script:Summary.Failed -gt 0) {
 if ($finalFailureMessage) {
     $managedResultReadiness = "FAILED"
 }
+Write-ProgressLog ("summary written: readiness={0} failed={1} warnings={2}" -f `
+    $managedResultReadiness, $script:Summary.Failed, $script:Summary.WarnEvents)
 Write-ForgerEmsManagedDownloadResultJson -RootPath $root -Readiness $managedResultReadiness
+
+try {
+    $usbManifestCopy = Resolve-ForgerEMSUsbMetadataPath -Root $root -FileName "ForgerEMS.updates.json"
+    if ($PSCmdlet.ShouldProcess($usbManifestCopy, "Refresh USB manifest metadata copy")) {
+        Copy-Item -LiteralPath $manifestPath -Destination $usbManifestCopy -Force
+        Write-Log "USB manifest metadata refreshed: $usbManifestCopy" "OK"
+    }
+}
+catch {
+    Write-Log ("Could not refresh USB manifest metadata copy: {0}" -f $_.Exception.Message) "INFO"
+}
 
 if ($finalFailureMessage) {
     throw $finalFailureMessage

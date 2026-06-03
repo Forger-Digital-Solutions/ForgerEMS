@@ -54,4 +54,49 @@ public static class ToolkitDisplayClassification
 
         return "Other / Review";
     }
+
+    /// <summary>
+    /// Catalog-aware classification tag, surfaced from manifest metadata.
+    /// Returns one of the technician-facing chip labels ("Legacy / Lab Only", "Paid - vendor licence",
+    /// "Manual ISO Required", "Community source", "Official source") or null when none apply.
+    /// Falls through to <see cref="BuildNormalizedLabel(string,string,string)"/> when the catalog has no
+    /// metadata for the entry — preserves behaviour for legacy reports.
+    /// </summary>
+    public static string? BuildCatalogStatusTag(
+        string? legacyWarning,
+        string? licenseNote,
+        bool manualOnly,
+        string? type,
+        string? sourceTrust)
+    {
+        if (!string.IsNullOrWhiteSpace(legacyWarning))
+        {
+            return "Legacy / Lab Only";
+        }
+
+        if (!string.IsNullOrWhiteSpace(licenseNote) &&
+            licenseNote.Contains("Paid", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Paid - vendor licence";
+        }
+
+        var normalizedType = (type ?? string.Empty).Trim();
+        if (manualOnly || string.Equals(normalizedType, "manualDownload", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Manual ISO Required";
+        }
+
+        var normalizedTrust = (sourceTrust ?? string.Empty).Trim();
+        if (string.Equals(normalizedTrust, "community", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Community source";
+        }
+
+        if (string.Equals(normalizedTrust, "official", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Official source";
+        }
+
+        return null;
+    }
 }

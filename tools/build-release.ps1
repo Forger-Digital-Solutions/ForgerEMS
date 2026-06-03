@@ -48,12 +48,6 @@ $installerScript = Join-Path $repoRoot "installer\ForgerEMS.iss"
 $manifestRoot = Join-Path $repoRoot "manifests"
 $distRoot = Join-Path $repoRoot "dist"
 $runtimeHelperPath = Join-Path $repoRoot "backend\ForgerEMS.Runtime.ps1"
-if (Test-Path -LiteralPath $runtimeHelperPath) {
-    . $runtimeHelperPath
-}
-else {
-    throw "ForgerEMS runtime helper was not found. Checked: $runtimeHelperPath"
-}
 
 function Write-Step {
     param([Parameter(Mandatory)][string]$Message)
@@ -436,17 +430,34 @@ $checksumsPath = Join-Path $releaseRoot "CHECKSUMS.sha256"
 $installerOutputDir = Join-Path $distRoot "installer"
 $installerReleaseName = "ForgerEMS-Setup-v{0}.exe" -f $Version
 $installerReleasePath = Join-Path $releaseRoot $installerReleaseName
-$displayVersionLabel = "ForgerEMS v1.2.1 Public Preview"
-$releaseIdentifierLabel = "ForgerEMS v1.2.1 Public Preview - package $Version (ZIP-first technician bundle)"
+$displayVersionLabel = "ForgerEMS v1.2.3 Public Preview"
+$releaseIdentifierLabel = "ForgerEMS v1.2.3 Public Preview - package $Version (ZIP-first technician bundle)"
+
+$buildTempRoot = Join-Path $distRoot "tmp"
+Ensure-Dir -Path $buildTempRoot
+$env:TEMP = $buildTempRoot
+$env:TMP = $buildTempRoot
 
 Write-Step "Release version: $Version"
 Write-Step "Restoring solution"
-dotnet restore $solutionPath
-if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed with exit code $LASTEXITCODE." }
+Push-Location $repoRoot
+try {
+    dotnet restore ".\ForgerEMS.sln" --disable-parallel
+    if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed with exit code $LASTEXITCODE." }
+}
+finally {
+    Pop-Location
+}
 
 Write-Step "Building solution"
-dotnet build $solutionPath -c $Configuration --no-restore
-if ($LASTEXITCODE -ne 0) { throw "dotnet build failed with exit code $LASTEXITCODE." }
+Push-Location $repoRoot
+try {
+    dotnet build ".\ForgerEMS.sln" -c $Configuration --no-restore
+    if ($LASTEXITCODE -ne 0) { throw "dotnet build failed with exit code $LASTEXITCODE." }
+}
+finally {
+    Pop-Location
+}
 
 Write-Step "Publishing WPF app"
 dotnet publish $projectPath -c $Configuration -r $Runtime --self-contained true /p:PublishSingleFile=true /p:Version=$Version /p:InformationalVersion=$Version /p:PublishDir="$publishDir\"
@@ -528,6 +539,13 @@ if (Test-Path -LiteralPath $betaReadmePath) {
 }
 
 $releaseJsonPath = Join-Path $releaseRoot "release.json"
+
+if (Test-Path -LiteralPath $runtimeHelperPath) {
+    . $runtimeHelperPath
+}
+else {
+    throw "ForgerEMS runtime helper was not found. Checked: $runtimeHelperPath"
+}
 
 if ($DryRun -or $SkipInstaller) {
     Write-Step "Generating SHA256 checksums"

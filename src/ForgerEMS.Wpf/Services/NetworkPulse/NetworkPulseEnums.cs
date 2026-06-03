@@ -5,6 +5,7 @@ public enum NetworkPulseStatus
     Good,
     Slow,
     Unstable,
+    Limited,
     Offline,
     Unknown,
     Testing,

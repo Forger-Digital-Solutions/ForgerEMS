@@ -65,7 +65,7 @@ Full variable details are maintained in [ENVIRONMENT.md](ENVIRONMENT.md). Summar
 | GitHub Releases update checker | Active | none by default | Yes, public GitHub metadata request | N/A | No account/token required for public releases. |
 | eBay/marketplace providers | Shell/future/disabled | future eBay credentials | Future only | Yes | Offline FlipValue heuristic remains. |
 | Facebook/OfferUp marketplace | Manual/future only | none active | No active integration found | Yes | Do not assume public APIs. |
-| LibreHardwareMonitor Deep Sensor Provider | Optional bundled local provider | Deep Sensor Mode `ReadOnly` | No | Windows Native provider | Local read-only hardware sensors only. |
+| LibreHardwareMonitor Deep Sensor Provider | Optional bundled local provider | Deep Sensor Mode `ReadOnly` | No | Forger Sensor Core | Local read-only hardware sensors only. |
 
 ## 5. External Network Access
 

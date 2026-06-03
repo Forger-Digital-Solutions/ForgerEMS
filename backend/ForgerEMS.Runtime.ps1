@@ -163,10 +163,159 @@ function Get-ForgerSha256 {
     }
 }
 
+function Get-ForgerSha512 {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$LiteralPath,
+        [switch]$ForceDotNetFallback
+    )
+
+    if (-not (Test-Path -LiteralPath $LiteralPath -PathType Leaf)) {
+        throw "Cannot calculate SHA512 for missing file: $(Get-ForgerSafePathForLog -Path $LiteralPath)"
+    }
+
+    $forceFallbackFromEnvironment =
+        [string]::Equals($env:FORGEREMS_FORCE_DOTNET_HASH, "1", [System.StringComparison]::OrdinalIgnoreCase) -or
+        [string]::Equals($env:FORGEREMS_FORCE_DOTNET_HASH, "true", [System.StringComparison]::OrdinalIgnoreCase)
+
+    if (-not ($ForceDotNetFallback -or $forceFallbackFromEnvironment)) {
+        $getFileHashCommand = Get-Command -Name Get-FileHash -CommandType Cmdlet -ErrorAction SilentlyContinue
+        if (-not $getFileHashCommand) {
+            try {
+                Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
+            }
+            catch {
+                $getFileHashCommand = $null
+            }
+
+            $getFileHashCommand = Get-Command -Name Get-FileHash -CommandType Cmdlet -ErrorAction SilentlyContinue
+        }
+
+        if ($getFileHashCommand) {
+            try {
+                $fileHash = & $getFileHashCommand -LiteralPath $LiteralPath -Algorithm SHA512 -ErrorAction Stop
+                if ($fileHash -and $fileHash.Hash) {
+                    $script:ForgerLastHashProvider = "Get-FileHash"
+                    return ([string]$fileHash.Hash).ToLowerInvariant()
+                }
+            }
+            catch {
+                $script:ForgerLastHashProvider = "Get-FileHashFailed"
+            }
+        }
+    }
+
+    $stream = $null
+    $sha512 = $null
+    try {
+        $stream = [IO.File]::Open($LiteralPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+        $sha512 = [Security.Cryptography.SHA512]::Create()
+        $hashBytes = $sha512.ComputeHash($stream)
+        $script:ForgerLastHashProvider = "DotNetFallback"
+        return (([BitConverter]::ToString($hashBytes)) -replace '-', '').ToLowerInvariant()
+    }
+    finally {
+        if ($sha512 -ne $null) {
+            $sha512.Dispose()
+        }
+
+        if ($stream -ne $null) {
+            $stream.Dispose()
+        }
+    }
+}
+
 function Get-ForgerLastHashProvider {
     if ([string]::IsNullOrWhiteSpace($script:ForgerLastHashProvider)) {
         return "Unknown"
     }
 
     return $script:ForgerLastHashProvider
+}
+
+function Get-ForgerEMSUsbInternalLayout {
+    param([Parameter(Mandatory)][string]$Root)
+
+    $normalizedRoot = [IO.Path]::GetFullPath($Root).TrimEnd('\')
+    return [PSCustomObject]@{
+        Root           = $normalizedRoot
+        InternalRoot   = Join-Path $normalizedRoot "_forgerems"
+        MetadataRoot   = Join-Path $normalizedRoot "_forgerems\metadata"
+        RawLogsRoot    = Join-Path $normalizedRoot "_forgerems\logs"
+        RawReportsRoot = Join-Path $normalizedRoot "_forgerems\reports"
+        SupportRoot    = Join-Path $normalizedRoot "_forgerems\support"
+        CacheRoot      = Join-Path $normalizedRoot "_forgerems\cache"
+    }
+}
+
+function Ensure-ForgerEMSUsbInternalLayout {
+    param([Parameter(Mandatory)][string]$Root)
+
+    $layout = Get-ForgerEMSUsbInternalLayout -Root $Root
+    foreach ($path in @(
+        $layout.InternalRoot,
+        $layout.MetadataRoot,
+        $layout.RawLogsRoot,
+        $layout.RawReportsRoot,
+        $layout.SupportRoot,
+        $layout.CacheRoot
+    ) | Select-Object -Unique) {
+        if (-not (Test-Path -LiteralPath $path)) {
+            New-Item -ItemType Directory -Path $path -Force | Out-Null
+        }
+    }
+
+    return $layout
+}
+
+function Resolve-ForgerEMSUsbMetadataPath {
+    param(
+        [Parameter(Mandatory)][string]$Root,
+        [Parameter(Mandatory)][string]$FileName
+    )
+
+    $layout = Ensure-ForgerEMSUsbInternalLayout -Root $Root
+    return Join-Path $layout.MetadataRoot $FileName
+}
+
+function Resolve-ForgerEMSUsbManagedDownloadResultPath {
+    param([Parameter(Mandatory)][string]$Root)
+
+    $primary = Resolve-ForgerEMSUsbMetadataPath -Root $Root -FileName "ForgerEMS-managed-download-result.json"
+    if (Test-Path -LiteralPath $primary) {
+        return $primary
+    }
+
+    $legacy = Join-Path ([IO.Path]::GetFullPath($Root).TrimEnd('\')) "ForgerEMS-managed-download-result.json"
+    if (Test-Path -LiteralPath $legacy) {
+        return $legacy
+    }
+
+    return $primary
+}
+
+function Resolve-ForgerEMSUsbManifestSeedPath {
+    param(
+        [Parameter(Mandatory)][string]$Root,
+        [string]$ManifestName = "ForgerEMS.updates.json"
+    )
+
+    $primary = Resolve-ForgerEMSUsbMetadataPath -Root $Root -FileName $ManifestName
+    if (Test-Path -LiteralPath $primary) {
+        return $primary
+    }
+
+    $legacy = Join-Path ([IO.Path]::GetFullPath($Root).TrimEnd('\')) $ManifestName
+    if (Test-Path -LiteralPath $legacy) {
+        return $legacy
+    }
+
+    return $primary
+}
+
+function Resolve-ForgerEMSUsbRawLogDirectory {
+    param([Parameter(Mandatory)][string]$Root)
+
+    $layout = Ensure-ForgerEMSUsbInternalLayout -Root $Root
+    return $layout.RawLogsRoot
 }

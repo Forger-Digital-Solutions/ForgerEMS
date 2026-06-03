@@ -92,6 +92,8 @@ public sealed class UsbBenchmarkHardeningTests
         public void ShowMessage(string title, string message, System.Windows.MessageBoxImage image = System.Windows.MessageBoxImage.Information)
         {
         }
+
+        public int? PickOption(string title, string message, IReadOnlyList<string> options) => options.Count > 0 ? 0 : null;
     }
 
     private static UsbTargetInfo BenchmarkTarget(string deviceModel = "") =>
@@ -376,6 +378,23 @@ public sealed class UsbBenchmarkHardeningTests
         Assert.True(profileResult.ReadIsEstimate);
         Assert.Equal("Read may be cached", profileResult.BenchmarkConfidence);
         Assert.True(profileResult.ConfidenceScore <= 45);
+    }
+
+    [Fact]
+    public void BenchmarkUiMessages_UsesContextAwareCancellationCopy()
+    {
+        Assert.Contains(
+            "another USB action started",
+            UsbBenchmarkUiMessages.BuildUiSummary(UsbBenchmarkResultKind.CancelledByUsbAction, 0, 0),
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "settling",
+            UsbBenchmarkUiMessages.BuildUiSummary(UsbBenchmarkResultKind.SkippedTargetSettling, 0, 0),
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "application closed",
+            UsbBenchmarkUiMessages.BuildUiSummary(UsbBenchmarkResultKind.CancelledByHost, 0, 0),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

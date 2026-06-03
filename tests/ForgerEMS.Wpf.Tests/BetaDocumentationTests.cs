@@ -64,10 +64,47 @@ public sealed class BetaDocumentationTests
     }
 
     [Fact]
+    public void Legal_DocumentsTechnicianAssistScopeAndNoGuaranteedOutcomes()
+    {
+        var text = File.ReadAllText(Path.Combine(RepoRoot, "docs", "LEGAL.md"));
+        Assert.Contains("technician-assist", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not a replacement", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Guaranteed", text, StringComparison.Ordinal);
+        Assert.Contains("data recovery", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("malware removal", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("hardware diagnosis", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("compatibility", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("legal", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Faq_DocumentsTechnicianAssistAndSupportBundlePrivacy()
+    {
+        var text = File.ReadAllText(Path.Combine(RepoRoot, "docs", "FAQ.md"));
+        Assert.Contains("technician-assist", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("review every bundle", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not automatically upload", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Unknown", text, StringComparison.Ordinal);
+        Assert.Contains("NotExposed", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void About_DocumentsTechnicianAssistAndCoverageLimits()
+    {
+        var text = File.ReadAllText(Path.Combine(RepoRoot, "docs", "ABOUT_FORGEREMS.md"));
+        Assert.Contains("technician-assist", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Unknown", text, StringComparison.Ordinal);
+        Assert.Contains("NotExposed", text, StringComparison.Ordinal);
+        Assert.Contains("Inferred", text, StringComparison.Ordinal);
+        Assert.Contains("coverage limits", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not automatically upload", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Readme_MentionsCurrentBetaAndFaq()
     {
         var text = File.ReadAllText(Path.Combine(RepoRoot, "README.md"));
-        Assert.Contains("1.2.1-preview.1", text, StringComparison.Ordinal);
+        Assert.Contains("1.2.3-preview.1", text, StringComparison.Ordinal);
         Assert.Contains("docs/DOWNLOAD_TROUBLESHOOTING.md", text, StringComparison.Ordinal);
         Assert.Contains("docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md", text, StringComparison.Ordinal);
         Assert.Contains("docs/FAQ.md", text, StringComparison.Ordinal);

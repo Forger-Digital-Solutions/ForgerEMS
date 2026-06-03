@@ -89,13 +89,33 @@ param(
     [switch]$LayoutOnly,
     [switch]$WaitForManagedDownloads,
     [switch]$NonInteractive,
-    [switch]$ShowVersion
+    [switch]$ShowVersion,
+    # Comma-separated or repeated USB Builder profile category IDs to include for shortcut/extras/update seeding.
+    [string[]]$IncludedCategories = @()
 )
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
 try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
+
+$runtimeHelperCandidates = @(
+    (Join-Path $PSScriptRoot "ForgerEMS.Runtime.ps1"),
+    (Join-Path $PSScriptRoot "backend\ForgerEMS.Runtime.ps1")
+) | Select-Object -Unique
+
+$runtimeHelperImported = $false
+foreach ($runtimeHelperCandidate in $runtimeHelperCandidates) {
+    if (Test-Path -LiteralPath $runtimeHelperCandidate) {
+        . $runtimeHelperCandidate
+        $runtimeHelperImported = $true
+        break
+    }
+}
+
+if (-not $runtimeHelperImported) {
+    throw "ForgerEMS runtime helper was not found. Checked: $($runtimeHelperCandidates -join '; ')"
+}
 
 $script:LogFile = $null
 
@@ -169,19 +189,19 @@ function Test-IsReleaseBundleRoot {
 function Find-ReleaseBundleRoot {
     param([Parameter(Mandatory)][string]$Path)
 
-    $current = (Resolve-Path -LiteralPath $Path).Path.TrimEnd('\')
+    $current = [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $Path).Path)
 
     while (-not [string]::IsNullOrWhiteSpace($current)) {
         if (Test-IsReleaseBundleRoot -Path $current) {
             return $current
         }
 
-        $parentInfo = [IO.Directory]::GetParent($current + '\')
+        $parentInfo = [IO.Directory]::GetParent($current)
         if ($null -eq $parentInfo) {
             break
         }
 
-        $parent = $parentInfo.FullName.TrimEnd('\')
+        $parent = [IO.Path]::GetFullPath($parentInfo.FullName)
         if ($parent -eq $current) {
             break
         }
@@ -301,6 +321,127 @@ function Resolve-RootChildPath {
     }
 
     return $fullPath
+}
+
+function Get-DefaultUsbBuilderCategoryIds {
+    return @(
+        "core",
+        "windows",
+        "legacy-windows",
+        "linux-rescue",
+        "diagnostics",
+        "oem-tools"
+    )
+}
+
+function Get-NormalizedUsbBuilderCategoryIds {
+    param([string[]]$CategoryIds)
+
+    $tokens = @()
+    foreach ($raw in @($CategoryIds)) {
+        foreach ($part in (([string]$raw) -split ",")) {
+            $trimmed = $part.Trim().ToLowerInvariant()
+            if (-not [string]::IsNullOrWhiteSpace($trimmed)) {
+                $tokens += $trimmed
+            }
+        }
+    }
+
+    if ($tokens.Count -eq 0) {
+        $tokens = @(Get-DefaultUsbBuilderCategoryIds)
+    }
+
+    if ("core" -notin $tokens) {
+        $tokens += "core"
+    }
+
+    return @($tokens | Select-Object -Unique)
+}
+
+function New-UsbBuilderCategorySet {
+    param([string[]]$CategoryIds)
+
+    $set = @{}
+    foreach ($id in (Get-NormalizedUsbBuilderCategoryIds -CategoryIds $CategoryIds)) {
+        $set[$id] = $true
+    }
+
+    return $set
+}
+
+function Get-ManifestStringProperty {
+    param(
+        [AllowNull()]$Object,
+        [Parameter(Mandatory)][string]$Name
+    )
+
+    if ($null -eq $Object) { return "" }
+    if ($Object.PSObject.Properties.Name -notcontains $Name) { return "" }
+    return ([string]$Object.$Name).Trim()
+}
+
+function Get-UsbBuilderCategoryIdForPath {
+    param(
+        [string]$RelativePath,
+        [string]$Name = "",
+        [string]$Family = ""
+    )
+
+    $path = (([string]$RelativePath).Trim() -replace '/', '\').ToLowerInvariant()
+    $nameText = ([string]$Name).Trim().ToLowerInvariant()
+    $familyText = ([string]$Family).Trim().ToLowerInvariant()
+
+    if ($path.Contains("ventoy") -or $nameText.Contains("ventoy")) { return "core" }
+    if ($path.StartsWith("iso\macos\")) { return "macos" }
+    if ($path.StartsWith("iso\android\") -or $path.StartsWith("tools\android\")) { return "android" }
+    if ($path.StartsWith("iso\ios-ipados\") -or $path.StartsWith("tools\apple-mobile\")) { return "ios-ipados" }
+    if ($path.StartsWith("drivers\")) { return "oem-tools" }
+    if ($path.StartsWith("iso\windows-legacy\")) { return "legacy-windows" }
+    if ($path.StartsWith("iso\windows\windows-manual-iso-drop\windows 8.1") -or
+        $path.StartsWith("iso\windows\windows-manual-iso-drop\windows 8") -or
+        $path.StartsWith("iso\windows\windows-manual-iso-drop\windows 7") -or
+        $path.StartsWith("iso\windows\windows-manual-iso-drop\windows vista") -or
+        $path.StartsWith("iso\windows\windows-manual-iso-drop\windows xp") -or
+        $path.StartsWith("iso\windows\windows-manual-iso-drop\windows 2000") -or
+        $path.StartsWith("iso\windows\windows-manual-iso-drop\windows me") -or
+        $path.StartsWith("iso\windows\windows-manual-iso-drop\windows 98") -or
+        $path.StartsWith("iso\windows\windows-manual-iso-drop\windows 95")) {
+        return "legacy-windows"
+    }
+    if ($path.StartsWith("iso\windows\") -or $familyText -eq "windows") { return "windows" }
+    if ($path.StartsWith("iso\linux\") -or $familyText -eq "linux") { return "linux-rescue" }
+    if ($path.StartsWith("iso\tools\") -or $path.StartsWith("tools\portable\") -or $path.StartsWith("medicat.usb\")) { return "diagnostics" }
+
+    return "diagnostics"
+}
+
+function Get-UsbBuilderCategoryIdForManifestEntry {
+    param(
+        [AllowNull()]$Entry,
+        [string]$RelativePath = ""
+    )
+
+    $explicit = Get-ManifestStringProperty -Object $Entry -Name "categoryId"
+    if (-not [string]::IsNullOrWhiteSpace($explicit)) {
+        return $explicit.Trim().ToLowerInvariant()
+    }
+
+    $path = if ([string]::IsNullOrWhiteSpace($RelativePath)) { Get-ManifestStringProperty -Object $Entry -Name "dest" } else { $RelativePath }
+    return Get-UsbBuilderCategoryIdForPath `
+        -RelativePath $path `
+        -Name (Get-ManifestStringProperty -Object $Entry -Name "name") `
+        -Family (Get-ManifestStringProperty -Object $Entry -Name "family")
+}
+
+function Test-UsbBuilderCategoryIncluded {
+    param(
+        [Parameter(Mandatory)]$CategorySet,
+        [AllowNull()]$Entry,
+        [string]$RelativePath = ""
+    )
+
+    $categoryId = Get-UsbBuilderCategoryIdForManifestEntry -Entry $Entry -RelativePath $RelativePath
+    return $CategorySet.ContainsKey($categoryId)
 }
 
 function Get-BundledManifestTemplatePath {
@@ -434,6 +575,19 @@ function Assert-ManifestSha256Field {
     }
 }
 
+function Assert-ManifestSha512Field {
+    param(
+        [AllowNull()]$Value,
+        [Parameter(Mandatory)][string]$FieldName
+    )
+
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) { return }
+
+    if (-not ([string]$Value -match '^[a-fA-F0-9]{128}$')) {
+        throw "$FieldName must be a 128-character SHA-512 hex string."
+    }
+}
+
 function Assert-ManifestSourceTypeField {
     param(
         [AllowNull()]$Value,
@@ -459,6 +613,33 @@ function Assert-ManifestFragilityLevelField {
     $normalized = ([string]$Value).Trim().ToLowerInvariant()
     if ($normalized -notin @("low", "medium", "high")) {
         throw "$FieldName must be 'low', 'medium', or 'high'."
+    }
+}
+
+function Assert-ManifestDownloadModeField {
+    param(
+        [AllowNull()]$Value,
+        [Parameter(Mandatory)][string]$FieldName
+    )
+
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) { return }
+
+    $normalized = ([string]$Value).Trim()
+    if ($normalized -notin @(
+            "ManagedDownload",
+            "OfficialDownloadPage",
+            "ManualMediaRequired",
+            "ReviewFirst",
+            "VendorPortal",
+            "LicenseRestricted",
+            "DynamicMirrorOnly",
+            "OEMSpecific",
+            "FirmwareBlocked",
+            "CommunityToolkit",
+            "Unsupported",
+            "InfoOnly"
+        )) {
+        throw "$FieldName has an unsupported downloadMode value."
     }
 }
 
@@ -539,8 +720,10 @@ function Assert-ManifestContract {
         Assert-ManifestBooleanField -Value $item.archive -FieldName "$prefix.archive"
         Assert-ManifestPositiveIntegerField -Value $item.timeoutSec -FieldName "$prefix.timeoutSec"
         Assert-ManifestSha256Field -Value $item.sha256 -FieldName "$prefix.sha256"
+        Assert-ManifestSha512Field -Value $item.sha512 -FieldName "$prefix.sha512"
         Assert-ManifestSourceTypeField -Value $item.sourceType -FieldName "$prefix.sourceType"
         Assert-ManifestFragilityLevelField -Value $item.fragilityLevel -FieldName "$prefix.fragilityLevel"
+        Assert-ManifestDownloadModeField -Value $item.downloadMode -FieldName "$prefix.downloadMode"
         Assert-ManifestStringField -Value $item.fallbackRule -FieldName "$prefix.fallbackRule"
         Assert-ManifestPositiveIntegerField -Value $item.maintenanceRank -FieldName "$prefix.maintenanceRank"
         Assert-ManifestBooleanField -Value $item.borderline -FieldName "$prefix.borderline"
@@ -551,16 +734,21 @@ function Assert-ManifestContract {
             }
         }
 
+        if ($null -ne $item.sha512Url -and -not [string]::IsNullOrWhiteSpace([string]$item.sha512Url)) {
+            if ($type -ne "file") {
+                throw "$prefix.sha512Url is only valid for file items."
+            }
+        }
+
         $hasResilienceMetadata = (
             ($null -ne $item.sourceType -and -not [string]::IsNullOrWhiteSpace([string]$item.sourceType)) -or
             ($null -ne $item.fragilityLevel -and -not [string]::IsNullOrWhiteSpace([string]$item.fragilityLevel)) -or
-            ($null -ne $item.fallbackRule -and -not [string]::IsNullOrWhiteSpace([string]$item.fallbackRule)) -or
             ($null -ne $item.maintenanceRank -and -not [string]::IsNullOrWhiteSpace([string]$item.maintenanceRank)) -or
             ($null -ne $item.borderline)
         )
 
         if ($hasResilienceMetadata -and $type -ne "file") {
-            throw "$prefix.sourceType, $prefix.fragilityLevel, $prefix.fallbackRule, $prefix.maintenanceRank, and $prefix.borderline are only valid for file items."
+            throw "$prefix.sourceType, $prefix.fragilityLevel, $prefix.maintenanceRank, and $prefix.borderline are only valid for file items."
         }
     }
 }
@@ -670,51 +858,164 @@ function Test-ManagedPlaceholderShadowMatch {
     return $false
 }
 
+function Get-ManifestItemEnabled {
+    param([AllowNull()]$Item)
+
+    if ($null -eq $Item) {
+        return $false
+    }
+
+    if ($null -ne $Item.enabled) {
+        return [bool]$Item.enabled
+    }
+
+    return $true
+}
+
+function Get-ManifestItemType {
+    param([AllowNull()]$Item)
+
+    if ($null -eq $Item) {
+        return "file"
+    }
+
+    return ([string]$(if ($Item.type) { $Item.type } else { "file" })).Trim().ToLowerInvariant()
+}
+
+function Get-UniqueNonEmptyManifestMatchText {
+    param([object[]]$Values)
+
+    $seen = @{}
+    $result = New-Object System.Collections.Generic.List[string]
+    foreach ($value in @($Values)) {
+        $normalized = Normalize-ManifestMatchText -Text ([string]$value)
+        if ([string]::IsNullOrWhiteSpace($normalized)) {
+            continue
+        }
+
+        if (-not $seen.ContainsKey($normalized)) {
+            $seen[$normalized] = $true
+            [void]$result.Add($normalized)
+        }
+    }
+
+    return $result.ToArray()
+}
+
+function New-ManagedPlaceholderMatchInfo {
+    param(
+        [Parameter(Mandatory)]$Item,
+        [Parameter(Mandatory)][ValidateSet("page", "file")][string]$Kind
+    )
+
+    $dest = ([string]$(if ($Item.dest) { $Item.dest } else { "" })).Trim()
+    $dir = if ([string]::IsNullOrWhiteSpace($dest)) { "" } else { [string](Split-Path -Parent $dest) }
+    $name = [string]$(if ($Item.name) { $Item.name } else { "" })
+
+    if ($Kind -eq "page") {
+        $matchTexts = Get-UniqueNonEmptyManifestMatchText -Values @(
+            (Get-PlaceholderDisplayLabelFromDestination -RelativePath $dest),
+            $name
+        )
+    }
+    else {
+        $matchTexts = Get-UniqueNonEmptyManifestMatchText -Values @(
+            $name,
+            ([IO.Path]::GetFileNameWithoutExtension($dest))
+        )
+    }
+
+    return [PSCustomObject]@{
+        Item       = $Item
+        Dest       = $dest
+        DestKey    = Get-ManifestDestinationKey -RelativePath $dest
+        Directory  = $dir
+        MatchTexts = $matchTexts
+    }
+}
+
+function Test-ManagedPlaceholderShadowMatchInfo {
+    param(
+        [Parameter(Mandatory)]$PageInfo,
+        [Parameter(Mandatory)]$ManagedInfo
+    )
+
+    if ([string]::IsNullOrWhiteSpace($PageInfo.Dest) -or [string]::IsNullOrWhiteSpace($ManagedInfo.Dest)) {
+        return $false
+    }
+
+    if (-not [string]::Equals([string]$PageInfo.Directory, [string]$ManagedInfo.Directory, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $false
+    }
+
+    foreach ($pageLabel in @($PageInfo.MatchTexts)) {
+        foreach ($managedTarget in @($ManagedInfo.MatchTexts)) {
+            if ($managedTarget.Contains($pageLabel) -or $pageLabel.Contains($managedTarget)) {
+                return $true
+            }
+        }
+    }
+
+    return $false
+}
+
 function Get-ActiveManagedPlaceholderPlanFromManifest {
     param([Parameter(Mandatory)]$Manifest)
 
-    $enabledManagedFileItems = @(
-        @($Manifest.items) | Where-Object {
-            $itemEnabled = $true
-            if ($null -ne $_.enabled) {
-                $itemEnabled = [bool]$_.enabled
-            }
-
-            $itemType = ([string]$(if ($_.type) { $_.type } else { "file" })).Trim().ToLowerInvariant()
-            $itemEnabled -and $itemType -eq "file"
-        }
-    )
-
+    $managedByDirectory = @{}
+    $pageInfos = New-Object System.Collections.Generic.List[object]
     $byPlaceholderDest = @{}
 
     foreach ($item in @($Manifest.items)) {
         if ($null -eq $item) { continue }
 
-        $itemEnabled = $true
-        if ($null -ne $item.enabled) {
-            $itemEnabled = [bool]$item.enabled
-        }
-
-        $itemType = ([string]$(if ($item.type) { $item.type } else { "file" })).Trim().ToLowerInvariant()
-        if (-not $itemEnabled -or $itemType -ne "page") {
+        if (-not (Get-ManifestItemEnabled -Item $item)) {
             continue
         }
 
-        $matchedManagedItem = @(
-            $enabledManagedFileItems | Where-Object {
-                Test-ManagedPlaceholderShadowMatch -PageItem $item -ManagedItem $_
+        $itemType = Get-ManifestItemType -Item $item
+        if ($itemType -eq "file") {
+            $managedInfo = New-ManagedPlaceholderMatchInfo -Item $item -Kind "file"
+            if ([string]::IsNullOrWhiteSpace($managedInfo.Dest)) {
+                continue
             }
-        ) | Select-Object -First 1
 
-        if ($null -eq $matchedManagedItem) {
+            $dirKey = ([string]$managedInfo.Directory).ToLowerInvariant()
+            if (-not $managedByDirectory.ContainsKey($dirKey)) {
+                $managedByDirectory[$dirKey] = New-Object System.Collections.Generic.List[object]
+            }
+
+            [void]($managedByDirectory[$dirKey]).Add($managedInfo)
             continue
         }
 
-        $destKey = Get-ManifestDestinationKey -RelativePath ([string]$item.dest)
-        if (-not $byPlaceholderDest.ContainsKey($destKey)) {
-            $byPlaceholderDest[$destKey] = [PSCustomObject]@{
-                PlaceholderItem = $item
-                ManagedItem     = $matchedManagedItem
+        if ($itemType -eq "page") {
+            [void]$pageInfos.Add((New-ManagedPlaceholderMatchInfo -Item $item -Kind "page"))
+        }
+    }
+
+    foreach ($pageInfo in $pageInfos) {
+        $dirKey = ([string]$pageInfo.Directory).ToLowerInvariant()
+        if (-not $managedByDirectory.ContainsKey($dirKey)) {
+            continue
+        }
+
+        $matchedManagedInfo = $null
+        foreach ($managedInfo in $managedByDirectory[$dirKey]) {
+            if (Test-ManagedPlaceholderShadowMatchInfo -PageInfo $pageInfo -ManagedInfo $managedInfo) {
+                $matchedManagedInfo = $managedInfo
+                break
+            }
+        }
+
+        if ($null -eq $matchedManagedInfo) {
+            continue
+        }
+
+        if (-not $byPlaceholderDest.ContainsKey($pageInfo.DestKey)) {
+            $byPlaceholderDest[$pageInfo.DestKey] = [PSCustomObject]@{
+                PlaceholderItem = $pageInfo.Item
+                ManagedItem     = $matchedManagedInfo.Item
             }
         }
     }
@@ -723,14 +1024,20 @@ function Get-ActiveManagedPlaceholderPlanFromManifest {
 }
 
 function Get-ShortcutDefinitionsFromManifest {
-    param([Parameter(Mandatory)][string]$Root)
+    param(
+        [Parameter(Mandatory)][string]$Root,
+        [Parameter(Mandatory)]$IncludedCategorySet
+    )
 
     $manifest = Get-BundledManifestTemplate -Root $Root
     $links = @()
     $suppressedPaths = @()
-    $activeManagedPlaceholderPlan = Get-ActiveManagedPlaceholderPlanFromManifest -Manifest $manifest
+    $profileItems = @($manifest.items | Where-Object {
+            Test-UsbBuilderCategoryIncluded -CategorySet $IncludedCategorySet -Entry $_
+        })
+    $activeManagedPlaceholderPlan = Get-ActiveManagedPlaceholderPlanFromManifest -Manifest ([PSCustomObject]@{ items = $profileItems })
 
-    foreach ($item in $manifest.items) {
+    foreach ($item in $profileItems) {
         $enabled = $true
         if ($null -ne $item.enabled) {
             $enabled = [bool]$item.enabled
@@ -856,8 +1163,10 @@ function Get-ManagedDownloadRankingFromManifest {
 function Get-ManagedDownloadChecksumPostureFromItem {
     param([Parameter(Mandatory)]$Item)
 
-    $hasPinnedChecksum = -not [string]::IsNullOrWhiteSpace([string]$Item.sha256)
-    $hasChecksumUrl = -not [string]::IsNullOrWhiteSpace([string]$Item.sha256Url)
+    $hasPinnedChecksum = (-not [string]::IsNullOrWhiteSpace([string]$Item.sha256)) -or
+                         (-not [string]::IsNullOrWhiteSpace([string]$Item.sha512))
+    $hasChecksumUrl = (-not [string]::IsNullOrWhiteSpace([string]$Item.sha256Url)) -or
+                      (-not [string]::IsNullOrWhiteSpace([string]$Item.sha512Url))
 
     if ($hasPinnedChecksum -and $hasChecksumUrl) { return "pinned+remote" }
     if ($hasPinnedChecksum) { return "pinned-only" }
@@ -1492,7 +1801,8 @@ function Start-ManagedDownloadPassInBackground {
         [Parameter(Mandatory)][string]$UpdateScriptPath,
         [Parameter(Mandatory)][string]$Root,
         [Parameter(Mandatory)][string]$ManifestName,
-        [Parameter(Mandatory)][string]$LogDirectory
+        [Parameter(Mandatory)][string]$LogDirectory,
+        [string[]]$IncludedCategories = @()
     )
 
     $powerShellExe = Get-PowerShellExePath
@@ -1500,9 +1810,16 @@ function Start-ManagedDownloadPassInBackground {
     $stdoutPath = J $LogDirectory ("update-launcher_" + $stamp + ".stdout.log")
     $stderrPath = J $LogDirectory ("update-launcher_" + $stamp + ".stderr.log")
 
+    $argumentList = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $UpdateScriptPath, "-UsbRoot", $Root, "-ManifestName", $ManifestName)
+    $normalizedCategories = @(Get-NormalizedUsbBuilderCategoryIds -CategoryIds $IncludedCategories)
+    if ($normalizedCategories.Count -gt 0) {
+        $argumentList += "-IncludedCategories"
+        $argumentList += ($normalizedCategories -join ",")
+    }
+
     $process = Start-Process `
         -FilePath $powerShellExe `
-        -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $UpdateScriptPath, "-UsbRoot", $Root, "-ManifestName", $ManifestName) `
+        -ArgumentList $argumentList `
         -RedirectStandardOutput $stdoutPath `
         -RedirectStandardError $stderrPath `
         -WindowStyle Hidden `
@@ -1572,13 +1889,18 @@ $root = Resolve-UsbRoot -Drive $DriveLetter -Root $UsbRoot -NonInteractive:$NonI
 
 $versionInfo = Get-VentoyCoreVersionInfo
 
-$logDir = J $root "_logs"
+$logDir = Resolve-ForgerEMSUsbRawLogDirectory -Root $root
 Ensure-Folder -Path $logDir
+Ensure-Folder -Path (J $root "_logs")
 $script:LogFile = Join-Path $logDir ("setup_" + (Get-Date -Format "yyyyMMdd_HHmmss") + ".log")
 
 Write-Log ("Ventoy core: {0} {1} ({2})" -f $versionInfo.Name, $versionInfo.Version, $versionInfo.BuildTimestampUtc) "INFO"
 Write-Log ("Release: " + $versionInfo.ReleaseType) "INFO"
 Write-Log "Using root: $root" "INFO"
+
+$builderCategorySet = New-UsbBuilderCategorySet -CategoryIds $IncludedCategories
+Write-Log ("USB Builder profile categories included: {0}" -f (($builderCategorySet.Keys | Sort-Object) -join ", ")) "INFO"
+Write-Log "Unchecked categories are skipped for this setup/update run only; existing USB files are not deleted." "INFO"
 
 Move-LegacyDocsFolderIfSafe -Root $root
 
@@ -1656,7 +1978,7 @@ foreach ($legacyShortcut in @(
     Remove-PathIfPresent -Path $legacyShortcut -Description "Remove legacy generated shortcut" | Out-Null
 }
 
-$shortcutPlan = Get-ShortcutDefinitionsFromManifest -Root $root
+$shortcutPlan = Get-ShortcutDefinitionsFromManifest -Root $root -IncludedCategorySet $builderCategorySet
 
 foreach ($suppressedPath in @($shortcutPlan.SuppressedPaths | Sort-Object -Unique)) {
     Remove-PathIfPresent -Path $suppressedPath -Description "Remove placeholder shortcut for active managed download" | Out-Null
@@ -1754,7 +2076,10 @@ Manual or partially managed:
 - Medicat.USB
 "@
 
-$readmePath = Join-Path $root "README.md"
+$supportRoot = (Get-ForgerEMSUsbInternalLayout -Root $root).SupportRoot
+Ensure-Folder -Path $supportRoot
+
+$readmePath = Join-Path $supportRoot "ForgerEMS-TechBench-README.md"
 $legacyReadmePath = Join-Path $root "README.txt"
 if ($PSCmdlet.ShouldProcess($readmePath, "Write README")) {
     Set-Content -LiteralPath $readmePath -Value $readme -Encoding UTF8
@@ -1820,7 +2145,7 @@ Core folders:
 - _docs
 "@
 
-$bootstrapNotesPath = Join-Path $root "_docs\ForgerEMS-Bootstrap-Notes.txt"
+$bootstrapNotesPath = Join-Path $supportRoot "ForgerEMS-Bootstrap-Notes.txt"
 if ($PSCmdlet.ShouldProcess($bootstrapNotesPath, "Write bootstrap notes")) {
     Set-Content -LiteralPath $bootstrapNotesPath -Value $bootstrapNotes -Encoding UTF8
     Write-Log "Bootstrap notes written: $bootstrapNotesPath" "OK"
@@ -1965,7 +2290,7 @@ foreach ($driverCategory in $driverCategoryNotes.Keys) {
     }
 }
 
-$downloadCatalogPath = Join-Path $root "_docs\ForgerEMS-Download-Catalog.txt"
+$downloadCatalogPath = Join-Path $supportRoot "ForgerEMS-Download-Catalog.txt"
 $downloadCatalog = Get-DownloadCatalogTextFromManifest -Root $root
 
 if ($PSCmdlet.ShouldProcess($downloadCatalogPath, "Write download catalog")) {
@@ -1976,7 +2301,7 @@ else {
     Write-Log "Would write download catalog: $downloadCatalogPath" "INFO"
 }
 
-$maintenanceGuidePath = Join-Path $root "_docs\ForgerEMS-Managed-Download-Maintenance.txt"
+$maintenanceGuidePath = Join-Path $supportRoot "ForgerEMS-Managed-Download-Maintenance.txt"
 $maintenanceGuide = Get-ManagedDownloadMaintenanceTextFromManifest -Root $root
 
 if ($PSCmdlet.ShouldProcess($maintenanceGuidePath, "Write managed download maintenance guide")) {
@@ -1987,7 +2312,7 @@ else {
     Write-Log "Would write managed download maintenance guide: $maintenanceGuidePath" "INFO"
 }
 
-$inventoryPath = Join-Path $root "_docs\ForgerEMS-Link-Inventory.csv"
+$inventoryPath = Join-Path $supportRoot "ForgerEMS-Link-Inventory.csv"
 
 $inventoryRows = @()
 
@@ -2010,12 +2335,12 @@ else {
 }
 
 if ($SeedManifest) {
-    $manifestPath = Resolve-RootChildPath -Root $root -RelativePath $ManifestName
+    $manifestPath = Resolve-ForgerEMSUsbManifestSeedPath -Root $root -ManifestName $ManifestName
     $bundledManifestPath = Get-BundledManifestTemplatePath
     Get-BundledManifestTemplate -Root $root | Out-Null
 
     if ((Test-Path -LiteralPath $manifestPath) -and -not $ForceManifestOverwrite) {
-        Write-Log "Manifest already exists, skipping seed: $manifestPath" "WARN"
+        Write-Log "Manifest already exists, skipping seed: $manifestPath" "INFO"
     }
     else {
         if ($PSCmdlet.ShouldProcess($manifestPath, "Write manifest JSON")) {
@@ -2035,8 +2360,9 @@ if (-not $LayoutOnly) {
     }
 
     $updateParameters = @{
-        UsbRoot      = $root
-        ManifestName = $ManifestName
+        UsbRoot            = $root
+        ManifestName       = $ManifestName
+        IncludedCategories = @(Get-NormalizedUsbBuilderCategoryIds -CategoryIds $IncludedCategories)
     }
 
     try {
@@ -2052,14 +2378,15 @@ if (-not $LayoutOnly) {
             Write-Log "Managed download pass completed." "OK"
         }
         else {
-            $logsRoot = J $root "_logs"
+            $logsRoot = Resolve-ForgerEMSUsbRawLogDirectory -Root $root
             Write-Log "Starting managed download pass in background..." "INFO"
             try {
                 $launchInfo = Start-ManagedDownloadPassInBackground `
                     -UpdateScriptPath $updateScriptPath `
                     -Root $root `
                     -ManifestName $ManifestName `
-                    -LogDirectory $logsRoot
+                    -LogDirectory $logsRoot `
+                    -IncludedCategories (Get-NormalizedUsbBuilderCategoryIds -CategoryIds $IncludedCategories)
 
                 Write-Log "Managed download pass started in background (PID $($launchInfo.ProcessId))." "OK"
                 Write-Log "Watch $logsRoot for update_*.log and launcher output if you want live progress." "INFO"
@@ -2102,9 +2429,8 @@ elseif ($WaitForManagedDownloads) {
     Write-Log "Next: install Ventoy, review any remaining placeholder/manual/review-first shortcuts, and rerun Update-ForgerEMS.ps1 later for refreshes." "OK"
 }
 else {
-    $rootLogsPath = J $root "_logs"
-    $rootDownloadsPath = J $root "_downloads"
-    Write-Log "Next: downloads are running in the background; watch $rootLogsPath and $rootDownloadsPath for activity." "OK"
+    $rootLogsPath = Resolve-ForgerEMSUsbRawLogDirectory -Root $root
+    Write-Log "Next: downloads are running in the background; watch $rootLogsPath for update_*.log activity." "OK"
     Write-Log "Next after downloads: install Ventoy if you have not already, review remaining placeholder/manual/review-first shortcuts, and rerun Update-ForgerEMS.ps1 later for refreshes." "OK"
 }
 if ($script:LogFile -and $WhatIfPreference) {

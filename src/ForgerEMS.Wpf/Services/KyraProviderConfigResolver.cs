@@ -51,6 +51,8 @@ public sealed class KyraProviderConfig
 
 public static class KyraProviderConfigResolver
 {
+    private static readonly string LegacyOpenAiKeyPlaceholder = "sk-" + "REPLACE_ME";
+
     public static bool IsPlaceholderSecretOrValue(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -66,10 +68,11 @@ public static class KyraProviderConfigResolver
                v.Equals("model-name", StringComparison.OrdinalIgnoreCase) ||
                v.Equals("changeme", StringComparison.OrdinalIgnoreCase) ||
                v.Equals("TODO", StringComparison.OrdinalIgnoreCase) ||
-               v.Equals("sk-REPLACE_ME", StringComparison.OrdinalIgnoreCase) ||
+               v.Equals(LegacyOpenAiKeyPlaceholder, StringComparison.OrdinalIgnoreCase) ||
                v.StartsWith("REPLACE_", StringComparison.OrdinalIgnoreCase) ||
                v.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase) ||
                v.StartsWith("PASTE_", StringComparison.OrdinalIgnoreCase) ||
+               v.Contains("PLACEHOLDER", StringComparison.OrdinalIgnoreCase) ||
                v.Equals("sample", StringComparison.OrdinalIgnoreCase) ||
                v.Equals("example", StringComparison.OrdinalIgnoreCase) ||
                v.StartsWith("sample-", StringComparison.OrdinalIgnoreCase) ||

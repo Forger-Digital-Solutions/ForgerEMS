@@ -60,7 +60,7 @@ public static class NetworkPulseQualityVocabulary
     {
         if (jitterMs is not > 0)
         {
-            return "— (not measured this cycle)";
+            return "— (sample pending)";
         }
 
         var q = JitterQuality(jitterMs);
@@ -79,8 +79,8 @@ public static class NetworkPulseQualityVocabulary
         {
             NetworkPulseMeasurementKind.Measured => "measured",
             NetworkPulseMeasurementKind.Estimated => "estimated",
-            NetworkPulseMeasurementKind.Unavailable => "not measured this cycle",
+            NetworkPulseMeasurementKind.Unavailable => "sample pending",
             NetworkPulseMeasurementKind.Paused => "paused",
-            _ => "not measured this cycle"
+            _ => "sample pending"
         };
 }

@@ -66,6 +66,16 @@ public sealed class NetworkPulseViewModel : ObservableObject
     private string _internetWidgetLine1 = "Internet: …";
     private string _internetWidgetLine2 = string.Empty;
     private string _internetWidgetLine3 = string.Empty;
+    private Brush _headerStatusBrush = new SolidColorBrush(Color.FromRgb(232, 244, 255));
+    private string _status = "Unknown";
+    private double? _latencyMs;
+    private double? _downloadMbps;
+    private double? _uploadMbps;
+    private DateTimeOffset? _lastCheckedAt;
+    private bool _isMeasuring;
+    private bool _isStale;
+    private string _detailText = "Starting network checks.";
+    private string _lastErrorCategory = string.Empty;
 
     public NetworkPulseViewModel(NetworkPulseSettingsStore store)
     {
@@ -285,6 +295,66 @@ public sealed class NetworkPulseViewModel : ObservableObject
         private set => SetProperty(ref _internetWidgetLine3, value);
     }
 
+    public Brush HeaderStatusBrush
+    {
+        get => _headerStatusBrush;
+        private set => SetProperty(ref _headerStatusBrush, value);
+    }
+
+    public string Status
+    {
+        get => _status;
+        private set => SetProperty(ref _status, value);
+    }
+
+    public double? LatencyMs
+    {
+        get => _latencyMs;
+        private set => SetProperty(ref _latencyMs, value);
+    }
+
+    public double? DownloadMbps
+    {
+        get => _downloadMbps;
+        private set => SetProperty(ref _downloadMbps, value);
+    }
+
+    public double? UploadMbps
+    {
+        get => _uploadMbps;
+        private set => SetProperty(ref _uploadMbps, value);
+    }
+
+    public DateTimeOffset? LastCheckedAt
+    {
+        get => _lastCheckedAt;
+        private set => SetProperty(ref _lastCheckedAt, value);
+    }
+
+    public bool IsMeasuring
+    {
+        get => _isMeasuring;
+        private set => SetProperty(ref _isMeasuring, value);
+    }
+
+    public bool IsStale
+    {
+        get => _isStale;
+        private set => SetProperty(ref _isStale, value);
+    }
+
+    public string DetailText
+    {
+        get => _detailText;
+        private set => SetProperty(ref _detailText, value);
+    }
+
+    public string LastErrorCategory
+    {
+        get => _lastErrorCategory;
+        private set => SetProperty(ref _lastErrorCategory, value);
+    }
+
     public bool NetworkPulseEnabled
     {
         get => _settings.Enabled;
@@ -450,6 +520,12 @@ public sealed class NetworkPulseViewModel : ObservableObject
         InternetWidgetLine1 = "Internet: Testing…";
         InternetWidgetLine2 = "Running lightweight reachability, latency, and optional throughput samples.";
         InternetWidgetLine3 = string.Empty;
+        HeaderStatusBrush = BrushForSurface("Measuring");
+        Status = "Measuring";
+        IsMeasuring = true;
+        IsStale = false;
+        DetailText = "Measuring now.";
+        LastErrorCategory = string.Empty;
     }
 
     public void Apply(NetworkPulseUiState ui)
@@ -515,7 +591,7 @@ public sealed class NetworkPulseViewModel : ObservableObject
             : "Adapter link ceiling: unknown (not used as internet speed).";
         DetailGatewayText = s.GatewayPingMs is > 0
             ? $"{s.GatewayPingMs.Value.ToString("0.0", CultureInfo.InvariantCulture)} ms ICMP to default gateway (measured)"
-            : "— (not measured this cycle)";
+            : "— (sample pending)";
         DetailDnsText = s.DnsLookupMs is > 0
             ? $"{s.DnsLookupMs.Value.ToString("0.0", CultureInfo.InvariantCulture)} ms lookup sample (may be cached)"
             : "—";
@@ -544,6 +620,17 @@ public sealed class NetworkPulseViewModel : ObservableObject
         InternetWidgetLine2 = ui.InternetWidgetLine2;
         InternetWidgetLine3 = ui.InternetWidgetLine3;
         HeaderSummaryText = ui.InternetWidgetLine1;
+        var surface = ExtractSurface(ui.InternetWidgetLine1);
+        HeaderStatusBrush = BrushForSurface(surface);
+        Status = surface;
+        LatencyMs = s.LatencyKind == NetworkPulseMeasurementKind.Measured ? s.PingMs : null;
+        DownloadMbps = s.DownloadKind == NetworkPulseMeasurementKind.Measured ? s.DownloadMbps : null;
+        UploadMbps = s.UploadKind == NetworkPulseMeasurementKind.Measured ? s.UploadMbps : null;
+        LastCheckedAt = s.LastCheckedUtc == DateTimeOffset.MinValue ? null : s.LastCheckedUtc;
+        IsMeasuring = s.Status == NetworkPulseStatus.Testing || surface.Equals("Measuring", StringComparison.OrdinalIgnoreCase);
+        IsStale = surface.Equals("Stale", StringComparison.OrdinalIgnoreCase);
+        DetailText = string.IsNullOrWhiteSpace(ui.InternetWidgetLine3) ? s.DataSourceNotes : ui.InternetWidgetLine3;
+        LastErrorCategory = ClassifyLastErrorCategory(s, surface);
     }
 
     private static string FormatSpeedNumber(double? mbps, NetworkPulseMeasurementKind kind)
@@ -582,6 +669,7 @@ public sealed class NetworkPulseViewModel : ObservableObject
             NetworkPulseStatus.Good => "Good",
             NetworkPulseStatus.Slow => "Slow",
             NetworkPulseStatus.Unstable => "Unstable",
+            NetworkPulseStatus.Limited => "Limited",
             NetworkPulseStatus.Offline => "Offline",
             NetworkPulseStatus.Unknown => "Unknown",
             NetworkPulseStatus.Testing => "Testing",
@@ -603,9 +691,9 @@ public sealed class NetworkPulseViewModel : ObservableObject
         {
             NetworkPulseMeasurementKind.Measured => "Measured",
             NetworkPulseMeasurementKind.Estimated => "Estimated",
-            NetworkPulseMeasurementKind.Unavailable => "not measured this cycle",
+            NetworkPulseMeasurementKind.Unavailable => "sample pending",
             NetworkPulseMeasurementKind.Paused => "probe paused",
-            _ => "not measured this cycle"
+            _ => "sample pending"
         };
 
     private static string FormatSpeedLabel(double? mbps, NetworkPulseMeasurementKind kind)
@@ -657,5 +745,89 @@ public sealed class NetworkPulseViewModel : ObservableObject
             $"Instant: {StatusLabel(s.Status)}. Header chip: {ui.Smoothed.StatusChipText}. Reliability: {rel}. " +
             ui.SmoothingNote.TrimEnd() +
             " Adapter link speed is never shown as internet speed.";
+    }
+
+    private static string ExtractSurface(string line1)
+    {
+        const string prefix = "Internet:";
+        if (!line1.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return "Unknown";
+        }
+
+        var value = line1[prefix.Length..].Trim();
+        var dot = value.IndexOf('·');
+        return (dot >= 0 ? value[..dot] : value).Trim();
+    }
+
+    // Two-part surfaces such as "Partial check" share their colour with the
+    // base ("Online" → green-ish). Map by checking the first word so future variations don't
+    // silently fall to the default neutral colour.
+    private static SolidColorBrush BrushForSurface(string surface)
+    {
+        var head = ExtractSurfaceHead(surface);
+        return head switch
+        {
+            "Online" => new SolidColorBrush(Color.FromRgb(134, 239, 172)),
+            "Partial check" => new SolidColorBrush(Color.FromRgb(186, 230, 253)),
+            "Testing…" => new SolidColorBrush(Color.FromRgb(186, 230, 253)),
+            "Measuring" => new SolidColorBrush(Color.FromRgb(186, 230, 253)),
+            "Stale" => new SolidColorBrush(Color.FromRgb(253, 224, 71)),
+            "Limited" => new SolidColorBrush(Color.FromRgb(251, 191, 36)),
+            "Offline" => new SolidColorBrush(Color.FromRgb(252, 165, 165)),
+            "Disabled" => new SolidColorBrush(Color.FromRgb(203, 213, 225)),
+            _ => new SolidColorBrush(Color.FromRgb(232, 244, 255))
+        };
+    }
+
+    private static string ExtractSurfaceHead(string surface)
+    {
+        if (string.IsNullOrEmpty(surface))
+        {
+            return string.Empty;
+        }
+
+        // Match the part before an em-dash, en-dash, hyphen, or " (": "Partial check"
+        // and "Online (verification mismatch)" both map to "Online".
+        var separators = new[] { " — ", " – ", " - ", " (" };
+        foreach (var sep in separators)
+        {
+            var idx = surface.IndexOf(sep, StringComparison.Ordinal);
+            if (idx > 0)
+            {
+                return surface[..idx].Trim();
+            }
+        }
+
+        return surface.Trim();
+    }
+
+    private static string ClassifyLastErrorCategory(NetworkPulseSnapshot s, string surface)
+    {
+        if (surface.Equals("Offline", StringComparison.OrdinalIgnoreCase))
+        {
+            return "NoUsableRouteOrProbe";
+        }
+
+        // "Partial check" is informational, not an error. Keep the technical
+        // category empty so error-banner consumers (clipboard, logs) do not over-react.
+        if (surface.StartsWith("Partial check", StringComparison.OrdinalIgnoreCase) ||
+            (surface.StartsWith("Online", StringComparison.OrdinalIgnoreCase) &&
+             surface.Contains("checks", StringComparison.OrdinalIgnoreCase)))
+        {
+            return string.Empty;
+        }
+
+        if (surface.Equals("Limited", StringComparison.OrdinalIgnoreCase))
+        {
+            return s.InternetReachable ? "MixedProbeSignals" : "HttpsProbeFailed";
+        }
+
+        if (s.DataSourceNotes.Contains("Download sample failed", StringComparison.OrdinalIgnoreCase))
+        {
+            return "SpeedProbeUnavailable";
+        }
+
+        return string.Empty;
     }
 }

@@ -6,6 +6,8 @@
 
 This page is practical guidance, not legal advice. See also [LEGAL.md](LEGAL.md) and [PRIVACY.md](PRIVACY.md). Environment variables: [ENVIRONMENT.md](ENVIRONMENT.md). Campaign FAQ: [marketing/PUBLIC-FAQ.md](marketing/PUBLIC-FAQ.md).
 
+ForgerEMS is independent and is not affiliated with, sponsored by, or endorsed by Microsoft, Linux distributions, hardware vendors, driver vendors, or third-party tools referenced in the app. Names are used only to identify compatibility, official resources, or supported technician workflows.
+
 ---
 
 ## What should I download first?
@@ -30,9 +32,9 @@ You get **one bundle** with `START_HERE.bat`, verification hints, checksums, and
 
 ---
 
-## Why is the animated background static by default?
+## Why is the command-center background static?
 
-For public preview, ForgerEMS prioritizes launch speed, scrolling, toolkit checks, and Kyra responsiveness. **Settings → Visual Effects** defaults to **Static / Low Power**. You can choose **Animated** if you want the circuit motion, or **Off / Plain dark** for slower systems, remote sessions, or battery-saving work.
+ForgerEMS uses a packaged static command-center image so the preview app stays responsive while logs, toolkit checks, and Kyra run.
 
 ---
 
@@ -138,6 +140,72 @@ If a related managed download is already installed and checksum-verified, a miss
 
 ---
 
+## What is Driver Hub?
+
+**Driver Hub** is a curated official-link app-store-style catalog for GPU utilities, OEM support portals, chipset/network/audio driver pages, BIOS/firmware support links, and Linux driver guidance.
+
+It is **not** a sketchy driver-updater clone. Each card shows **one clear primary action** — `Get`, `Open Driver Page`, `Open Support Page`, `Open Official Download`, or `Open Firmware Guidance` — that opens the official vendor/project page. Helper actions (**Copy Link**, **Add Shortcut to USB**, and **Open Page** when it differs from the primary URL) are tucked behind a small `⋯` overflow button on each card so the catalog stays scannable like the App Store / Microsoft Store. ForgerEMS does **not** claim a driver is outdated or current unless a real version comparison exists, does **not** auto-run installers, does **not** auto-download model-specific OEM packages, does **not** upload service tags or serial numbers, and does **not** automate BIOS/firmware flashing.
+
+Recommendations are hints only, based on detected manufacturer/GPU/CPU/platform data from System Intelligence when available. Brand tiles are text monograms, not bundled vendor logo assets. Firmware cards remind you to confirm the exact model, power, battery/AC state, and vendor instructions before updates.
+
+Releases run an optional link-health pass via [`tools/Test-DriverHubLinks.ps1`](../tools/Test-DriverHubLinks.ps1), which probes each catalog URL with a reasonable timeout and a real-browser user agent. Some vendor pages reject automated checkers (HTTP 401 / 403 / 429) even when the page opens fine in a real browser — the script reports those as `ForbiddenLikelyOk` and only fails on confirmed 404s. The unit tests never depend on live vendor reachability.
+
+---
+
+## What is the USB Builder Profile?
+
+The **USB Builder tab → USB Builder Profile** lets you pick which toolkit packs Setup USB and Update USB seed or refresh on the selected target. Each pack is one of:
+
+- **Core ForgerEMS USB structure** (required, cannot be turned off): the folders, logs, manifest, and Ventoy safety structure ForgerEMS needs to operate.
+- **Windows installers and recovery** (default on): official Microsoft Windows 10 / 11 / Server download shortcuts, ADK / WinPE references, and the modern Windows workflow folders.
+- **Legacy Windows manual media drop folders** (default on): tracking folders for Windows 8.1 and older. ForgerEMS never downloads legacy Windows ISOs.
+- **Linux rescue and installer tools** (default on): managed Linux rescue ISOs and installer/recovery workflows.
+- **Diagnostics and rescue utilities** (default on): disk, imaging, hardware, network, security, and portable technician utilities.
+- **OEM recovery links and vendor tools** (default on): official vendor support, driver, and recovery utility shortcuts.
+- **macOS installer workflow** (default off, manual media required).
+- **Android platform tools and firmware workflow** (default off, manual media required).
+- **iOS / iPadOS restore workflow** (default off, manual media required).
+
+Buttons: **Select recommended** restores the default set, **Select all** turns every pack on, **Reset to defaults** matches a fresh install. Your choice is saved per user at `%LOCALAPPDATA%\ForgerEMS\Runtime\config\usb-builder-profile.json`.
+
+Important behavior:
+
+- **Unchecking a pack only skips seeding/updating it on this run.**
+- **It does not delete files already on the USB.** Existing user-supplied media, drop folders, and prior toolkit content are left alone.
+- Core safety structure always runs even if everything else is off.
+
+---
+
+## Does ForgerEMS auto-download macOS, iOS / iPadOS, or Android media?
+
+**No.** ForgerEMS is Windows-first and does not redistribute or auto-download:
+
+- macOS installers, DMGs, or PKGs.
+- iOS / iPadOS IPSW files.
+- Android OEM firmware (Samsung, Motorola, OnePlus, etc.).
+
+What the mobile/macOS packs do provide:
+
+- **macOS**: shortcuts to Apple's official download, recovery, and `createinstallmedia` guides. A compatible Mac may be required. Drop user-supplied installer media into `ISO\macOS\macOS-Manual-Installer-Drop\<version>\` for tracking. ForgerEMS does not redistribute Apple installers.
+- **Android**: official download shortcuts for Android SDK Platform-Tools (adb / fastboot), Google Pixel factory / OTA images, and AOSP source/build documentation. Samsung, Motorola, and OnePlus open the official vendor support sites. Drop user-supplied firmware into `ISO\Android\Android-Manual-Firmware-Drop\<vendor>\`. Flashing the wrong firmware can wipe data or brick devices. ForgerEMS does not redistribute Android firmware.
+- **iOS / iPadOS**: shortcuts to Apple's official Apple Devices for Windows, Finder / iTunes, recovery mode, and Apple Configurator restore guides. IPSW files are user-supplied; drop them into `ISO\iOS-iPadOS\iOS-Manual-IPSW-Drop\<device>\`. Restores can erase devices. Activation Lock and Apple ID ownership are outside ForgerEMS. ForgerEMS does not use third-party IPSW indexes.
+
+ForgerEMS never bypasses licenses, activation, DRM, account locks, or vendor authorization flows.
+
+---
+
+## What do the toolkit action labels mean?
+
+Every catalog item uses one of these labels in its `.url` filename or display:
+
+- **DOWNLOAD** / **AUTO DOWNLOAD**: ForgerEMS can safely download or update this item from an official, redistributable, machine-resolvable source. Checksum verified when the upstream publishes one.
+- **MANUAL DOWNLOAD**: ForgerEMS opens an official vendor page; you must choose the variant, sign in, accept license terms, or pick the right device/model. ForgerEMS does not bypass that flow.
+- **MANUAL MEDIA REQUIRED** / **MANUAL ISO REQUIRED** / **MANUAL INSTALLER REQUIRED** / **MANUAL IPSW REQUIRED** / **MANUAL FIRMWARE REQUIRED**: you must supply the ISO, installer, IPSW, or firmware yourself. Used for legacy Windows, macOS installers, iOS / iPadOS IPSW, and OEM Android firmware. Drop your legally obtained file in the matching folder; ForgerEMS does not redistribute these.
+- **GUIDE**: official how-to instructions (Apple `createinstallmedia`, recovery mode, AOSP build guide, etc.).
+- **INFO**: true reference material — release notes, lifecycle pages, ADK references. Not a substitute for a missing download.
+
+---
+
 ## What does “Verify Links” do in Toolkit Manager?
 
 **Verify Links** asks ForgerEMS to contact official toolkit URLs using **safe HTTP metadata checks** — typically **HEAD**, with a **small ranged GET** fallback when some hosts block HEAD. The verifier records reachability, HTTP status (when available), redirect hosts, content-length hints when exposed, and compares those signals to your manifest/checksum columns **without fetching entire installers or ISOs** and **without executing anything it downloads**. Runs are **timeout-bounded** and **cancellable**, and work gracefully **offline** (results fall back to Unknown / Offline rather than pretending links were validated). Kyra can summarize the latest saved verification when it aligns with your toolkit-health report and USB scope.
@@ -167,7 +235,7 @@ No beta program can promise “100% safe,” but ForgerEMS is designed for **tec
 Open PowerShell in the folder that contains the ZIP and `CHECKSUMS.sha256`. For example:
 
 ```powershell
-Get-FileHash .\ForgerEMS-v1.2.1-preview.1.zip -Algorithm SHA256
+Get-FileHash .\ForgerEMS-v1.2.3-preview.1.zip -Algorithm SHA256
 ```
 
 Compare the `Hash` line to the line in `CHECKSUMS.sha256` for that filename.
@@ -193,9 +261,9 @@ There is **no automatic upload** to Forger Digital Solutions when you run local 
 
 ---
 
-## Does ForgerEMS require HWiNFO, LibreHardwareMonitor, CPU-Z, or vendor tools?
+## Does ForgerEMS require HWiNFO, AIDA64, CPU-Z, or vendor tools?
 
-No. ForgerEMS ships its approved local providers with the app where legally allowed. Deep Sensor Mode uses bundled read-only providers and does not require separate user downloads.
+No. ForgerEMS uses its own local **Forger Sensor Stack**. Forger Sensor Core is active by default, and approved bundled providers are used only where legally allowed. There is no paid third-party tool requirement and no user-required HWiNFO, AIDA64, CPU-Z, or vendor-tool download for System Intelligence.
 
 ---
 
@@ -213,7 +281,9 @@ If Windows or your security policy blocks the admin handoff (UAC cancelled, endp
 
 ## What is Deep Sensor Mode?
 
-Deep Sensor Mode is an optional local read-only sensor mode that may improve **Hardware X-Ray** sensor coverage for temperatures, clocks, load, fan RPM, and storage wear when supported. It enables the bundled LibreHardwareMonitorLib provider where packaged; it is not permanent administrator permission.
+Deep Sensor Mode is an optional local read-only sensor mode inside the Forger Sensor Stack. It may improve **Hardware X-Ray** coverage for temperatures, clocks, load, fan RPM, and storage wear when supported. It enables bundled reviewed sensor providers where packaged and does not require separate user downloads; it is not permanent administrator permission and it is not an external tool bridge.
+
+Forger Sensor Service is a future optional local service and is not installed in this build. Forger Deep Sensor Driver is roadmap only and is not included in this build.
 
 ---
 
@@ -237,7 +307,9 @@ No automatic upload. Reports and logs stay local unless you choose to copy, expo
 
 ## Can Deep Sensor Mode require administrator access?
 
-Some sensors may require admin access, vendor drivers, or firmware support, but Deep Sensor Mode itself is not the same as admin permission. Windows may ask for UAC approval when you run Elevated Scan; ForgerEMS reports unavailable readings honestly when approval or hardware support is not available.
+Some sensors may require admin access, vendor drivers, firmware support, or the future Forger Deep Sensor Driver, but Deep Sensor Mode itself is not the same as admin permission. Windows may ask for UAC approval when you run Elevated Scan. ForgerEMS reports unavailable readings honestly when approval or hardware support is not available.
+
+This is not a failure. Many laptops do not expose CPU package power, fan speed, VRM, or EC telemetry through standard Windows APIs.
 
 ---
 
@@ -250,6 +322,8 @@ Yes, where packaged, ForgerEMS includes **LibreHardwareMonitorLib** as a bundled
 ## Can I turn Deep Sensor Mode off?
 
 Yes. Deep Sensor Mode can be **Off** or **Read-only local sensors**. Environment variable/testing overrides may also be supported.
+
+Related docs: [FORGER-SENSOR-STACK.md](FORGER-SENSOR-STACK.md), [SENSOR-LIMITATIONS.md](SENSOR-LIMITATIONS.md), and [FORGER-DEEP-SENSOR-DRIVER-ROADMAP.md](FORGER-DEEP-SENSOR-DRIVER-ROADMAP.md).
 
 ---
 
@@ -277,6 +351,53 @@ Email **ForgerDigitalSolutions@outlook.com** with app version, Windows version, 
 
 ---
 
+## What is Drive Validator?
+
+**Drive Validator** (USB Builder tab → **Open Drive Validator** opens the Drive Validator Wizard) writes **temporary ForgerEMS test files** into **free space** on a selected removable USB target, reads them back, and checks for verification errors or suspicious capacity behavior. It does **not** format the drive and does **not** delete your existing files — only files under `.forgerems-drive-validator` are created and removed afterward.
+
+- The **Drive Validator Wizard** walks you through **Select target → Choose mode → Safety review → Running → Results** with a live **media integrity map** of region tiles. The compact card on the USB Builder tab is the entry point and shows the last validation status/age for the selected drive.
+- **Quick Safe Check** and **Sampled Capacity Check** use bounded writes spread across free space. A passing result is reported as **"No issues found in sampled validation"** — it does **not** prove the drive is genuine, healthy, or fit for any specific use. Sophisticated fake-capacity media can still evade a small sample.
+- **Full Free-Space Validation** is the **strongest non-destructive mode** (it writes across the available free-space budget). It is **slow**, causes **heavy USB writes**, and requires an explicit acknowledgement checkbox in the wizard. Even a clean Full Free-Space pass is evidence of correct file-system-visible behavior, **not** a sector-level guarantee.
+- **Destructive Full Media validation** is **not available in this build**. The wizard surfaces it as "not available". If it is ever enabled later, it will require typing an exact confirmation phrase and will erase the entire drive.
+- Drive Validator cannot **directly inspect NAND chips** through normal Windows file I/O. Safe modes operate at the file-system level. They can detect many fake-capacity, aliasing, failing-media, short-read/write, and I/O-error patterns — but a passing result is advisory evidence, **not** a 100% authenticity certificate.
+- Drive Validator **refuses to run** against the Windows OS drive, system / boot / EFI / VTOYEFI / recovery partitions, BitLocker-encrypted volumes, and internal fixed disks. The existing USB Builder hard safety blocks still apply.
+- A **failed drive should not be trusted for a ForgerEMS/Ventoy toolkit**. The wizard's results step explains the recommended next step (Sampled / Full Free-Space, or consider replacing the drive).
+- Drive Validator results are **advisory evidence for a technician**. They are not a warranty, certification, or replacement for vendor diagnostics. **Back up** important data before any heavy validation, and ForgerEMS is **not responsible** for failing media or any destructive action you explicitly confirm.
+- Cached results are keyed by a composite identity (root path + best-effort volume serial + drive model + size + label) so a different drive that mounts on the same letter is **not** treated as already validated. Entries older than 30 days expire.
+
+### How is Drive Validator different from Speed Benchmark?
+
+**Speed Benchmark** measures throughput; some of its reads may be served from OS cache, so a fast number does not prove the drive can faithfully return what was written. **Drive Validator** writes unique deterministic signatures into bounded regions and verifies the *content* on read-back, looking for mismatches, aliasing, zero/0xFF fills, short reads/writes, and per-region speed collapse. A fast drive can still fail validation. A slow drive can still be valid but may not be ideal for a technician toolkit.
+
+---
+
 ## What is ForgerEMS in one sentence?
 
-A Windows technician suite for **USB toolkit building**, **USB Intelligence**, **System Intelligence**, **Diagnostics**, **Toolkit Manager**, and **Kyra**.
+A Windows technician suite for **USB toolkit building**, **USB Intelligence**, **System Intelligence**, **Driver Hub**, **Diagnostics**, **Toolkit Manager**, and **Kyra**.
+
+---
+
+## Does ForgerEMS guarantee repair, data recovery, malware removal, hardware diagnosis, or compatibility?
+
+**No.** ForgerEMS is **technician-assist software**, not a replacement for professional judgement. Dev Beta builds do not promise guaranteed repair, guaranteed data recovery, guaranteed malware removal, guaranteed hardware diagnosis, guaranteed driver/component compatibility, guaranteed pricing or marketplace accuracy, or guaranteed legal/regulatory compliance. System Intelligence and Hardware X-Ray may report **Unknown**, **NotExposed**, or **Inferred** when firmware, drivers, permissions, or sensor providers do not expose data — these are coverage limits, not failures. Confirm critical decisions with additional testing and treat third-party tools, OS images, and vendor utilities under their own licenses and terms.
+
+---
+
+## Are support bundles uploaded automatically?
+
+**No.** Support bundles are user-controlled. ForgerEMS attempts to redact local usernames, private paths, API keys, tokens, bearer values, and product keys from logs, diagnostics, and exported bundles, but you should still **review every bundle before sharing it**. The app does not automatically upload bundles, sensor data, scan reports, or USB inventories anywhere.
+
+---
+
+## Can I run ForgerEMS on Linux through Wine?
+
+**Experimentally, yes.** ForgerEMS detects Wine on startup, forces WPF
+into `SoftwareOnly` render mode, and shows a yellow compatibility banner
+at the top of the window. Catalog browsing, profiles, the Drive Validator
+wizard (read-only), and Kyra still work. USB drive write actions — Setup
+USB, Update USB, Rename USB, Install/Update Ventoy, Toolkit Update, and
+Full Managed Download — are disabled under Wine in this prerelease. Use
+native Windows for any USB writing step. See
+[docs/LINUX-WINE-COMPATIBILITY.md](LINUX-WINE-COMPATIBILITY.md) for the
+full guide, tested distros, launch flags, and how to collect logs for a
+bug report.

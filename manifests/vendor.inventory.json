@@ -13,7 +13,11 @@
       "checksum": "",
       "verified": false,
       "source_trust": "manual",
-      "notes": "Curated portable tool collection. Inventory root only; child categories remain manually maintained."
+      "notes": "Curated portable tool collection. Inventory root only; child categories remain manually maintained.",
+      "downloadMode": "ReviewFirst",
+      "actionLabel": "Review First",
+      "managedReason": "Manual workspace root only; child binaries are not catalog-verified.",
+      "verificationMode": "manual-root"
     },
     {
       "name": "Portable Disk Tools",
@@ -24,7 +28,11 @@
       "checksum": "",
       "verified": false,
       "source_trust": "manual",
-      "notes": "Manual third-party disk utilities."
+      "notes": "Manual third-party disk utilities.",
+      "downloadMode": "ReviewFirst",
+      "actionLabel": "Review First",
+      "managedReason": "Manual workspace root only; child binaries are not catalog-verified.",
+      "verificationMode": "manual-root"
     },
     {
       "name": "Portable Hardware Tools",
@@ -35,7 +43,11 @@
       "checksum": "",
       "verified": false,
       "source_trust": "manual",
-      "notes": "Manual third-party hardware diagnostics."
+      "notes": "Manual third-party hardware diagnostics.",
+      "downloadMode": "ReviewFirst",
+      "actionLabel": "Review First",
+      "managedReason": "Manual workspace root only; child binaries are not catalog-verified.",
+      "verificationMode": "manual-root"
     },
     {
       "name": "Portable Network Tools",
@@ -46,7 +58,11 @@
       "checksum": "",
       "verified": false,
       "source_trust": "manual",
-      "notes": "Manual third-party networking utilities."
+      "notes": "Manual third-party networking utilities.",
+      "downloadMode": "ReviewFirst",
+      "actionLabel": "Review First",
+      "managedReason": "Manual workspace root only; child binaries are not catalog-verified.",
+      "verificationMode": "manual-root"
     },
     {
       "name": "Portable System Tools",
@@ -57,7 +73,11 @@
       "checksum": "",
       "verified": false,
       "source_trust": "manual",
-      "notes": "Manual third-party system utilities."
+      "notes": "Manual third-party system utilities.",
+      "downloadMode": "ReviewFirst",
+      "actionLabel": "Review First",
+      "managedReason": "Manual workspace root only; child binaries are not catalog-verified.",
+      "verificationMode": "manual-root"
     },
     {
       "name": "Portable Remote Tools",
@@ -68,7 +88,11 @@
       "checksum": "",
       "verified": false,
       "source_trust": "manual",
-      "notes": "Manual third-party remote support tools."
+      "notes": "Manual third-party remote support tools.",
+      "downloadMode": "ReviewFirst",
+      "actionLabel": "Review First",
+      "managedReason": "Manual workspace root only; child binaries are not catalog-verified.",
+      "verificationMode": "manual-root"
     },
     {
       "name": "Portable USB Tools",
@@ -79,7 +103,11 @@
       "checksum": "",
       "verified": false,
       "source_trust": "manual",
-      "notes": "Manual USB creation and flashing utilities."
+      "notes": "Manual USB creation and flashing utilities.",
+      "downloadMode": "ReviewFirst",
+      "actionLabel": "Review First",
+      "managedReason": "Manual workspace root only; child binaries are not catalog-verified.",
+      "verificationMode": "manual-root"
     },
     {
       "name": "Portable GPU Tools",
@@ -90,7 +118,11 @@
       "checksum": "",
       "verified": false,
       "source_trust": "manual",
-      "notes": "Manual GPU cleanup and install utilities."
+      "notes": "Manual GPU cleanup and install utilities.",
+      "downloadMode": "ReviewFirst",
+      "actionLabel": "Review First",
+      "managedReason": "Manual workspace root only; child binaries are not catalog-verified.",
+      "verificationMode": "manual-root"
     },
     {
       "name": "Portable Security Tools",
@@ -101,7 +133,11 @@
       "checksum": "",
       "verified": false,
       "source_trust": "manual",
-      "notes": "Manual portable security utilities."
+      "notes": "Manual portable security utilities.",
+      "downloadMode": "ReviewFirst",
+      "actionLabel": "Review First",
+      "managedReason": "Manual workspace root only; child binaries are not catalog-verified.",
+      "verificationMode": "manual-root"
     },
     {
       "name": "Drivers Root",
@@ -112,7 +148,11 @@
       "checksum": "",
       "verified": false,
       "source_trust": "manual",
-      "notes": "Offline driver stash; folders are manually curated."
+      "notes": "Offline driver stash; folders are manually curated.",
+      "downloadMode": "ReviewFirst",
+      "actionLabel": "Review First",
+      "managedReason": "Manual workspace root only; child binaries are not catalog-verified.",
+      "verificationMode": "manual-root"
     },
     {
       "name": "Driver Audio Staging",
@@ -123,7 +163,11 @@
       "checksum": "",
       "verified": false,
       "source_trust": "manual",
-      "notes": "Manual audio driver staging."
+      "notes": "Manual audio driver staging.",
+      "downloadMode": "ReviewFirst",
+      "actionLabel": "Review First",
+      "managedReason": "Manual workspace root only; child binaries are not catalog-verified.",
+      "verificationMode": "manual-root"
     },
     {
       "name": "Driver Bluetooth Staging",
@@ -134,7 +178,11 @@
       "checksum": "",
       "verified": false,
       "source_trust": "manual",
-      "notes": "Manual Bluetooth driver staging."
+      "notes": "Manual Bluetooth driver staging.",
+      "downloadMode": "ReviewFirst",
+      "actionLabel": "Review First",
+      "managedReason": "Manual workspace root only; child binaries are not catalog-verified.",
+      "verificationMode": "manual-root"
     },
     {
       "name": "Driver Chipset Staging",
@@ -145,7 +193,11 @@
       "checksum": "",
       "verified": false,
       "source_trust": "manual",
-      "notes": "Manual chipset driver staging."
+      "notes": "Manual chipset driver staging.",
+      "downloadMode": "ReviewFirst",
+      "actionLabel": "Review First",
+      "managedReason": "Manual workspace root only; child binaries are not catalog-verified.",
+      "verificationMode": "manual-root"
     },
     {
       "name": "Driver Graphics Staging",
@@ -156,7 +208,11 @@
       "checksum": "",
       "verified": false,
       "source_trust": "manual",
-      "notes": "Manual graphics driver staging."
+      "notes": "Manual graphics driver staging.",
+      "downloadMode": "ReviewFirst",
+      "actionLabel": "Review First",
+      "managedReason": "Manual workspace root only; child binaries are not catalog-verified.",
+      "verificationMode": "manual-root"
     },
     {
       "name": "Driver Input Staging",
@@ -167,7 +223,11 @@
       "checksum": "",
       "verified": false,
       "source_trust": "manual",
-      "notes": "Manual input driver staging."
+      "notes": "Manual input driver staging.",
+      "downloadMode": "ReviewFirst",
+      "actionLabel": "Review First",
+      "managedReason": "Manual workspace root only; child binaries are not catalog-verified.",
+      "verificationMode": "manual-root"
     },
     {
       "name": "Driver Network Staging",
@@ -178,7 +238,11 @@
       "checksum": "",
       "verified": false,
       "source_trust": "manual",
-      "notes": "Manual wired network driver staging."
+      "notes": "Manual wired network driver staging.",
+      "downloadMode": "ReviewFirst",
+      "actionLabel": "Review First",
+      "managedReason": "Manual workspace root only; child binaries are not catalog-verified.",
+      "verificationMode": "manual-root"
     },
     {
       "name": "Driver Storage Staging",
@@ -189,7 +253,11 @@
       "checksum": "",
       "verified": false,
       "source_trust": "manual",
-      "notes": "Manual storage and RAID driver staging."
+      "notes": "Manual storage and RAID driver staging.",
+      "downloadMode": "ReviewFirst",
+      "actionLabel": "Review First",
+      "managedReason": "Manual workspace root only; child binaries are not catalog-verified.",
+      "verificationMode": "manual-root"
     },
     {
       "name": "Driver Wireless Staging",
@@ -200,7 +268,11 @@
       "checksum": "",
       "verified": false,
       "source_trust": "manual",
-      "notes": "Manual Wi-Fi driver staging."
+      "notes": "Manual Wi-Fi driver staging.",
+      "downloadMode": "ReviewFirst",
+      "actionLabel": "Review First",
+      "managedReason": "Manual workspace root only; child binaries are not catalog-verified.",
+      "verificationMode": "manual-root"
     },
     {
       "name": "Realtek Audio Drivers Shortcut",
@@ -211,7 +283,11 @@
       "checksum": "",
       "verified": true,
       "source_trust": "official",
-      "notes": "Managed page shortcut generated by the Ventoy core."
+      "notes": "Managed official page shortcut; not a managed file download.",
+      "downloadMode": "OEMSpecific",
+      "actionLabel": "Vendor Portal",
+      "managedReason": "Verified official page shortcut only. Driver/firmware selection remains manual and vendor/model-specific.",
+      "verificationMode": "managed-page-shortcut"
     },
     {
       "name": "Intel Bluetooth Drivers Shortcut",
@@ -222,7 +298,11 @@
       "checksum": "",
       "verified": true,
       "source_trust": "official",
-      "notes": "Managed page shortcut generated by the Ventoy core."
+      "notes": "Managed official page shortcut; not a managed file download.",
+      "downloadMode": "OEMSpecific",
+      "actionLabel": "Vendor Portal",
+      "managedReason": "Verified official page shortcut only. Driver/firmware selection remains manual and vendor/model-specific.",
+      "verificationMode": "managed-page-shortcut"
     },
     {
       "name": "Intel Drivers Shortcut",
@@ -233,7 +313,11 @@
       "checksum": "",
       "verified": true,
       "source_trust": "official",
-      "notes": "Managed page shortcut generated by the Ventoy core."
+      "notes": "Managed official page shortcut; not a managed file download.",
+      "downloadMode": "OEMSpecific",
+      "actionLabel": "Vendor Portal",
+      "managedReason": "Verified official page shortcut only. Driver/firmware selection remains manual and vendor/model-specific.",
+      "verificationMode": "managed-page-shortcut"
     },
     {
       "name": "AMD Drivers Shortcut",
@@ -244,7 +328,11 @@
       "checksum": "",
       "verified": true,
       "source_trust": "official",
-      "notes": "Managed page shortcut generated by the Ventoy core."
+      "notes": "Managed official page shortcut; not a managed file download.",
+      "downloadMode": "OEMSpecific",
+      "actionLabel": "Vendor Portal",
+      "managedReason": "Verified official page shortcut only. Driver/firmware selection remains manual and vendor/model-specific.",
+      "verificationMode": "managed-page-shortcut"
     },
     {
       "name": "Intel Graphics Drivers Shortcut",
@@ -255,7 +343,11 @@
       "checksum": "",
       "verified": true,
       "source_trust": "official",
-      "notes": "Managed page shortcut generated by the Ventoy core."
+      "notes": "Managed official page shortcut; not a managed file download.",
+      "downloadMode": "OEMSpecific",
+      "actionLabel": "Vendor Portal",
+      "managedReason": "Verified official page shortcut only. Driver/firmware selection remains manual and vendor/model-specific.",
+      "verificationMode": "managed-page-shortcut"
     },
     {
       "name": "NVIDIA Drivers Shortcut",
@@ -266,7 +358,11 @@
       "checksum": "",
       "verified": true,
       "source_trust": "official",
-      "notes": "Managed page shortcut generated by the Ventoy core."
+      "notes": "Managed official page shortcut; not a managed file download.",
+      "downloadMode": "OEMSpecific",
+      "actionLabel": "Vendor Portal",
+      "managedReason": "Verified official page shortcut only. Driver/firmware selection remains manual and vendor/model-specific.",
+      "verificationMode": "managed-page-shortcut"
     },
     {
       "name": "Intel Ethernet Drivers Shortcut",
@@ -277,7 +373,11 @@
       "checksum": "",
       "verified": true,
       "source_trust": "official",
-      "notes": "Managed page shortcut generated by the Ventoy core."
+      "notes": "Managed official page shortcut; not a managed file download.",
+      "downloadMode": "OEMSpecific",
+      "actionLabel": "Vendor Portal",
+      "managedReason": "Verified official page shortcut only. Driver/firmware selection remains manual and vendor/model-specific.",
+      "verificationMode": "managed-page-shortcut"
     },
     {
       "name": "Realtek Drivers Shortcut",
@@ -288,7 +388,11 @@
       "checksum": "",
       "verified": true,
       "source_trust": "official",
-      "notes": "Managed page shortcut generated by the Ventoy core."
+      "notes": "Managed official page shortcut; not a managed file download.",
+      "downloadMode": "OEMSpecific",
+      "actionLabel": "Vendor Portal",
+      "managedReason": "Verified official page shortcut only. Driver/firmware selection remains manual and vendor/model-specific.",
+      "verificationMode": "managed-page-shortcut"
     },
     {
       "name": "Intel RST Drivers Shortcut",
@@ -299,7 +403,11 @@
       "checksum": "",
       "verified": true,
       "source_trust": "official",
-      "notes": "Managed page shortcut generated by the Ventoy core."
+      "notes": "Managed official page shortcut; not a managed file download.",
+      "downloadMode": "OEMSpecific",
+      "actionLabel": "Vendor Portal",
+      "managedReason": "Verified official page shortcut only. Driver/firmware selection remains manual and vendor/model-specific.",
+      "verificationMode": "managed-page-shortcut"
     },
     {
       "name": "Intel Wi-Fi Drivers Shortcut",
@@ -310,7 +418,11 @@
       "checksum": "",
       "verified": true,
       "source_trust": "official",
-      "notes": "Managed page shortcut generated by the Ventoy core."
+      "notes": "Managed official page shortcut; not a managed file download.",
+      "downloadMode": "OEMSpecific",
+      "actionLabel": "Vendor Portal",
+      "managedReason": "Verified official page shortcut only. Driver/firmware selection remains manual and vendor/model-specific.",
+      "verificationMode": "managed-page-shortcut"
     },
     {
       "name": "MediCat USB Bundle",
@@ -321,7 +433,11 @@
       "checksum": "",
       "verified": false,
       "source_trust": "community",
-      "notes": "Large community toolkit bundle; source workflow is external."
+      "notes": "Large community toolkit bundle; source workflow is external.",
+      "downloadMode": "CommunityToolkit",
+      "actionLabel": "Community Toolkit Page",
+      "managedReason": "Community bundle/root remains manual; provenance and licensing must be reviewed before use.",
+      "verificationMode": "manual-root"
     }
   ]
 }

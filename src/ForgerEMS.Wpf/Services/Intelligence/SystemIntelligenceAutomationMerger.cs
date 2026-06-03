@@ -46,6 +46,9 @@ public static class SystemIntelligenceAutomationMerger
             root["deviceFit"] = JsonSerializer.SerializeToNode(deviceFit, SerializerOptions);
             root["machineClass"] = JsonSerializer.SerializeToNode(machineClass, SerializerOptions);
             root["sensorMatrix"] = JsonSerializer.SerializeToNode(sensorMatrix, SerializerOptions);
+            root["forgerSensorStack"] = JsonSerializer.SerializeToNode(
+                ForgerSensorStackState.Create(ResolveElevatedScanState(doc.RootElement)),
+                SerializerOptions);
             root["forgerAutomation"] = JsonSerializer.SerializeToNode(automation, SerializerOptions);
             File.WriteAllText(reportPath, root.ToJsonString(new JsonSerializerOptions
             {
@@ -149,6 +152,7 @@ public static class SystemIntelligenceAutomationMerger
                     provider.FailureReason
                 }).ToArray(),
                 deepSensorMode = sensorMatrix.DeepSensorMode,
+                forgerSensorStack = sensorMatrix.ForgerSensorStack,
                 note = sensorMatrix.DeepSensorModeNote
             },
             deepSensorMode = new
@@ -170,6 +174,39 @@ public static class SystemIntelligenceAutomationMerger
             recommendedActions = recs.ToArray(),
             normalizedHardware = norm
         };
+    }
+
+    private static string ResolveElevatedScanState(JsonElement root)
+    {
+        var scanMode = GetJsonString(root, "scanMode");
+        if (!scanMode.Equals("Elevated", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Recommended";
+        }
+
+        if (root.TryGetProperty("portPowerTelemetry", out var portPower) &&
+            portPower.ValueKind == JsonValueKind.Object &&
+            (HasNumber(portPower, "effectiveChargeRateWatts") ||
+             HasNumber(portPower, "adapterWattageWatts") ||
+             HasNumber(portPower, "adapterWattageClassWatts") ||
+             HasNumber(portPower, "voltageVolts") ||
+             HasNumber(portPower, "currentAmps")))
+        {
+            return "Complete";
+        }
+
+        return "Partial";
+    }
+
+    private static bool HasNumber(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var value))
+        {
+            return false;
+        }
+
+        return value.ValueKind == JsonValueKind.Number ||
+               (value.ValueKind == JsonValueKind.String && double.TryParse(value.GetString(), out _));
     }
 
     private static object[] BuildHealthBreakdown(SystemHealthEvaluation health, SystemProfile profile, int issueCount)
@@ -387,6 +424,7 @@ public static class SystemIntelligenceAutomationMerger
             {
                 Groups = groups,
                 SensorProviders = sensorMatrix.SensorProviders,
+                ForgerSensorStack = sensorMatrix.ForgerSensorStack,
                 DeepSensorMode = sensorMatrix.DeepSensorMode,
                 Confidence = confidenceRatio >= 0.7 ? "High" : confidenceRatio >= 0.45 ? "Medium" : "Low",
                 DeepSensorModeNote = sensorMatrix.DeepSensorModeNote

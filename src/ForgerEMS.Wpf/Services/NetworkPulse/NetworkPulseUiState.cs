@@ -33,6 +33,8 @@ public sealed record NetworkPulseUiState(
             snapshot,
             head,
             new NetworkPulseLastKnownGood(),
+            // Neutral preview (e.g. disabled/paused snapshot) treats upload probes as off so the
+            // widget says "Up: probes off" rather than implying a failed measurement.
             uploadProbesEnabled: false,
             consecutiveHardFailures: 0,
             freshnessStaleAfter: TimeSpan.FromMinutes(10),
@@ -64,6 +66,7 @@ public sealed record NetworkPulseUiState(
             NetworkPulseStatus.Good => "Stable",
             NetworkPulseStatus.Slow => "Slow",
             NetworkPulseStatus.Unstable => "Unstable",
+            NetworkPulseStatus.Limited => "Limited",
             NetworkPulseStatus.Offline => "Offline",
             NetworkPulseStatus.Unknown => "Unknown",
             NetworkPulseStatus.Testing => "Testing…",

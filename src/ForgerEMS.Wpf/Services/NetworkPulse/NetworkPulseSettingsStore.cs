@@ -8,7 +8,10 @@ public sealed class NetworkPulseSettingsStore
 {
     private readonly string _path;
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
-    public const int CurrentSchemaVersion = 2;
+    // Schema bumped to 3 in 1.2.3-preview.1 so a one-time migration can turn on UploadProbesEnabled
+    // for existing users who only had it off because the previous default was opt-in. The widget
+    // can no longer honestly report "Up: not tested" as a normal end-of-cycle state.
+    public const int CurrentSchemaVersion = 3;
 
     public NetworkPulseSettingsStore(string path) => _path = path;
 
@@ -24,6 +27,7 @@ public sealed class NetworkPulseSettingsStore
             var json = File.ReadAllText(_path);
             var loaded = JsonSerializer.Deserialize<NetworkPulseSettings>(json) ?? new NetworkPulseSettings();
             MigrateLegacyAutoCreatedPauseOnMetered(json, loaded);
+            MigrateUploadProbesDefaultForExistingUsers(json, loaded);
             return ApplyDefaults(loaded);
         }
         catch
@@ -55,6 +59,24 @@ public sealed class NetworkPulseSettingsStore
         s.SpeedProbeCadenceSeconds = Math.Clamp(s.SpeedProbeCadenceSeconds, 30, 3600);
         s.SettingsSchemaVersion = CurrentSchemaVersion;
         return s;
+    }
+
+    private static void MigrateUploadProbesDefaultForExistingUsers(string json, NetworkPulseSettings s)
+    {
+        // Only act on settings written before schema version 3 (i.e. before this default flipped).
+        // If the JSON explicitly carries an UploadProbesEnabled value, leave the user's choice alone.
+        if (s.SettingsSchemaVersion >= CurrentSchemaVersion)
+        {
+            return;
+        }
+
+        if (json.Contains(nameof(NetworkPulseSettings.UploadProbesEnabled), StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        // Pre-v3 file with no explicit upload-probe choice: adopt the new default (on).
+        s.UploadProbesEnabled = true;
     }
 
     private static void MigrateLegacyAutoCreatedPauseOnMetered(string json, NetworkPulseSettings s)

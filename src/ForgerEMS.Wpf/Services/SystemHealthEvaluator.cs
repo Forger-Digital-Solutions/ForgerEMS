@@ -11,6 +11,7 @@ using System.Text.RegularExpressions;
 using VentoyToolkitSetup.Wpf.Configuration;
 using VentoyToolkitSetup.Wpf.Infrastructure;
 using VentoyToolkitSetup.Wpf.Models;
+using VentoyToolkitSetup.Wpf.Services.Compatibility;
 using VentoyToolkitSetup.Wpf.Services.Intelligence;
 using VentoyToolkitSetup.Wpf.Services.Kyra;
 using VentoyToolkitSetup.Wpf.Services.KyraTools;
@@ -95,31 +96,50 @@ public sealed class SystemHealthEvaluator
             issues.Add("A physical internet-capable adapter has no default gateway.");
         }
 
-        if (profile.TpmPresent == false)
+        // Under Wine compatibility mode, treat TPM/Secure-Boot "unknown" as a
+        // host-limitation note instead of a confidence penalty. Real hardware
+        // health is unchanged; we just stop pretending Windows ran a probe.
+        var isCompatibility = WineProbeGate.IsWine;
+
+        if (profile.TpmPresent == false && !isCompatibility)
         {
             score -= 8;
             issues.Add("TPM was not detected by Windows.");
         }
-        else if (profile.TpmReady == false && IsConfirmedProblemStatus(profile.TpmStatus))
+        else if (profile.TpmReady == false && IsConfirmedProblemStatus(profile.TpmStatus) && !isCompatibility)
         {
             score -= 4;
             issues.Add("TPM is present but Windows reports it is not ready.");
         }
         else if (profile.TpmPresent is null || profile.TpmReady is null || IsUnknownStatus(profile.TpmStatus))
         {
-            confidence -= 8;
-            issues.Add("TPM state is unknown; verify in BIOS/UEFI before treating it as disabled or missing.");
+            if (isCompatibility)
+            {
+                issues.Add("TPM state not checked in Wine compatibility mode (Windows-only probe).");
+            }
+            else
+            {
+                confidence -= 8;
+                issues.Add("TPM state is unknown; verify in BIOS/UEFI before treating it as disabled or missing.");
+            }
         }
 
-        if (profile.SecureBoot == false)
+        if (profile.SecureBoot == false && !isCompatibility)
         {
             score -= 5;
             issues.Add("Secure Boot is disabled.");
         }
         else if (profile.SecureBoot is null || IsUnknownStatus(profile.SecureBootStatus))
         {
-            confidence -= 6;
-            issues.Add("Secure Boot state is unknown; Windows did not expose enough firmware data to confirm it.");
+            if (isCompatibility)
+            {
+                issues.Add("Secure Boot state not checked in Wine compatibility mode (Windows-only probe).");
+            }
+            else
+            {
+                confidence -= 6;
+                issues.Add("Secure Boot state is unknown; Windows did not expose enough firmware data to confirm it.");
+            }
         }
 
         foreach (var problem in profile.ObviousProblems.Where(problem => !problem.Contains("No obvious", StringComparison.OrdinalIgnoreCase)).Take(8))
@@ -277,6 +297,17 @@ public sealed class SystemHealthEvaluator
         var reasons = new List<string>();
         var score = 88;
         var confidence = "High";
+        var isCompatibility = WineProbeGate.IsWine;
+
+        if (isCompatibility)
+        {
+            // Wine has no TPM / Secure Boot surface — surface this as a host
+            // limitation, not a "Low" confidence security finding.
+            reasons.Add("TPM and Secure Boot not checked in Wine compatibility mode (Windows-only probes).");
+            reasons.Add("Compatibility-limited under Linux/Wine — security category is informational only here.");
+            return Category("Security", score, reasons, "Run ForgerEMS on native Windows to evaluate TPM and Secure Boot.", confidence);
+        }
+
         if (profile.TpmPresent == false)
         {
             score -= 12;

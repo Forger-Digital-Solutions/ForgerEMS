@@ -12,12 +12,18 @@ public sealed class NetworkPulseStabilizer
     private const int PingHistoryCap = 36;
     private const int OfflineConfirmSamples = 3;
     private const int UnstableConfirmSamples = 2;
+    // Limited (HTTPS-verification) hold-time: a single failed probe must not flash "Limited"
+    // when ICMP / measured download / DNS still indicate usability. Service-level streak
+    // gating handles the primary path; this is a defensive second layer at the chip surface.
+    private const int LimitedConfirmSamples = 2;
 
     private readonly List<double?> _pingHistory = new(PingHistoryCap);
     private int _reachFailStreak;
     private int _reachOkStreak;
     private int _unstableConfirmCounter;
+    private int _limitedConfirmCounter;
     private NetworkPulseStatus _lastNonUnstableRaw = NetworkPulseStatus.Unknown;
+    private NetworkPulseStatus _lastNonLimitedRaw = NetworkPulseStatus.Unknown;
     private double? _emaDownMbps;
     private double? _emaUpMbps;
     private int _reconnectHoldTicks;
@@ -28,7 +34,9 @@ public sealed class NetworkPulseStabilizer
         _reachFailStreak = 0;
         _reachOkStreak = 0;
         _unstableConfirmCounter = 0;
+        _limitedConfirmCounter = 0;
         _lastNonUnstableRaw = NetworkPulseStatus.Unknown;
+        _lastNonLimitedRaw = NetworkPulseStatus.Unknown;
         _emaDownMbps = null;
         _emaUpMbps = null;
         _reconnectHoldTicks = 0;
@@ -78,6 +86,20 @@ public sealed class NetworkPulseStabilizer
             _unstableConfirmCounter = 0;
         }
 
+        if (raw == NetworkPulseStatus.Limited)
+        {
+            _limitedConfirmCounter++;
+        }
+        else
+        {
+            if (raw is NetworkPulseStatus.Good or NetworkPulseStatus.Slow)
+            {
+                _lastNonLimitedRaw = raw;
+            }
+
+            _limitedConfirmCounter = 0;
+        }
+
         var (display, chip) = Resolve(raw, reach, icmpOk);
 
         if (display != NetworkPulseStatus.Offline && display != NetworkPulseStatus.Unknown)
@@ -123,6 +145,21 @@ public sealed class NetworkPulseStabilizer
         if (raw is NetworkPulseStatus.Paused or NetworkPulseStatus.Testing)
         {
             return (raw, Chip(raw, null));
+        }
+
+        if (raw == NetworkPulseStatus.Limited)
+        {
+            // Hold-time: a single transient Limited classification must not flash the alarming
+            // chip when the previous state was healthy. ICMP success in the same cycle is also
+            // enough to keep showing the prior healthy chip until the failure persists.
+            if (_limitedConfirmCounter < LimitedConfirmSamples && icmpOk &&
+                _lastNonLimitedRaw is NetworkPulseStatus.Good or NetworkPulseStatus.Slow)
+            {
+                var held = _lastNonLimitedRaw;
+                return (held, Chip(held, null));
+            }
+
+            return (NetworkPulseStatus.Limited, Chip(NetworkPulseStatus.Limited, null));
         }
 
         if (!reach && !icmpOk)
@@ -173,6 +210,7 @@ public sealed class NetworkPulseStabilizer
             NetworkPulseStatus.Good => "Stable",
             NetworkPulseStatus.Slow => "Slow",
             NetworkPulseStatus.Unstable => "Unstable",
+            NetworkPulseStatus.Limited => "Limited",
             NetworkPulseStatus.Offline => "Offline",
             NetworkPulseStatus.Unknown => "Unknown",
             NetworkPulseStatus.Testing => "Testing…",

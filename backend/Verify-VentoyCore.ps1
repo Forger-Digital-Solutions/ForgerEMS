@@ -283,6 +283,19 @@ function Assert-Sha256Value {
     }
 }
 
+function Assert-Sha512Value {
+    param(
+        [AllowNull()]$Value,
+        [Parameter(Mandatory)][string]$FieldName
+    )
+
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) { return }
+
+    if (-not ([string]$Value -match '^[a-fA-F0-9]{128}$')) {
+        throw "$FieldName must be a 128-character SHA-512 hex string."
+    }
+}
+
 function Assert-ManagedDownloadSourceTypeValue {
     param(
         [AllowNull()]$Value,
@@ -309,6 +322,211 @@ function Assert-ManagedDownloadFragilityLevelValue {
     if ($normalized -notin @("low", "medium", "high")) {
         throw "$FieldName must be 'low', 'medium', or 'high'."
     }
+}
+
+function Get-ValidDownloadModes {
+    return @(
+        "ManagedDownload",
+        "OfficialDownloadPage",
+        "ManualMediaRequired",
+        "ReviewFirst",
+        "VendorPortal",
+        "LicenseRestricted",
+        "DynamicMirrorOnly",
+        "OEMSpecific",
+        "FirmwareBlocked",
+        "CommunityToolkit",
+        "Unsupported",
+        "InfoOnly"
+    )
+}
+
+function Assert-DownloadModeValue {
+    param(
+        [AllowNull()]$Value,
+        [Parameter(Mandatory)][string]$FieldName
+    )
+
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) { return }
+
+    $normalized = ([string]$Value).Trim()
+    if ($normalized -notin (Get-ValidDownloadModes)) {
+        throw "$FieldName has an unsupported downloadMode value: $normalized"
+    }
+}
+
+function Test-ManifestItemChecksumProof {
+    param([Parameter(Mandatory)]$Item)
+
+    return (-not [string]::IsNullOrWhiteSpace([string]$Item.sha256)) -or
+           (-not [string]::IsNullOrWhiteSpace([string]$Item.sha256Url)) -or
+           (-not [string]::IsNullOrWhiteSpace([string]$Item.sha512)) -or
+           (-not [string]::IsNullOrWhiteSpace([string]$Item.sha512Url))
+}
+
+function Get-InferredManifestDownloadMode {
+    param([Parameter(Mandatory)]$Item)
+
+    $explicit = [string]$Item.downloadMode
+    if (-not [string]::IsNullOrWhiteSpace($explicit)) {
+        Assert-DownloadModeValue -Value $explicit -FieldName "downloadMode"
+        return $explicit.Trim()
+    }
+
+    $itemType = if ($Item.type) { ([string]$Item.type).Trim().ToLowerInvariant() } else { "file" }
+    if ($itemType -eq "file" -or $itemType -eq "managedautodownload" -or $itemType -eq "managed") {
+        return "ManagedDownload"
+    }
+
+    $kind = if ($Item.kind) { ([string]$Item.kind).Trim().ToLowerInvariant() } else { "" }
+    $sourceTrust = if ($Item.sourceTrust) { ([string]$Item.sourceTrust).Trim().ToLowerInvariant() } else { "" }
+    $manualOnly = if ($null -ne $Item.manualOnly) { [bool]$Item.manualOnly } else { $false }
+    $text = @(
+        [string]$Item.name,
+        [string]$Item.notes,
+        [string]$Item.technicianNotes,
+        [string]$Item.legacyWarning,
+        [string]$Item.licenseNote,
+        [string]$Item.dest,
+        [string]$Item.family
+    ) -join " "
+    $text = $text.ToLowerInvariant()
+
+    if ($text -match 'android-manual-firmware-drop|manual firmware|firmware required|bios portal|uefi firmware|surface drivers and firmware') {
+        return "FirmwareBlocked"
+    }
+
+    if ($manualOnly -and ($text -match 'manual iso|manual media|manual installer|manual ipsw|user-supplied|legally obtained|windows-legacy|macos-manual-installer-drop|ios-manual-ipsw-drop')) {
+        return "ManualMediaRequired"
+    }
+
+    if ($kind -eq "driver-shortcut" -and $sourceTrust -eq "official") {
+        if ($text -match 'model-specific|serial|oem|drivers\\vendor|support / drivers') {
+            return "OEMSpecific"
+        }
+
+        return "VendorPortal"
+    }
+
+    if ($text -match 'review first|provenance') {
+        return "ReviewFirst"
+    }
+
+    if ($text -match 'dynamic mirror|mirror selection|rotating mirror') {
+        return "DynamicMirrorOnly"
+    }
+
+    if ($text -match 'paid|commercial|trial|eula required|licence required|license required') {
+        return "LicenseRestricted"
+    }
+
+    if ($manualOnly -and $text -match 'unsupported') {
+        return "Unsupported"
+    }
+
+    if ($sourceTrust -eq "official") {
+        return "OfficialDownloadPage"
+    }
+
+    if ($sourceTrust -eq "community") {
+        return "CommunityToolkit"
+    }
+
+    return "InfoOnly"
+}
+
+function Get-ManifestDownloadModePolicyIssues {
+    param(
+        [Parameter(Mandatory)]$Manifest,
+        [Parameter(Mandatory)][string]$ManagedChecksumPolicy
+    )
+
+    $issues = New-Object System.Collections.Generic.List[string]
+    $seenNames = @{}
+    $seenDests = @{}
+    $requireChecksum = $ManagedChecksumPolicy -eq "require-for-release"
+
+    foreach ($item in @($Manifest.items)) {
+        if ($null -eq $item) { continue }
+
+        $name = [string]$item.name
+        $dest = [string]$item.dest
+        $type = if ($item.type) { ([string]$item.type).Trim().ToLowerInvariant() } else { "file" }
+        $mode = Get-InferredManifestDownloadMode -Item $item
+        $modeLower = $mode.ToLowerInvariant()
+        $text = @(
+            $name,
+            [string]$item.notes,
+            [string]$item.technicianNotes,
+            [string]$item.legacyWarning,
+            [string]$item.licenseNote,
+            $dest,
+            [string]$item.family,
+            [string]$item.categoryId
+        ) -join " "
+        $text = $text.ToLowerInvariant()
+
+        if ($seenNames.ContainsKey($name)) {
+            [void]$issues.Add("Duplicate manifest item name: $name")
+        }
+        elseif (-not [string]::IsNullOrWhiteSpace($name)) {
+            $seenNames[$name] = $true
+        }
+
+        if ($seenDests.ContainsKey($dest)) {
+            [void]$issues.Add("Duplicate manifest destination: $dest")
+        }
+        elseif (-not [string]::IsNullOrWhiteSpace($dest)) {
+            $seenDests[$dest] = $true
+        }
+
+        if ($mode -eq "ManagedDownload" -and $type -ne "file") {
+            [void]$issues.Add("$name declares ManagedDownload but type is '$type'.")
+        }
+
+        if ($type -eq "file" -and $mode -ne "ManagedDownload") {
+            [void]$issues.Add("$name is type=file but downloadMode is '$mode'.")
+        }
+
+        if ($mode -eq "ManagedDownload" -and $requireChecksum -and -not (Test-ManifestItemChecksumProof -Item $item)) {
+            [void]$issues.Add("$name is ManagedDownload without checksum proof under require-for-release.")
+        }
+
+        if ($type -eq "page") {
+            foreach ($field in @("sha256", "sha256Url", "sha512", "sha512Url")) {
+                if ($null -ne $item.PSObject.Properties[$field] -and -not [string]::IsNullOrWhiteSpace([string]$item.$field)) {
+                    [void]$issues.Add("$name is a page item but declares $field.")
+                }
+            }
+        }
+
+        if ($mode -in @("ManualMediaRequired", "FirmwareBlocked", "VendorPortal", "OEMSpecific") -and $type -ne "page") {
+            [void]$issues.Add("$name uses $mode but is not type=page.")
+        }
+
+        if ($mode -eq "LicenseRestricted" -and $type -ne "page") {
+            [void]$issues.Add("$name is license-restricted but is not type=page.")
+        }
+
+        if (($text -match 'windows-legacy|manual iso required|macos|ios-ipados|manual ipsw|android-manual-firmware-drop|manual firmware|firmware required|bios|uefi firmware') -and $mode -eq "ManagedDownload") {
+            [void]$issues.Add("$name is restricted/manual media or firmware but was classified as ManagedDownload.")
+        }
+
+        if (($text -match "hiren|strelec|medicat|community winpe") -and $mode -eq "ManagedDownload") {
+            [void]$issues.Add("$name is a community WinPE/toolkit entry and cannot be ManagedDownload without an explicit legal allowlist.")
+        }
+
+        $actionLabel = [string]$item.actionLabel
+        if ($mode -ne "InfoOnly" -and $actionLabel.Trim() -eq "Info") {
+            [void]$issues.Add("$name uses raw actionLabel 'Info' outside InfoOnly.")
+        }
+
+        if ($modeLower -notin @((Get-ValidDownloadModes) | ForEach-Object { $_.ToLowerInvariant() })) {
+            [void]$issues.Add("$name inferred unsupported downloadMode '$mode'.")
+        }
+    }
+
+    return $issues.ToArray()
 }
 
 function Get-ManagedChecksumPolicy {
@@ -356,8 +574,10 @@ function Get-ManagedItemsMissingChecksumCoverage {
 
         $hasSha256 = -not [string]::IsNullOrWhiteSpace([string]$item.sha256)
         $hasSha256Url = -not [string]::IsNullOrWhiteSpace([string]$item.sha256Url)
+        $hasSha512 = -not [string]::IsNullOrWhiteSpace([string]$item.sha512)
+        $hasSha512Url = -not [string]::IsNullOrWhiteSpace([string]$item.sha512Url)
 
-        if ($hasSha256 -or $hasSha256Url) { continue }
+        if ($hasSha256 -or $hasSha256Url -or $hasSha512 -or $hasSha512Url) { continue }
 
         $missing.Add([PSCustomObject]@{
             Name = [string]$item.name
@@ -394,8 +614,10 @@ function Get-EnabledManagedFileItems {
 function Get-ChecksumCoverageModeText {
     param([Parameter(Mandatory)]$Item)
 
-    $hasPinnedChecksum = -not [string]::IsNullOrWhiteSpace([string]$Item.sha256)
-    $hasChecksumUrl = -not [string]::IsNullOrWhiteSpace([string]$Item.sha256Url)
+    $hasPinnedChecksum = (-not [string]::IsNullOrWhiteSpace([string]$Item.sha256)) -or
+                         (-not [string]::IsNullOrWhiteSpace([string]$Item.sha512))
+    $hasChecksumUrl = (-not [string]::IsNullOrWhiteSpace([string]$Item.sha256Url)) -or
+                      (-not [string]::IsNullOrWhiteSpace([string]$Item.sha512Url))
 
     if ($hasPinnedChecksum -and $hasChecksumUrl) { return "pinned+remote" }
     if ($hasPinnedChecksum) { return "pinned-only" }
@@ -455,6 +677,20 @@ function Get-ManagedFileResilienceMetadataIssues {
         $fallbackRule = [string]$item.fallbackRule
         $maintenanceRankText = [string]$item.maintenanceRank
         $borderline = $item.borderline
+
+        try {
+            Assert-Sha256Value -Value $item.sha256 -FieldName "sha256"
+        }
+        catch {
+            [void]$issues.Add($name + " has an invalid sha256 value.")
+        }
+
+        try {
+            Assert-Sha512Value -Value $item.sha512 -FieldName "sha512"
+        }
+        catch {
+            [void]$issues.Add($name + " has an invalid sha512 value.")
+        }
 
         if ([string]::IsNullOrWhiteSpace($sourceType)) {
             [void]$issues.Add($name + " is missing sourceType.")
@@ -549,8 +785,17 @@ function Get-ManagedDownloadRevalidationRows {
         $urlResult = Test-RemoteHead -Uri $declaredUrl
         $checksumMode = Get-ChecksumCoverageModeText -Item $item
 
-        $hasChecksumUrl = -not [string]::IsNullOrWhiteSpace([string]$item.sha256Url)
-        $checksumUrl = if ($hasChecksumUrl) { [string]$item.sha256Url } else { "" }
+        $hasChecksumUrl = (-not [string]::IsNullOrWhiteSpace([string]$item.sha256Url)) -or
+                          (-not [string]::IsNullOrWhiteSpace([string]$item.sha512Url))
+        $checksumUrl = if (-not [string]::IsNullOrWhiteSpace([string]$item.sha256Url)) {
+            [string]$item.sha256Url
+        }
+        elseif (-not [string]::IsNullOrWhiteSpace([string]$item.sha512Url)) {
+            [string]$item.sha512Url
+        }
+        else {
+            ""
+        }
         $checksumResult = $null
         if ($hasChecksumUrl) {
             $checksumResult = Test-RemoteHead -Uri $checksumUrl
@@ -1020,6 +1265,8 @@ function Assert-VendorInventoryContract {
         $sourceUrl = [string]$entry.sourceUrl
         $version = [string]$entry.version
         $sourceTrust = if ($entry.source_trust) { ([string]$entry.source_trust).Trim().ToLowerInvariant() } else { "" }
+        $downloadMode = [string]$entry.downloadMode
+        $verificationMode = [string]$entry.verificationMode
 
         if ([string]::IsNullOrWhiteSpace($name)) {
             throw "$prefix.name is required."
@@ -1043,6 +1290,28 @@ function Assert-VendorInventoryContract {
 
         if ($sourceTrust -notin @("official", "community", "manual")) {
             throw "$prefix.source_trust must be 'official', 'community', or 'manual'."
+        }
+
+        Assert-DownloadModeValue -Value $downloadMode -FieldName "$prefix.downloadMode"
+
+        if (-not [string]::IsNullOrWhiteSpace($verificationMode) -and $verificationMode -notin @("manual-root", "managed-page-shortcut", "verified-file-checksum")) {
+            throw "$prefix.verificationMode must be 'manual-root', 'managed-page-shortcut', or 'verified-file-checksum'."
+        }
+
+        if ($sourceTrust -eq "manual" -and [string]$entry.verificationMode -ne "manual-root") {
+            throw "$prefix manual inventory roots must use verificationMode='manual-root'."
+        }
+
+        if ([bool]$entry.managed -and [string]::IsNullOrWhiteSpace($sourceUrl)) {
+            throw "$prefix managed vendor inventory entries must declare sourceUrl."
+        }
+
+        if ([bool]$entry.managed -and [string]::IsNullOrWhiteSpace($downloadMode)) {
+            throw "$prefix managed vendor inventory entries must declare downloadMode."
+        }
+
+        if ([bool]$entry.managed -and $downloadMode -notin @("VendorPortal", "OEMSpecific", "OfficialDownloadPage", "FirmwareBlocked")) {
+            throw "$prefix managed vendor shortcuts must remain page/portal modes, not $downloadMode."
         }
 
         Assert-Sha256Value -Value $entry.checksum -FieldName "$prefix.checksum"
@@ -1421,6 +1690,13 @@ Run-Test -Name "managed-items-have-checksum-coverage" -Body {
     Add-Warning ("[offline] " + $message)
 }
 
+Run-Test -Name "manifest-download-mode-policy-is-valid" -Body {
+    $issues = @(Get-ManifestDownloadModePolicyIssues -Manifest $manifest -ManagedChecksumPolicy $managedChecksumPolicy)
+    if ($issues.Count -gt 0) {
+        throw ("Manifest downloadMode policy violations: " + ($issues -join "; "))
+    }
+}
+
 Run-Test -Name "managed-download-resilience-metadata-is-complete" -Body {
     $issues = @(Get-ManagedFileResilienceMetadataIssues -Manifest $manifest)
     if ($issues.Count -eq 0) {
@@ -1476,14 +1752,13 @@ if (-not $RevalidateManagedDownloads) {
         )
 
         foreach ($expectedRelativePath in @(
-            "README.md",
-            "ForgerEMS.updates.json",
-            "_docs\ForgerEMS-Download-Catalog.txt",
-            "_docs\ForgerEMS-Managed-Download-Maintenance.txt",
-            "_docs\ForgerEMS-Link-Inventory.csv",
+            "_forgerems\metadata\ForgerEMS.updates.json",
+            "_forgerems\support\ForgerEMS-Download-Catalog.txt",
+            "_forgerems\support\ForgerEMS-Managed-Download-Maintenance.txt",
+            "_forgerems\support\ForgerEMS-Link-Inventory.csv",
             "Drivers\README.txt",
             "MediCat.USB\DOWNLOAD - MediCat.url",
-            "ISO\Linux\DOWNLOAD - Fedora Workstation.url",
+            "ISO\Linux\DOWNLOAD - Pop!_OS.url",
             "ISO\Linux\DOWNLOAD - Endless OS.url",
             "Tools\Portable\Security\DOWNLOAD - AdwCleaner.url"
         )) {
@@ -1495,10 +1770,13 @@ if (-not $RevalidateManagedDownloads) {
             "IfScriptFails(ManualSetup)",
             "ForgerTools",
             "README.txt",
+            "README.md",
+            "START-HERE.html",
+            "ForgerEMS.updates.json",
+            "ForgerEMS-managed-download-result.json",
             "Docs",
             "_archive",
-            "_downloads",
-            "_reports"
+            "_downloads"
         ) + $suppressedShortcutRelativePaths) {
             $unexpectedPath = Join-Path $root $unexpectedRelativePath
             Assert-Condition -Condition (-not (Test-Path -LiteralPath $unexpectedPath)) -Message "Legacy layout artifact should not be created: $unexpectedPath"
@@ -1587,10 +1865,13 @@ if (-not $RevalidateManagedDownloads) {
 
         Set-Content -LiteralPath $manifestUnderTestPath -Value $manifestContent -Encoding UTF8
 
+        # Use the absolute USB-local manifest path so this regression does not load the bundled
+        # production catalog (which would trigger live managed-download work and time out).
         $result = Invoke-PublicScript `
             -ScriptPath $updateScript `
-            -Arguments @("-UsbRoot", $root, "-ManifestName", "ForgerEMS.updates.json") `
-            -LogPath (Join-Path $runRoot "updater-cleans-active-managed-shadow-placeholder.log")
+            -Arguments @("-UsbRoot", $root, "-ManifestName", $manifestUnderTestPath) `
+            -LogPath (Join-Path $runRoot "updater-cleans-active-managed-shadow-placeholder.log") `
+            -TimeoutSec 60
 
         Assert-Condition -Condition ($result.ExitCode -eq 0) -Message "Updater did not complete successfully when the managed payload was already verified."
         Assert-Condition -Condition (Test-Path -LiteralPath $payloadPath) -Message "Verified managed payload should remain in place."
@@ -1688,11 +1969,22 @@ if ($Online) {
                 $itemType = if ($item.type) { ([string]$item.type).Trim().ToLowerInvariant() } else { "file" }
 
                 if ($itemType -eq "file") {
-                    $hasPinnedChecksum = -not [string]::IsNullOrWhiteSpace([string]$item.sha256)
-                    $hasChecksumUrl = -not [string]::IsNullOrWhiteSpace([string]$item.sha256Url)
+                    $hasPinnedChecksum = (-not [string]::IsNullOrWhiteSpace([string]$item.sha256)) -or
+                                         (-not [string]::IsNullOrWhiteSpace([string]$item.sha512))
+                    $hasChecksumUrl = (-not [string]::IsNullOrWhiteSpace([string]$item.sha256Url)) -or
+                                      (-not [string]::IsNullOrWhiteSpace([string]$item.sha512Url))
+                    $checksumUrl = if (-not [string]::IsNullOrWhiteSpace([string]$item.sha256Url)) {
+                        [string]$item.sha256Url
+                    }
+                    elseif (-not [string]::IsNullOrWhiteSpace([string]$item.sha512Url)) {
+                        [string]$item.sha512Url
+                    }
+                    else {
+                        ""
+                    }
 
-                    if ($item.sha256Url) {
-                        $shaResult = Test-RemoteHead -Uri ([string]$item.sha256Url)
+                    if ($checksumUrl) {
+                        $shaResult = Test-RemoteHead -Uri $checksumUrl
 
                         if ($shaResult.Reachable) {
                             if ($shaResult.Note) {
@@ -1701,7 +1993,7 @@ if ($Online) {
 
                             $declaredChecksumHost = ""
                             $finalChecksumHost = ""
-                            try { $declaredChecksumHost = ([Uri]([string]$item.sha256Url)).Host } catch {}
+                            try { $declaredChecksumHost = ([Uri]$checksumUrl).Host } catch {}
                             try { $finalChecksumHost = ([Uri]$shaResult.FinalUri).Host } catch {}
 
                             if (-not [string]::IsNullOrWhiteSpace($declaredChecksumHost) -and -not [string]::IsNullOrWhiteSpace($finalChecksumHost) -and $declaredChecksumHost -ne $finalChecksumHost -and -not (Test-CrossHostRedirectIsExpected -SourceType $sourceType)) {

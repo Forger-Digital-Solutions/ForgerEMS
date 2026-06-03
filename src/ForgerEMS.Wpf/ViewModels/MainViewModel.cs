@@ -30,11 +30,12 @@ using VentoyToolkitSetup.Wpf.Services.Intelligence;
 using VentoyToolkitSetup.Wpf.Services.Kyra;
 using VentoyToolkitSetup.Wpf.Services.KyraTools;
 using VentoyToolkitSetup.Wpf.Services.Licensing;
+using VentoyToolkitSetup.Wpf.Services.DriveValidation;
 using VentoyToolkitSetup.Wpf.Services.NetworkPulse;
 
 namespace VentoyToolkitSetup.Wpf.ViewModels;
 
-public sealed class MainViewModel : ObservableObject, IDisposable
+public sealed partial class MainViewModel : ObservableObject, IDisposable
 {
     private sealed class Releaser(SemaphoreSlim gate) : IDisposable
     {
@@ -67,12 +68,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private readonly IVentoyIntegrationService _ventoyIntegrationService;
     private readonly IAppRuntimeService _appRuntimeService;
     private readonly IUsbBenchmarkService _usbBenchmarkService;
+    private readonly IDriveValidationService _driveValidationService;
     private readonly ICopilotService _copilotService;
     private readonly ICopilotProviderRegistry _copilotProviderRegistry;
     private readonly IUsbIntelligenceService _usbIntelligenceService;
+    private readonly IPortPowerTelemetryService _portPowerTelemetryService;
+    private readonly IElevatedScanTelemetryCache _elevatedScanTelemetryCache;
     private readonly IAutoIntelligenceOrchestrator _autoIntelligenceOrchestrator;
     private readonly IWslCommandExecutor _wslExecutor;
     private readonly Dictionary<string, UsbBenchmarkResult> _benchmarkResultsByRoot = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, DriveValidationResult> _driveValidationResultsByRoot = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _benchmarksInProgress = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _usbBuilderActionGate = new(1, 1);
     private readonly UsbMachineProfileStore _usbMachineProfileStore;
@@ -81,15 +86,21 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _usbMappingWorkflowStatus = string.Empty;
     private string _usbMappingLabelDraft = string.Empty;
     private readonly string _benchmarkCachePath;
+    private readonly string _driveValidationCachePath;
     private readonly string _copilotConfigPath;
     private readonly string _betaConfigPath;
     private readonly string _updateConfigPath;
+    private readonly string _usbBuilderProfileConfigPath;
     private readonly AppUpdateSettingsStore _updateSettingsStore;
+    private readonly UsbBuilderProfileSettingsStore _usbBuilderProfileSettingsStore;
     private readonly NetworkPulseSettingsStore _networkPulseSettingsStore;
     private readonly NetworkPulseViewModel _networkPulseViewModel;
     private readonly NetworkPulseService _networkPulseService;
     private readonly GitHubReleaseUpdateCheckService _updateCheckService;
     private AppUpdateSettings _appUpdateSettings = new();
+    private UsbBuilderProfileSettings _usbBuilderProfileSettings = new();
+    private bool _loadingUsbBuilderProfileSettings;
+    private CancellationTokenSource? _usbBuilderProfileMediaScanCts;
     private bool _updateCheckInProgress;
     private CancellationTokenSource? _updateCheckCancellation;
     private bool _updateDownloadInProgress;
@@ -111,7 +122,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private Visibility _appUpdateDiagnosticsHintVisibility = Visibility.Collapsed;
     private bool _verboseLiveLogs;
     private UsbManagedHeartbeatPhase _usbManagedHeartbeatPhase = UsbManagedHeartbeatPhase.Unknown;
-    private CancellationTokenSource? _usbMonitorCancellation;
+    private UsbDeviceChangeDebouncer? _usbDeviceChangeDebouncer;
+    private UsbDeviceChangeWindowHook? _usbDeviceChangeWindowHook;
+    private bool _usbDeviceChangeHookAttached;
     private CancellationTokenSource? _manualUsbBenchmarkCts;
     private CancellationTokenSource? _autoUsbBenchmarkCts;
     private CancellationTokenSource? _autoUsbBenchmarkDebounceCts;
@@ -131,6 +144,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         None,
         UserRequested,
         SelectionChanged,
+        UsbActionStarted,
+        TargetSettling,
         AppShutdown
     }
 
@@ -174,6 +189,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _managedSummaryStatusText = "No snapshot";
     private string _managedDownloadPartialBannerText = string.Empty;
     private Visibility _managedDownloadRetryPanelVisibility = Visibility.Collapsed;
+    private string _usbBuilderProfileSummaryText = "This update will include: Core, Windows, Legacy Windows, Linux Rescue, Diagnostics, OEM Tools. macOS / Mobile folders are off.";
+    private string _usbBuilderProfileNoteText = "Unchecked packs are skipped for this run. Existing user-supplied files already on the USB are not deleted.";
+    private string _fullManagedDownloadStatusText = "Managed downloads: select a USB target and profile to calculate.";
+    private string _fullManagedDownloadDetailText = "Full Managed Download updates safe verified downloads only. BIOS, firmware, and model-specific OEM drivers remain manual lookup links.";
     private string _logsText = string.Empty;
     private string _recentLogsText = "No log output yet.";
     private string _selectedLogLevelFilter = "All";
@@ -208,7 +227,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _systemIntelligenceFlipValueCardText = "Run a system scan to generate local flip-value guidance.";
     private string _systemIntelligenceDeviceFitCardText = "Run a system scan to estimate best-use/device fit.";
     private string _systemIntelligenceHardwareXrayCardText = "Run a system scan to build machine class and sensor exposure coverage.";
-    private string _systemIntelligenceScanModeHintText = "Standard scan: safe non-admin scan. Elevated scan unlocks deeper hardware/security detail.";
+    private string _systemIntelligenceSensorStackStatusText =
+        "Forger Sensor Stack\nCore: Active\nElevated Scan: Recommended\nSensor Service: Not installed / Future optional component\nDeep Sensor Driver: Not included / Roadmap\nExternal tools: Not required";
+    private string _systemIntelligenceScanModeHintText = "Standard scan runs automatically. Elevated scan unlocks extra detail when needed.";
     private string _systemIntelligenceStaleBannerText = string.Empty;
     private string _systemIntelligenceAutomationLineText = string.Empty;
     private string _systemIntelligenceWarningReasonText = "Warning reason: none.";
@@ -231,7 +252,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _toolkitMissingCountText = "Managed Missing: 0";
     private string _toolkitUpdatesCountText = "Managed updates available: 0";
     private string _toolkitFailedCountText = "Verification issues: 0";
-    private string _toolkitManualCountText = "Manual 0";
+    private string _toolkitManualCountText = "Manual / Vendor links: 0";
     private string _toolkitPlaceholderCountText = "Skipped/Placeholder 0";
     private string _toolkitHealthVerdictText = "Health Verdict: not scanned";
     private string _toolkitReadinessScoreText = "Toolkit readiness: Unknown / Limited Data (0/100)";
@@ -243,24 +264,45 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private string _machineProfileLastHealthText = "Last health score: unknown";
     private string _machineProfileLastToolkitReadinessText = "Last toolkit readiness: unknown";
     private string _toolkitManualExplanationText =
-        "Manual Required means ForgerEMS cannot legally or safely auto-download this item (licensing, vendor gating, or verification limits). Use the provided link or instructions, place files where the manifest expects, then re-run Refresh Health.";
+        "Toolkit Manager checks readiness, reports, links, and selected-tool details. Use USB Builder to add or update tools on the USB.";
+    private const string ToolkitTargetHelperTextValue = "Change USB target from USB Builder.";
+    private const string ToolkitManagerFooterGuidanceValue =
+        "Use USB Builder to add/update tools. Toolkit Manager inspects what is present and what needs attention. " +
+        "Manual / Vendor links are OEM support pages, model-specific drivers, firmware lookup, and licensed/manual tools — they are not auto-downloaded and do not count as managed-tool failures. " +
+        "Use the Manual / Vendor links chip to open them.";
     private string _selectedToolkitFilter = "All";
     private string _selectedToolkitCategoryFilter = "All categories";
+    private string _selectedToolkitFamilyFilter = "All families";
+    private string _selectedToolkitArchitectureFilter = "All architectures";
+    private string _selectedToolkitBootModeFilter = "All boot modes";
+    private string _selectedToolkitSourceTrustFilter = "All source trust";
     private string _toolkitSearchText = string.Empty;
     private string _toolkitLastScanText = "Last scan: never";
     private string _toolkitClassificationSummaryText = string.Empty;
+    private string _toolkitRecommendedUseSummaryText = "Recommended-use groups: load toolkit health to build groups.";
+    private string _toolkitDownloadPlanSummaryText = "Download plan: no selected items.";
+    private string _toolkitDownloadPlanStorageText = "Storage: no selected items.";
+    private string _toolkitDownloadPlanValidationText = "Planning only. No downloads or USB writes start from selection.";
+    private string _selectedManagedDownloadExecutionText = "Selected downloads: idle.";
+    private string _selectedManagedDownloadSafetyText = "Selected downloads use Update-ForgerEMS with a selected-only manifest. Manual-only entries are instructions only.";
+    private bool _isSelectedManagedDownloadRunning;
+    private CancellationTokenSource? _selectedManagedDownloadCts;
+    private string _toolkitProfileNotes = string.Empty;
+    private string _selectedToolkitProfileName = "Windows Recovery USB";
     private ToolkitHealthItemView? _selectedToolkitHealthItem;
+    private DownloadQueueItem? _selectedDownloadPlanItem;
     private Brush _toolkitStatusBackground = RunningBackground;
     private Brush _toolkitStatusBorderBrush = RunningBorder;
     private Brush _toolkitStatusForeground = RunningForeground;
     private readonly List<ToolkitHealthItemView> _allToolkitHealthItems = [];
+    private readonly ToolkitWorkspaceProfileStore _toolkitProfileStore = new();
     private readonly ToolkitLinkVerifier _toolkitLinkVerifier = new();
     private CancellationTokenSource? _toolkitLinkVerifyCts;
     private ToolkitLinkVerificationSummaryForReadiness? _cachedLinkVerificationSummary;
     private bool _toolkitHealthAlignedWithSelection;
     private bool _isToolkitLinkVerificationBusy;
     private string _toolkitLinkVerificationCountsText =
-        "Links: not verified yet (Toolkit Manager ► Verify Links).";
+        "Links: not verified yet (expand Advanced link diagnostics ► Verify Links).";
     private string _toolkitLinkVerificationLastRunText = "Last verify: —";
     private string _toolkitLinkVerificationExplanationText =
         "Safe HTTP-only verification checks HEAD/ranged GET metadata — downloads/archives are not executed.";
@@ -315,6 +357,64 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private string _usbIntelligenceRunBenchmarkHintDisplay = string.Empty;
 
+    private UsbIntelligencePanelUiState? _lastUsbIntelligencePanelState;
+
+    private PortPowerSnapshot? _lastPortPowerSnapshot;
+
+    private ElevatedScanTelemetrySnapshot? _lastElevatedScanTelemetrySnapshot;
+
+    private string _portIntelligenceOverviewText =
+        "Select a USB target and refresh telemetry to build Port Intelligence.";
+
+    private string _portIntelligencePortMapSummaryText =
+        "Port map unavailable until USB Intelligence has a saved report.";
+
+    private string _portIntelligenceChargingSummaryText =
+        "Charging telemetry has not been refreshed yet.";
+
+    private string _portIntelligencePowerSourceSummaryText =
+        "Power source unknown. Adapter wattage: Unknown.";
+
+    private string _portIntelligenceBottlenecksText =
+        "No obvious cable, hub, port, power, or device bottleneck has been identified yet.";
+
+    private string _portIntelligenceRecommendedFixesText =
+        "Map the current port, run a USB benchmark, and refresh charging telemetry before making hardware changes.";
+
+    private string _portIntelligenceDeepScanSummaryText =
+        ElevatedScanTelemetrySnapshot.RunElevatedScanPrompt;
+
+    private string _portIntelligenceTelemetryLimitationsText =
+        PortIntelligenceSummaryBuilder.DefaultTelemetryLimitations;
+
+    private string _portPowerSummaryText = "Charging intelligence has not been refreshed yet.";
+
+    private string _portPowerBatteryPercentDisplay = "Unknown";
+
+    private string _portPowerBatteryStatusDisplay = "Unknown";
+
+    private string _portPowerSourceDisplay = "Unknown";
+
+    private string _portPowerAdapterClassDisplay = "Unknown";
+
+    private string _portPowerChargeRateDisplay = "Unavailable";
+
+    private string _portPowerEstimatedFullDisplay = "Unavailable";
+
+    private string _portPowerVoltageCurrentDisplay =
+        "Unavailable - exact USB-C voltage/current is not exposed by this device.";
+
+    private string _portPowerTelemetryConfidenceDisplay = "Unavailable";
+
+    private string _portPowerEvidenceSummaryDisplay = "Only basic Windows power status was available.";
+
+    private string _portPowerMissingTelemetryReasonDisplay =
+        "This device does not expose per-port USB-C power telemetry. ForgerEMS can still estimate charging from battery behavior.";
+
+    private string _portPowerWarningsDisplay = string.Empty;
+
+    private string _portPowerLastUpdatedDisplay = "Not refreshed";
+
     private string _unifiedDiagnosticsSummaryText = "Unified diagnostics: not generated yet.";
 
     private string _diagnosticsHealthChecklistText =
@@ -354,6 +454,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private CancellationTokenSource? _wslRunnerCancellation;
     private readonly ConcurrentQueue<string> _wslPendingOutputLines = new();
     private readonly ConcurrentQueue<LogLine> _pendingLiveLogs = new();
+    private readonly ManagedDownloadProgressLogThrottle _managedDownloadProgressThrottle = new();
     private readonly object _logDedupLock = new();
     private string _lastEnqueuedLogText = string.Empty;
     private LogSeverity _lastEnqueuedLogSeverity = LogSeverity.Info;
@@ -365,12 +466,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private SafeTestingEnvironmentStatus _cachedSafeTestingStatus = SafeTestingEnvironmentProbe.ProbeQuick();
     private bool _experimentalEmbeddedWslRunner;
     private CancellationTokenSource? _safeTestingEnvironmentRefreshCts;
+    private bool _isLinkSafetyBusy;
     private string _linkSafetyUrlInput = string.Empty;
     private string _linkSafetyResultText =
-        "Paste an https URL, tap Analyze for local heuristics, then optionally HTTPS HEAD. Quarantine download never runs the file.";
+        "Paste an http(s) URL. Analyze reads headers and a bounded HTML preview only. Quarantine download never runs the file.";
     private string _localFileSafetyPath = string.Empty;
     private string _localFileSafetyResultText =
-        "Pick a downloaded file for a read-only check (SHA256 + heuristics). ForgerEMS never executes the selected file.";
+        "Pick a downloaded file for a read-only check. ForgerEMS computes metadata only and never executes the selected file.";
     private string _lastLocalSafetySha256 = string.Empty;
     private Visibility _appUpdateBannerVisibility = Visibility.Collapsed;
     private string _appUpdateBannerTitle = string.Empty;
@@ -391,7 +493,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ICopilotProviderRegistry copilotProviderRegistry,
         IWslCommandExecutor? wslExecutor = null,
         IUsbIntelligenceService? usbIntelligenceService = null,
-        IAutoIntelligenceOrchestrator? autoIntelligenceOrchestrator = null)
+        IAutoIntelligenceOrchestrator? autoIntelligenceOrchestrator = null,
+        IDriveValidationService? driveValidationService = null,
+        IPortPowerTelemetryService? portPowerTelemetryService = null,
+        IElevatedScanTelemetryCache? elevatedScanTelemetryCache = null)
     {
         _backendDiscoveryService = backendDiscoveryService;
         _powerShellRunnerService = powerShellRunnerService;
@@ -402,9 +507,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _ventoyIntegrationService = ventoyIntegrationService;
         _appRuntimeService = appRuntimeService;
         _usbBenchmarkService = usbBenchmarkService;
+        _driveValidationService = driveValidationService ?? new DriveValidationService();
         _copilotService = copilotService;
         _copilotProviderRegistry = copilotProviderRegistry;
         _usbIntelligenceService = usbIntelligenceService ?? new UsbIntelligenceService();
+        _portPowerTelemetryService = portPowerTelemetryService ?? new PortPowerTelemetryService();
+        _elevatedScanTelemetryCache = elevatedScanTelemetryCache ?? new ElevatedScanTelemetryCache();
         _autoIntelligenceOrchestrator = autoIntelligenceOrchestrator ?? new AutoIntelligenceOrchestrator(
             _appRuntimeService,
             _powerShellRunnerService,
@@ -416,12 +524,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _usbMachineProfileStore = new UsbMachineProfileStore(_appRuntimeService.RuntimeRoot);
         _machineProfileStore = new MachineProfileStore(_appRuntimeService.RuntimeRoot);
         _benchmarkCachePath = Path.Combine(_appRuntimeService.RuntimeRoot, "cache", "usb-benchmarks.json");
+        _driveValidationCachePath = Path.Combine(_appRuntimeService.RuntimeRoot, "cache", "drive-validation-results.json");
         _copilotConfigPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "copilot-settings.json");
         _kyraMemoryPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "kyra-memory.json");
         _kyraMachineMemoryPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "kyra-machine-memory.json");
         _betaConfigPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "beta-settings.json");
         _updateConfigPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "update-settings.json");
+        _usbBuilderProfileConfigPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "usb-builder-profile.json");
         _updateSettingsStore = new AppUpdateSettingsStore(_updateConfigPath);
+        _usbBuilderProfileSettingsStore = new UsbBuilderProfileSettingsStore(_usbBuilderProfileConfigPath);
         _networkPulseSettingsStore = new NetworkPulseSettingsStore(
             Path.Combine(_appRuntimeService.RuntimeRoot, "config", "network-pulse-settings.json"));
         _networkPulseViewModel = new NetworkPulseViewModel(_networkPulseSettingsStore);
@@ -429,27 +540,30 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _networkPulseViewModel,
             () => _networkPulseViewModel.CurrentSettings,
             () => new NetworkPulseHostActivityHints(
-                IsBusy,
-                _updateDownloadInProgress,
-                _benchmarksInProgress.Count > 0),
+                _updateDownloadInProgress),
             SynchronizationContext.Current,
             () => Path.Combine(_appRuntimeService.RuntimeRoot, "reports"),
             line => _appRuntimeService.AppendSessionLog(line));
         _updateCheckService = new GitHubReleaseUpdateCheckService();
         LoadBenchmarkCache();
+        LoadDriveValidationCache();
         LoadCopilotSettings();
         LoadBetaSettings();
         LoadUpdateSettings();
+        LoadUsbBuilderProfileSettings();
         RefreshDeepSensorModeSettingsProperties();
         _isLoadingDeepSensorModeSetting = false;
         _networkPulseService.Start();
 
         RefreshAllCommand = new AsyncRelayCommand(RefreshAllAsync, () => !IsBusy);
         RefreshUsbTargetsCommand = new AsyncRelayCommand(RefreshUsbTargetsAsync, () => !IsBusy);
-        VerifyCommand = new AsyncRelayCommand(RunVerifyAsync, CanRunBackendOnlyActions);
         RevalidateManagedDownloadsCommand = new AsyncRelayCommand(RunRevalidateManagedDownloadsAsync, CanRunBackendOnlyActions);
         SetupUsbCommand = new AsyncRelayCommand(RunSetupUsbAsync, CanRunTargetedActions);
         UpdateUsbCommand = new AsyncRelayCommand(RunUpdateUsbAsync, CanRunTargetedActions);
+        FullManagedDownloadCommand = new AsyncRelayCommand(RunFullManagedDownloadAsync, CanRunTargetedActions);
+        SelectRecommendedUsbBuilderProfileCommand = new RelayCommand(SelectRecommendedUsbBuilderProfile, () => !IsBusy);
+        SelectAllUsbBuilderProfileCommand = new RelayCommand(SelectAllUsbBuilderProfile, () => !IsBusy);
+        ResetUsbBuilderProfileCommand = new RelayCommand(ResetUsbBuilderProfile, () => !IsBusy);
         RetryFailedManagedDownloadsCommand = new AsyncRelayCommand(RunRetryFailedManagedDownloadsAsync, CanRetryFailedManagedDownloads);
         RenameUsbCommand = new AsyncRelayCommand(RunRenameUsbAsync, CanRunTargetedActions);
         InstallOrUpdateVentoyCommand = new AsyncRelayCommand(RunInstallOrUpdateVentoyAsync, CanRunTargetedActions);
@@ -458,21 +572,44 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         CopyElevatedScanAdminCommand = new RelayCommand(CopyElevatedScanAdminCommandExecute, CanRunBackendOnlyActions);
         RestartAsAdministratorCommand = new RelayCommand(RestartAsAdministratorExecute);
         RefreshToolkitHealthCommand = new AsyncRelayCommand(RunToolkitHealthScanAsync, CanRunToolkitScan);
+        FullVerifyToolkitHealthCommand = new AsyncRelayCommand(RunToolkitHealthFullVerifyAsync, CanRunToolkitScan);
         VerifyToolkitLinksCommand = new AsyncRelayCommand(RunVerifyToolkitLinksAsync, CanVerifyToolkitLinks);
         CancelVerifyToolkitLinksCommand = new RelayCommand(CancelVerifyToolkitLinks, () => IsToolkitLinkVerificationBusy);
         UpdateToolkitCommand = new AsyncRelayCommand(RunToolkitUpdateAsync, CanRunTargetedActions);
         OpenSystemReportFolderCommand = new RelayCommand(OpenSystemReportFolder);
         OpenSystemJsonReportCommand = new RelayCommand(OpenSystemJsonReport);
         OpenSystemMarkdownReportCommand = new RelayCommand(OpenSystemMarkdownReport);
+        OpenSystemIntelligenceFilesCommand = new RelayCommand(OpenSystemIntelligenceFiles);
         CopySystemReportSafePathCommand = new RelayCommand(CopySystemReportSafePath);
         CopySystemSummaryCommand = new RelayCommand(CopySystemSummary);
         OpenToolkitUsbReportsCommand = new RelayCommand(OpenToolkitUsbReports, () => SelectedUsbTarget is not null);
         OpenToolkitLocalReportsCommand = new RelayCommand(OpenToolkitLocalReports);
+        OpenToolkitReportsCommand = new RelayCommand(OpenToolkitReports);
+        OpenToolkitFolderCommand = new RelayCommand(OpenToolkitFolder);
         RecheckSelectedToolCommand = new AsyncRelayCommand(RunToolkitHealthScanAsync, () => CanRunToolkitScan() && SelectedToolkitHealthItem is not null);
         OpenSelectedToolLocationCommand = new RelayCommand(OpenSelectedToolLocation, () => SelectedToolkitHealthItem is not null);
         OpenManualDownloadShortcutCommand = new RelayCommand(OpenManualDownloadShortcut, () => SelectedToolkitHealthItem is not null);
         CopySelectedToolkitExpectedPathCommand = new RelayCommand(CopySelectedToolkitExpectedPath, () => SelectedToolkitHealthItem is not null);
         CopySelectedToolkitDetectedPathCommand = new RelayCommand(CopySelectedToolkitDetectedPath, () => SelectedToolkitHealthItem is not null);
+        AddSelectedToolToDownloadPlanCommand = new RelayCommand(AddSelectedToolToDownloadPlan, () => SelectedToolkitHealthItem is not null);
+        RemoveSelectedToolFromDownloadPlanCommand = new RelayCommand(RemoveSelectedToolFromDownloadPlan, () => SelectedToolkitHealthItem is not null);
+        SelectVisibleToolkitItemsCommand = new RelayCommand(SelectVisibleToolkitItems, () => ToolkitHealthItems.Count > 0);
+        ClearToolkitDownloadPlanCommand = new RelayCommand(ClearToolkitDownloadPlan, () => ToolkitDownloadPlanItems.Count > 0);
+        ValidateToolkitDownloadPlanCommand = new RelayCommand(ValidateToolkitDownloadPlan, () => ToolkitDownloadPlanItems.Count > 0);
+        SaveToolkitProfileCommand = new RelayCommand(SaveToolkitProfile, () => ToolkitDownloadPlanItems.Count > 0);
+        LoadToolkitProfileCommand = new RelayCommand(LoadToolkitProfile, () => !string.IsNullOrWhiteSpace(SelectedToolkitProfileName));
+        ExportToolkitProfileCommand = new RelayCommand(ExportToolkitProfile, () => ToolkitDownloadPlanItems.Count > 0);
+        ImportToolkitProfileCommand = new RelayCommand(ImportToolkitProfile);
+        RemoveSelectedPlanItemCommand = new RelayCommand(RemoveSelectedPlanItem, () => SelectedDownloadPlanItem is not null);
+        MoveSelectedPlanItemUpCommand = new RelayCommand(() => MoveSelectedPlanItem(-1), () => SelectedDownloadPlanItem is not null);
+        MoveSelectedPlanItemDownCommand = new RelayCommand(() => MoveSelectedPlanItem(1), () => SelectedDownloadPlanItem is not null);
+        DownloadSelectedManagedItemsCommand = new AsyncRelayCommand(RunSelectedManagedDownloadsAsync, CanRunSelectedManagedDownloads);
+        CancelSelectedManagedDownloadsCommand = new RelayCommand(CancelSelectedManagedDownloads, () => IsSelectedManagedDownloadRunning);
+        RetryFailedSelectedManagedDownloadsCommand = new AsyncRelayCommand(RunRetryFailedManagedDownloadsAsync, CanRetryFailedManagedDownloads);
+        OpenToolkitDownloadFolderCommand = new RelayCommand(OpenToolkitDownloadFolder, () => SelectedUsbTarget is not null);
+        CopySelectedManualInstructionsCommand = new RelayCommand(CopySelectedManualInstructions, () => SelectedToolkitHealthItem is not null);
+        OpenSelectedVendorPageCommand = new RelayCommand(OpenManualDownloadShortcut, () => SelectedToolkitHealthItem is not null);
+        ApplyToolkitQuickFilterCommand = new RelayCommand<string>(ApplyToolkitQuickFilter);
         CopyLogsCommand = new RelayCommand(CopyLogs, () => !string.IsNullOrWhiteSpace(LogsText));
         ClearLogsCommand = new RelayCommand(ClearLogs, () => Logs.Count > 0);
         ShowAboutCommand = new RelayCommand(ShowAbout);
@@ -513,9 +650,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         RunWslHostStatusRunnerCommand = new AsyncRelayCommand(
             () => RunWslHostArgumentsUiAsync(WslHostStatusArgs, "wsl.exe --status"),
             () => !IsBusy && !_isWslRunnerBusy && DiagnosticsFeatureFlags.EmbeddedWslCommandRunnerEnabled && _wslExecutor.IsWslInstalled());
-        AnalyzeLinkSafetyCommand = new RelayCommand(RunLinkSafetyAnalyze, () => !IsBusy);
-        FetchLinkSafetyHeadersCommand = new AsyncRelayCommand(RunLinkSafetyHeadAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(_linkSafetyUrlInput));
-        DownloadLinkToQuarantineCommand = new AsyncRelayCommand(DownloadLinkToQuarantineAsync, () => !IsBusy && !string.IsNullOrWhiteSpace(_linkSafetyUrlInput));
+        AnalyzeLinkSafetyCommand = new AsyncRelayCommand(RunLinkSafetyAnalyzeAsync, CanRunLinkSafetyAction);
+        FetchLinkSafetyHeadersCommand = new AsyncRelayCommand(RunLinkSafetyHeadAsync, CanRunLinkSafetyAction);
+        DownloadLinkToQuarantineCommand = new AsyncRelayCommand(DownloadLinkToQuarantineAsync, CanRunLinkSafetyAction);
         BrowseLocalFileSafetyCommand = new RelayCommand(BrowseLocalFileSafety, () => !IsBusy);
         AnalyzeLocalFileSafetyCommand = new RelayCommand(RunLocalFileSafetyAnalyze, () => !IsBusy && !string.IsNullOrWhiteSpace(_localFileSafetyPath));
         CopyLocalFileSafetyShaCommand = new RelayCommand(CopyLocalFileSafetySha, () => !string.IsNullOrWhiteSpace(_lastLocalSafetySha256));
@@ -533,10 +670,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         CaptureUsbMappingAfterCommand = new RelayCommand(CaptureUsbMappingAfter, () => SelectedUsbTarget is not null);
         SaveUsbMappingLabelCommand = new RelayCommand(SaveUsbMappingLabel, () => SelectedUsbTarget is not null && !string.IsNullOrWhiteSpace(UsbMappingLabelDraft));
         OpenUsbMappingWizardCommand = new RelayCommand(OpenUsbMappingWizard);
+        RefreshPortPowerCommand = new RelayCommand(RefreshPortPowerTelemetry);
         RunUsbIntelligenceBenchmarkCommand =
             new AsyncRelayCommand(RunUsbIntelligenceBenchmarkAsync, CanRunUsbIntelligenceBenchmark);
         CancelUsbIntelligenceBenchmarkCommand =
             new RelayCommand(CancelActiveUsbBenchmark, IsAnyUsbBenchmarkActive);
+        RunDriveValidatorCommand = new AsyncRelayCommand(RunDriveValidatorAsync, CanRunDriveValidator);
+        CancelDriveValidatorCommand = new RelayCommand(CancelDriveValidator, () => _driveValidationCts is { Token.IsCancellationRequested: false });
+        OpenDriveValidatorWizardCommand = new RelayCommand(OpenDriveValidatorWizard);
         AskCopilotWarningCommand = new AsyncRelayCommand(() => AskCopilotAsync("/warning"), () => !IsCopilotGenerating);
         AskCopilotListingCommand = new AsyncRelayCommand(() => AskCopilotAsync("/listing facebook"), () => !IsCopilotGenerating);
         AskCopilotLiveToolsCommand = new AsyncRelayCommand(() => AskCopilotAsync("/provider"), () => !IsCopilotGenerating);
@@ -592,6 +733,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ClearIgnoredAppUpdateVersionCommand = new RelayCommand(ClearIgnoredAppUpdateVersion, CanClearIgnoredAppUpdateVersion);
         ClearIgnoredAppUpdateVersionCommand.RaiseCanExecuteChanged();
         CheckForUpdatesNowCommand.RaiseCanExecuteChanged();
+        InitializeDriverHub();
 
         CopilotMessages.Add(new CopilotChatMessage
         {
@@ -606,10 +748,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         RefreshDiagnosticsAuxiliaryText();
         RefreshEmbeddedWslDiagnosticsBindings();
         RefreshKyraQuickPromptVisibilities();
+        RefreshToolkitProfileOptions();
+        RefreshToolkitDownloadPlan();
         ScheduleBackgroundUpdateCheck();
     }
 
     public ObservableCollection<UsbTargetInfo> UsbTargets { get; } = [];
+
+    public ObservableCollection<UsbBuilderProfileOption> UsbBuilderProfileOptions { get; } = [];
 
     public ObservableCollection<LogLine> Logs { get; } = [];
 
@@ -618,6 +764,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public ObservableCollection<string> DiagnosticsActionCenterItems { get; } = [];
 
     public ObservableCollection<ToolkitHealthItemView> ToolkitHealthItems { get; } = [];
+
+    public ObservableCollection<DownloadQueueItem> ToolkitDownloadPlanItems { get; } = [];
+
+    public ObservableCollection<SelectedManagedDownloadQueueItem> SelectedManagedDownloadQueueItems { get; } = [];
+
+    public ObservableCollection<string> ToolkitProfileOptions { get; } = [];
 
     public ObservableCollection<CopilotChatMessage> CopilotMessages { get; } = [];
 
@@ -646,6 +798,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         "All",
         "Installed",
         "Managed Missing",
+        "Manual / Vendor links",
         "Manual / Info",
         "Manual Required",
         "Verification Issues",
@@ -657,6 +810,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     [
         "All categories",
         "USB / Boot",
+        "Recovery",
+        "Security",
+        "Network",
+        "Legacy",
         "Disk / Storage",
         "Backup / Imaging",
         "Partitioning",
@@ -668,19 +825,67 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         "Portable Apps"
     ];
 
+    public IReadOnlyList<string> ToolkitFamilyFilterOptions { get; } =
+    [
+        "All families",
+        "Windows",
+        "Linux",
+        "BSD",
+        "DOS",
+        "Hobby",
+        "Recovery",
+        "Network",
+        "Security",
+        "Disk",
+        "USB"
+    ];
+
+    public IReadOnlyList<string> ToolkitArchitectureFilterOptions { get; } =
+    [
+        "All architectures",
+        "amd64",
+        "x86",
+        "arm64",
+        "i386",
+        "many"
+    ];
+
+    public IReadOnlyList<string> ToolkitBootModeFilterOptions { get; } =
+    [
+        "All boot modes",
+        "bios",
+        "uefi",
+        "secure-boot",
+        "uefi-csm"
+    ];
+
+    public IReadOnlyList<string> ToolkitSourceTrustFilterOptions { get; } =
+    [
+        "All source trust",
+        "official",
+        "community",
+        "manual"
+    ];
+
     public IReadOnlyList<string> CopilotModeOptions { get; } = ["ForgerEMS Beta Gateway", "BYOK", "Local Only", "Offline Only", "Free API Pool", "Hybrid", "Online/API", "Ask First"];
 
     public AsyncRelayCommand RefreshAllCommand { get; }
 
     public AsyncRelayCommand RefreshUsbTargetsCommand { get; }
 
-    public AsyncRelayCommand VerifyCommand { get; }
-
     public AsyncRelayCommand RevalidateManagedDownloadsCommand { get; }
 
     public AsyncRelayCommand SetupUsbCommand { get; }
 
     public AsyncRelayCommand UpdateUsbCommand { get; }
+
+    public AsyncRelayCommand FullManagedDownloadCommand { get; }
+
+    public RelayCommand SelectRecommendedUsbBuilderProfileCommand { get; }
+
+    public RelayCommand SelectAllUsbBuilderProfileCommand { get; }
+
+    public RelayCommand ResetUsbBuilderProfileCommand { get; }
 
     public AsyncRelayCommand RetryFailedManagedDownloadsCommand { get; }
 
@@ -698,6 +903,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public AsyncRelayCommand RefreshToolkitHealthCommand { get; }
 
+    public AsyncRelayCommand FullVerifyToolkitHealthCommand { get; }
+
     public AsyncRelayCommand VerifyToolkitLinksCommand { get; }
 
     public RelayCommand CancelVerifyToolkitLinksCommand { get; }
@@ -707,6 +914,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public RelayCommand OpenSystemReportFolderCommand { get; }
     public RelayCommand OpenSystemJsonReportCommand { get; }
     public RelayCommand OpenSystemMarkdownReportCommand { get; }
+    public RelayCommand OpenSystemIntelligenceFilesCommand { get; }
     public RelayCommand CopySystemReportSafePathCommand { get; }
 
     public RelayCommand CopySystemSummaryCommand { get; }
@@ -715,6 +923,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public RelayCommand OpenToolkitLocalReportsCommand { get; }
 
+    public RelayCommand OpenToolkitReportsCommand { get; }
+
+    public RelayCommand OpenToolkitFolderCommand { get; }
+
     public AsyncRelayCommand RecheckSelectedToolCommand { get; }
 
     public RelayCommand OpenSelectedToolLocationCommand { get; }
@@ -722,6 +934,25 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public RelayCommand OpenManualDownloadShortcutCommand { get; }
     public RelayCommand CopySelectedToolkitExpectedPathCommand { get; }
     public RelayCommand CopySelectedToolkitDetectedPathCommand { get; }
+    public RelayCommand AddSelectedToolToDownloadPlanCommand { get; }
+    public RelayCommand RemoveSelectedToolFromDownloadPlanCommand { get; }
+    public RelayCommand SelectVisibleToolkitItemsCommand { get; }
+    public RelayCommand ClearToolkitDownloadPlanCommand { get; }
+    public RelayCommand ValidateToolkitDownloadPlanCommand { get; }
+    public RelayCommand SaveToolkitProfileCommand { get; }
+    public RelayCommand LoadToolkitProfileCommand { get; }
+    public RelayCommand ExportToolkitProfileCommand { get; }
+    public RelayCommand ImportToolkitProfileCommand { get; }
+    public RelayCommand RemoveSelectedPlanItemCommand { get; }
+    public RelayCommand MoveSelectedPlanItemUpCommand { get; }
+    public RelayCommand MoveSelectedPlanItemDownCommand { get; }
+    public AsyncRelayCommand DownloadSelectedManagedItemsCommand { get; }
+    public RelayCommand CancelSelectedManagedDownloadsCommand { get; }
+    public AsyncRelayCommand RetryFailedSelectedManagedDownloadsCommand { get; }
+    public RelayCommand OpenToolkitDownloadFolderCommand { get; }
+    public RelayCommand CopySelectedManualInstructionsCommand { get; }
+    public RelayCommand OpenSelectedVendorPageCommand { get; }
+    public RelayCommand<string> ApplyToolkitQuickFilterCommand { get; }
 
     public RelayCommand CopyLogsCommand { get; }
 
@@ -775,7 +1006,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public AsyncRelayCommand RunWslHostStatusRunnerCommand { get; }
 
-    public RelayCommand AnalyzeLinkSafetyCommand { get; }
+    public AsyncRelayCommand AnalyzeLinkSafetyCommand { get; }
 
     public AsyncRelayCommand FetchLinkSafetyHeadersCommand { get; }
 
@@ -815,9 +1046,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     public RelayCommand OpenUsbMappingWizardCommand { get; }
 
+    public RelayCommand RefreshPortPowerCommand { get; }
+
     public AsyncRelayCommand RunUsbIntelligenceBenchmarkCommand { get; }
 
     public RelayCommand CancelUsbIntelligenceBenchmarkCommand { get; }
+
+    public AsyncRelayCommand RunDriveValidatorCommand { get; }
+
+    public RelayCommand CancelDriveValidatorCommand { get; }
+
+    public RelayCommand OpenDriveValidatorWizardCommand { get; }
 
     public AsyncRelayCommand AskCopilotWarningCommand { get; }
 
@@ -948,6 +1187,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             UpdateTargetWarnings();
             RaiseCommandStates();
             OnPropertyChanged(nameof(HeaderUsbTargetText));
+            OnPropertyChanged(nameof(ToolkitTargetChipText));
             OnPropertyChanged(nameof(LogStatusLineText));
             RefreshCopilotContextText();
 
@@ -960,6 +1200,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             RefreshUsbIntelligenceFromDisk();
             RefreshManagedDownloadRunArtifactFromSelectedUsb();
+            RefreshDriveValidatorPanel();
+            ScheduleUsbBuilderProfileMediaScan();
+            RefreshUsbBuilderProfileSummary();
         }
     }
 
@@ -1045,6 +1288,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             var resolution = ForgerEmsEnvironmentConfiguration.DeepSensorModeResolution;
             return
+                "Forger Sensor Core: Active. Sensor Service: not installed / future optional component. Deep Sensor Driver: not included in this build. " +
                 $"Deep Sensor Mode: {resolution.Mode}. Current source: {resolution.DisplaySource}. " +
                 "Read-only local sensors may improve Hardware X-Ray sensor coverage while ForgerEMS is running or scanning. " +
                 "Running Elevated Scan as administrator may improve sensor/security coverage. " +
@@ -1099,6 +1343,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         SelectedUsbTarget is null
             ? "Selected USB target: none. Choose a removable volume in the list — use the large data partition, not the tiny EFI or VTOYEFI boot slice."
             : $"Selected USB target: {(string.IsNullOrWhiteSpace(SelectedUsbTarget.DriveLetter) ? "—" : SelectedUsbTarget.DriveLetter.TrimEnd('\\'))} · {SelectedUsbTarget.LabelDisplay} — {SelectedUsbTarget.SafetyStatusText}. {SelectedUsbTarget.SelectionStatusText}";
+
+    public string ToolkitTargetChipText =>
+        SelectedUsbTarget is null
+            ? "Toolkit target: none selected"
+            : $"Toolkit target: {(string.IsNullOrWhiteSpace(SelectedUsbTarget.DriveLetter) ? SelectedUsbTarget.RootPath : SelectedUsbTarget.DriveLetter.TrimEnd('\\'))} · {SelectedUsbTarget.LabelDisplay}";
+
+    public string ToolkitTargetHelperText => ToolkitTargetHelperTextValue;
+
+    public string ToolkitManagerFooterGuidanceText => ToolkitManagerFooterGuidanceValue;
 
     public string LogStatusLineText =>
         $"STATUS: {CurrentTaskState} | {CurrentTaskText} | {BackendModeText} | USB Detected: {(SelectedUsbTarget?.RootPath ?? "none")} | {Logs.Count(item => item.Severity == LogSeverity.Error)} errors";
@@ -1316,6 +1569,30 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _managedDownloadRetryPanelVisibility, value);
     }
 
+    public string UsbBuilderProfileSummaryText
+    {
+        get => _usbBuilderProfileSummaryText;
+        private set => SetProperty(ref _usbBuilderProfileSummaryText, value);
+    }
+
+    public string FullManagedDownloadStatusText
+    {
+        get => _fullManagedDownloadStatusText;
+        private set => SetProperty(ref _fullManagedDownloadStatusText, value);
+    }
+
+    public string FullManagedDownloadDetailText
+    {
+        get => _fullManagedDownloadDetailText;
+        private set => SetProperty(ref _fullManagedDownloadDetailText, value);
+    }
+
+    public string UsbBuilderProfileNoteText
+    {
+        get => _usbBuilderProfileNoteText;
+        private set => SetProperty(ref _usbBuilderProfileNoteText, value);
+    }
+
     public string TargetWarningText
     {
         get => _targetWarningText;
@@ -1440,6 +1717,132 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         get => _usbIntelligenceRunBenchmarkHintDisplay;
         private set => SetProperty(ref _usbIntelligenceRunBenchmarkHintDisplay, value);
+    }
+
+    public string PortIntelligenceOverviewText
+    {
+        get => _portIntelligenceOverviewText;
+        private set => SetProperty(ref _portIntelligenceOverviewText, value);
+    }
+
+    public string PortIntelligencePortMapSummaryText
+    {
+        get => _portIntelligencePortMapSummaryText;
+        private set => SetProperty(ref _portIntelligencePortMapSummaryText, value);
+    }
+
+    public string PortIntelligenceChargingSummaryText
+    {
+        get => _portIntelligenceChargingSummaryText;
+        private set => SetProperty(ref _portIntelligenceChargingSummaryText, value);
+    }
+
+    public string PortIntelligencePowerSourceSummaryText
+    {
+        get => _portIntelligencePowerSourceSummaryText;
+        private set => SetProperty(ref _portIntelligencePowerSourceSummaryText, value);
+    }
+
+    public string PortIntelligenceBottlenecksText
+    {
+        get => _portIntelligenceBottlenecksText;
+        private set => SetProperty(ref _portIntelligenceBottlenecksText, value);
+    }
+
+    public string PortIntelligenceRecommendedFixesText
+    {
+        get => _portIntelligenceRecommendedFixesText;
+        private set => SetProperty(ref _portIntelligenceRecommendedFixesText, value);
+    }
+
+    public string PortIntelligenceDeepScanSummaryText
+    {
+        get => _portIntelligenceDeepScanSummaryText;
+        private set => SetProperty(ref _portIntelligenceDeepScanSummaryText, value);
+    }
+
+    public string PortIntelligenceTelemetryLimitationsText
+    {
+        get => _portIntelligenceTelemetryLimitationsText;
+        private set => SetProperty(ref _portIntelligenceTelemetryLimitationsText, value);
+    }
+
+    public string PortPowerSummaryText
+    {
+        get => _portPowerSummaryText;
+        private set => SetProperty(ref _portPowerSummaryText, value);
+    }
+
+    public string PortPowerBatteryPercentDisplay
+    {
+        get => _portPowerBatteryPercentDisplay;
+        private set => SetProperty(ref _portPowerBatteryPercentDisplay, value);
+    }
+
+    public string PortPowerBatteryStatusDisplay
+    {
+        get => _portPowerBatteryStatusDisplay;
+        private set => SetProperty(ref _portPowerBatteryStatusDisplay, value);
+    }
+
+    public string PortPowerSourceDisplay
+    {
+        get => _portPowerSourceDisplay;
+        private set => SetProperty(ref _portPowerSourceDisplay, value);
+    }
+
+    public string PortPowerAdapterClassDisplay
+    {
+        get => _portPowerAdapterClassDisplay;
+        private set => SetProperty(ref _portPowerAdapterClassDisplay, value);
+    }
+
+    public string PortPowerChargeRateDisplay
+    {
+        get => _portPowerChargeRateDisplay;
+        private set => SetProperty(ref _portPowerChargeRateDisplay, value);
+    }
+
+    public string PortPowerEstimatedFullDisplay
+    {
+        get => _portPowerEstimatedFullDisplay;
+        private set => SetProperty(ref _portPowerEstimatedFullDisplay, value);
+    }
+
+    public string PortPowerVoltageCurrentDisplay
+    {
+        get => _portPowerVoltageCurrentDisplay;
+        private set => SetProperty(ref _portPowerVoltageCurrentDisplay, value);
+    }
+
+    public string PortPowerTelemetryConfidenceDisplay
+    {
+        get => _portPowerTelemetryConfidenceDisplay;
+        private set => SetProperty(ref _portPowerTelemetryConfidenceDisplay, value);
+    }
+
+    public string PortPowerEvidenceSummaryDisplay
+    {
+        get => _portPowerEvidenceSummaryDisplay;
+        private set => SetProperty(ref _portPowerEvidenceSummaryDisplay, value);
+    }
+
+    public string PortPowerMissingTelemetryReasonDisplay
+    {
+        get => _portPowerMissingTelemetryReasonDisplay;
+        private set => SetProperty(ref _portPowerMissingTelemetryReasonDisplay, value);
+    }
+
+    public string PortPowerWarningsDisplay
+    {
+        get => _portPowerWarningsDisplay;
+        private set => SetProperty(ref _portPowerWarningsDisplay, value);
+    }
+
+    public string PortPowerLastUpdatedDisplay
+    {
+        get => _portPowerLastUpdatedDisplay;
+        private set => SetProperty(ref _portPowerLastUpdatedDisplay, value);
     }
 
     public string UsbMappingWorkflowStatus
@@ -1643,6 +2046,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         get => _systemIntelligenceHardwareXrayCardText;
         private set => SetProperty(ref _systemIntelligenceHardwareXrayCardText, value);
+    }
+
+    public string SystemIntelligenceSensorStackStatusText
+    {
+        get => _systemIntelligenceSensorStackStatusText;
+        private set => SetProperty(ref _systemIntelligenceSensorStackStatusText, value);
     }
 
     public string SystemIntelligenceScanModeHintText
@@ -2590,11 +2999,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             if (SetProperty(ref _linkSafetyUrlInput, value))
             {
+                LinkSafetyResultText = string.IsNullOrWhiteSpace(value)
+                    ? "Paste an http(s) URL. Analyze reads headers and a bounded HTML preview only. Quarantine download never runs the file."
+                    : "Ready to analyze. Previous URL result cleared.";
+                AnalyzeLinkSafetyCommand.RaiseCanExecuteChanged();
                 FetchLinkSafetyHeadersCommand.RaiseCanExecuteChanged();
                 DownloadLinkToQuarantineCommand.RaiseCanExecuteChanged();
             }
         }
     }
+
+    public bool IsLinkSafetyCheckRunning => _isLinkSafetyBusy;
 
     public string LinkSafetyResultText
     {
@@ -2609,6 +3024,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             if (SetProperty(ref _localFileSafetyPath, value))
             {
+                _lastLocalSafetySha256 = string.Empty;
+                LocalFileSafetyResultText = string.IsNullOrWhiteSpace(value)
+                    ? "Pick a downloaded file for a read-only check. ForgerEMS computes metadata only and never executes the selected file."
+                    : "Ready to analyze selected file. Previous file result cleared.";
+                CopyLocalFileSafetyShaCommand.RaiseCanExecuteChanged();
+                CopyLocalFileSafetyReportCommand.RaiseCanExecuteChanged();
                 AnalyzeLocalFileSafetyCommand.RaiseCanExecuteChanged();
                 CopyLocalFileToQuarantineCommand.RaiseCanExecuteChanged();
             }
@@ -2778,6 +3199,73 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _toolkitClassificationSummaryText, value);
     }
 
+    public string ToolkitRecommendedUseSummaryText
+    {
+        get => _toolkitRecommendedUseSummaryText;
+        private set => SetProperty(ref _toolkitRecommendedUseSummaryText, value);
+    }
+
+    public string ToolkitDownloadPlanSummaryText
+    {
+        get => _toolkitDownloadPlanSummaryText;
+        private set => SetProperty(ref _toolkitDownloadPlanSummaryText, value);
+    }
+
+    public string ToolkitDownloadPlanStorageText
+    {
+        get => _toolkitDownloadPlanStorageText;
+        private set => SetProperty(ref _toolkitDownloadPlanStorageText, value);
+    }
+
+    public string ToolkitDownloadPlanValidationText
+    {
+        get => _toolkitDownloadPlanValidationText;
+        private set => SetProperty(ref _toolkitDownloadPlanValidationText, value);
+    }
+
+    public string SelectedManagedDownloadExecutionText
+    {
+        get => _selectedManagedDownloadExecutionText;
+        private set => SetProperty(ref _selectedManagedDownloadExecutionText, value);
+    }
+
+    public string SelectedManagedDownloadSafetyText
+    {
+        get => _selectedManagedDownloadSafetyText;
+        private set => SetProperty(ref _selectedManagedDownloadSafetyText, value);
+    }
+
+    public bool IsSelectedManagedDownloadRunning
+    {
+        get => _isSelectedManagedDownloadRunning;
+        private set
+        {
+            if (SetProperty(ref _isSelectedManagedDownloadRunning, value))
+            {
+                DownloadSelectedManagedItemsCommand.RaiseCanExecuteChanged();
+                CancelSelectedManagedDownloadsCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public string ToolkitProfileNotes
+    {
+        get => _toolkitProfileNotes;
+        set => SetProperty(ref _toolkitProfileNotes, value);
+    }
+
+    public string SelectedToolkitProfileName
+    {
+        get => _selectedToolkitProfileName;
+        set
+        {
+            if (SetProperty(ref _selectedToolkitProfileName, value))
+            {
+                LoadToolkitProfileCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
     public string SelectedToolkitFilter
     {
         get => _selectedToolkitFilter;
@@ -2796,6 +3284,54 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         set
         {
             if (SetProperty(ref _selectedToolkitCategoryFilter, value))
+            {
+                ApplyToolkitFilter();
+            }
+        }
+    }
+
+    public string SelectedToolkitFamilyFilter
+    {
+        get => _selectedToolkitFamilyFilter;
+        set
+        {
+            if (SetProperty(ref _selectedToolkitFamilyFilter, value))
+            {
+                ApplyToolkitFilter();
+            }
+        }
+    }
+
+    public string SelectedToolkitArchitectureFilter
+    {
+        get => _selectedToolkitArchitectureFilter;
+        set
+        {
+            if (SetProperty(ref _selectedToolkitArchitectureFilter, value))
+            {
+                ApplyToolkitFilter();
+            }
+        }
+    }
+
+    public string SelectedToolkitBootModeFilter
+    {
+        get => _selectedToolkitBootModeFilter;
+        set
+        {
+            if (SetProperty(ref _selectedToolkitBootModeFilter, value))
+            {
+                ApplyToolkitFilter();
+            }
+        }
+    }
+
+    public string SelectedToolkitSourceTrustFilter
+    {
+        get => _selectedToolkitSourceTrustFilter;
+        set
+        {
+            if (SetProperty(ref _selectedToolkitSourceTrustFilter, value))
             {
                 ApplyToolkitFilter();
             }
@@ -2829,6 +3365,24 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 OpenManualDownloadShortcutCommand.RaiseCanExecuteChanged();
                 CopySelectedToolkitExpectedPathCommand.RaiseCanExecuteChanged();
                 CopySelectedToolkitDetectedPathCommand.RaiseCanExecuteChanged();
+                AddSelectedToolToDownloadPlanCommand.RaiseCanExecuteChanged();
+                RemoveSelectedToolFromDownloadPlanCommand.RaiseCanExecuteChanged();
+                CopySelectedManualInstructionsCommand.RaiseCanExecuteChanged();
+                OpenSelectedVendorPageCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public DownloadQueueItem? SelectedDownloadPlanItem
+    {
+        get => _selectedDownloadPlanItem;
+        set
+        {
+            if (SetProperty(ref _selectedDownloadPlanItem, value))
+            {
+                RemoveSelectedPlanItemCommand.RaiseCanExecuteChanged();
+                MoveSelectedPlanItemUpCommand.RaiseCanExecuteChanged();
+                MoveSelectedPlanItemDownCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -2870,28 +3424,52 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _toolkitStatusForeground, value);
     }
 
-    public async Task InitializeAsync()
+    public Task InitializeAsync()
     {
         if (_initialized)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         _initialized = true;
-        HydrateFromCachedReportsEarly();
-        await RefreshAllAsync();
         StartUsbAutoDetectionMonitor();
-        await ConsumeElevatedScanStartupRequestAsync();
+        _ = RunStartupInitializationAsync();
+        return Task.CompletedTask;
     }
 
-    private void HydrateFromCachedReportsEarly()
+    private async Task RunStartupInitializationAsync()
     {
         try
         {
+            await Task.Yield();
+            await HydrateFromCachedReportsEarlyAsync().ConfigureAwait(true);
+            await RefreshAllAsync().ConfigureAwait(true);
+            await ConsumeElevatedScanStartupRequestAsync().ConfigureAwait(true);
+        }
+        catch (Exception exception)
+        {
+            StartupDiagnosticLog.AppendException("MainViewModel.StartupInitialization", exception);
+            AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Startup refresh failed without closing ForgerEMS: {exception.Message}", LogSeverity.Warning));
+            SetStatus(
+                "Startup refresh needs attention",
+                "ForgerEMS stayed open. Use Refresh Backend Context or retry the last action.",
+                WarningBackground,
+                WarningBorder,
+                WarningForeground);
+        }
+    }
+
+    private async Task HydrateFromCachedReportsEarlyAsync()
+    {
+        try
+        {
+            var portPowerTask = RefreshPortPowerTelemetryAsync();
+            await Task.Yield();
             LoadSystemIntelligenceReport();
             LoadToolkitHealthReport();
             ApplyDiagnosticsFromDisk();
             RefreshUsbIntelligenceFromDisk();
+            await portPowerTask.ConfigureAwait(true);
         }
         catch (Exception ex)
         {
@@ -3148,6 +3726,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private bool CanRunTargetedActions()
     {
+        // Wine compatibility mode disables every targeted USB Builder action
+        // that mutates state on the selected drive (Setup, Update, Rename,
+        // Ventoy install/update, Toolkit update, Full Managed Download) —
+        // these all go through Update-ForgerEMS.ps1 / Setup-USB and depend
+        // on Windows-only PowerShell + WMI paths that are not available in
+        // a Wine prefix. Catalog browsing, profile editing, link safety,
+        // and Drive Validator (read-only) stay enabled.
+        if (_compatibilityEnvironment?.IsCompatibilityMode == true)
+        {
+            return false;
+        }
+
         return !_isBusy &&
                _backendContext.IsAvailable &&
                SelectedUsbTarget is not null &&
@@ -3171,7 +3761,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         await _usbBuilderActionGate.WaitAsync().ConfigureAwait(true);
         if (_autoUsbBenchmarkCts is { Token.IsCancellationRequested: false })
         {
-            _usbBenchmarkHostInterruptKind = UsbBenchmarkHostInterruptKind.SelectionChanged;
+            _usbBenchmarkHostInterruptKind = UsbBenchmarkHostInterruptKind.UsbActionStarted;
             _autoUsbBenchmarkCts.Cancel();
             AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Auto benchmark paused while USB Builder action is running.", LogSeverity.Info));
         }
@@ -3204,6 +3794,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         LoadToolkitHealthReport();
         ApplyDiagnosticsFromDisk();
         RefreshUsbIntelligenceFromDisk();
+        await RefreshPortPowerTelemetryAsync().ConfigureAwait(true);
 
         if (_backendContext.IsAvailable)
         {
@@ -3324,18 +3915,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private async Task RunVerifyAsync()
-    {
-        await RunScriptAsync(
-            ScriptActionType.VerifyBackend,
-            new PowerShellRunRequest
-            {
-                DisplayName = "Verify backend",
-                WorkingDirectory = _backendContext.WorkingDirectory,
-                ScriptPath = _backendContext.VerifyScriptPath
-            });
-    }
-
     private async Task RunRevalidateManagedDownloadsAsync()
     {
         await RunScriptAsync(
@@ -3353,6 +3932,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private async Task RunSetupUsbAsync()
     {
         if (!TryGetValidatedSelectedTarget("Setup USB", out var selectedUsbTarget))
+        {
+            return;
+        }
+
+        if (!TryAcknowledgeDriveValidationForBuild("Setup USB"))
         {
             return;
         }
@@ -3379,6 +3963,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             arguments.Add(UsbOwnerName.Trim());
         }
 
+        arguments.Add("-IncludedCategories");
+        arguments.Add(string.Join(",", GetIncludedUsbBuilderCategoryArguments()));
         arguments.Add("-WaitForManagedDownloads");
 
         await RunScriptAsync(
@@ -3393,9 +3979,119 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             });
     }
 
+    private async Task RunFullManagedDownloadAsync()
+    {
+        // Thin guided wrapper around Update-ForgerEMS.ps1 scoped by the selected USB Builder
+        // Profile. The Update script already enforces:
+        //   * type=file + enabled-only filtering
+        //   * categoryId filtering via -IncludedCategories
+        //   * sha256/sha512 checksum verification against the vendor checksum source
+        //   * skipping items already present with the right hash
+        // This action exists so the technician has a profile-area button that says "managed
+        // downloads only" without the destructive-sounding "Setup USB" or "Update USB"
+        // wording. It does not seed folders, install Ventoy, format the drive, or copy
+        // user-supplied media.
+        if (!TryGetValidatedSelectedTarget("Full Managed Download", out var selectedUsbTarget))
+        {
+            return;
+        }
+
+        var manifestPath = ResolveManifestPath();
+        var includedCategories = GetIncludedUsbBuilderCategoryArguments();
+        var includedSet = new HashSet<string>(includedCategories, StringComparer.OrdinalIgnoreCase);
+
+        UsbBuilderProfileFullManagedDownloadPlan plan;
+        try
+        {
+            plan = UsbBuilderProfileFullManagedDownloadPlanner.Calculate(
+                manifestPath,
+                includedSet,
+                selectedUsbTarget.RootPath);
+        }
+        catch (Exception exception)
+        {
+            _userPromptService.ShowMessage(
+                "Full Managed Download unavailable",
+                "Could not read the managed-download catalog: " + exception.Message,
+                MessageBoxImage.Error);
+            return;
+        }
+
+        if (plan.EligibleManagedCount == 0)
+        {
+            _userPromptService.ShowMessage(
+                "Full Managed Download",
+                "No managed items are eligible for this USB Builder Profile. Manual/vendor links remain guided shortcuts.",
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        var freeSpaceText = TryGetFreeSpaceText(selectedUsbTarget.RootPath, out var freeBytes);
+        var sizeLine = plan.EstimatedDownloadBytes > 0
+            ? $"Estimated download size: {plan.EstimatedDownloadDisplay}"
+            : "Estimated download size: not pinned in catalog; runtime checksum verification gates each item.";
+
+        var confirmation =
+            $"Managed downloads eligible (this profile): {plan.EligibleManagedCount}{Environment.NewLine}" +
+            $"Already current on USB: {plan.AlreadyPresentCount}{Environment.NewLine}" +
+            $"Missing / to download: {plan.MissingCount}{Environment.NewLine}" +
+            $"Managed items excluded by profile filter: {plan.ExcludedByProfileCount}{Environment.NewLine}" +
+            $"Manual / vendor links (not part of managed downloads): {plan.ExcludedManualOrVendorCount}{Environment.NewLine}" +
+            $"Catalog safety exclusions (disabled / no checksum): {plan.ExcludedBySafetyCount}{Environment.NewLine}" +
+            $"{sizeLine}{Environment.NewLine}" +
+            $"Destination root: {selectedUsbTarget.RootPath}{Environment.NewLine}" +
+            $"Free space: {freeSpaceText}{Environment.NewLine}" +
+            $"Checksum policy: require-for-release. Every managed item is verified via Update-ForgerEMS.{Environment.NewLine}" +
+            $"BIOS, firmware, and model-specific OEM drivers remain manual lookup links and are not part of this action.{Environment.NewLine}" +
+            $"No USB partitioning, no Ventoy install, and no destructive write step will run.{Environment.NewLine}{Environment.NewLine}" +
+            "Start Full Managed Download?";
+
+        if (!_userPromptService.Confirm("Full Managed Download", confirmation))
+        {
+            FullManagedDownloadStatusText = $"Full Managed Download: canceled before start ({plan.ShortSummaryLine}).";
+            return;
+        }
+
+        var arguments = new System.Collections.Generic.List<string>
+        {
+            "-UsbRoot",
+            selectedUsbTarget.RootPath,
+            "-IncludedCategories",
+            string.Join(",", includedCategories)
+        };
+
+        try
+        {
+            var result = await RunScriptAsync(
+                ScriptActionType.UpdateUsb,
+                new PowerShellRunRequest
+                {
+                    DisplayName = "Full Managed Download",
+                    WorkingDirectory = _backendContext.WorkingDirectory,
+                    ScriptPath = _backendContext.UpdateScriptPath,
+                    Arguments = arguments,
+                    ProgressItemName = "managed downloads"
+                });
+
+            FullManagedDownloadStatusText = result?.Succeeded == true
+                ? $"Full Managed Download: finished. {plan.ShortSummaryLine}. Review the managed download result and toolkit health."
+                : $"Full Managed Download: finished with one or more issues. {plan.ShortSummaryLine}. Review the managed download result.";
+        }
+        finally
+        {
+            RefreshUsbBuilderProfileSummary();
+            LoadToolkitHealthReport();
+        }
+    }
+
     private async Task RunUpdateUsbAsync()
     {
         if (!TryGetValidatedSelectedTarget("Update USB", out var selectedUsbTarget))
+        {
+            return;
+        }
+
+        if (!TryAcknowledgeDriveValidationForBuild("Update USB"))
         {
             return;
         }
@@ -3411,7 +4107,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         var arguments = new System.Collections.Generic.List<string>
         {
             "-UsbRoot",
-            selectedUsbTarget.RootPath
+            selectedUsbTarget.RootPath,
+            "-IncludedCategories",
+            string.Join(",", GetIncludedUsbBuilderCategoryArguments())
         };
 
         await RunScriptAsync(
@@ -3424,6 +4122,226 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 Arguments = arguments,
                 ProgressItemName = "managed downloads"
             });
+    }
+
+    private bool CanRunSelectedManagedDownloads() =>
+        !IsBusy &&
+        !IsSelectedManagedDownloadRunning &&
+        _backendContext.IsAvailable &&
+        SelectedUsbTarget is not null &&
+        ToolkitDownloadPlanItems.Count > 0;
+
+    private async Task RunSelectedManagedDownloadsAsync()
+    {
+        if (!TryGetValidatedSelectedTarget("Download selected managed items", out var selectedUsbTarget))
+        {
+            return;
+        }
+
+        var manifestPath = ResolveManifestPath();
+        var selectedManifestPath = Path.Combine(
+            selectedUsbTarget.RootPath,
+            "_forgerems",
+            "selected-download-plan",
+            $"selected-managed-{DateTime.UtcNow:yyyyMMdd-HHmmss}.json");
+
+        SelectedManagedDownloadManifestResult selectedManifest;
+        try
+        {
+            selectedManifest = ToolkitWorkspacePlanner.BuildSelectedManagedManifest(
+                manifestPath,
+                selectedManifestPath,
+                _allToolkitHealthItems);
+        }
+        catch (Exception exception)
+        {
+            _userPromptService.ShowMessage("Selected downloads unavailable", exception.Message, MessageBoxImage.Error);
+            return;
+        }
+
+        RefreshSelectedManagedDownloadQueue(selectedManifest);
+        if (selectedManifest.ReadyCount == 0)
+        {
+            _userPromptService.ShowMessage(
+                "Selected downloads",
+                "No selected managed items are eligible for automation. Manual-only, disabled, legacy/lab, paid/manual, missing-checksum, and unsafe URL entries remain instructions only.",
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        var freeSpaceText = TryGetFreeSpaceText(selectedUsbTarget.RootPath, out var freeBytes);
+        var spaceWarning = freeBytes.HasValue &&
+                           selectedManifest.KnownBytes > 0 &&
+                           selectedManifest.KnownBytes > freeBytes.Value
+            ? Environment.NewLine + "WARNING: known selected size exceeds detected free space."
+            : selectedManifest.UnknownSizeCount > 0
+                ? Environment.NewLine + "WARNING: one or more selected downloads have unknown size."
+                : string.Empty;
+
+        var confirmation =
+            $"Managed downloads ready: {selectedManifest.ReadyCount}{Environment.NewLine}" +
+            $"Manual instructions only: {selectedManifest.ManualCount}{Environment.NewLine}" +
+            $"Blocked from automation: {selectedManifest.BlockedCount}{Environment.NewLine}" +
+            $"Estimated selected size: {selectedManifest.KnownSizeDisplay}{Environment.NewLine}" +
+            $"Unknown-size items: {selectedManifest.UnknownSizeCount}{Environment.NewLine}" +
+            $"Destination root: {selectedUsbTarget.RootPath}{Environment.NewLine}" +
+            $"Free space: {freeSpaceText}{Environment.NewLine}" +
+            $"Checksum policy: every managed item must verify through Update-ForgerEMS checksum gates.{Environment.NewLine}" +
+            $"Manual-only entries will not be downloaded.{Environment.NewLine}" +
+            $"No USB partitioning or Ventoy write action will run from this command.{spaceWarning}{Environment.NewLine}{Environment.NewLine}" +
+            "Start selected managed downloads?";
+
+        if (!_userPromptService.Confirm("Start selected downloads", confirmation))
+        {
+            SelectedManagedDownloadExecutionText = "Selected downloads: canceled before start.";
+            return;
+        }
+
+        _selectedManagedDownloadCts?.Dispose();
+        _selectedManagedDownloadCts = new CancellationTokenSource();
+        IsSelectedManagedDownloadRunning = true;
+        SelectedManagedDownloadExecutionText = $"Selected downloads running: {selectedManifest.ReadyCount} queued.";
+        SelectedManagedDownloadSafetyText = "Running selected managed items through Update-ForgerEMS with checksum validation. Manual items are skipped.";
+        MarkSelectedManagedDownloadQueueStatus(SelectedManagedDownloadQueueStatus.Downloading, "Downloading");
+
+        try
+        {
+            var result = await RunScriptAsync(
+                ScriptActionType.UpdateUsb,
+                new PowerShellRunRequest
+                {
+                    DisplayName = "Download selected managed items",
+                    WorkingDirectory = _backendContext.WorkingDirectory,
+                    ScriptPath = _backendContext.UpdateScriptPath,
+                    Arguments =
+                    [
+                        "-UsbRoot",
+                        selectedUsbTarget.RootPath,
+                        "-ManifestName",
+                        selectedManifest.ManifestPath
+                    ],
+                    ProgressItemName = "selected managed downloads"
+                },
+                cancellationToken: _selectedManagedDownloadCts.Token);
+
+            if (result?.Succeeded == true)
+            {
+                MarkSelectedManagedDownloadQueueStatus(SelectedManagedDownloadQueueStatus.Completed, "Completed");
+                SelectedManagedDownloadExecutionText = "Selected downloads: finished. Review the managed download result and toolkit health.";
+            }
+            else
+            {
+                MarkSelectedManagedDownloadQueueStatus(SelectedManagedDownloadQueueStatus.Failed, "Failed");
+                SelectedManagedDownloadExecutionText = "Selected downloads: failed or completed with blocked items. Review the managed download result.";
+            }
+
+            LoadToolkitHealthReport();
+        }
+        catch (OperationCanceledException)
+        {
+            SelectedManagedDownloadExecutionText = "Selected downloads: canceled.";
+            MarkSelectedManagedDownloadQueueCanceled();
+        }
+        finally
+        {
+            IsSelectedManagedDownloadRunning = false;
+            _selectedManagedDownloadCts?.Dispose();
+            _selectedManagedDownloadCts = null;
+        }
+    }
+
+    private void CancelSelectedManagedDownloads()
+    {
+        if (_selectedManagedDownloadCts is null || _selectedManagedDownloadCts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        _selectedManagedDownloadCts.Cancel();
+        SelectedManagedDownloadExecutionText = "Selected downloads: cancel requested.";
+    }
+
+    private void RefreshSelectedManagedDownloadQueue(SelectedManagedDownloadManifestResult result)
+    {
+        SelectedManagedDownloadQueueItems.Clear();
+        foreach (var item in result.QueueItems.Concat(result.ManualItems).Concat(result.BlockedItems))
+        {
+            SelectedManagedDownloadQueueItems.Add(item);
+        }
+
+        SelectedManagedDownloadExecutionText = $"Selected downloads: {result.SummaryText}";
+        SelectedManagedDownloadSafetyText =
+            "Ready items will run through Update-ForgerEMS. Manual, disabled, legacy/lab, paid/manual, missing-checksum, and unsafe URL items are skipped.";
+    }
+
+    private void MarkSelectedManagedDownloadQueueStatus(SelectedManagedDownloadQueueStatus status, string statusText)
+    {
+        var current = SelectedManagedDownloadQueueItems.ToArray();
+        SelectedManagedDownloadQueueItems.Clear();
+        foreach (var item in current)
+        {
+            var shouldUpdate = item.Status is SelectedManagedDownloadQueueStatus.Pending
+                or SelectedManagedDownloadQueueStatus.Downloading
+                or SelectedManagedDownloadQueueStatus.VerifyingChecksum;
+
+            SelectedManagedDownloadQueueItems.Add(new SelectedManagedDownloadQueueItem
+            {
+                EntryId = item.EntryId,
+                Name = item.Name,
+                Destination = item.Destination,
+                Url = item.Url,
+                Reason = item.Reason,
+                Status = shouldUpdate ? status : item.Status,
+                StatusText = shouldUpdate ? statusText : item.StatusText
+            });
+        }
+    }
+
+    private void MarkSelectedManagedDownloadQueueCanceled()
+    {
+        var current = SelectedManagedDownloadQueueItems.ToArray();
+        SelectedManagedDownloadQueueItems.Clear();
+        foreach (var item in current)
+        {
+            SelectedManagedDownloadQueueItems.Add(new SelectedManagedDownloadQueueItem
+            {
+                EntryId = item.EntryId,
+                Name = item.Name,
+                Destination = item.Destination,
+                Url = item.Url,
+                Reason = item.Reason,
+                Status = item.Status == SelectedManagedDownloadQueueStatus.Pending
+                    ? SelectedManagedDownloadQueueStatus.Canceled
+                    : item.Status,
+                StatusText = item.Status == SelectedManagedDownloadQueueStatus.Pending ? "Canceled" : item.StatusText
+            });
+        }
+    }
+
+    private static string TryGetFreeSpaceText(string rootPath, out long? freeBytes)
+    {
+        freeBytes = null;
+        try
+        {
+            var root = Path.GetPathRoot(Path.GetFullPath(rootPath));
+            if (string.IsNullOrWhiteSpace(root))
+            {
+                return "unavailable";
+            }
+
+            var drive = new DriveInfo(root);
+            if (!drive.IsReady)
+            {
+                return "target not ready";
+            }
+
+            freeBytes = drive.AvailableFreeSpace;
+            return FormatBytesForToolkit(drive.AvailableFreeSpace);
+        }
+        catch
+        {
+            return "unavailable";
+        }
     }
 
     private bool CanRetryFailedManagedDownloads() =>
@@ -3443,7 +4361,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (!ConfirmTargetedAction(
                 "Retry failed managed downloads",
                 selectedUsbTarget,
-                "This retries only items marked retryable in ForgerEMS-managed-download-result.json on the USB root. Already staged files are left intact."))
+                "This retries only items marked retryable in the latest managed-download result JSON on this USB. Already staged files are left intact."))
         {
             return;
         }
@@ -3520,6 +4438,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             });
 
         LoadSystemIntelligenceReport();
+        await RefreshPortPowerTelemetryAsync().ConfigureAwait(true);
         TryRecordKyraSystemScanLearning();
     }
 
@@ -3604,10 +4523,28 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             var analysis = ElevatedScanLaunchClassifier.Analyze(result.RawRun, inferMissing(result.RawRun));
             ElevatedScanDiagnostics.WriteErrorMarker(reportsDir, analysis, correlationId);
         }
+        else if (result is null)
+        {
+            var analysis = ElevatedScanLaunchClassifier.AnalyzeReasonLine(
+                "Elevated scan failed to start before a process result was available.",
+                exitCode: -1);
+            ElevatedScanDiagnostics.WriteErrorMarker(reportsDir, analysis, correlationId);
+            ApplyLatestElevatedScanMarkerToUi(reportsDir);
+        }
 
         if (result is not null)
         {
             LoadSystemIntelligenceReport();
+            await RefreshPortPowerTelemetryAsync().ConfigureAwait(true);
+            if (SelectedUsbTarget is not null)
+            {
+                await RefreshUsbIntelligenceReportForSelectedTargetAsync().ConfigureAwait(true);
+            }
+            else
+            {
+                RefreshUsbIntelligenceFromDisk();
+            }
+
             TryRecordKyraSystemScanLearning();
         }
     }
@@ -3634,6 +4571,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             ClearLogs();
             AppendLog(new LogLine(DateTimeOffset.Now, "[ERROR] Elevated Scan resume request was received, but ForgerEMS is still not running as administrator.", LogSeverity.Error));
             AppendLog(new LogLine(DateTimeOffset.Now, "[ACTION] Retry Elevated Scan and approve the Windows UAC prompt. Standard Scan results are still available.", LogSeverity.Warning));
+            ApplyElevatedScanLifecycleToSystemIntelligence(new ElevatedScanTelemetrySnapshot
+            {
+                State = ElevatedScanTelemetryState.NeedsAdmin,
+                CollectedAtUtc = DateTimeOffset.UtcNow,
+                Freshness = "Unavailable",
+                ParseQuality = ElevatedScanParseQuality.Failed,
+                Severity = ElevatedScanSeverity.Warning,
+                UserMessage = "Elevated scan needs administrator approval",
+                MissingTelemetryReason =
+                    "ForgerEMS was relaunched for Elevated Scan, but Windows did not grant administrator permission.",
+                UnavailableReason =
+                    "ForgerEMS was relaunched for Elevated Scan, but Windows did not grant administrator permission."
+            });
             SetStatus(
                 "Elevated Scan could not resume",
                 "ForgerEMS was relaunched for Elevated Scan, but Windows did not grant administrator permission. Standard Scan results are still available.",
@@ -3683,13 +4633,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             }
 
             AppendLog(new LogLine(DateTimeOffset.Now, $"[OK] Administrator relaunch requested. Request id: {requestId}", LogSeverity.Success, channel: LiveLogChannel.Diagnostics));
-            Application.Current?.MainWindow?.Dispatcher.BeginInvoke(() =>
-            {
-                if (Application.Current.MainWindow is not null)
-                {
-                    Application.Current.MainWindow.WindowState = WindowState.Minimized;
-                }
-            });
+            AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Closing this non-elevated window so Elevated Scan continues in the elevated ForgerEMS instance.", LogSeverity.Info));
+            Application.Current?.Shutdown();
         }
         catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
         {
@@ -3697,6 +4642,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 "Elevation handoff failed: UAC cancelled NativeError=1223",
                 exitCode: 1223);
             ElevatedScanDiagnostics.WriteErrorMarker(reportsDir, analysis, correlationId);
+            ApplyLatestElevatedScanMarkerToUi(reportsDir);
             AppendLog(new LogLine(DateTimeOffset.Now, "[WARN] Elevated Scan was cancelled before administrator permission was approved. Standard Scan results are still available.", LogSeverity.Warning));
             SetStatus(
                 "Elevated Scan cancelled",
@@ -3711,6 +4657,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 $"Elevation handoff failed: {ex.Message} NativeError={ex.NativeErrorCode}",
                 exitCode: ex.NativeErrorCode);
             ElevatedScanDiagnostics.WriteErrorMarker(reportsDir, analysis, correlationId);
+            ApplyLatestElevatedScanMarkerToUi(reportsDir);
             AppendLog(new LogLine(DateTimeOffset.Now, "[ERROR] " + analysis.PrimaryUserMessage, LogSeverity.Error));
             AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] " + analysis.AdvancedDiagnosticsLine, LogSeverity.Info, channel: LiveLogChannel.Diagnostics));
             SetStatus(
@@ -3726,6 +4673,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 $"Elevation handoff failed: {ex.Message}",
                 exitCode: -1);
             ElevatedScanDiagnostics.WriteErrorMarker(reportsDir, analysis, correlationId);
+            ApplyLatestElevatedScanMarkerToUi(reportsDir);
             AppendLog(new LogLine(DateTimeOffset.Now, "[ERROR] " + analysis.PrimaryUserMessage, LogSeverity.Error));
             AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] " + analysis.AdvancedDiagnosticsLine, LogSeverity.Info, channel: LiveLogChannel.Diagnostics));
             SetStatus(
@@ -3806,7 +4754,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private async Task RunToolkitHealthScanAsync()
+    private Task RunToolkitHealthScanAsync() => RunToolkitHealthScanAsync(fullVerify: false);
+
+    private Task RunToolkitHealthFullVerifyAsync() => RunToolkitHealthScanAsync(fullVerify: true);
+
+    private async Task RunToolkitHealthScanAsync(bool fullVerify)
     {
         if (SelectedUsbTarget is null)
         {
@@ -3826,20 +4778,33 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
+        // Normal Refresh Health is the fast cached path; Full Verify forces a
+        // re-hash of every managed file even when its size/last-write/expected
+        // checksum are unchanged. The cache is never used to make a security
+        // claim — fresh hashes still distinguish themselves in the verification
+        // wording recorded by the PowerShell scanner.
+        var arguments = new List<string>
+        {
+            "-TargetRoot",
+            SelectedUsbTarget.RootPath,
+            "-ManifestPath",
+            ResolveManifestPath(),
+        };
+        if (fullVerify)
+        {
+            arguments.Add("-FullVerify");
+        }
+
+        var displayName = fullVerify ? "Toolkit health scan (Full Verify)" : "Toolkit health scan";
+
         await RunScriptAsync(
             ScriptActionType.ToolkitHealth,
             new PowerShellRunRequest
             {
-                DisplayName = "Toolkit health scan",
+                DisplayName = displayName,
                 WorkingDirectory = _backendContext.WorkingDirectory,
                 ScriptPath = scriptPath,
-                Arguments =
-                [
-                    "-TargetRoot",
-                    SelectedUsbTarget.RootPath,
-                    "-ManifestPath",
-                    ResolveManifestPath()
-                ],
+                Arguments = arguments,
                 ProgressItemName = "toolkit health scan",
                 HeartbeatKind = PowerShellHeartbeatKind.LongRunningScan
             });
@@ -3972,7 +4937,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private void ResetToolkitLinkVerificationUi()
     {
         _cachedLinkVerificationSummary = null;
-        ToolkitLinkVerificationCountsText = "Links: not verified yet (Toolkit Manager ► Verify Links).";
+        ToolkitLinkVerificationCountsText = "Links: not verified yet (Advanced link diagnostics ► Verify Links).";
         ToolkitLinkVerificationLastRunText = "Last verify: —";
         ToolkitLinkVerificationExplanationText =
             "Safe HTTP-only verification checks HEAD/ranged GET metadata — downloads/archives are not executed.";
@@ -3989,7 +4954,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         if (!ToolkitLinkVerificationPersistence.TryLoad(verifyPath, out var snap))
         {
-            ToolkitLinkVerificationCountsText = "Links: not verified yet (Toolkit Manager ► Verify Links).";
+            ToolkitLinkVerificationCountsText = "Links: not verified yet (Advanced link diagnostics ► Verify Links).";
             ToolkitLinkVerificationLastRunText = "Last verify: —";
             ToolkitLinkVerificationExplanationText =
                 "Safe HTTP-only verification checks HEAD/ranged GET metadata — downloads/archives are not executed.";
@@ -4048,6 +5013,53 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     private void OpenSystemMarkdownReport()
     {
         OpenPathIfExists(GetSystemIntelligenceMarkdownPath(), "System Intelligence Markdown report");
+    }
+
+    private void OpenSystemIntelligenceFiles()
+    {
+        var jsonPath = GetSystemIntelligenceJsonPath();
+        var markdownPath = GetSystemIntelligenceMarkdownPath();
+        var reportsDir = GetRuntimeReportsDirectory();
+        var jsonExists = File.Exists(jsonPath);
+        var markdownExists = File.Exists(markdownPath);
+        var folderExists = Directory.Exists(reportsDir);
+
+        if (!jsonExists && !markdownExists && !folderExists)
+        {
+            _userPromptService.ShowMessage(
+                "Open Files",
+                "No System Intelligence reports are available yet. A standard scan runs automatically when ForgerEMS starts — wait for it to finish, or use Elevated Scan for deeper detail.",
+                MessageBoxImage.Information);
+            return;
+        }
+
+        var options = new List<string>();
+        var actions = new List<Action>();
+        if (jsonExists)
+        {
+            options.Add("Latest JSON report");
+            actions.Add(() => OpenPathIfExists(jsonPath, "System Intelligence JSON report"));
+        }
+
+        if (markdownExists)
+        {
+            options.Add("Latest Markdown report");
+            actions.Add(() => OpenPathIfExists(markdownPath, "System Intelligence Markdown report"));
+        }
+
+        options.Add("Reports folder");
+        actions.Add(() => OpenFolder(reportsDir, "System Intelligence reports", createIfMissing: true));
+
+        var picked = _userPromptService.PickOption(
+            "Open Files",
+            "Choose which System Intelligence file or folder to open:",
+            options);
+        if (picked is null || picked.Value < 0 || picked.Value >= actions.Count)
+        {
+            return;
+        }
+
+        actions[picked.Value]();
     }
 
     private void CopySystemReportSafePath()
@@ -5739,6 +6751,118 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         OpenFolder(GetRuntimeReportsDirectory(), "local reports", createIfMissing: true);
     }
 
+    private void OpenToolkitReports()
+    {
+        var options = new List<string>();
+        var actions = new List<Action>();
+
+        if (SelectedUsbTarget is not null)
+        {
+            var usbReports = Path.Combine(SelectedUsbTarget.RootPath, "_reports");
+            if (Directory.Exists(usbReports))
+            {
+                options.Add("USB reports on target");
+                actions.Add(() => OpenFolder(usbReports, "USB reports", createIfMissing: false));
+            }
+            else
+            {
+                options.Add("USB reports on target (folder not found)");
+                var missingPath = usbReports;
+                actions.Add(() =>
+                {
+                    AppendLog(new LogLine(
+                        DateTimeOffset.Now,
+                        $"[WARN] USB reports folder was not found: {missingPath}",
+                        LogSeverity.Warning));
+                    _userPromptService.ShowMessage(
+                        "Open Reports",
+                        "No _reports folder exists on the selected USB yet. Run Setup USB or Update USB in USB Builder first.",
+                        MessageBoxImage.Information);
+                });
+            }
+        }
+        else
+        {
+            options.Add("USB reports on target (select USB in USB Builder)");
+            actions.Add(() =>
+                _userPromptService.ShowMessage(
+                    "Open Reports",
+                    "Select a USB target in USB Builder before opening USB reports.",
+                    MessageBoxImage.Information));
+        }
+
+        options.Add("Local runtime reports");
+        actions.Add(() => OpenToolkitLocalReports());
+
+        var picked = _userPromptService.PickOption(
+            "Open Reports",
+            "Choose which toolkit report location to open:",
+            options);
+        if (picked is null || picked.Value < 0 || picked.Value >= actions.Count)
+        {
+            return;
+        }
+
+        actions[picked.Value]();
+    }
+
+    private void OpenToolkitFolder()
+    {
+        if (SelectedUsbTarget is null)
+        {
+            _userPromptService.ShowMessage(
+                "Toolkit Manager",
+                "No USB target is selected. Choose a removable volume in USB Builder first.",
+                MessageBoxImage.Information);
+            return;
+        }
+
+        if (!Directory.Exists(SelectedUsbTarget.RootPath))
+        {
+            _userPromptService.ShowMessage(
+                "Toolkit Manager",
+                $"Toolkit folder was not found: {SelectedUsbTarget.RootPath}",
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        OpenFolder(SelectedUsbTarget.RootPath, "toolkit folder", createIfMissing: false);
+    }
+
+    private void OpenToolkitDownloadFolder()
+    {
+        if (SelectedUsbTarget is null)
+        {
+            return;
+        }
+
+        OpenFolder(Path.Combine(SelectedUsbTarget.RootPath, "_downloads"), "download folder", createIfMissing: true);
+    }
+
+    private void CopySelectedManualInstructions()
+    {
+        var item = SelectedToolkitHealthItem;
+        if (item is null)
+        {
+            return;
+        }
+
+        var lines = new List<string>
+        {
+            item.Tool,
+            $"Requirement: {item.CatalogStatusTag ?? item.TypeDisplay}",
+            $"Source: {FirstNonBlank(item.OfficialUrl, item.Url, "not provided")}",
+            $"Destination: {FirstNonBlank(item.ResolvedExpectedPath, item.ExpectedPath, "not reported")}",
+            $"Recommended use: {FirstNonBlank(item.RecommendedUse, item.Purpose, "not provided")}",
+            $"Secure Boot: {FirstNonBlank(item.SecureBootNote, "review vendor notes")}",
+            $"Ventoy: {FirstNonBlank(item.VentoyNotes, "review compatibility before field use")}",
+            $"Notes: {FirstNonBlank(item.TechnicianNotes, item.LegacyWarning, item.LicenseNote, "manual review required")}"
+        };
+
+        Clipboard.SetText(string.Join(Environment.NewLine, lines));
+        AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Copied manual item instructions.", LogSeverity.Success));
+    }
+
     private void OpenSelectedToolLocation()
     {
         var item = SelectedToolkitHealthItem;
@@ -5934,6 +7058,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
+        if (!TryAcknowledgeDriveValidationForBuild("Install / Update Ventoy"))
+        {
+            return;
+        }
+
         if (!ConfirmTargetedAction(
                 "Install / Update Ventoy",
                 selectedUsbTarget,
@@ -6026,7 +7155,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void CaptureUsbMappingBefore()
     {
-        var snap = _usbIntelligenceService.BuildTopologySnapshot(SelectedUsbTarget);
+        var snap = _usbIntelligenceService.BuildTopologySnapshot(
+            SelectedUsbTarget,
+            BuildUsbTopologyOptions(machineProfile: _usbMachineProfileStore.LoadOrCreate()));
         _usbGuidedMappingWorkflow.CaptureBeforeSnapshot(snap);
         UsbMappingWorkflowStatus =
             "Step 3: Move the USB to the port you want to label, wait for it to mount, then click Detect Port Change.";
@@ -6035,7 +7166,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void CaptureUsbMappingAfter()
     {
-        var snap = _usbIntelligenceService.BuildTopologySnapshot(SelectedUsbTarget);
+        var snap = _usbIntelligenceService.BuildTopologySnapshot(
+            SelectedUsbTarget,
+            BuildUsbTopologyOptions(machineProfile: _usbMachineProfileStore.LoadOrCreate()));
         _usbGuidedMappingWorkflow.CaptureAfterSnapshot(snap);
         UsbMappingWorkflowStatus =
             "Step 4: Enter a short label for that port. Step 5: Click Save Port Label (writes to your local profile).";
@@ -6051,7 +7184,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _usbIntelligenceService,
             _usbMachineProfileStore,
             () => UsbTargets.ToList(),
-            RunWizardUsbBenchmarkAsync);
+            RunWizardUsbBenchmarkAsync,
+            buildTopologyOptions: () => BuildUsbTopologyOptions(machineProfile: _usbMachineProfileStore.LoadOrCreate()));
         var win = new UsbMappingWizardWindow(vm);
         if (Application.Current?.MainWindow is { } owner)
         {
@@ -6088,11 +7222,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             var profile = _usbMachineProfileStore.LoadOrCreate();
             var snapshot = _usbIntelligenceService.BuildTopologySnapshot(
                 SelectedUsbTarget,
-                new UsbTopologyBuildOptions
-                {
-                    PreviousSnapshot = previousUsb,
-                    MachineProfile = profile
-                });
+                BuildUsbTopologyOptions(previousUsb, profile));
             _usbMachineProfileStore.ApplySnapshot(profile, snapshot);
             _usbMachineProfileStore.Save(profile);
             await _usbIntelligenceService.WriteLatestReportAsync(reports, snapshot).ConfigureAwait(true);
@@ -6171,7 +7301,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             Details = string.Empty,
             ReadSpeedDisplay = "Not tested",
             WriteSpeedDisplay = "Not tested",
-            LastTestedAt = null
+            LastTestedAt = null,
+            ResultKind = UsbBenchmarkResultKind.SkippedTargetSettling,
+            UiSummaryLine = UsbBenchmarkUiMessages.BuildUiSummary(UsbBenchmarkResultKind.SkippedTargetSettling, 0, 0)
         };
     }
 
@@ -6195,6 +7327,24 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (kind == UsbBenchmarkResultKind.CancelledByHost)
         {
             AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Benchmark stopped: application shutdown.", LogSeverity.Info));
+            return;
+        }
+
+        if (kind == UsbBenchmarkResultKind.CancelledByUsbAction)
+        {
+            AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Benchmark stopped: another USB action started.", LogSeverity.Info));
+            return;
+        }
+
+        if (kind == UsbBenchmarkResultKind.SkippedTargetSettling)
+        {
+            AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Benchmark skipped: USB target still settling.", LogSeverity.Info));
+            return;
+        }
+
+        if (kind == UsbBenchmarkResultKind.CancelledDuringUsbRefresh)
+        {
+            AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Benchmark cancelled during USB refresh.", LogSeverity.Info));
             return;
         }
 
@@ -6263,6 +7413,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 UsbBenchmarkResultKind.DeviceRemoved => "Device removed",
                 UsbBenchmarkResultKind.TargetChanged => "Target changed",
                 UsbBenchmarkResultKind.CancelledByHost => "Cancelled",
+                UsbBenchmarkResultKind.CancelledByUsbAction => "Cancelled",
+                UsbBenchmarkResultKind.SkippedTargetSettling => "Skipped",
+                UsbBenchmarkResultKind.CancelledDuringUsbRefresh => "Cancelled",
                 _ => "Cancelled"
             },
             Summary = "Benchmark did not complete",
@@ -6309,6 +7462,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 UsbBenchmarkResultKind.DeviceRemoved => "Device removed",
                 UsbBenchmarkResultKind.TargetChanged => "Target changed",
                 UsbBenchmarkResultKind.CancelledByHost => "Cancelled",
+                UsbBenchmarkResultKind.CancelledByUsbAction => "Cancelled",
+                UsbBenchmarkResultKind.SkippedTargetSettling => "Skipped",
+                UsbBenchmarkResultKind.CancelledDuringUsbRefresh => "Cancelled",
                 _ => "Cancelled"
             },
             Summary = "Benchmark interrupted",
@@ -6327,13 +7483,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private UsbBenchmarkResultKind ClassifyBenchmarkCancellation(string targetAtStartPath, bool isAutomatic)
     {
-        if (isAutomatic)
-        {
-            return UsbBenchmarkResultKind.CancelledByHost;
-        }
-
         var interrupt = _usbBenchmarkHostInterruptKind;
         _usbBenchmarkHostInterruptKind = UsbBenchmarkHostInterruptKind.None;
+
         if (!IsUsbRootStillPresent(targetAtStartPath))
         {
             return UsbBenchmarkResultKind.DeviceRemoved;
@@ -6349,13 +7501,25 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return UsbBenchmarkResultKind.CancelledByHost;
         }
 
+        if (interrupt == UsbBenchmarkHostInterruptKind.UsbActionStarted)
+        {
+            return UsbBenchmarkResultKind.CancelledByUsbAction;
+        }
+
+        if (interrupt == UsbBenchmarkHostInterruptKind.TargetSettling)
+        {
+            return UsbBenchmarkResultKind.SkippedTargetSettling;
+        }
+
         if (interrupt == UsbBenchmarkHostInterruptKind.SelectionChanged ||
             !UsbRootPathsEqual(SelectedUsbTarget?.RootPath, targetAtStartPath))
         {
-            return UsbBenchmarkResultKind.TargetChanged;
+            return UsbBenchmarkResultKind.CancelledDuringUsbRefresh;
         }
 
-        return UsbBenchmarkResultKind.CancelledByHost;
+        return isAutomatic
+            ? UsbBenchmarkResultKind.SkippedTargetSettling
+            : UsbBenchmarkResultKind.CancelledByUsbAction;
     }
 
     private async Task AutoBenchmarkSelectedUsbSafeAsync(bool isAutomatic = true)
@@ -6587,7 +7751,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                     if (k is UsbBenchmarkResultKind.CancelledByUser
                         or UsbBenchmarkResultKind.DeviceRemoved
                         or UsbBenchmarkResultKind.TargetChanged
-                        or UsbBenchmarkResultKind.CancelledByHost)
+                        or UsbBenchmarkResultKind.CancelledByHost
+                        or UsbBenchmarkResultKind.CancelledByUsbAction
+                        or UsbBenchmarkResultKind.SkippedTargetSettling
+                        or UsbBenchmarkResultKind.CancelledDuringUsbRefresh)
                     {
                         LogManualBenchmarkCancellation(targetAtStartPath, k);
                     }
@@ -6711,7 +7878,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         PowerShellRunRequest request,
         bool resetLogPane = true,
         bool appendLifecycleHeader = true,
-        Func<PowerShellRunResult, bool>? elevatedScanLikelyMissingOutput = null)
+        Func<PowerShellRunResult, bool>? elevatedScanLikelyMissingOutput = null,
+        CancellationToken cancellationToken = default)
     {
         if (!_backendContext.IsAvailable)
         {
@@ -6724,8 +7892,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return null;
         }
 
-        var requiresUsbBuilderGate = action is ScriptActionType.VerifyBackend
-            or ScriptActionType.RevalidateManagedDownloads
+        var requiresUsbBuilderGate = action is ScriptActionType.RevalidateManagedDownloads
             or ScriptActionType.SetupUsb
             or ScriptActionType.UpdateUsb
             or ScriptActionType.RenameUsb;
@@ -6777,7 +7944,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             var phaseTimer = Stopwatch.StartNew();
             var effectiveRequest = WithOptionalManagedDownloadHeartbeat(request);
-            var runResult = await _powerShellRunnerService.RunAsync(effectiveRequest, AppendLog);
+            var runResult = await _powerShellRunnerService.RunAsync(effectiveRequest, AppendLog, cancellationToken);
             var runMs = phaseTimer.ElapsedMilliseconds;
             var likelyMissingElevatedOutput = elevatedScanLikelyMissingOutput?.Invoke(runResult) ?? false;
             var parsed = _scriptStatusParser.Parse(action, request.DisplayName, runResult, likelyMissingElevatedOutput);
@@ -6786,8 +7953,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             var managedMs = phaseTimer.ElapsedMilliseconds;
             RefreshManagedDownloadRunArtifactFromSelectedUsb();
             var artifactMs = phaseTimer.ElapsedMilliseconds;
-            var shouldAwaitVentoyRefresh = action is ScriptActionType.VerifyBackend
-                or ScriptActionType.SetupUsb
+            var shouldAwaitVentoyRefresh = action is ScriptActionType.SetupUsb
                 or ScriptActionType.UpdateUsb
                 or ScriptActionType.RevalidateManagedDownloads;
             if (shouldAwaitVentoyRefresh)
@@ -6817,6 +7983,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 AppendLifecycleComplete(request.DisplayName, startedAt);
                 _lastCommandExitCode = 0;
                 LastCommandStatusText = parsed.HasWarnings ? "Completed with warnings" : "Completed";
+                if (action is ScriptActionType.SetupUsb or ScriptActionType.UpdateUsb)
+                {
+                    await TryGenerateUsbHtmlDocumentationAsync(request.DisplayName).ConfigureAwait(true);
+                }
             }
             else
             {
@@ -6838,6 +8008,25 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(LastCommandExitCodeText));
 
             return parsed;
+        }
+        catch (OperationCanceledException)
+        {
+            AppendLog(new LogLine(DateTimeOffset.Now, $"{request.DisplayName} canceled.", LogSeverity.Warning));
+            AppendLifecycleFailure(request.DisplayName, "Canceled", null);
+            SetStatus(
+                $"{request.DisplayName} canceled",
+                "The running PowerShell process was canceled.",
+                WarningBackground,
+                WarningBorder,
+                WarningForeground);
+            _lastCommandFinishedAt = DateTimeOffset.Now;
+            _lastCommandExitCode = -2;
+            LastCommandStatusText = "Canceled";
+            LastCommandSummaryText = "Canceled";
+            OnPropertyChanged(nameof(LastCommandFinishedText));
+            OnPropertyChanged(nameof(LastCommandDurationText));
+            OnPropertyChanged(nameof(LastCommandExitCodeText));
+            throw;
         }
         catch (Exception exception)
         {
@@ -6874,18 +8063,19 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             SystemIntelligenceAutomationLineText = string.Empty;
             SystemIntelligenceWarningReasonText = "Warning reason: waiting for first scan.";
             SystemIntelligenceScanStatusText = $"Scan status: Not scanned · App elevation: {ProcessElevationHelper.DescribeElevationUiShort()}";
+            SystemIntelligenceSensorStackStatusText = BuildForgerSensorStackStatus(elevatedScanState: "Recommended");
             SystemIntelligenceHealthStatusText = "Health status: Unknown";
             SystemIntelligenceWindowsReadinessText = "Windows readiness: Needs verification";
             SystemIntelligenceReportSafePathText = @"Runtime\reports\system-intelligence-latest.json";
             SystemIntelligenceReportPathText = "Report: not generated yet.";
             SystemIntelligenceNetworkTechnicalDetailsText = "Technical network details are hidden.";
             SystemIntelligenceNextActions.Clear();
-            SystemIntelligenceNextActions.Add("Run Standard Scan to collect a baseline hardware/security profile.");
-            SystemIntelligenceNextActions.Add("Use Run Elevated Scan if deeper TPM/Secure Boot/storage detail is needed.");
+            SystemIntelligenceNextActions.Add("Wait for the automatic standard scan to finish, or use Elevated Scan for deeper TPM/Secure Boot/storage detail.");
             MachineProfileStatusText = "Profile: no previous profile";
             MachineProfileLastSavedText = "Last profile saved: not yet";
             MachineProfileLastHealthText = "Last health score: unknown";
             MachineProfileLastToolkitReadinessText = "Last toolkit readiness: unknown";
+            RefreshDriverHubRecommendations();
             RefreshCopilotContextText();
             RefreshKyraQuickPromptVisibilities();
             return;
@@ -6928,7 +8118,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 DateTime.UtcNow - generatedUtc > TimeSpan.FromDays(7))
             {
                 SystemIntelligenceStaleBannerText =
-                    "This system scan is more than 7 days old. Run System Scan to refresh hardware context, then revisit summaries and Kyra.";
+                    "This system scan is more than 7 days old. Results refresh automatically on launch; use Elevated Scan if you need deeper detail now.";
             }
             ApplyStatusBrushes(
                 overallStatus,
@@ -7000,12 +8190,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             SystemIntelligenceFlipValueCardText = BuildFlipValueSummary(root);
             SystemIntelligenceDeviceFitCardText = BuildDeviceFitSummary(root);
             SystemIntelligenceHardwareXrayCardText = BuildHardwareXraySummary(root) + BuildHardwareXrayElevationFooter();
+            SystemIntelligenceSensorStackStatusText = BuildForgerSensorStackStatus(root, _lastElevatedScanTelemetrySnapshot);
             SystemIntelligenceWarningReasonText = BuildSystemIntelligenceWarningReason(root, UnifiedDiagnosticsSummaryText);
             var scanMode = GetJsonString(root, "scanMode", "Standard");
             var permissionLimitedProviders = CountOptionalProviderStatuses(root, "PermissionRequired");
             SystemIntelligenceScanModeHintText = permissionLimitedProviders > 0
-                ? $"Scan mode: {scanMode}. Some deep hardware/security details are permission-limited. Run Elevated Scan for additional detail."
-                : $"Scan mode: {scanMode}. Standard scan is safe non-admin scan; Elevated scan unlocks extra detail when needed.";
+                ? $"Scan mode: {scanMode}. Some deep hardware/security details are permission-limited. Elevated scan unlocks extra detail when needed."
+                : "Standard scan runs automatically. Elevated scan unlocks extra detail when needed.";
             SystemIntelligenceReportSafePathText = @"Runtime\reports\system-intelligence-latest.json";
             SystemIntelligenceReportPathText = "Report available";
             RefreshCopilotContextText(root);
@@ -7038,6 +8229,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             SaveMachineProfileSnapshot(root);
             RefreshMachineProfileSummary(root);
 
+            RefreshDriverHubRecommendations();
             RefreshKyraQuickPromptVisibilities();
         }
         catch
@@ -7046,17 +8238,18 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             SystemIntelligenceStatusText = "Needs attention";
             SystemIntelligenceWarningReasonText = "Warning: scan report needs regeneration.";
             SystemIntelligenceScanStatusText = $"Scan status: Needs attention · App elevation: {ProcessElevationHelper.DescribeElevationUiShort()}";
+            SystemIntelligenceSensorStackStatusText = BuildForgerSensorStackStatus(elevatedScanState: "Failed");
             SystemIntelligenceHealthStatusText = "Health status: Warning";
             SystemIntelligenceWindowsReadinessText = "Windows readiness: Needs verification";
             SystemIntelligenceSummaryText =
-                "The saved system report could not be read. Run Standard Scan to generate a fresh report.";
+                "The saved system report could not be read. Restart ForgerEMS or wait for the automatic standard scan to generate a fresh report.";
             SystemIntelligenceReportSafePathText = @"Runtime\reports\system-intelligence-latest.json";
             SystemIntelligenceReportPathText = "Report needs attention (parse error).";
             SystemIntelligenceNetworkTechnicalDetailsText = "Technical network details are unavailable until the report is rebuilt.";
             SystemIntelligenceRecommendations.Clear();
-            SystemIntelligenceRecommendations.Add("Run Standard Scan to replace or rebuild the report file.");
+            SystemIntelligenceRecommendations.Add("Restart ForgerEMS or wait for the automatic standard scan to replace or rebuild the report file.");
             SystemIntelligenceNextActions.Clear();
-            SystemIntelligenceNextActions.Add("Run Standard Scan to regenerate the System Intelligence report.");
+            SystemIntelligenceNextActions.Add("Wait for the automatic standard scan to regenerate the System Intelligence report.");
             SystemIntelligenceNextActions.Add("If TPM/Secure Boot remain unknown, run Elevated Scan.");
             MachineProfileStatusText = "Profile: no previous profile";
             MachineProfileLastSavedText = "Last profile saved: unavailable (scan parse failed)";
@@ -7070,6 +8263,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                     SystemIntelligenceStatusBorderBrush = border;
                     SystemIntelligenceStatusForeground = foreground;
                 });
+            RefreshDriverHubRecommendations();
             RefreshKyraQuickPromptVisibilities();
         }
     }
@@ -7086,6 +8280,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             ToolkitReadinessStrengthsText = "Top strengths: unavailable until toolkit report is generated.";
             ToolkitReadinessBlockersText = "Top blockers: toolkit report/log evidence not available.";
             ToolkitReadinessNextActionText = "Next action: run Refresh Health on the selected USB target.";
+            ToolkitHealthItems.Clear();
+            ClearAllToolkitHealthItems();
+            RefreshToolkitDownloadPlan();
             return;
         }
 
@@ -7106,14 +8303,15 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 _toolkitHealthAlignedWithSelection = false;
                 ResetToolkitLinkVerificationUi();
                 ToolkitStatusText = "Needs refresh";
-                ToolkitHealthVerdictText = $"Toolkit report was cached for {reportTargetRoot}. Click Refresh Toolkit for {selectedRoot}.";
+                ToolkitHealthVerdictText = $"Toolkit report was cached for {reportTargetRoot}. Click Refresh Health for {selectedRoot}.";
                 ToolkitReportPathText = $"Report: stale for selected target ({reportPath})";
                 ToolkitReadinessScoreText = "Toolkit readiness: Unknown / Limited Data (0/100)";
                 ToolkitReadinessStrengthsText = "Top strengths: stale report for selected target.";
                 ToolkitReadinessBlockersText = "Top blockers: readiness score is stale for this USB target.";
                 ToolkitReadinessNextActionText = "Next action: run Refresh Health for the currently selected target.";
                 ToolkitHealthItems.Clear();
-                _allToolkitHealthItems.Clear();
+                ClearAllToolkitHealthItems();
+                RefreshToolkitDownloadPlan();
                 return;
             }
 
@@ -7143,11 +8341,35 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 unknown = GetJsonInt(summary, "unknown");
             }
 
+            // Manual / Vendor links chip: combines MANUAL_REQUIRED entries with the vendor page
+            // shortcuts Setup writes (PLACEHOLDER/COVERED_BY_MANAGED with type=page). The chip
+            // label intentionally says "Manual / Vendor links" to reflect what these items
+            // actually are: OEM support, model-specific drivers, firmware lookup, and
+            // licensed/manual tools — not failures. Count is computed by scanning the JSON
+            // items pre-populating the grid so the chip number is honest at first render.
+            var vendorShortcutCount = manual;
+            if (root.TryGetProperty("items", out var preItems) && preItems.ValueKind == JsonValueKind.Array)
+            {
+                var counted = 0;
+                foreach (var probe in preItems.EnumerateArray())
+                {
+                    if (JsonItemIsManualOrVendorLink(probe))
+                    {
+                        counted++;
+                    }
+                }
+
+                if (counted > 0)
+                {
+                    vendorShortcutCount = counted;
+                }
+            }
+
             ToolkitInstalledCountText = $"Managed Ready: {installed}";
             ToolkitMissingCountText = $"Managed Missing: {missing}";
             ToolkitUpdatesCountText = $"Managed updates available: {updates}";
             ToolkitFailedCountText = $"Verification issues: {failed}";
-            ToolkitManualCountText = $"Manual / Info items: {manual}";
+            ToolkitManualCountText = $"Manual / Vendor links: {vendorShortcutCount}";
             ToolkitPlaceholderCountText = $"Skipped/Placeholder/Covered {skipped + placeholder + coveredByManaged}";
             var healthVerdict = GetJsonString(root, "healthVerdict", "UNKNOWN");
             ToolkitLastScanText = $"Last scan: {FormatGeneratedUtc(GetJsonString(root, "generatedUtc", string.Empty))} | Target: {reportTargetRoot}";
@@ -7158,7 +8380,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             if (functionalHealthy && verdictUpper.Contains("MANUAL", StringComparison.Ordinal))
             {
                 ToolkitHealthVerdictText =
-                    "Toolkit usable — manual/info items available (expected: download pages, licensed tools, or gated downloads ForgerEMS does not auto-fetch).";
+                    "Managed toolkit ready. Optional manual/vendor links are available for OEM support, model-specific drivers, firmware lookup, and licensed tools. No required managed downloads are missing.";
                 ToolkitStatusText = healthVerdict;
                 ApplyStatusBrushes(
                     "READY",
@@ -7183,7 +8405,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                     });
             }
 
-            _allToolkitHealthItems.Clear();
+            ClearAllToolkitHealthItems();
             if (root.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
             {
                 foreach (var item in items.EnumerateArray())
@@ -7200,7 +8422,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                     var verification = GetJsonString(item, "verification", string.Empty);
                     var normalized = ToolkitDisplayClassification.BuildNormalizedLabel(status, type, verification);
                     var category = GetJsonString(item, "category", "General");
-                    _allToolkitHealthItems.Add(new ToolkitHealthItemView
+                    var view = new ToolkitHealthItemView
                     {
                         Tool = GetJsonString(item, "tool", "Unknown tool"),
                         Category = category,
@@ -7212,6 +8434,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                         MatchedPath = matchedPath,
                         Exists = exists,
                         SizeBytes = sizeBytes,
+                        EstimatedSizeBytes = GetOptionalJsonLong(item, "estimatedSizeBytes") ??
+                                             GetOptionalJsonLong(item, "sizeEstimateBytes"),
                         Url = GetJsonString(item, "url", string.Empty),
                         OfficialUrl = GetJsonString(item, "officialUrl", GetJsonString(item, "officialUri", GetJsonString(item, "url", string.Empty))),
                         Purpose = GetJsonString(item, "purpose", GetJsonString(item, "description", string.Empty)),
@@ -7223,9 +8447,40 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                         ClassificationReason = GetJsonString(item, "classificationReason", string.Empty),
                         Version = GetJsonString(item, "version", "Unknown"),
                         Verification = verification,
+                        VerificationMode = GetJsonString(item, "verificationMode", string.Empty),
                         Recommendation = GetJsonString(item, "recommendation", string.Empty),
-                        NormalizedCategoryLabel = normalized
-                    });
+                        NormalizedCategoryLabel = normalized,
+                        Kind = GetJsonString(item, "kind", string.Empty),
+                        Family = GetJsonString(item, "family", string.Empty),
+                        OsCategory = GetJsonString(item, "osCategory", string.Empty),
+                        Architecture = GetJsonString(item, "architecture", string.Empty),
+                        BootMode = GetJsonString(item, "bootMode", string.Empty),
+                        RecommendedUse = GetJsonString(item, "recommendedUse", string.Empty),
+                        TechnicianNotes = GetJsonString(item, "technicianNotes", string.Empty),
+                        LicenseNote = GetJsonString(item, "licenseNote", string.Empty),
+                        ManualOnly = GetJsonBool(item, "manualOnly"),
+                        LegacyWarning = GetJsonString(item, "legacyWarning", string.Empty),
+                        VentoyNotes = GetJsonString(item, "ventoyNotes", string.Empty),
+                        SecureBootNote = GetJsonString(item, "secureBootNote", string.Empty),
+                        SourceTrust = GetJsonString(item, "sourceTrust", string.Empty),
+                        DownloadMode = GetJsonString(item, "downloadMode", string.Empty),
+                        ActionLabel = GetJsonString(item, "actionLabel", string.Empty),
+                        SecondaryActionLabel = GetJsonString(item, "secondaryActionLabel", string.Empty),
+                        ActionReason = GetJsonString(item, "actionReason", string.Empty),
+                        PromotionStatus = GetJsonString(item, "promotionStatus", string.Empty),
+                        PromotionEvidence = GetJsonString(item, "promotionEvidence", string.Empty),
+                        LegalRisk = GetJsonString(item, "legalRisk", string.Empty),
+                        ChecksumRequirement = GetJsonString(item, "checksumRequirement", string.Empty),
+                        ManagedPromotionCandidate = GetJsonBool(item, "managedPromotionCandidate"),
+                        CurrentPinnedVersion = GetJsonString(item, "currentPinnedVersion", string.Empty),
+                        LatestKnownStableVersion = GetJsonString(item, "latestKnownStableVersion", string.Empty),
+                        LastFreshnessAuditUtc = GetJsonString(item, "lastFreshnessAuditUtc", string.Empty),
+                        FreshnessStatus = GetJsonString(item, "freshnessStatus", string.Empty),
+                        ChecksumVerificationMode = GetJsonString(item, "checksumVerificationMode", string.Empty),
+                        UpdateRecommendation = GetJsonString(item, "updateRecommendation", string.Empty)
+                    };
+                    SubscribeToolkitItem(view);
+                    _allToolkitHealthItems.Add(view);
                 }
             }
 
@@ -7236,6 +8491,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             ToolkitClassificationSummaryText = summaryBuckets.Length == 0
                 ? "Toolkit classification: no items in the last report."
                 : "Toolkit classification — " + string.Join("; ", summaryBuckets);
+            RefreshToolkitRecommendedUseSummary();
             RefreshToolkitLinkVerificationUi(reportPath, reportTargetRoot);
             ApplyToolkitReadinessScore(
                 reportAvailable: true,
@@ -7246,6 +8502,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             SelectedToolkitHealthItem = _allToolkitHealthItems.FirstOrDefault();
             ApplyToolkitFilter();
+            RefreshToolkitDownloadPlan();
             ToolkitReportPathText = $"Report: {reportPath}";
             IntelligenceLogWriter.Append(
                 "toolkit-manager.log",
@@ -7285,6 +8542,328 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             SelectedToolkitHealthItem = ToolkitHealthItems.FirstOrDefault();
         }
+
+        SelectVisibleToolkitItemsCommand.RaiseCanExecuteChanged();
+    }
+
+    private void SubscribeToolkitItem(ToolkitHealthItemView item)
+    {
+        item.PropertyChanged += OnToolkitItemPropertyChanged;
+    }
+
+    private void ClearAllToolkitHealthItems()
+    {
+        foreach (var item in _allToolkitHealthItems)
+        {
+            item.PropertyChanged -= OnToolkitItemPropertyChanged;
+        }
+
+        _allToolkitHealthItems.Clear();
+    }
+
+    private void OnToolkitItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ToolkitHealthItemView.SelectedForDownload))
+        {
+            RefreshToolkitDownloadPlan();
+        }
+    }
+
+    private void RefreshToolkitDownloadPlan()
+    {
+        var selectedEntryId = SelectedDownloadPlanItem?.EntryId;
+        var plan = ToolkitWorkspacePlanner.BuildPlan(_allToolkitHealthItems);
+
+        ToolkitDownloadPlanItems.Clear();
+        foreach (var item in plan.Items)
+        {
+            ToolkitDownloadPlanItems.Add(item);
+        }
+
+        SelectedDownloadPlanItem = ToolkitDownloadPlanItems.FirstOrDefault(item =>
+            string.Equals(item.EntryId, selectedEntryId, StringComparison.OrdinalIgnoreCase));
+        ToolkitDownloadPlanSummaryText =
+            $"Download plan: {plan.Items.Count} item(s) | managed {plan.ManagedCount} | manual {plan.ManualCount} | checksums {plan.ChecksumAvailableCount}";
+        ToolkitDownloadPlanStorageText =
+            $"Storage: {plan.Storage.TotalDisplay} | {plan.Storage.CapacityWarningText}";
+        ToolkitDownloadPlanValidationText =
+            $"{plan.ValidationSummary} | {plan.ManualRequirementSummary} | {plan.SourceTrustSummary} | {plan.ArchitectureSummary} | {plan.VentoyCompatibilitySummary}";
+
+        ClearToolkitDownloadPlanCommand.RaiseCanExecuteChanged();
+        ValidateToolkitDownloadPlanCommand.RaiseCanExecuteChanged();
+        SaveToolkitProfileCommand.RaiseCanExecuteChanged();
+        ExportToolkitProfileCommand.RaiseCanExecuteChanged();
+        DownloadSelectedManagedItemsCommand.RaiseCanExecuteChanged();
+        RemoveSelectedPlanItemCommand.RaiseCanExecuteChanged();
+        MoveSelectedPlanItemUpCommand.RaiseCanExecuteChanged();
+        MoveSelectedPlanItemDownCommand.RaiseCanExecuteChanged();
+    }
+
+    private void RefreshToolkitRecommendedUseSummary()
+    {
+        var groups = _allToolkitHealthItems
+            .Select(GetToolkitWorkflowGroup)
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .GroupBy(static value => value, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(static group => group.Count())
+            .ThenBy(static group => group.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(static group => $"{group.Key}: {group.Count()}")
+            .ToArray();
+
+        ToolkitRecommendedUseSummaryText = groups.Length == 0
+            ? "Recommended-use groups: no catalog metadata in current report."
+            : "Recommended-use groups — " + string.Join("; ", groups);
+    }
+
+    private void RefreshToolkitProfileOptions()
+    {
+        ToolkitProfileOptions.Clear();
+        foreach (var profile in ToolkitWorkspaceProfileStore.GetBuiltInProfiles())
+        {
+            ToolkitProfileOptions.Add(profile.Name);
+        }
+
+        foreach (var profileName in _toolkitProfileStore.ListProfileNames())
+        {
+            if (!ToolkitProfileOptions.Contains(profileName, StringComparer.OrdinalIgnoreCase))
+            {
+                ToolkitProfileOptions.Add(profileName);
+            }
+        }
+    }
+
+    private void AddSelectedToolToDownloadPlan()
+    {
+        if (SelectedToolkitHealthItem is not null)
+        {
+            SelectedToolkitHealthItem.SelectedForDownload = true;
+        }
+    }
+
+    private void RemoveSelectedToolFromDownloadPlan()
+    {
+        if (SelectedToolkitHealthItem is not null)
+        {
+            SelectedToolkitHealthItem.SelectedForDownload = false;
+        }
+    }
+
+    private void SelectVisibleToolkitItems()
+    {
+        foreach (var item in ToolkitHealthItems)
+        {
+            item.SelectedForDownload = true;
+        }
+    }
+
+    private void ClearToolkitDownloadPlan()
+    {
+        foreach (var item in _allToolkitHealthItems)
+        {
+            item.SelectedForDownload = false;
+        }
+    }
+
+    private void ValidateToolkitDownloadPlan()
+    {
+        _userPromptService.ShowMessage(
+            "Download plan validation",
+            ToolkitDownloadPlanValidationText + Environment.NewLine + Environment.NewLine +
+            "This validation does not start downloads, fetch manual-only sources, delete files, or write USB partitions.",
+            MessageBoxImage.Information);
+    }
+
+    private void SaveToolkitProfile()
+    {
+        var name = _userPromptService.PromptText(
+            "Save workspace profile",
+            "Profile name",
+            string.IsNullOrWhiteSpace(SelectedToolkitProfileName) ? "Technician USB Profile" : SelectedToolkitProfileName);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return;
+        }
+
+        var profile = ToolkitWorkspacePlanner.BuildProfile(
+            name,
+            ToolkitProfileNotes,
+            _allToolkitHealthItems,
+            [SelectedToolkitCategoryFilter],
+            SplitProfileLabels(ToolkitProfileNotes));
+        var path = _toolkitProfileStore.Save(profile);
+        SelectedToolkitProfileName = profile.Name;
+        RefreshToolkitProfileOptions();
+        AppendLog(new LogLine(DateTimeOffset.Now, $"[OK] Workspace profile saved: {path}", LogSeverity.Success));
+    }
+
+    private void LoadToolkitProfile()
+    {
+        var builtIn = ToolkitWorkspaceProfileStore.GetBuiltInProfiles()
+            .FirstOrDefault(profile => profile.Name.Equals(SelectedToolkitProfileName, StringComparison.OrdinalIgnoreCase));
+        UsbWorkspaceProfile? profile = builtIn;
+        if (profile is null && _toolkitProfileStore.TryLoad(SelectedToolkitProfileName, out var loaded))
+        {
+            profile = loaded;
+        }
+
+        if (profile is null)
+        {
+            _userPromptService.ShowMessage("Load workspace profile", $"Profile was not found: {SelectedToolkitProfileName}", MessageBoxImage.Warning);
+            return;
+        }
+
+        if (profile.SelectedEntries.Count == 0 && profile.CategoryPreferences.Count > 0)
+        {
+            ApplyProfilePreferences(profile);
+        }
+        else
+        {
+            ToolkitWorkspacePlanner.ApplyProfile(_allToolkitHealthItems, profile);
+        }
+
+        ToolkitProfileNotes = profile.Notes;
+        RefreshToolkitDownloadPlan();
+    }
+
+    private void ExportToolkitProfile()
+    {
+        var dialog = new SaveFileDialog
+        {
+            Title = "Export workspace profile",
+            Filter = "ForgerEMS workspace profile (*.json)|*.json",
+            FileName = $"{SelectedToolkitProfileName}.json"
+        };
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        var profile = ToolkitWorkspacePlanner.BuildProfile(
+            SelectedToolkitProfileName,
+            ToolkitProfileNotes,
+            _allToolkitHealthItems,
+            [SelectedToolkitCategoryFilter],
+            SplitProfileLabels(ToolkitProfileNotes));
+        ToolkitWorkspaceProfileStore.Export(profile, dialog.FileName);
+        AppendLog(new LogLine(DateTimeOffset.Now, $"[OK] Workspace profile exported: {dialog.FileName}", LogSeverity.Success));
+    }
+
+    private void ImportToolkitProfile()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Import workspace profile",
+            Filter = "ForgerEMS workspace profile (*.json)|*.json|JSON files (*.json)|*.json"
+        };
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        var profile = _toolkitProfileStore.Import(dialog.FileName);
+        SelectedToolkitProfileName = profile.Name;
+        RefreshToolkitProfileOptions();
+        ToolkitWorkspacePlanner.ApplyProfile(_allToolkitHealthItems, profile);
+        ToolkitProfileNotes = profile.Notes;
+        RefreshToolkitDownloadPlan();
+    }
+
+    private void RemoveSelectedPlanItem()
+    {
+        if (SelectedDownloadPlanItem is null)
+        {
+            return;
+        }
+
+        var entryId = SelectedDownloadPlanItem.EntryId;
+        var item = _allToolkitHealthItems.FirstOrDefault(candidate =>
+            string.Equals(ToolkitWorkspacePlanner.GetSelectionId(candidate), entryId, StringComparison.OrdinalIgnoreCase));
+        if (item is not null)
+        {
+            item.SelectedForDownload = false;
+        }
+    }
+
+    private void MoveSelectedPlanItem(int direction)
+    {
+        if (SelectedDownloadPlanItem is null)
+        {
+            return;
+        }
+
+        var selectedId = SelectedDownloadPlanItem.EntryId;
+        var selectedIndex = _allToolkitHealthItems.FindIndex(item =>
+            string.Equals(ToolkitWorkspacePlanner.GetSelectionId(item), selectedId, StringComparison.OrdinalIgnoreCase));
+        if (selectedIndex < 0)
+        {
+            return;
+        }
+
+        var swapIndex = selectedIndex + direction;
+        while (swapIndex >= 0 && swapIndex < _allToolkitHealthItems.Count && !_allToolkitHealthItems[swapIndex].SelectedForDownload)
+        {
+            swapIndex += direction;
+        }
+
+        if (swapIndex < 0 || swapIndex >= _allToolkitHealthItems.Count)
+        {
+            return;
+        }
+
+        (_allToolkitHealthItems[selectedIndex], _allToolkitHealthItems[swapIndex]) = (_allToolkitHealthItems[swapIndex], _allToolkitHealthItems[selectedIndex]);
+        RefreshToolkitDownloadPlan();
+        SelectedDownloadPlanItem = ToolkitDownloadPlanItems.FirstOrDefault(item =>
+            string.Equals(item.EntryId, selectedId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void ApplyToolkitQuickFilter(string? token)
+    {
+        switch ((token ?? string.Empty).Trim().ToLowerInvariant())
+        {
+            case "secure-boot":
+                SelectedToolkitBootModeFilter = "secure-boot";
+                break;
+            case "old-bios":
+                SelectedToolkitBootModeFilter = "bios";
+                SelectedToolkitArchitectureFilter = "x86";
+                break;
+            case "recovery":
+                SelectedToolkitCategoryFilter = "Recovery";
+                break;
+            case "security":
+                SelectedToolkitCategoryFilter = "Security";
+                break;
+            case "network":
+                SelectedToolkitFamilyFilter = "Network";
+                break;
+            case "legacy":
+                SelectedToolkitCategoryFilter = "Legacy";
+                break;
+            case "managed":
+                SelectedToolkitFilter = "All";
+                SelectedToolkitSourceTrustFilter = "official";
+                break;
+            case "manual":
+                // v1.2.3: route the legacy "manual" hint to the broader Manual / Vendor links
+                // chip so users land on the MSI/OEM/vendor support shortcuts as well as the
+                // narrower MANUAL_REQUIRED rows.
+                SelectedToolkitFilter = "Manual / Vendor links";
+                break;
+            case "vendor":
+            case "vendorlinks":
+            case "manualvendor":
+                SelectedToolkitFilter = "Manual / Vendor links";
+                break;
+            default:
+                SelectedToolkitFilter = "All";
+                SelectedToolkitCategoryFilter = "All categories";
+                SelectedToolkitFamilyFilter = "All families";
+                SelectedToolkitArchitectureFilter = "All architectures";
+                SelectedToolkitBootModeFilter = "All boot modes";
+                SelectedToolkitSourceTrustFilter = "All source trust";
+                ToolkitSearchText = string.Empty;
+                break;
+        }
     }
 
     private void InvalidateToolkitHealthForSelectionChange(string? previousRoot, string? newRoot)
@@ -7294,10 +8873,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        _allToolkitHealthItems.Clear();
+        ClearAllToolkitHealthItems();
         ToolkitHealthItems.Clear();
         ToolkitClassificationSummaryText = "Toolkit classification: refresh required for selected target.";
-        ToolkitHealthVerdictText = "Toolkit health cache invalidated after USB target change. Click Refresh Toolkit.";
+        ToolkitHealthVerdictText = "Toolkit health cache invalidated after USB target change. Click Refresh Health.";
         ToolkitReportPathText = "Report: pending refresh for selected target.";
         ToolkitMissingCountText = "Managed Missing: --";
         ToolkitInstalledCountText = "Managed Ready: --";
@@ -7307,6 +8886,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         ToolkitReadinessNextActionText = "Next action: refresh toolkit health for current USB target.";
         _toolkitHealthAlignedWithSelection = false;
         ResetToolkitLinkVerificationUi();
+        RefreshToolkitDownloadPlan();
     }
 
     private bool ShouldShowToolkitItem(ToolkitHealthItemView item)
@@ -7323,7 +8903,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                                      string.Equals(item.Status, "PLACEHOLDER", StringComparison.OrdinalIgnoreCase) ||
                                      string.Equals(item.Status, "COVERED_BY_MANAGED", StringComparison.OrdinalIgnoreCase),
             "Manual Required" => string.Equals(item.Status, "MANUAL_REQUIRED", StringComparison.OrdinalIgnoreCase),
+            // Backward-compatible "Manual / Info" still matches MANUAL_REQUIRED only.
             "Manual / Info" => string.Equals(item.Status, "MANUAL_REQUIRED", StringComparison.OrdinalIgnoreCase),
+            // v1.2.3 "Manual / Vendor links" is broader: it surfaces the MSI/OEM/vendor support
+            // shortcuts that Setup writes as PLACEHOLDER/COVERED_BY_MANAGED page entries, along
+            // with any tool flagged manualOnly or with kind=*-shortcut/page. These are not
+            // failures and not auto-downloaded — they're vendor pages, OEM support links,
+            // firmware lookup, model-specific drivers, and licensed/manual tools.
+            "Manual / Vendor links" => IsManualOrVendorLink(item),
             _ => true
         };
 
@@ -7338,9 +8925,29 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             return false;
         }
 
+        if (!MatchesMetadataFilter(SelectedToolkitFamilyFilter, "All families", item.Family, item.OsCategory, item.Category))
+        {
+            return false;
+        }
+
+        if (!MatchesMetadataFilter(SelectedToolkitArchitectureFilter, "All architectures", item.Architecture))
+        {
+            return false;
+        }
+
+        if (!MatchesMetadataFilter(SelectedToolkitBootModeFilter, "All boot modes", item.BootMode, item.SecureBootNote))
+        {
+            return false;
+        }
+
+        if (!MatchesMetadataFilter(SelectedToolkitSourceTrustFilter, "All source trust", item.SourceTrust, item.CatalogStatusTag ?? string.Empty))
+        {
+            return false;
+        }
+
         if (!string.IsNullOrWhiteSpace(ToolkitSearchText))
         {
-            var haystack = $"{item.Tool} {item.Category} {item.StatusDisplayUi} {item.TypeDisplay} {item.ExpectedPath} {item.LocationDisplay} {item.VerificationDisplay} {item.Recommendation}";
+            var haystack = $"{item.Tool} {item.Category} {item.StatusDisplayUi} {item.TypeDisplay} {item.ExpectedPath} {item.LocationDisplay} {item.VerificationDisplay} {item.Recommendation} {item.Family} {item.OsCategory} {item.Architecture} {item.BootMode} {item.RecommendedUse} {item.TechnicianNotes} {item.SourceTrust}";
             if (!haystack.Contains(ToolkitSearchText, StringComparison.OrdinalIgnoreCase))
             {
                 return false;
@@ -7348,6 +8955,154 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// True when this item should appear under the v1.2.3 "Manual / Vendor links" chip:
+    /// vendor support pages, OEM/driver lookup shortcuts, firmware lookup, licensed/manual tools,
+    /// or anything the manifest flagged as manualOnly. These items are not failures and are
+    /// never auto-downloaded — they are the MSI/OEM/vendor shortcut entries Setup writes to the
+    /// USB under \Tools\Portable\Vendor.
+    /// </summary>
+    internal static bool IsManualOrVendorLink(ToolkitHealthItemView item)
+    {
+        if (item is null)
+        {
+            return false;
+        }
+
+        if (string.Equals(item.Status, "MANUAL_REQUIRED", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (item.ManualOnly)
+        {
+            return true;
+        }
+
+        // Page/shortcut type entries that ended up classified as PLACEHOLDER/COVERED_BY_MANAGED
+        // are the vendor link entries: those are precisely the rows the user expected to see
+        // under the manual/vendor chip.
+        var typeIsPage = item.Type?.IndexOf("page", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                         item.Type?.IndexOf("shortcut", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                         item.Type?.IndexOf("link", StringComparison.OrdinalIgnoreCase) >= 0;
+        var kindIsShortcut = item.Kind?.IndexOf("shortcut", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                             item.Kind?.IndexOf("page", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                             item.Kind?.IndexOf("vendor", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                             item.Kind?.IndexOf("oem", StringComparison.OrdinalIgnoreCase) >= 0;
+        var statusIsPlaceholderLike =
+            string.Equals(item.Status, "PLACEHOLDER", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(item.Status, "COVERED_BY_MANAGED", StringComparison.OrdinalIgnoreCase);
+
+        if (statusIsPlaceholderLike && (typeIsPage || kindIsShortcut))
+        {
+            return true;
+        }
+
+        if (typeIsPage && string.Equals(item.Status, "SKIPPED", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// JSON-side counterpart of <see cref="IsManualOrVendorLink"/> used while parsing the
+    /// Toolkit Health report so the chip count is correct on first render (before the
+    /// observable item collection is populated).
+    /// </summary>
+    private static bool JsonItemIsManualOrVendorLink(JsonElement item)
+    {
+        var status = GetJsonString(item, "status", string.Empty);
+        if (string.Equals(status, "MANUAL_REQUIRED", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var manualOnly = GetJsonBool(item, "manualOnly");
+        if (manualOnly)
+        {
+            return true;
+        }
+
+        var type = GetJsonString(item, "type", string.Empty);
+        var kind = GetJsonString(item, "kind", string.Empty);
+
+        bool ContainsCi(string source, string fragment) =>
+            !string.IsNullOrEmpty(source) && source.Contains(fragment, StringComparison.OrdinalIgnoreCase);
+
+        var typeIsPage = ContainsCi(type, "page") || ContainsCi(type, "shortcut") || ContainsCi(type, "link");
+        var kindIsShortcut = ContainsCi(kind, "shortcut") || ContainsCi(kind, "page") ||
+                             ContainsCi(kind, "vendor") || ContainsCi(kind, "oem");
+
+        var statusIsPlaceholderLike =
+            string.Equals(status, "PLACEHOLDER", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(status, "COVERED_BY_MANAGED", StringComparison.OrdinalIgnoreCase);
+
+        if (statusIsPlaceholderLike && (typeIsPage || kindIsShortcut))
+        {
+            return true;
+        }
+
+        if (typeIsPage && string.Equals(status, "SKIPPED", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private void ApplyProfilePreferences(UsbWorkspaceProfile profile)
+    {
+        var labels = profile.CategoryPreferences
+            .Concat(profile.TechnicianLabels)
+            .Where(static value => !string.IsNullOrWhiteSpace(value))
+            .ToArray();
+
+        foreach (var item in _allToolkitHealthItems)
+        {
+            item.SelectedForDownload = labels.Any(label =>
+                item.Category.Contains(label, StringComparison.OrdinalIgnoreCase) ||
+                item.Family.Contains(label, StringComparison.OrdinalIgnoreCase) ||
+                item.OsCategory.Contains(label, StringComparison.OrdinalIgnoreCase) ||
+                item.RecommendedUse.Contains(label, StringComparison.OrdinalIgnoreCase) ||
+                item.BootMode.Contains(label, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    private static string[] SplitProfileLabels(string notes)
+    {
+        return (notes ?? string.Empty)
+            .Split([',', ';', '|', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(static value => value.Length > 1)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static string GetToolkitWorkflowGroup(ToolkitHealthItemView item)
+    {
+        var haystack = $"{item.Category} {item.Family} {item.OsCategory} {item.RecommendedUse} {item.TechnicianNotes}".ToLowerInvariant();
+        if (haystack.Contains("network", StringComparison.Ordinal)) return "Network troubleshooting kit";
+        if (haystack.Contains("security", StringComparison.Ordinal) || haystack.Contains("malware", StringComparison.Ordinal)) return "Malware cleanup USB";
+        if (haystack.Contains("legacy", StringComparison.Ordinal) || haystack.Contains("retro", StringComparison.Ordinal) || haystack.Contains("hobby", StringComparison.Ordinal)) return "Legacy retro lab setup";
+        if (haystack.Contains("windows", StringComparison.Ordinal) && haystack.Contains("recovery", StringComparison.Ordinal)) return "Windows recovery USB";
+        if (haystack.Contains("linux", StringComparison.Ordinal) && haystack.Contains("server", StringComparison.Ordinal)) return "Linux admin pack";
+        if (haystack.Contains("recovery", StringComparison.Ordinal) || haystack.Contains("rescue", StringComparison.Ordinal)) return "Offline-first recovery kit";
+        if (haystack.Contains("hypervisor", StringComparison.Ordinal) || haystack.Contains("vm", StringComparison.Ordinal) || haystack.Contains("sandbox", StringComparison.Ordinal)) return "VM/Sandbox toolkit";
+        return "Portable tech bench";
+    }
+
+    private static bool MatchesMetadataFilter(string selected, string allValue, params string[] values)
+    {
+        if (string.IsNullOrWhiteSpace(selected) || selected.Equals(allValue, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return values.Any(value => !string.IsNullOrWhiteSpace(value) &&
+                                   value.Contains(selected, StringComparison.OrdinalIgnoreCase));
     }
 
     private void ApplyToolkitReadinessScore(
@@ -7560,6 +9315,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         LoadSystemIntelligenceReport();
         ApplyDiagnosticsFromDisk();
         RefreshUsbIntelligenceFromDisk();
+        RefreshPortPowerTelemetry();
         RefreshCopilotContextText();
         RefreshKyraAssistantPanel();
     }
@@ -7676,6 +9432,201 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    private void RefreshPortPowerTelemetry()
+    {
+        try
+        {
+            var elevatedTelemetry = GetLatestElevatedScanTelemetry();
+            _lastElevatedScanTelemetrySnapshot = elevatedTelemetry;
+            ApplyElevatedScanLifecycleToSystemIntelligence(elevatedTelemetry);
+            ApplyPortPowerSnapshot(_portPowerTelemetryService.CollectSnapshot(elevatedTelemetry));
+        }
+        catch (Exception ex)
+        {
+            PortPowerSummaryText = "Charging intelligence could not read Windows power telemetry.";
+            PortPowerBatteryPercentDisplay = "Unknown";
+            PortPowerBatteryStatusDisplay = "Unknown";
+            PortPowerSourceDisplay = "Unknown";
+            PortPowerAdapterClassDisplay = "Unknown";
+            PortPowerChargeRateDisplay = "Unavailable";
+            PortPowerEstimatedFullDisplay = "Unavailable";
+            PortPowerVoltageCurrentDisplay = "Unavailable - exact USB-C voltage/current is not exposed by this device.";
+            PortPowerTelemetryConfidenceDisplay = "Unavailable";
+            PortPowerEvidenceSummaryDisplay = "Power telemetry read failed.";
+            PortPowerMissingTelemetryReasonDisplay = ex.Message;
+            PortPowerWarningsDisplay = string.Empty;
+            PortPowerLastUpdatedDisplay = $"Updated {DateTimeOffset.Now:g}";
+            ApplyPortIntelligenceSummary();
+            AppendDiagnosticsLog($"Port power telemetry refresh failed: {ex.Message}");
+        }
+    }
+
+    private async Task RefreshPortPowerTelemetryAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var elevatedTelemetry = await GetLatestElevatedScanTelemetryAsync(cancellationToken).ConfigureAwait(true);
+            var snapshot = await Task.Run(
+                    () => _portPowerTelemetryService.CollectSnapshot(elevatedTelemetry),
+                    cancellationToken)
+                .ConfigureAwait(true);
+
+            cancellationToken.ThrowIfCancellationRequested();
+            _lastElevatedScanTelemetrySnapshot = elevatedTelemetry;
+            ApplyElevatedScanLifecycleToSystemIntelligence(elevatedTelemetry);
+            ApplyPortPowerSnapshot(snapshot);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            PortPowerSummaryText = "Charging intelligence could not read Windows power telemetry.";
+            PortPowerBatteryPercentDisplay = "Unknown";
+            PortPowerBatteryStatusDisplay = "Unknown";
+            PortPowerSourceDisplay = "Unknown";
+            PortPowerAdapterClassDisplay = "Unknown";
+            PortPowerChargeRateDisplay = "Unavailable";
+            PortPowerEstimatedFullDisplay = "Unavailable";
+            PortPowerVoltageCurrentDisplay = "Unavailable - exact USB-C voltage/current is not exposed by this device.";
+            PortPowerTelemetryConfidenceDisplay = "Unavailable";
+            PortPowerEvidenceSummaryDisplay = "Power telemetry read failed.";
+            PortPowerMissingTelemetryReasonDisplay = ex.Message;
+            PortPowerWarningsDisplay = string.Empty;
+            PortPowerLastUpdatedDisplay = $"Updated {DateTimeOffset.Now:g}";
+            ApplyPortIntelligenceSummary();
+            AppendDiagnosticsLog($"Port power telemetry async refresh failed: {ex.Message}");
+            StartupDiagnosticLog.AppendException("RefreshPortPowerTelemetryAsync", ex);
+        }
+    }
+
+    private ElevatedScanTelemetrySnapshot GetLatestElevatedScanTelemetry()
+    {
+        var snapshot = _elevatedScanTelemetryCache.GetLatest(GetRuntimeReportsDirectory());
+        _lastElevatedScanTelemetrySnapshot = snapshot;
+        return snapshot;
+    }
+
+    private async Task<ElevatedScanTelemetrySnapshot> GetLatestElevatedScanTelemetryAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var snapshot = await _elevatedScanTelemetryCache
+            .GetLatestAsync(GetRuntimeReportsDirectory(), cancellationToken)
+            .ConfigureAwait(false);
+        return snapshot;
+    }
+
+    private void ApplyLatestElevatedScanMarkerToUi(string reportsDirectory)
+    {
+        try
+        {
+            var snapshot = _elevatedScanTelemetryCache.GetLatest(reportsDirectory);
+            _lastElevatedScanTelemetrySnapshot = snapshot;
+            ApplyElevatedScanLifecycleToSystemIntelligence(snapshot);
+            ApplyPortIntelligenceSummary();
+        }
+        catch (Exception exception)
+        {
+            StartupDiagnosticLog.AppendException("ApplyLatestElevatedScanMarkerToUi", exception);
+        }
+    }
+
+    private void ApplyElevatedScanLifecycleToSystemIntelligence(ElevatedScanTelemetrySnapshot snapshot)
+    {
+        switch (snapshot.State)
+        {
+            case ElevatedScanTelemetryState.Fresh:
+                SystemIntelligenceScanStatusText = "Elevated scan complete";
+                SystemIntelligenceScanModeHintText = "Deep hardware and port telemetry is available.";
+                SystemIntelligenceStaleBannerText = string.Empty;
+                SystemIntelligenceStatusBackground = ReadyBackground;
+                SystemIntelligenceStatusBorderBrush = ReadyBorder;
+                SystemIntelligenceStatusForeground = ReadyForeground;
+                break;
+            case ElevatedScanTelemetryState.CompletePartial:
+                SystemIntelligenceScanStatusText =
+                    "Elevated scan complete — some deep telemetry was unavailable on this device.";
+                SystemIntelligenceScanModeHintText =
+                    "Elevated scan complete — some deep telemetry was unavailable on this device.";
+                SystemIntelligenceStaleBannerText = string.Empty;
+                SystemIntelligenceStatusBackground = ReadyBackground;
+                SystemIntelligenceStatusBorderBrush = ReadyBorder;
+                SystemIntelligenceStatusForeground = ReadyForeground;
+                break;
+            case ElevatedScanTelemetryState.Running:
+                SystemIntelligenceScanStatusText = "Elevated scan running";
+                SystemIntelligenceScanModeHintText = "Waiting for the elevated report to finish.";
+                SystemIntelligenceStatusBackground = RunningBackground;
+                SystemIntelligenceStatusBorderBrush = RunningBorder;
+                SystemIntelligenceStatusForeground = RunningForeground;
+                break;
+            case ElevatedScanTelemetryState.Stale:
+            case ElevatedScanTelemetryState.Missing:
+                SystemIntelligenceScanStatusText = "Elevated scan recommended";
+                SystemIntelligenceScanModeHintText = "Run elevated scan for deeper port and hardware telemetry.";
+                SystemIntelligenceStatusBackground = WarningBackground;
+                SystemIntelligenceStatusBorderBrush = WarningBorder;
+                SystemIntelligenceStatusForeground = WarningForeground;
+                break;
+            case ElevatedScanTelemetryState.Cancelled:
+                SystemIntelligenceScanStatusText = "Elevated scan cancelled";
+                SystemIntelligenceScanModeHintText =
+                    "Retry Elevated Scan and approve the Windows UAC prompt, or continue with Standard Scan results.";
+                SystemIntelligenceStatusBackground = WarningBackground;
+                SystemIntelligenceStatusBorderBrush = WarningBorder;
+                SystemIntelligenceStatusForeground = WarningForeground;
+                break;
+            case ElevatedScanTelemetryState.NeedsAdmin:
+                SystemIntelligenceScanStatusText = "Elevated scan needs administrator approval";
+                SystemIntelligenceScanModeHintText =
+                    "Retry Elevated Scan and approve the Windows UAC prompt, or start ForgerEMS as administrator.";
+                SystemIntelligenceStatusBackground = WarningBackground;
+                SystemIntelligenceStatusBorderBrush = WarningBorder;
+                SystemIntelligenceStatusForeground = WarningForeground;
+                break;
+            case ElevatedScanTelemetryState.Failed:
+                SystemIntelligenceScanStatusText = "Elevated scan failed";
+                SystemIntelligenceScanModeHintText = "ForgerEMS stayed open. Check logs or retry as administrator.";
+                SystemIntelligenceStatusBackground = ErrorBackground;
+                SystemIntelligenceStatusBorderBrush = ErrorBorder;
+                SystemIntelligenceStatusForeground = ErrorForeground;
+                break;
+        }
+
+        SystemIntelligenceSensorStackStatusText =
+            BuildForgerSensorStackStatus(elevatedScanState: MapElevatedScanStateForSensorStack(snapshot) ?? "Recommended");
+    }
+
+    private UsbTopologyBuildOptions BuildUsbTopologyOptions(
+        UsbTopologySnapshot? previousSnapshot = null,
+        UsbMachineProfile? machineProfile = null) =>
+        new()
+        {
+            PreviousSnapshot = previousSnapshot,
+            MachineProfile = machineProfile,
+            ElevatedScanTelemetry = GetLatestElevatedScanTelemetry()
+        };
+
+    private void ApplyPortPowerSnapshot(PortPowerSnapshot snapshot)
+    {
+        _lastPortPowerSnapshot = snapshot;
+        PortPowerSummaryText = PortPowerTelemetryFormatter.FormatSummary(snapshot);
+        PortPowerBatteryPercentDisplay = PortPowerTelemetryFormatter.FormatBatteryPercent(snapshot);
+        PortPowerBatteryStatusDisplay = snapshot.BatteryStatus;
+        PortPowerSourceDisplay = PortPowerTelemetryFormatter.FormatPowerSource(snapshot.PowerSourceKind);
+        PortPowerAdapterClassDisplay = PortPowerTelemetryFormatter.FormatAdapterClass(snapshot);
+        PortPowerChargeRateDisplay = PortPowerTelemetryFormatter.FormatChargeRate(snapshot);
+        PortPowerEstimatedFullDisplay = PortPowerTelemetryFormatter.FormatEstimatedFull(snapshot);
+        PortPowerVoltageCurrentDisplay = PortPowerTelemetryFormatter.FormatVoltageCurrent(snapshot);
+        PortPowerTelemetryConfidenceDisplay = PortPowerTelemetryFormatter.FormatConfidence(snapshot.TelemetryConfidence);
+        PortPowerEvidenceSummaryDisplay = snapshot.EvidenceSummary;
+        PortPowerMissingTelemetryReasonDisplay = snapshot.MissingTelemetryReason;
+        PortPowerWarningsDisplay = PortPowerTelemetryFormatter.FormatWarnings(snapshot);
+        PortPowerLastUpdatedDisplay = PortPowerTelemetryFormatter.FormatLastUpdated(snapshot.CollectedAtUtc);
+        ApplyPortIntelligenceSummary();
+    }
+
     private void RefreshUsbIntelligenceFromDisk()
     {
         var targetLine = FormatUsbIntelligenceTargetLine(SelectedUsbTarget);
@@ -7687,6 +9638,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             UsbIntelligenceBuilderHintText =
                 "USB Intelligence: waiting for a saved report. Select a USB target in USB Builder, then run USB Benchmark or refresh intelligence when available.";
             ResetUsbIntelligencePanelFieldsForMissingReport(targetLine, showBenchmarkHint: true);
+            _lastUsbIntelligencePanelState = null;
+            ApplyPortIntelligenceSummary();
             return;
         }
 
@@ -7694,6 +9647,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             var json = File.ReadAllText(path);
             var state = UsbIntelligenceLatestPanelReader.Parse(json);
+            _lastUsbIntelligencePanelState = state;
 
             UsbIntelligencePanelTargetDisplay = targetLine;
             UsbIntelligenceDetectedClassDisplay = state.DetectedClassDisplay;
@@ -7711,12 +9665,45 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             UsbIntelligenceBuilderHintText = string.IsNullOrWhiteSpace(state.BuilderSummaryLine)
                 ? UsbIntelligencePanelUiCopy.GuidanceIntro
                 : state.BuilderSummaryLine;
+            ApplyPortIntelligenceSummary();
         }
         catch
         {
             UsbIntelligenceBuilderHintText = "USB Intelligence: could not read the latest topology file.";
             ResetUsbIntelligencePanelFieldsForMissingReport(targetLine, showBenchmarkHint: true);
+            _lastUsbIntelligencePanelState = null;
+            ApplyPortIntelligenceSummary();
         }
+    }
+
+    private void ApplyPortIntelligenceSummary()
+    {
+        var elevated = _lastElevatedScanTelemetrySnapshot;
+        if (elevated is null)
+        {
+            try
+            {
+                elevated = GetLatestElevatedScanTelemetry();
+            }
+            catch
+            {
+                elevated = ElevatedScanTelemetrySnapshot.Missing();
+            }
+        }
+
+        var summary = PortIntelligenceSummaryBuilder.Build(
+            _lastUsbIntelligencePanelState,
+            _lastPortPowerSnapshot,
+            elevated,
+            SelectedUsbTarget);
+        PortIntelligenceOverviewText = summary.Overview;
+        PortIntelligencePortMapSummaryText = summary.PortMapSummary;
+        PortIntelligenceChargingSummaryText = summary.ChargingSummary;
+        PortIntelligencePowerSourceSummaryText = summary.PowerSourceSummary;
+        PortIntelligenceBottlenecksText = summary.BottlenecksSummary;
+        PortIntelligenceRecommendedFixesText = summary.RecommendedFixesSummary;
+        PortIntelligenceDeepScanSummaryText = summary.DeepScanSummary;
+        PortIntelligenceTelemetryLimitationsText = summary.TelemetryLimitationsSummary;
     }
 
     private static string FormatUsbIntelligenceTargetLine(UsbTargetInfo? target)
@@ -8123,25 +10110,27 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             coverage = ApplyUsbCoverageFromIntelligence(root, coverage);
 
             var live = FindLiveSensorNames(sensorMatrix);
-            var deepNote = GetJsonString(sensorMatrix, "deepSensorModeNote", "Some sensors require admin access, firmware support, vendor drivers, or optional reviewed providers.");
+            var deepNote = GetJsonString(sensorMatrix, "deepSensorModeNote", "Some board-level sensors require the future Forger Deep Sensor Driver.");
             var limited = BuildLimitedSensorCompactSummary(sensorMatrix);
             var storage = BuildStorageSensorCompactSummary(sensorMatrix);
             var usb = BuildUsbSensorCompactSummary(root, sensorMatrix);
-            var optionalProviders = BuildOptionalProviderStatusSummary(root);
+            var sensorLimits = BuildOptionalProviderStatusSummary(root);
 
             return
                 $"Machine: {primary} ({confidence}){Environment.NewLine}" +
                 (secondary.Equals("none", StringComparison.OrdinalIgnoreCase) ? string.Empty : $"Secondary: {secondary}{Environment.NewLine}") +
                 $"Coverage: {CompactCoverageSummary(coverage)}{Environment.NewLine}" +
                 $"Live: {live}{Environment.NewLine}" +
-                $"Sensor Providers: {BuildSensorProviderCompactSummary(sensorMatrix)}{Environment.NewLine}" +
+                $"Forger Sensor Stack: Core active; Sensor Service not installed; Deep Sensor Driver not included; External tools not required{Environment.NewLine}" +
+                $"Sensor Sources: {BuildSensorProviderCompactSummary(sensorMatrix)}{Environment.NewLine}" +
                 $"Deep Sensor Mode: {BuildDeepSensorModeCompactSummary(root, sensorMatrix)}{Environment.NewLine}" +
                 $"Inventory: {GetInventoryDataSummary(sensorMatrix)}{Environment.NewLine}" +
                 $"USB: {usb}{Environment.NewLine}" +
-                $"Optional providers: {optionalProviders}{Environment.NewLine}" +
+                $"Sensor limits: {sensorLimits}{Environment.NewLine}" +
                 $"Limited: {limited}{Environment.NewLine}" +
                 $"Storage: {storage}{Environment.NewLine}" +
-                "Guide: Unknown lowers confidence; NotExposed means firmware/driver/permission limit; failure requires explicit evidence." + Environment.NewLine +
+                "Guide: missing readings are coverage limits, not failures. Unknown lowers confidence; ForgerEMS does not invent sensor values." + Environment.NewLine +
+                "Why missing? Common reasons: firmware does not expose the sensor, vendor driver does not expose it, admin was not granted, bundled deep provider is not packaged or is off, or the future Forger Deep Sensor Driver is required." + Environment.NewLine +
                 $"Note: {note} {deepNote}";
         }
 
@@ -8155,7 +10144,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 $"Secondary: {FormatList(classification.SecondaryClasses.Take(3), "none")}{Environment.NewLine}" +
                 $"Sensor coverage: {CompactCoverageSummary(sensors.CoverageSummary)}{Environment.NewLine}" +
                 $"Live sensors: {FormatList(sensors.Groups.SelectMany(g => g.Readings).Where(r => r.IsLive).Select(r => r.Name).Take(5), "none exposed in safe scan")}{Environment.NewLine}" +
-                $"Sensor Providers: {BuildSensorProviderCompactSummary(sensors)}{Environment.NewLine}" +
+                $"Forger Sensor Stack: Core active; Sensor Service not installed; Deep Sensor Driver not included; External tools not required{Environment.NewLine}" +
+                $"Sensor Sources: {BuildSensorProviderCompactSummary(sensors)}{Environment.NewLine}" +
                 $"Deep Sensor Mode: {sensors.DeepSensorMode.Mode} via {sensors.DeepSensorMode.DisplaySource}; Safety: read-only; no fan/voltage/clock/firmware control.{Environment.NewLine}" +
                 $"Limited: CPU/GPU temps, fan RPM, package power may require deep/vendor sensor support.{Environment.NewLine}" +
                 $"Note: {classification.TechnicianNote} {sensors.DeepSensorModeNote}";
@@ -8177,6 +10167,67 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         return lines;
     }
+
+    private static string BuildForgerSensorStackStatus(
+        JsonElement root,
+        ElevatedScanTelemetrySnapshot? elevatedSnapshot)
+    {
+        if (root.TryGetProperty("forgerSensorStack", out var stack) &&
+            stack.ValueKind == JsonValueKind.Object)
+        {
+            return BuildForgerSensorStackStatus(
+                GetJsonString(stack, "forgerSensorCore", "Active"),
+                MapElevatedScanStateForSensorStack(elevatedSnapshot) ??
+                    GetJsonString(stack, "elevatedScan", "Recommended"),
+                GetJsonString(stack, "sensorService", "Not installed"),
+                GetJsonString(stack, "deepSensorDriver", "Not included"),
+                GetJsonString(stack, "externalTools", "Not required"));
+        }
+
+        var scanMode = GetJsonString(root, "scanMode", "Standard");
+        var state = MapElevatedScanStateForSensorStack(elevatedSnapshot) ??
+                    (scanMode.Equals("Elevated", StringComparison.OrdinalIgnoreCase) ? "Complete" : "Recommended");
+        return BuildForgerSensorStackStatus(elevatedScanState: state);
+    }
+
+    private static string BuildForgerSensorStackStatus(
+        string core = "Active",
+        string elevatedScanState = "Recommended",
+        string sensorService = "Not installed",
+        string deepSensorDriver = "Not included",
+        string externalTools = "Not required")
+    {
+        var serviceDisplay = sensorService.Equals("Not installed", StringComparison.OrdinalIgnoreCase)
+            ? "Not installed / Future optional component"
+            : sensorService;
+        var driverDisplay = deepSensorDriver.Equals("Not included", StringComparison.OrdinalIgnoreCase)
+            ? "Not included / Roadmap"
+            : deepSensorDriver;
+
+        return
+            "Forger Sensor Stack" + Environment.NewLine +
+            $"Core: {core}" + Environment.NewLine +
+            $"Elevated Scan: {ForgerSensorStackState.NormalizeElevatedScanState(elevatedScanState)}" + Environment.NewLine +
+            $"Sensor Service: {serviceDisplay}" + Environment.NewLine +
+            $"Deep Sensor Driver: {driverDisplay}" + Environment.NewLine +
+            $"External tools: {externalTools}" + Environment.NewLine +
+            "Some board-level sensors require the future Forger Deep Sensor Driver." + Environment.NewLine +
+            "This is not a failure. Many laptops do not expose CPU package power, fan speed, VRM, or EC telemetry through standard Windows APIs.";
+    }
+
+    private static string? MapElevatedScanStateForSensorStack(ElevatedScanTelemetrySnapshot? snapshot) =>
+        snapshot?.State switch
+        {
+            ElevatedScanTelemetryState.Fresh => "Complete",
+            ElevatedScanTelemetryState.CompletePartial => "Partial",
+            ElevatedScanTelemetryState.Running => "Running",
+            ElevatedScanTelemetryState.Failed => "Failed",
+            ElevatedScanTelemetryState.Cancelled => "Recommended",
+            ElevatedScanTelemetryState.NeedsAdmin => "Recommended",
+            ElevatedScanTelemetryState.Stale => "Recommended",
+            ElevatedScanTelemetryState.Missing => "Recommended",
+            _ => null
+        };
 
     private static string FindLiveSensorNames(JsonElement sensorMatrix)
     {
@@ -8236,7 +10287,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         if (!sensorMatrix.TryGetProperty("sensorProviders", out var providers) || providers.ValueKind != JsonValueKind.Array)
         {
-            return "Windows Native: Active; LibreHardwareMonitor: Off; Admin Bridge: Off; Driver Provider: Not included";
+            return "Forger Sensor Core: Active; LibreHardwareMonitor: Off; Forger Sensor Service: Not installed; Forger Deep Sensor Driver: Not included";
         }
 
         var rows = new List<string>();
@@ -8249,20 +10300,30 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             var failure = GetJsonString(provider, "failureReason", string.Empty);
             var label = name switch
             {
-                var n when n.Contains("Windows", StringComparison.OrdinalIgnoreCase) => "Windows Native",
+                var n when n.Contains("Forger Sensor Core", StringComparison.OrdinalIgnoreCase) => "Forger Sensor Core",
+                var n when n.Contains("Windows", StringComparison.OrdinalIgnoreCase) => "Forger Sensor Core",
                 var n when n.Contains("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase) => "LibreHardwareMonitor",
+                var n when n.Contains("ACPI", StringComparison.OrdinalIgnoreCase) => "ACPI Thermal Zones",
+                var n when n.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) => "NVIDIA SMI",
+                var n when n.Contains("Sensor Service", StringComparison.OrdinalIgnoreCase) => "Forger Sensor Service",
+                var n when n.Contains("Admin", StringComparison.OrdinalIgnoreCase) => "Forger Sensor Service",
+                var n when n.Contains("Driver", StringComparison.OrdinalIgnoreCase) => "Forger Deep Sensor Driver",
                 var n when n.Contains("Deep", StringComparison.OrdinalIgnoreCase) => "Deep Sensor Provider",
-                var n when n.Contains("Admin", StringComparison.OrdinalIgnoreCase) => "Admin Bridge",
-                var n when n.Contains("Driver", StringComparison.OrdinalIgnoreCase) => "Driver Provider",
                 _ => name
             };
             var status = enabled
                 ? label.Equals("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase) ? "Active read-only" : "Active"
                 : bundled
                     ? "Bundled but disabled"
-                    : label.Equals("Driver Provider", StringComparison.OrdinalIgnoreCase)
+                    : label.Equals("Forger Deep Sensor Driver", StringComparison.OrdinalIgnoreCase)
                         ? "Not included"
-                        : "Off";
+                        : label.Equals("NVIDIA SMI", StringComparison.OrdinalIgnoreCase)
+                            ? "Not detected"
+                            : label.Equals("ACPI Thermal Zones", StringComparison.OrdinalIgnoreCase)
+                                ? "No zones exposed"
+                                : label.Equals("Forger Sensor Service", StringComparison.OrdinalIgnoreCase)
+                                    ? "Not installed"
+                                : "Off";
             if (!enabled &&
                 (label.Equals("Deep Sensor Provider", StringComparison.OrdinalIgnoreCase) ||
                  label.Equals("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase)) &&
@@ -8272,17 +10333,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 status = "Not packaged / unavailable";
             }
 
-            if (!enabled && mode.Equals("Disabled", StringComparison.OrdinalIgnoreCase))
-            {
-                rows.Add($"{label}: {status}");
-            }
-            else
-            {
-                rows.Add($"{label}: {status}");
-            }
+            rows.Add($"{label}: {status}");
         }
 
-        return FormatList(rows.Take(4), "Windows Native: Active; LibreHardwareMonitor: Off; Admin Bridge: Off; Driver Provider: Not included");
+        return FormatList(rows.Take(6), "Forger Sensor Core: Active; LibreHardwareMonitor: Off; ACPI Thermal Zones: No zones exposed; NVIDIA SMI: Not detected; Forger Sensor Service: Not installed; Forger Deep Sensor Driver: Not included");
     }
 
     private static string BuildSensorProviderCompactSummary(SensorMatrixResult sensors)
@@ -8291,20 +10345,30 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             var label = provider.ProviderName switch
             {
-                var n when n.Contains("Windows", StringComparison.OrdinalIgnoreCase) => "Windows Native",
+                var n when n.Contains("Forger Sensor Core", StringComparison.OrdinalIgnoreCase) => "Forger Sensor Core",
+                var n when n.Contains("Windows", StringComparison.OrdinalIgnoreCase) => "Forger Sensor Core",
                 var n when n.Contains("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase) => "LibreHardwareMonitor",
+                var n when n.Contains("ACPI", StringComparison.OrdinalIgnoreCase) => "ACPI Thermal Zones",
+                var n when n.Contains("NVIDIA", StringComparison.OrdinalIgnoreCase) => "NVIDIA SMI",
+                var n when n.Contains("Sensor Service", StringComparison.OrdinalIgnoreCase) => "Forger Sensor Service",
+                var n when n.Contains("Admin", StringComparison.OrdinalIgnoreCase) => "Forger Sensor Service",
+                var n when n.Contains("Driver", StringComparison.OrdinalIgnoreCase) => "Forger Deep Sensor Driver",
                 var n when n.Contains("Deep", StringComparison.OrdinalIgnoreCase) => "Deep Sensor Provider",
-                var n when n.Contains("Admin", StringComparison.OrdinalIgnoreCase) => "Admin Bridge",
-                var n when n.Contains("Driver", StringComparison.OrdinalIgnoreCase) => "Driver Provider",
                 _ => provider.ProviderName
             };
             var status = provider.IsEnabled
                 ? label.Equals("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase) ? "Active read-only" : "Active"
                 : provider.IsBundled
                     ? "Bundled but disabled"
-                    : label.Equals("Driver Provider", StringComparison.OrdinalIgnoreCase)
+                    : label.Equals("Forger Deep Sensor Driver", StringComparison.OrdinalIgnoreCase)
                         ? "Not included"
-                        : "Off";
+                        : label.Equals("NVIDIA SMI", StringComparison.OrdinalIgnoreCase)
+                            ? "Not detected"
+                            : label.Equals("ACPI Thermal Zones", StringComparison.OrdinalIgnoreCase)
+                                ? "No zones exposed"
+                                : label.Equals("Forger Sensor Service", StringComparison.OrdinalIgnoreCase)
+                                    ? "Not installed"
+                                : "Off";
             if (!provider.IsEnabled &&
                 (label.Equals("Deep Sensor Provider", StringComparison.OrdinalIgnoreCase) ||
                  label.Equals("LibreHardwareMonitor", StringComparison.OrdinalIgnoreCase)) &&
@@ -8316,14 +10380,14 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             return $"{label}: {status}";
         });
-        return FormatList(rows.Take(4), "Windows Native: Active; LibreHardwareMonitor: Off; Admin Bridge: Off; Driver Provider: Not included");
+        return FormatList(rows.Take(6), "Forger Sensor Core: Active; LibreHardwareMonitor: Off; ACPI Thermal Zones: No zones exposed; NVIDIA SMI: Not detected; Forger Sensor Service: Not installed; Forger Deep Sensor Driver: Not included");
     }
 
     private static string BuildOptionalProviderStatusSummary(JsonElement root)
     {
         if (!root.TryGetProperty("optionalProviderStatus", out var providers) || providers.ValueKind != JsonValueKind.Array)
         {
-            return "Available: n/a; Permission required: n/a; Not exposed: n/a; Provider unavailable: n/a";
+            return "No additional source limits were recorded. Missing board-level sensors are coverage limits, not failures.";
         }
 
         var available = 0;
@@ -8351,7 +10415,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             }
         }
 
-        return $"Available: {available}; Permission required: {permissionRequired}; Not exposed by firmware/driver: {notExposed}; Provider unavailable: {providerUnavailable}. Run Elevated Scan for more detail.";
+        return $"Available: {available}; Permission required: {permissionRequired}; Firmware/driver-limited: {notExposed}; Provider blocked/errors: {providerUnavailable}. Elevated Scan unlocks extra detail when Windows allows it.";
     }
 
     private static string BuildSystemIntelligenceWarningReason(JsonElement root, string diagnosticsSummary)
@@ -8815,7 +10879,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         return reason switch
         {
-            "RequiresExternalProvider" => "Requires deep sensor provider",
+            "RequiresExternalProvider" => "Requires Forger deep sensor layer",
             "RequiresVendorDriver" => "Requires vendor driver/support",
             "NotExposedByFirmware" => "Not exposed by firmware",
             _ => reason
@@ -9250,6 +11314,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         return 0L;
     }
 
+    private static long? GetOptionalJsonLong(JsonElement element, string propertyName)
+    {
+        var value = GetJsonLong(element, propertyName);
+        return value > 0 ? value : null;
+    }
+
     private static string FormatBytesForToolkit(long bytes)
     {
         if (bytes <= 0)
@@ -9268,6 +11338,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
         return $"{value:0.#} {units[unitIndex]}";
     }
+
+    private static string FirstNonBlank(params string[] values) =>
+        values.FirstOrDefault(static value => !string.IsNullOrWhiteSpace(value)) ?? string.Empty;
 
     private static double? GetJsonDouble(JsonElement element, string propertyName)
     {
@@ -9742,6 +11815,65 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         {
             _ = dispatcher.BeginInvoke(DispatcherPriority.Normal, () => ApplyBenchmarkResult(target, result));
             return;
+        }
+
+        // Cache-pollution guard: a re-run that comes back as cache-suspected must NEVER overwrite a
+        // previously verified believable read in the UI. The earlier result is in our verified-history
+        // dictionary because `ShouldPersistSuccessfulHistory` only stores non-cache-suspected runs.
+        // Keep the verified read display + speed surfaced; the cache-suspected raw sample stays in the
+        // result.Details / AccuracyWarning for the operator to inspect, but does not become the user-
+        // facing read number.
+        if (result.IsReadCacheSuspected && result.Succeeded &&
+            _benchmarkResultsByRoot.TryGetValue(GetBenchmarkCacheKey(target.RootPath), out var prior) &&
+            prior.ShouldPersistSuccessfulHistory && prior.VerifiedReadMbps is { } priorRead && priorRead > 0)
+        {
+            var rawSampleNote = result.RawReadMbps is { } raw && raw > 0
+                ? $" (re-read sample {raw:0.0} MB/s discarded as cache-suspected)"
+                : " (re-read discarded as cache-suspected)";
+
+            result = new UsbBenchmarkResult
+            {
+                RunId = result.RunId,
+                Succeeded = result.Succeeded,
+                Status = result.Status,
+                Summary = result.Summary,
+                Details = result.Details + Environment.NewLine + "Preserving last believable read: " + prior.ReadSpeedDisplay + rawSampleNote,
+                WriteSpeedDisplay = result.WriteSpeedDisplay,
+                ReadSpeedDisplay = prior.ReadSpeedDisplay + " (last verified)",
+                TestSizeMb = result.TestSizeMb,
+                LastTestedAt = result.LastTestedAt,
+                Classification = result.Classification,
+                WriteSpeedMBps = result.WriteSpeedMBps,
+                ReadSpeedMBps = priorRead,
+                VerifiedWriteMbps = result.VerifiedWriteMbps,
+                VerifiedReadMbps = priorRead,
+                RawReadMbps = result.RawReadMbps,
+                IsReadCacheSuspected = true,
+                ReadVerificationStatus = "Verified earlier; latest sample was cache-suspected.",
+                BenchmarkDurationMs = result.BenchmarkDurationMs,
+                IntelligenceMeasurementClass = prior.IntelligenceMeasurementClass,
+                IntelligenceConfidenceScore = Math.Min(result.IntelligenceConfidenceScore, prior.IntelligenceConfidenceScore),
+                ResultKind = result.ResultKind,
+                CancellationSource = result.CancellationSource,
+                StartedAtUtc = result.StartedAtUtc,
+                CompletedAtUtc = result.CompletedAtUtc,
+                ActualBytesWritten = result.ActualBytesWritten,
+                ActualBytesRead = result.ActualBytesRead,
+                WriteElapsedMs = result.WriteElapsedMs,
+                ReadElapsedMs = result.ReadElapsedMs,
+                ReadLikelyCached = result.ReadLikelyCached,
+                ReadIsEstimate = result.ReadIsEstimate,
+                BenchmarkConfidence = "Read verification needed (using last verified)",
+                AccuracyWarning = result.AccuracyWarning,
+                TargetTopologyFingerprint = result.TargetTopologyFingerprint,
+                UiSummaryLine = result.UiSummaryLine
+            };
+
+            AppendLog(new LogLine(
+                DateTimeOffset.Now,
+                $"[INFO] USB benchmark re-read was cache-suspected — keeping last believable read {prior.ReadSpeedDisplay}.",
+                LogSeverity.Info,
+                channel: LiveLogChannel.Diagnostics));
         }
 
         if (result.ShouldPersistSuccessfulHistory)
@@ -10532,68 +12664,134 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void StartUsbAutoDetectionMonitor()
     {
+        // The legacy 1-second polling loop was retired in favor of an
+        // event-driven WM_DEVICECHANGE hook (see AttachUsbDeviceChangeNotifier).
+        // We keep this entry point because InitializeAsync still calls it; when
+        // the hook is already wired up there is nothing for it to do.
         if (_usbMonitorStarted)
         {
             return;
         }
 
         _usbMonitorStarted = true;
-        _usbMonitorCancellation = new CancellationTokenSource();
-        _ = MonitorUsbTargetsAsync(_usbMonitorCancellation.Token);
-        AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Automatic USB detection monitor started.", LogSeverity.Info));
+        if (_usbDeviceChangeHookAttached)
+        {
+            AppendLog(new LogLine(
+                DateTimeOffset.Now,
+                "[INFO] Event-driven USB plug/unplug detection active (WM_DEVICECHANGE, debounced).",
+                LogSeverity.Info));
+        }
+        else
+        {
+            AppendLog(new LogLine(
+                DateTimeOffset.Now,
+                "[INFO] USB detection ready. Plug/unplug refreshes will arrive via Windows device events once the main window is realized.",
+                LogSeverity.Info));
+        }
     }
 
-    private async Task MonitorUsbTargetsAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Wires the event-driven USB plug/unplug detection to the main application
+    /// window. Replaces the legacy 1-second polling loop with a debounced
+    /// WM_DEVICECHANGE hook (default 1200ms) so the target list refreshes once
+    /// per device-change burst without constant background scanning.
+    ///
+    /// Safety: this only triggers a target-list refresh. Toolkit Health is not
+    /// auto-started on hotplug, no destructive USB action is initiated, and
+    /// the existing USB target safety gate continues to filter out C:\,
+    /// system, internal, and EFI partitions inside <see cref="RefreshUsbTargetsAsync"/>.
+    /// </summary>
+    public void AttachUsbDeviceChangeNotifier(System.Windows.Window window)
     {
-        while (!cancellationToken.IsCancellationRequested)
+        ArgumentNullException.ThrowIfNull(window);
+        if (_usbDeviceChangeHookAttached)
         {
-            try
+            return;
+        }
+
+        _usbDeviceChangeDebouncer = new UsbDeviceChangeDebouncer(
+            OnUsbDeviceChangeFlushed,
+            TimeSpan.FromMilliseconds(1200));
+        _usbDeviceChangeWindowHook = new UsbDeviceChangeWindowHook(_usbDeviceChangeDebouncer);
+        _usbDeviceChangeWindowHook.Attach(window);
+        _usbDeviceChangeHookAttached = true;
+
+        AppendLog(new LogLine(
+            DateTimeOffset.Now,
+            "[INFO] WM_DEVICECHANGE hook installed (debounce=1200ms). Plug or unplug a USB to refresh targets automatically.",
+            LogSeverity.Info));
+    }
+
+    private void OnUsbDeviceChangeFlushed(UsbDeviceChangeReason reason)
+    {
+        // The debouncer fires on a thread-pool thread; marshal back to the UI
+        // thread before touching anything that listens to PropertyChanged.
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null)
+        {
+            return;
+        }
+
+        _ = dispatcher.InvokeAsync(() => HandleDebouncedUsbDeviceChangeAsync(reason));
+    }
+
+    private async Task HandleDebouncedUsbDeviceChangeAsync(UsbDeviceChangeReason reason)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (_isBusy || _refreshingUsbTargets || _benchmarksInProgress.Count > 0)
+        {
+            // Avoid stepping on a destructive USB operation in flight.
+            return;
+        }
+
+        try
+        {
+            var detectionResult = await _usbDetectionService.GetUsbTargetsAsync().ConfigureAwait(true);
+            var signature = BuildUsbSignature(detectionResult.Targets);
+            if (string.Equals(signature, _knownUsbSignature, StringComparison.Ordinal))
             {
-                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);
-                if (cancellationToken.IsCancellationRequested || _isBusy || _refreshingUsbTargets || _benchmarksInProgress.Count > 0)
-                {
-                    continue;
-                }
-
-                var detectionResult = await _usbDetectionService.GetUsbTargetsAsync(cancellationToken).ConfigureAwait(false);
-                var signature = BuildUsbSignature(detectionResult.Targets);
-                if (string.Equals(signature, _knownUsbSignature, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                var oldRoots = ParseUsbSignature(_knownUsbSignature);
-                var newRoots = ParseUsbSignature(signature);
-                var added = newRoots.Except(oldRoots, StringComparer.OrdinalIgnoreCase).ToArray();
-                var removed = oldRoots.Except(newRoots, StringComparer.OrdinalIgnoreCase).ToArray();
-
-                if (added.Length > 0)
-                {
-                    AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] USB device added: {string.Join(", ", added)}. Waiting for Windows mount to settle.", LogSeverity.Info));
-                    await Task.Delay(TimeSpan.FromMilliseconds(1600), cancellationToken).ConfigureAwait(false);
-                }
-
-                if (removed.Length > 0)
-                {
-                    foreach (var removedRoot in removed)
-                    {
-                        UsbPortLabelResolver.MarkDriveRemoved(removedRoot);
-                    }
-
-                    AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] USB device removed: {string.Join(", ", removed)}.", LogSeverity.Warning));
-                }
-
-                var refreshTask = await Application.Current.Dispatcher.InvokeAsync(() => RefreshUsbTargetsAsync());
-                await refreshTask.ConfigureAwait(false);
+                // Nothing interesting changed (could be a non-volume device hop).
+                return;
             }
-            catch (OperationCanceledException)
+
+            var oldRoots = ParseUsbSignature(_knownUsbSignature);
+            var newRoots = ParseUsbSignature(signature);
+            var added = newRoots.Except(oldRoots, StringComparer.OrdinalIgnoreCase).ToArray();
+            var removed = oldRoots.Except(newRoots, StringComparer.OrdinalIgnoreCase).ToArray();
+
+            if (added.Length > 0)
             {
-                break;
+                AppendLog(new LogLine(
+                    DateTimeOffset.Now,
+                    $"[INFO] USB device arrival event: {string.Join(", ", added)} (reason={reason}).",
+                    LogSeverity.Info));
             }
-            catch (Exception exception)
+
+            if (removed.Length > 0)
             {
-                AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Automatic USB detection skipped one cycle: {exception.Message}", LogSeverity.Warning));
+                foreach (var removedRoot in removed)
+                {
+                    UsbPortLabelResolver.MarkDriveRemoved(removedRoot);
+                }
+
+                AppendLog(new LogLine(
+                    DateTimeOffset.Now,
+                    $"[WARN] USB device removal event: {string.Join(", ", removed)} (reason={reason}).",
+                    LogSeverity.Warning));
             }
+
+            await RefreshUsbTargetsAsync().ConfigureAwait(true);
+        }
+        catch (Exception exception)
+        {
+            AppendLog(new LogLine(
+                DateTimeOffset.Now,
+                $"[WARN] Event-driven USB refresh skipped: {exception.Message}",
+                LogSeverity.Warning));
         }
     }
 
@@ -11357,10 +13555,44 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         WslRunnerOutputText = string.Empty;
     }
 
-    private void RunLinkSafetyAnalyze()
+    private bool CanRunLinkSafetyAction()
     {
-        var report = LinkSafetyAnalyzer.Analyze(LinkSafetyUrlInput);
-        LinkSafetyResultText = LinkSafetyAnalyzer.FormatReport(report);
+        return !IsBusy && !_isLinkSafetyBusy && !string.IsNullOrWhiteSpace(_linkSafetyUrlInput);
+    }
+
+    private void SetLinkSafetyBusy(bool value)
+    {
+        if (_isLinkSafetyBusy == value)
+        {
+            return;
+        }
+
+        _isLinkSafetyBusy = value;
+        OnPropertyChanged(nameof(IsLinkSafetyCheckRunning));
+        AnalyzeLinkSafetyCommand.RaiseCanExecuteChanged();
+        FetchLinkSafetyHeadersCommand.RaiseCanExecuteChanged();
+        DownloadLinkToQuarantineCommand.RaiseCanExecuteChanged();
+    }
+
+    private async Task RunLinkSafetyAnalyzeAsync()
+    {
+        SetLinkSafetyBusy(true);
+        LinkSafetyResultText = "Analyzing URL metadata. Previous URL result cleared. ForgerEMS will not save or execute payload bytes.";
+
+        try
+        {
+            var report = await LinkSafetyAnalyzer.AnalyzeAsync(LinkSafetyUrlInput).ConfigureAwait(true);
+            LinkSafetyResultText = LinkSafetyAnalyzer.FormatReport(report);
+        }
+        catch (Exception exception)
+        {
+            StartupDiagnosticLog.AppendException("RunLinkSafetyAnalyzeAsync", exception);
+            LinkSafetyResultText = "URL analysis failed: " + exception.Message + Environment.NewLine + "ForgerEMS did not execute anything.";
+        }
+        finally
+        {
+            SetLinkSafetyBusy(false);
+        }
     }
 
     private void BrowseLocalFileSafety()
@@ -11392,6 +13624,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         try
         {
+            _lastLocalSafetySha256 = string.Empty;
+            CopyLocalFileSafetyShaCommand.RaiseCanExecuteChanged();
+            LocalFileSafetyResultText = "Analyzing selected file metadata. Previous file result cleared. ForgerEMS will not execute, unzip, or shell-open the file.";
+
             var report = DownloadedFileSafetyAnalyzer.Analyze(LocalFileSafetyPath.Trim(), out var error);
             if (report is null)
             {
@@ -11401,7 +13637,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            _lastLocalSafetySha256 = report.Sha256Hex;
+            _lastLocalSafetySha256 = report.Sha256Hex.Length == 64 ? report.Sha256Hex : string.Empty;
             CopyLocalFileSafetyShaCommand.RaiseCanExecuteChanged();
             CopyLocalFileSafetyReportCommand.RaiseCanExecuteChanged();
             LocalFileSafetyResultText = DownloadedFileSafetyAnalyzer.FormatReport(report);
@@ -11463,7 +13699,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            DownloadedFileSafetyAnalyzer.CopyToQuarantine(path, DownloadedFileSafetyAnalyzer.GetQuarantineRoot(), out var dest, out var error);
+            DownloadedFileSafetyAnalyzer.CopyToQuarantine(path, DownloadedFileSafetyAnalyzer.GetQuarantineRoot(), out var dest, out var error, out var metadataPath);
             if (!string.IsNullOrWhiteSpace(error))
             {
                 LocalFileSafetyResultText = "Copy to quarantine failed: " + error;
@@ -11472,7 +13708,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Copied file to quarantine (not executed): " + CopilotRedactor.Redact(dest, enabled: true), LogSeverity.Success));
             LocalFileSafetyResultText = (LocalFileSafetyResultText ?? string.Empty) + Environment.NewLine + Environment.NewLine +
-                                        "Copied to quarantine (read-only copy; original untouched):" + Environment.NewLine + CopilotRedactor.Redact(dest, enabled: true);
+                                        "Copied to ForgerEMS quarantine with neutral extension (read-only copy; original untouched; no execution):" + Environment.NewLine +
+                                        CopilotRedactor.Redact(dest, enabled: true) + Environment.NewLine +
+                                        "Metadata: " + CopilotRedactor.Redact(metadataPath ?? "(not available)", enabled: true);
         }
         catch (Exception exception)
         {
@@ -11483,106 +13721,51 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private async Task RunLinkSafetyHeadAsync()
     {
-        var report = LinkSafetyAnalyzer.Analyze(LinkSafetyUrlInput);
-        var baseText = LinkSafetyAnalyzer.FormatReport(report);
-        if (!Uri.TryCreate(LinkSafetyUrlInput.Trim(), UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
-        {
-            RunOnUi(() => LinkSafetyResultText = baseText + Environment.NewLine + Environment.NewLine +
-                                                "HTTPS HEAD was skipped (needs a valid https:// URL).");
-            return;
-        }
+        SetLinkSafetyBusy(true);
+        LinkSafetyResultText = "Checking URL headers. Previous URL result cleared. If HEAD is blocked, ForgerEMS will fall back to safe bounded GET metadata.";
 
         try
         {
-            using var client = new HttpClient();
-            client.Timeout = TimeSpan.FromSeconds(10);
-            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "ForgerEMS/1.2.1-preview.1 (beta link checker; no execute)");
-            using var request = new HttpRequestMessage(HttpMethod.Head, uri);
-            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
-            var sb = new StringBuilder(baseText);
-            sb.AppendLine().AppendLine("--- HTTPS HEAD (informational only; servers may omit headers) ---");
-            sb.AppendLine(FormattableString.Invariant($"HTTP {(int)response.StatusCode} {response.ReasonPhrase}"));
-            if (response.Headers.Location is not null)
-            {
-                sb.AppendLine("Location: " + response.Headers.Location);
-            }
-
-            foreach (var key in new[] { "Content-Type", "Content-Length", "Content-Disposition", "Last-Modified" })
-            {
-                if (response.Content.Headers.TryGetValues(key, out var values))
-                {
-                    sb.AppendLine(key + ": " + string.Join(", ", values));
-                }
-            }
-
-            RunOnUi(() => LinkSafetyResultText = sb.ToString());
+            var report = await LinkSafetyAnalyzer.AnalyzeAsync(LinkSafetyUrlInput).ConfigureAwait(true);
+            LinkSafetyResultText = LinkSafetyAnalyzer.FormatReport(report);
         }
         catch (Exception ex)
         {
-            RunOnUi(() => LinkSafetyResultText = baseText + Environment.NewLine + Environment.NewLine +
-                                                "HEAD request failed (network, TLS, or server policy): " + ex.Message);
+            StartupDiagnosticLog.AppendException("RunLinkSafetyHeadAsync", ex);
+            LinkSafetyResultText = "Header check failed: " + ex.Message + Environment.NewLine + "ForgerEMS did not execute anything.";
+        }
+        finally
+        {
+            SetLinkSafetyBusy(false);
         }
     }
 
     private async Task DownloadLinkToQuarantineAsync()
     {
-        if (!Uri.TryCreate(LinkSafetyUrlInput.Trim(), UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
-        {
-            RunOnUi(() => LinkSafetyResultText = "Quarantine download requires a valid https:// URL.");
-            return;
-        }
+        SetLinkSafetyBusy(true);
+        LinkSafetyResultText = "Downloading to ForgerEMS quarantine with neutral filename. Previous URL result cleared. ForgerEMS will not execute, unzip, or shell-open the payload.";
 
-        var quarantineRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ForgerEMS", "Quarantine");
-        Directory.CreateDirectory(quarantineRoot);
-        var name = Path.GetFileName(uri.AbsolutePath);
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            name = "download.bin";
-        }
-
-        foreach (var c in Path.GetInvalidFileNameChars())
-        {
-            name = name.Replace(c, '_');
-        }
-
-        if (name.Length > 120)
-        {
-            name = name[..120];
-        }
-
-        var targetPath = Path.Combine(quarantineRoot, $"{DateTimeOffset.Now:yyyyMMdd-HHmmss}-{name}");
         try
         {
-            using var client = new HttpClient();
-            client.Timeout = TimeSpan.FromMinutes(3);
-            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "ForgerEMS/1.2.1-preview.1 (beta quarantine download; no execute)");
-            await using var network = await client.GetStreamAsync(uri).ConfigureAwait(false);
-            await using var file = File.Create(targetPath);
-            using var incremental = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-            var buffer = new byte[81920];
-            long totalBytes = 0;
-            int read;
-            while ((read = await network.ReadAsync(buffer.AsMemory(0, buffer.Length)).ConfigureAwait(false)) > 0)
+            var result = await QuarantineDownloadService.DownloadAsync(LinkSafetyUrlInput).ConfigureAwait(true);
+            LinkSafetyResultText = QuarantineDownloadService.FormatResult(result);
+            if (result.Outcome == QuarantineOutcome.Quarantined)
             {
-                totalBytes += read;
-                if (totalBytes > 200L * 1024 * 1024)
-                {
-                    throw new IOException("Download exceeds 200 MB beta quarantine limit.");
-                }
-
-                incremental.AppendData(new ReadOnlySpan<byte>(buffer, 0, read));
-                await file.WriteAsync(buffer.AsMemory(0, read)).ConfigureAwait(false);
+                AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Downloaded to ForgerEMS quarantine (not executed): " + CopilotRedactor.Redact(result.PayloadPath ?? string.Empty, enabled: true), LogSeverity.Success));
             }
-
-            var hash = Convert.ToHexString(incremental.GetHashAndReset());
-            RunOnUi(() => LinkSafetyResultText =
-                "Saved bytes only (not executed) to:\n" + targetPath +
-                "\n\nSHA256: " + hash +
-                "\n\nScan with Windows Defender or upload the hash to VirusTotal manually if you choose. Delete the file when done.");
+            else if (result.Outcome == QuarantineOutcome.BlockedByExternalSecurity)
+            {
+                AppendLog(new LogLine(DateTimeOffset.Now, "[WARN] External AV/security intercepted quarantine download before retention.", LogSeverity.Warning));
+            }
         }
         catch (Exception ex)
         {
-            RunOnUi(() => LinkSafetyResultText = "Quarantine download failed: " + ex.Message);
+            StartupDiagnosticLog.AppendException("DownloadLinkToQuarantineAsync", ex);
+            LinkSafetyResultText = "Quarantine download failed: " + ex.Message + Environment.NewLine + "ForgerEMS did not execute anything.";
+        }
+        finally
+        {
+            SetLinkSafetyBusy(false);
         }
     }
 
@@ -11615,6 +13798,259 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(AppUpdateSettingsIgnoredVisibility));
         ClearIgnoredAppUpdateVersionCommand.RaiseCanExecuteChanged();
     }
+
+    private void LoadUsbBuilderProfileSettings()
+    {
+        _loadingUsbBuilderProfileSettings = true;
+        try
+        {
+            _usbBuilderProfileSettings = _usbBuilderProfileSettingsStore.Load();
+            UsbBuilderProfileOptions.Clear();
+
+            var included = new HashSet<string>(
+                _usbBuilderProfileSettings.IncludedCategoryIds,
+                StringComparer.OrdinalIgnoreCase);
+
+            foreach (var option in CreateUsbBuilderProfileOptions())
+            {
+                option.IsIncluded = option.IsRequired || included.Contains(option.CategoryId);
+                option.RefreshPackStatus();
+                option.PropertyChanged += OnUsbBuilderProfileOptionChanged;
+                UsbBuilderProfileOptions.Add(option);
+            }
+        }
+        finally
+        {
+            _loadingUsbBuilderProfileSettings = false;
+        }
+
+        PersistUsbBuilderProfileSettings();
+        ScheduleUsbBuilderProfileMediaScan();
+        RefreshUsbBuilderProfileSummary();
+    }
+
+    private static List<UsbBuilderProfileOption> CreateUsbBuilderProfileOptions() =>
+        UsbBuilderProfileCatalog.All
+            .Select(definition => UsbBuilderProfileOption.FromDefinition(definition, definition.DefaultIncluded))
+            .ToList();
+
+    private void OnUsbBuilderProfileOptionChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (!string.Equals(e.PropertyName, nameof(UsbBuilderProfileOption.IsIncluded), StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (!_loadingUsbBuilderProfileSettings)
+        {
+            PersistUsbBuilderProfileSettings();
+        }
+
+        RefreshUsbBuilderProfileSummary();
+    }
+
+    private void PersistUsbBuilderProfileSettings()
+    {
+        _usbBuilderProfileSettings.IncludedCategoryIds = UsbBuilderProfileOptions
+            .Where(option => option.IsIncluded)
+            .Select(option => option.CategoryId)
+            .ToList();
+
+        try
+        {
+            _usbBuilderProfileSettingsStore.Save(_usbBuilderProfileSettings);
+        }
+        catch
+        {
+            // best effort; profile changes still apply in memory for this run
+        }
+    }
+
+    private void RefreshUsbBuilderProfileSummary()
+    {
+        var included = UsbBuilderProfileOptions
+            .Where(option => option.IsIncluded)
+            .Select(option => UsbBuilderProfileCatalog.GetSummaryLabel(option.CategoryId))
+            .ToList();
+
+        var off = UsbBuilderProfileOptions
+            .Where(option => !option.IsIncluded && !option.IsRequired)
+            .Select(option => UsbBuilderProfileCatalog.GetSummaryLabel(option.CategoryId))
+            .ToList();
+
+        var totals = UsbBuilderProfileEstimateCalculator.CalculateTotals(
+            UsbBuilderProfileOptions,
+            SelectedUsbTarget?.FreeBytes);
+
+        var includedText = included.Count == 0 ? "Core only" : string.Join(", ", included);
+        var spaceLine = $"Estimated space: {totals.TypicalRangeDisplay} typical ({totals.MinimumDisplay} minimum) before user-supplied media.";
+        var freeLine = SelectedUsbTarget?.FreeBytes > 0
+            ? $"USB free space: {SelectedUsbTarget.DisplayFreeBytes}."
+            : "USB free space: select a target to detect.";
+
+        UsbBuilderProfileSummaryText =
+            $"This profile includes {totals.SelectedPackCount} pack(s): {includedText}. {spaceLine} {freeLine} " +
+            $"{totals.UserSuppliedPackCount} pack(s) need user-supplied or guided official downloads; {totals.AutoOrGuidedPackCount} can auto-download or use guided official sources.";
+
+        var offText = off.Count == 0
+            ? "All optional packs are selected."
+            : $"Off this run (not seeded/updated): {string.Join(", ", off)}.";
+
+        UsbBuilderProfileNoteText =
+            $"{offText} Unchecked means do not add/update/seed that pack this run. Existing user-supplied files on the USB are left alone. " +
+            (string.IsNullOrWhiteSpace(totals.OptionalNote) ? string.Empty : totals.OptionalNote);
+
+        RefreshFullManagedDownloadStatus();
+    }
+
+    private void RefreshFullManagedDownloadStatus()
+    {
+        try
+        {
+            var manifestPath = ResolveManifestPath();
+            var includedSet = new HashSet<string>(
+                GetIncludedUsbBuilderCategoryArguments(),
+                StringComparer.OrdinalIgnoreCase);
+            var plan = UsbBuilderProfileFullManagedDownloadPlanner.Calculate(
+                manifestPath,
+                includedSet,
+                SelectedUsbTarget?.RootPath);
+
+            var profileFilterNote = plan.ExcludedByProfileCount > 0
+                ? $" {plan.ProfileExclusionLine}"
+                : string.Empty;
+
+            FullManagedDownloadStatusText =
+                $"{plan.ShortSummaryLine} | {plan.ManualLinkLine}.{profileFilterNote}";
+        }
+        catch
+        {
+            FullManagedDownloadStatusText =
+                "Managed downloads: status unavailable (catalog could not be read).";
+        }
+    }
+
+    private void ScheduleUsbBuilderProfileMediaScan()
+    {
+        _usbBuilderProfileMediaScanCts?.Cancel();
+        _usbBuilderProfileMediaScanCts?.Dispose();
+        _usbBuilderProfileMediaScanCts = new CancellationTokenSource();
+        var token = _usbBuilderProfileMediaScanCts.Token;
+        _ = RefreshUsbBuilderProfileMediaScanAsync(token);
+    }
+
+    private async Task RefreshUsbBuilderProfileMediaScanAsync(CancellationToken cancellationToken)
+    {
+        var root = SelectedUsbTarget?.RootPath;
+        if (string.IsNullOrWhiteSpace(root))
+        {
+            foreach (var option in UsbBuilderProfileOptions)
+            {
+                option.ApplyMediaScan(null);
+            }
+
+            RefreshUsbBuilderProfileSummary();
+            return;
+        }
+
+        try
+        {
+            var categoryIds = UsbBuilderProfileOptions.Select(o => o.CategoryId).ToArray();
+            var results = await UsbBuilderProfileMediaScanner.ScanAsync(root, categoryIds, cancellationToken)
+                .ConfigureAwait(true);
+            foreach (var option in UsbBuilderProfileOptions)
+            {
+                results.TryGetValue(option.CategoryId, out var result);
+                option.ApplyMediaScan(result);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch
+        {
+            // best effort scan
+        }
+
+        RefreshUsbBuilderProfileSummary();
+    }
+
+    private async Task TryGenerateUsbHtmlDocumentationAsync(string actionName)
+    {
+        var root = SelectedUsbTarget?.RootPath;
+        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+        {
+            return;
+        }
+
+        try
+        {
+            await RefreshUsbBuilderProfileMediaScanAsync(CancellationToken.None).ConfigureAwait(true);
+            var written = UsbHtmlDocumentationGenerator.GenerateAll(new UsbHtmlDocumentationRequest
+            {
+                UsbRoot = root,
+                ProfileOptions = UsbBuilderProfileOptions.ToList(),
+                UsbFreeBytes = SelectedUsbTarget?.FreeBytes,
+                AppVersion = AppVersionText,
+                SupportEmail = SupportEmailAddress
+            });
+
+            AppendLog(new LogLine(
+                DateTimeOffset.Now,
+                $"[OK] USB HTML docs generated ({written.Count} files) after {actionName}. Open README.html on the USB.",
+                LogSeverity.Info));
+        }
+        catch (Exception ex)
+        {
+            AppendLog(new LogLine(
+                DateTimeOffset.Now,
+                $"[WARN] USB HTML documentation generation failed: {ex.Message}",
+                LogSeverity.Warning));
+        }
+    }
+
+    private void SelectRecommendedUsbBuilderProfile()
+    {
+        ApplyUsbBuilderProfileSelection(option => option.IsRequired || option.DefaultIncluded);
+    }
+
+    private void SelectAllUsbBuilderProfile()
+    {
+        ApplyUsbBuilderProfileSelection(_ => true);
+    }
+
+    private void ResetUsbBuilderProfile()
+    {
+        ApplyUsbBuilderProfileSelection(option =>
+            UsbBuilderProfileSettingsStore.DefaultIncludedCategoryIds.Contains(option.CategoryId, StringComparer.OrdinalIgnoreCase));
+    }
+
+    private void ApplyUsbBuilderProfileSelection(Func<UsbBuilderProfileOption, bool> include)
+    {
+        _loadingUsbBuilderProfileSettings = true;
+        try
+        {
+            foreach (var option in UsbBuilderProfileOptions)
+            {
+                option.IsIncluded = option.IsRequired || include(option);
+            }
+        }
+        finally
+        {
+            _loadingUsbBuilderProfileSettings = false;
+        }
+
+        PersistUsbBuilderProfileSettings();
+        RefreshUsbBuilderProfileSummary();
+    }
+
+    private string[] GetIncludedUsbBuilderCategoryArguments() =>
+        UsbBuilderProfileOptions
+            .Where(option => option.IsIncluded)
+            .Select(option => option.CategoryId)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
     private void ScheduleBackgroundUpdateCheck()
     {
@@ -11814,17 +14250,26 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             }
             else
             {
-                var isQuietNetwork =
-                    result.FailureKind == UpdateCheckFailureKind.Network ||
-                    result.FailureKind == UpdateCheckFailureKind.Timeout ||
-                    result.FailureKind == UpdateCheckFailureKind.UpdateSourceUnreachable;
-                AppendLog(new LogLine(
-                    DateTimeOffset.Now,
-                    isQuietNetwork
-                        ? $"Update check did not complete: {result.FailureKind}."
-                        : $"Update check failed: {result.FailureKind}.",
-                    isQuietNetwork ? LogSeverity.Info : LogSeverity.Warning,
-                    channel: LiveLogChannel.Update));
+                var friendlyLog = UpdateCheckDiagnosticsFormatter.TryFormatLiveLogMessage(result, manual);
+                if (friendlyLog is not null)
+                {
+                    AppendLog(new LogLine(
+                        DateTimeOffset.Now,
+                        friendlyLog,
+                        LogSeverity.Info,
+                        channel: LiveLogChannel.Update));
+                }
+                else
+                {
+                    var failureDetail = string.IsNullOrWhiteSpace(result.DiagnosticDetail)
+                        ? string.Empty
+                        : $" {UpdateCheckDiagnosticsFormatter.RedactForLog(result.DiagnosticDetail)}";
+                    AppendLog(new LogLine(
+                        DateTimeOffset.Now,
+                        $"Update check failed: {result.FailureKind}.{failureDetail}",
+                        LogSeverity.Warning,
+                        channel: LiveLogChannel.Update));
+                }
             }
         }
         catch (Exception exception)
@@ -11950,6 +14395,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         AppUpdateDownloadAdvancedInstallerCommand.RaiseCanExecuteChanged();
         CopyUpdateZipLinkCommand.RaiseCanExecuteChanged();
         CopyUpdateChecksumInstructionsCommand.RaiseCanExecuteChanged();
+        RaiseDriverHubCommandStates();
     }
 
     private void HideAppUpdateBanner()
@@ -12234,7 +14680,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
             using var client = new HttpClient();
             client.Timeout = TimeSpan.FromMinutes(20);
-            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", $"ForgerEMS-UpdateDownload/{AppReleaseInfo.Version}");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd($"ForgerEMS-UpdateDownload/{AppReleaseInfo.Version}");
             await using var stream = await client.GetStreamAsync(downloadUrl).ConfigureAwait(false);
             await using var file = File.Create(targetPath);
             using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
@@ -12643,10 +15089,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         RefreshAllCommand.RaiseCanExecuteChanged();
         RefreshUsbTargetsCommand.RaiseCanExecuteChanged();
-        VerifyCommand.RaiseCanExecuteChanged();
         RevalidateManagedDownloadsCommand.RaiseCanExecuteChanged();
         SetupUsbCommand.RaiseCanExecuteChanged();
         UpdateUsbCommand.RaiseCanExecuteChanged();
+        FullManagedDownloadCommand.RaiseCanExecuteChanged();
+        SelectRecommendedUsbBuilderProfileCommand.RaiseCanExecuteChanged();
+        SelectAllUsbBuilderProfileCommand.RaiseCanExecuteChanged();
+        ResetUsbBuilderProfileCommand.RaiseCanExecuteChanged();
         RetryFailedManagedDownloadsCommand.RaiseCanExecuteChanged();
         RenameUsbCommand.RaiseCanExecuteChanged();
         InstallOrUpdateVentoyCommand.RaiseCanExecuteChanged();
@@ -12654,6 +15103,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         RunElevatedSystemScanCommand.RaiseCanExecuteChanged();
         CopyElevatedScanAdminCommand.RaiseCanExecuteChanged();
         RefreshToolkitHealthCommand.RaiseCanExecuteChanged();
+        FullVerifyToolkitHealthCommand.RaiseCanExecuteChanged();
         VerifyToolkitLinksCommand.RaiseCanExecuteChanged();
         CancelVerifyToolkitLinksCommand.RaiseCanExecuteChanged();
         UpdateToolkitCommand.RaiseCanExecuteChanged();
@@ -12663,6 +15113,23 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         OpenManualDownloadShortcutCommand.RaiseCanExecuteChanged();
         CopySelectedToolkitExpectedPathCommand.RaiseCanExecuteChanged();
         CopySelectedToolkitDetectedPathCommand.RaiseCanExecuteChanged();
+        AddSelectedToolToDownloadPlanCommand.RaiseCanExecuteChanged();
+        RemoveSelectedToolFromDownloadPlanCommand.RaiseCanExecuteChanged();
+        SelectVisibleToolkitItemsCommand.RaiseCanExecuteChanged();
+        ClearToolkitDownloadPlanCommand.RaiseCanExecuteChanged();
+        ValidateToolkitDownloadPlanCommand.RaiseCanExecuteChanged();
+        SaveToolkitProfileCommand.RaiseCanExecuteChanged();
+        LoadToolkitProfileCommand.RaiseCanExecuteChanged();
+        ExportToolkitProfileCommand.RaiseCanExecuteChanged();
+        RemoveSelectedPlanItemCommand.RaiseCanExecuteChanged();
+        MoveSelectedPlanItemUpCommand.RaiseCanExecuteChanged();
+        MoveSelectedPlanItemDownCommand.RaiseCanExecuteChanged();
+        DownloadSelectedManagedItemsCommand.RaiseCanExecuteChanged();
+        CancelSelectedManagedDownloadsCommand.RaiseCanExecuteChanged();
+        RetryFailedSelectedManagedDownloadsCommand.RaiseCanExecuteChanged();
+        OpenToolkitDownloadFolderCommand.RaiseCanExecuteChanged();
+        CopySelectedManualInstructionsCommand.RaiseCanExecuteChanged();
+        OpenSelectedVendorPageCommand.RaiseCanExecuteChanged();
         OpenUbuntuTerminalCommand.RaiseCanExecuteChanged();
         RefreshSafeTestingEnvironmentCommand.RaiseCanExecuteChanged();
         CheckWslInstalledCommand.RaiseCanExecuteChanged();
@@ -12694,8 +15161,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         CaptureUsbMappingAfterCommand.RaiseCanExecuteChanged();
         SaveUsbMappingLabelCommand.RaiseCanExecuteChanged();
         OpenUsbMappingWizardCommand.RaiseCanExecuteChanged();
+        RefreshPortPowerCommand.RaiseCanExecuteChanged();
         RunUsbIntelligenceBenchmarkCommand.RaiseCanExecuteChanged();
         CancelUsbIntelligenceBenchmarkCommand.RaiseCanExecuteChanged();
+        RunDriveValidatorCommand.RaiseCanExecuteChanged();
+        CancelDriveValidatorCommand.RaiseCanExecuteChanged();
         CheckForUpdatesNowCommand.RaiseCanExecuteChanged();
         AppUpdateDownloadInstallerCommand.RaiseCanExecuteChanged();
         AppUpdateDownloadAdvancedInstallerCommand.RaiseCanExecuteChanged();
@@ -12705,7 +15175,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     private void AppendLog(LogLine line)
     {
-        var redacted = CopilotRedactor.Redact(line.Text, enabled: true);
+        var stripped = BackendLogPrefix.Normalize(line.Text);
+        var redacted = UserFacingLogSanitizer.Sanitize(stripped, GetSafeLogPathRoots(), enabled: true);
         var normalizedForDisplay = UsbLogDisplayNormalizer.NormalizeHashProviderLabels(redacted);
 
         lock (_logDedupLock)
@@ -12730,6 +15201,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             line.IsErrorStream,
             line.Channel);
 
+        var keep = _managedDownloadProgressThrottle.ShouldKeep(sanitized.Text, sanitized.Timestamp.UtcDateTime);
+
+        if (!keep)
+        {
+            // Progress UI status fields still advance for throttled ticks so the user sees
+            // live transfer detail without flooding Full Logs.
+            var statusText = sanitized.Text;
+            RunOnUi(() => ApplyProgressFromLog(statusText));
+            return;
+        }
+
         _pendingLiveLogs.Enqueue(sanitized);
         ScheduleLiveLogFlush();
 
@@ -12740,6 +15222,25 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         catch
         {
             // Session log persistence is best effort only.
+        }
+    }
+
+    private IEnumerable<string> GetSafeLogPathRoots()
+    {
+        var target = SelectedUsbTarget;
+        if (target is null)
+        {
+            yield break;
+        }
+
+        if (!string.IsNullOrWhiteSpace(target.RootPath))
+        {
+            yield return target.RootPath;
+        }
+
+        if (!string.IsNullOrWhiteSpace(target.DriveLetter))
+        {
+            yield return target.DriveLetter;
         }
     }
 
@@ -13110,7 +15611,6 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         }
 
         _disposed = true;
-        _usbMonitorCancellation?.Cancel();
         _copilotGenerationCancellation?.Cancel();
         _usbBenchmarkHostInterruptKind = UsbBenchmarkHostInterruptKind.AppShutdown;
         try
@@ -13131,7 +15631,17 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             // ignore
         }
 
-        _usbMonitorCancellation?.Dispose();
+        try
+        {
+            _usbDeviceChangeWindowHook?.Dispose();
+            _usbDeviceChangeDebouncer?.Dispose();
+        }
+        catch
+        {
+            // The hook lives as long as the window; tearing it down a second
+            // time during shutdown is harmless.
+        }
+
         _copilotGenerationCancellation?.Dispose();
         _manualUsbBenchmarkCts?.Dispose();
         _autoUsbBenchmarkCts?.Dispose();

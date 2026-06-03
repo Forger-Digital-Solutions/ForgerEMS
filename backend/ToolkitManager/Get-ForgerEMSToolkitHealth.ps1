@@ -3,7 +3,12 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$TargetRoot,
-    [string]$ManifestPath = ""
+    [string]$ManifestPath = "",
+    # When set, ignore the cached verification index and re-hash every managed
+    # file even if its size/last-write/expected-checksum are unchanged. This is
+    # the "Full Verify" / "Deep Verify" path; normal Refresh Health relies on
+    # the cache for unchanged installed files.
+    [switch]$FullVerify
 )
 
 $ErrorActionPreference = "Stop"
@@ -14,6 +19,22 @@ if (Test-Path -LiteralPath $runtimeHelperPath) {
 }
 else {
     throw "ForgerEMS runtime helper was not found. Checked: $runtimeHelperPath"
+}
+
+$checksumResolverPath = Join-Path $PSScriptRoot "ChecksumResolver.ps1"
+if (Test-Path -LiteralPath $checksumResolverPath) {
+    . $checksumResolverPath
+}
+else {
+    throw "Checksum resolver helper was not found. Checked: $checksumResolverPath"
+}
+
+$toolkitHealthCachePath = Join-Path $PSScriptRoot "ToolkitHealthCache.ps1"
+if (Test-Path -LiteralPath $toolkitHealthCachePath) {
+    . $toolkitHealthCachePath
+}
+else {
+    throw "Toolkit health cache helper was not found. Checked: $toolkitHealthCachePath"
 }
 
 function Write-ToolkitLog {
@@ -69,6 +90,35 @@ function Test-IsCRoot {
 
     $root = [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($Path))
     return [string]::Equals($root, "C:\", [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+function Get-CatalogMetadataString {
+    param($Value)
+
+    # Manifest schema accepts either a string or a JSON array of strings for fields like architecture / bootMode.
+    # Normalize both shapes to a single comma-separated string so downstream JSON consumers see a stable scalar.
+    if ($null -eq $Value) {
+        return ""
+    }
+
+    if ($Value -is [string]) {
+        return $Value.Trim()
+    }
+
+    if ($Value -is [System.Collections.IEnumerable]) {
+        $parts = @()
+        foreach ($entry in $Value) {
+            if ($null -eq $entry) { continue }
+            $text = [string]$entry
+            if (-not [string]::IsNullOrWhiteSpace($text)) {
+                $parts += $text.Trim()
+            }
+        }
+
+        return ($parts -join ", ")
+    }
+
+    return [string]$Value
 }
 
 function Get-Category {
@@ -389,49 +439,10 @@ function Find-AlternateItemPath {
     return ""
 }
 
-function Get-Sha256FromSourceUrl {
-    param(
-        [string]$ShaUrl
-    )
-
-    if ([string]::IsNullOrWhiteSpace($ShaUrl)) {
-        return ""
-    }
-
-    if (Test-Path -LiteralPath $ShaUrl -PathType Leaf) {
-        try {
-            $content = Get-Content -LiteralPath $ShaUrl -Raw -ErrorAction Stop
-            $match = [regex]::Match([string]$content, '([a-fA-F0-9]{64})')
-            if ($match.Success) {
-                return $match.Groups[1].Value.ToLowerInvariant()
-            }
-        }
-        catch {
-            Write-ToolkitLog ("Checksum source file read failed: {0}" -f $_.Exception.Message) "WARN"
-        }
-
-        return ""
-    }
-
-    try {
-        $uri = [Uri]$ShaUrl
-        if ($uri.Scheme -notin @("http", "https")) {
-            return ""
-        }
-
-        $response = Invoke-WebRequest -Uri $ShaUrl -TimeoutSec 45 -UseBasicParsing -ErrorAction Stop
-        $content = [string]$response.Content
-        $match = [regex]::Match($content, '([a-fA-F0-9]{64})')
-        if ($match.Success) {
-            return $match.Groups[1].Value.ToLowerInvariant()
-        }
-    }
-    catch {
-        Write-ToolkitLog ("Checksum source fetch failed: {0}" -f $_.Exception.Message) "WARN"
-    }
-
-    return ""
-}
+# Get-Sha256FromSourceUrl is now provided by ChecksumResolver.ps1 (dot-sourced
+# above). It accepts -TargetFileName for filename-aware multi-line checksum
+# files; legacy single-hash files still resolve without a target filename for
+# backwards compatibility.
 
 function Get-ManagedCoverageToken {
     param($Report)
@@ -479,21 +490,31 @@ function Set-ManualShortcutCoverageFromManagedDownloads {
         $manual.recommendation = "Shortcut suppressed because managed item is installed. No action needed."
         $manual.checksumStatus = "Covered"
         $manual.finalClassification = "COVERED_BY_MANAGED"
-        $manual.classificationReason = "Manual/info shortcut is covered by installed verified managed item: $($coveredBy.tool)."
+        $manual.classificationReason = "Manual/vendor link shortcut is covered by installed verified managed item: $($coveredBy.tool)."
     }
 }
 
 function Get-ToolkitItemStatus {
     param(
         [Parameter(Mandatory)]$Item,
-        [Parameter(Mandatory)][string]$ResolvedTargetRoot
+        [Parameter(Mandatory)][string]$ResolvedTargetRoot,
+        $TargetCacheEntry = $null,
+        [bool]$FullVerify = $false,
+        [ref]$CachedHitCount = $null,
+        [ref]$FreshHashCount = $null,
+        [hashtable]$VerifiedItemsForCache = $null
     )
 
     $destination = Normalize-RelativePath -Path ([string]$Item.dest)
     $type = [string]$Item.type
     $name = [string]$Item.name
-    $expectedHash = [string]$Item.sha256
-    $shaUrl = [string]$Item.sha256Url
+    $sha256 = ([string]$Item.sha256).Trim().ToLowerInvariant()
+    $sha256Url = ([string]$Item.sha256Url).Trim()
+    $sha512 = ([string]$Item.sha512).Trim().ToLowerInvariant()
+    $sha512Url = ([string]$Item.sha512Url).Trim()
+    $checksumAlgorithm = if ($sha256) { "SHA256" } elseif ($sha512) { "SHA512" } elseif ($sha256Url) { "SHA256" } elseif ($sha512Url) { "SHA512" } else { "" }
+    $expectedHash = if ($checksumAlgorithm -eq "SHA512") { $sha512 } else { $sha256 }
+    $checksumUrl = if ($checksumAlgorithm -eq "SHA512") { $sha512Url } else { $sha256Url }
     $url = [string]$Item.url
     $classificationInfo = Get-ItemClassification -Item $Item
     $classification = [string]$classificationInfo.Name
@@ -518,6 +539,10 @@ function Get-ToolkitItemStatus {
     $actualHash = ""
     $checksumStatus = "NotChecked"
     $diagnosticMessage = ""
+    # verificationMode is "fresh" for a hash computed this run, "cached" when
+    # the previous verified hash was reused, or "" when no checksum verification
+    # took place (manual shortcuts, optional items, missing files).
+    $verificationMode = ""
     $finalProbe = [PSCustomObject]@{
         Exists = $false
         SizeBytes = 0L
@@ -574,47 +599,141 @@ function Get-ToolkitItemStatus {
         $resolvedProbe = Get-ToolkitFileProbe -LiteralPath $resolvedPath
         if ($resolvedProbe.Exists -and $resolvedProbe.SizeBytes -gt 0) {
             $finalProbe = $resolvedProbe
-            if ([string]::IsNullOrWhiteSpace($expectedHash) -and -not [string]::IsNullOrWhiteSpace($shaUrl)) {
-                Write-ToolkitLog ("Checksum source URL available: {0}" -f $shaUrl) "INFO"
-                $expectedHash = Get-Sha256FromSourceUrl -ShaUrl $shaUrl
+            if ([string]::IsNullOrWhiteSpace($expectedHash) -and -not [string]::IsNullOrWhiteSpace($checksumUrl)) {
+                Write-ToolkitLog ("{0} checksum source URL available: {1}" -f $checksumAlgorithm, $checksumUrl) "INFO"
+                # Derive the target filename so multi-line checksum files can be parsed safely.
+                # Precedence: manifest destination basename (canonical artifact name we just hashed) ->
+                # local resolved path -> URL basename. The dest basename is the authoritative key because
+                # that is the exact filename the vendor's checksum file will reference.
+                $targetFileName = ""
+                if (-not [string]::IsNullOrWhiteSpace($destination)) {
+                    try {
+                        $targetFileName = [IO.Path]::GetFileName($destination)
+                    }
+                    catch {
+                        $targetFileName = ""
+                    }
+                }
+                if ([string]::IsNullOrWhiteSpace($targetFileName) -and -not [string]::IsNullOrWhiteSpace($resolvedPath)) {
+                    $targetFileName = [IO.Path]::GetFileName($resolvedPath)
+                }
+                if ([string]::IsNullOrWhiteSpace($targetFileName) -and -not [string]::IsNullOrWhiteSpace($url)) {
+                    try {
+                        $targetFileName = [IO.Path]::GetFileName([Uri]$url)
+                    }
+                    catch {
+                        $targetFileName = ""
+                    }
+                }
+                $expectedHash = if ($checksumAlgorithm -eq "SHA512") {
+                    Get-Sha512FromSourceUrl -ShaUrl $checksumUrl -TargetFileName $targetFileName
+                }
+                else {
+                    Get-Sha256FromSourceUrl -ShaUrl $checksumUrl -TargetFileName $targetFileName
+                }
                 if (-not [string]::IsNullOrWhiteSpace($expectedHash)) {
-                    Write-ToolkitLog ("Resolved SHA256 from sha256Url: {0}" -f $expectedHash) "OK"
+                    Write-ToolkitLog ("Resolved {0} from checksum URL: {1}" -f $checksumAlgorithm, $expectedHash) "OK"
                 }
             }
 
             if (-not [string]::IsNullOrWhiteSpace($expectedHash)) {
-                try {
-                    $actualHash = Get-ForgerSha256 -LiteralPath $resolvedPath
-                    Write-ToolkitLog ("SHA256 hash provider: {0} file={1}" -f (Get-ForgerLastHashProvider), (Get-ForgerSafePathForLog -Path $resolvedPath)) "INFO"
-                    if ([string]::Equals($actualHash, $expectedHash.ToLowerInvariant(), [System.StringComparison]::OrdinalIgnoreCase)) {
-                        $status = "INSTALLED"
-                        $verification = "SHA256 verified."
-                        $checksumStatus = "Match"
-                        $recommendation = "No action needed."
+                # Cache decision: when the previous scan verified this exact file
+                # (same path, size, last-write, expected hash, algorithm) we can
+                # skip the slow rehash. -FullVerify forces a fresh hash.
+                $verificationMode = "fresh"
+                $cacheHit = $null
+                $relativeForCache = $resolvedRelativePath
+                $expectedHashNormalized = $expectedHash.ToLowerInvariant()
+                if (-not $FullVerify -and $null -ne $TargetCacheEntry -and -not [string]::IsNullOrWhiteSpace($relativeForCache)) {
+                    $cachedItem = Get-ToolkitCachedItem -TargetCacheEntry $TargetCacheEntry -RelativePath $relativeForCache
+                    $resolvedLastWriteUtc = Get-ToolkitFileLastWriteUtcString -LiteralPath $resolvedPath
+                    $cacheHit = Test-ToolkitCacheHit `
+                        -CachedItem $cachedItem `
+                        -ActualSizeBytes ([int64]$resolvedProbe.SizeBytes) `
+                        -ActualLastWriteUtc $resolvedLastWriteUtc `
+                        -ExpectedChecksum $expectedHashNormalized `
+                        -ChecksumAlgorithm $checksumAlgorithm
+                }
+
+                if ($null -ne $cacheHit -and $cacheHit.Hit) {
+                    $actualHash = [string]$cacheHit.ActualChecksum
+                    $status = "INSTALLED"
+                    $verifiedUtc = [string]$cacheHit.VerifiedUtc
+                    if ([string]::IsNullOrWhiteSpace($verifiedUtc)) {
+                        $verification = ("{0} cached match (unchanged since previous verified scan)." -f $checksumAlgorithm)
                     }
                     else {
-                        $status = "HASH_FAILED"
-                        $verification = "SHA256 mismatch."
-                        $checksumStatus = "Mismatch"
-                        $recommendation = "Run Update Toolkit to replace this managed item from the manifest source."
+                        $verification = ("{0} cached match (unchanged since previous verified scan at {1})." -f $checksumAlgorithm, $verifiedUtc)
+                    }
+                    $checksumStatus = "Match"
+                    $recommendation = "No action needed."
+                    $verificationMode = "cached"
+                    if ($null -ne $CachedHitCount) {
+                        $CachedHitCount.Value = [int]$CachedHitCount.Value + 1
+                    }
+                    Write-ToolkitLog ("Cached verification reused for {0} (algorithm={1})." -f (Get-ForgerSafePathForLog -Path $resolvedPath), $checksumAlgorithm) "INFO"
+                }
+                else {
+                    try {
+                        $actualHash = if ($checksumAlgorithm -eq "SHA512") {
+                            Get-ForgerSha512 -LiteralPath $resolvedPath
+                        }
+                        else {
+                            Get-ForgerSha256 -LiteralPath $resolvedPath
+                        }
+                        if ($null -ne $FreshHashCount) {
+                            $FreshHashCount.Value = [int]$FreshHashCount.Value + 1
+                        }
+                        Write-ToolkitLog ("{0} hash provider: {1} file={2}" -f $checksumAlgorithm, (Get-ForgerLastHashProvider), (Get-ForgerSafePathForLog -Path $resolvedPath)) "INFO"
+                        if ([string]::Equals($actualHash, $expectedHashNormalized, [System.StringComparison]::OrdinalIgnoreCase)) {
+                            $status = "INSTALLED"
+                            $verification = "$checksumAlgorithm verified."
+                            $checksumStatus = "Match"
+                            $recommendation = "No action needed."
+                        }
+                        else {
+                            $status = "HASH_FAILED"
+                            $verification = "$checksumAlgorithm mismatch."
+                            $checksumStatus = "Mismatch"
+                            $recommendation = "Run Update Toolkit to replace this managed item from the manifest source."
+                        }
+                    }
+                    catch {
+                        $status = "VERIFICATION_PENDING"
+                        $verification = "File present; checksum verification pending due to hash provider error."
+                        $checksumStatus = "Pending"
+                        $diagnosticMessage = $_.Exception.Message
+                        $recommendation = "Re-run Refresh Toolkit health or Update Toolkit to complete verification."
                     }
                 }
-                catch {
-                    $status = "VERIFICATION_PENDING"
-                    $verification = "File present; checksum verification pending due to hash provider error."
-                    $checksumStatus = "Pending"
-                    $diagnosticMessage = $_.Exception.Message
-                    $recommendation = "Re-run Refresh Toolkit health or Update Toolkit to complete verification."
+
+                # Cache update: only record fresh, matching hashes. Cached matches
+                # are preserved by virtue of being re-emitted with the same facts.
+                if ($null -ne $VerifiedItemsForCache -and $status -eq "INSTALLED" -and $checksumStatus -eq "Match" -and
+                    -not [string]::IsNullOrWhiteSpace($relativeForCache)) {
+                    $lastWriteForCache = Get-ToolkitFileLastWriteUtcString -LiteralPath $resolvedPath
+                    $VerifiedItemsForCache[$relativeForCache] = [ordered]@{
+                        relativePath = $relativeForCache
+                        sizeBytes = [int64]$resolvedProbe.SizeBytes
+                        lastWriteUtc = $lastWriteForCache
+                        expectedChecksum = $expectedHashNormalized
+                        actualChecksum = $actualHash
+                        checksumAlgorithm = $checksumAlgorithm
+                        status = $status
+                        checksumStatus = $checksumStatus
+                        verifiedUtc = (Get-Date).ToUniversalTime().ToString("o")
+                        verificationMode = $verificationMode
+                    }
                 }
             }
             else {
                 $status = "VERIFICATION_PENDING"
-                if (-not [string]::IsNullOrWhiteSpace($shaUrl)) {
-                    $verification = "File present; offline checksum pending (sha256Url unavailable or unresolved)."
+                if (-not [string]::IsNullOrWhiteSpace($checksumUrl)) {
+                    $verification = "File present; offline checksum pending (checksum URL unavailable or unresolved)."
                     $recommendation = "File is present. Re-run Revalidate when network is available to verify checksum."
                 }
                 else {
-                    $verification = "File present; checksum not verified (manifest has no pinned SHA256)."
+                    $verification = "File present; checksum not verified (manifest has no pinned supported checksum)."
                     $recommendation = "File is present. Optional integrity verification may be done manually if required."
                 }
                 $checksumStatus = "Pending"
@@ -645,6 +764,8 @@ function Get-ToolkitItemStatus {
         $status
     ) "INFO"
 
+    $freshness = $Item.freshness
+
     return [PSCustomObject][ordered]@{
         tool = $name
         category = Get-Category -Destination $destination
@@ -662,6 +783,7 @@ function Get-ToolkitItemStatus {
         exists = [bool]$finalProbe.Exists
         sizeBytes = [int64]$finalProbe.SizeBytes
         checksumStatus = $checksumStatus
+        verificationMode = $verificationMode
         finalClassification = $status
         diagnosticMessage = $diagnosticMessage
         checkedExactPath = $destinationPath
@@ -670,8 +792,38 @@ function Get-ToolkitItemStatus {
         classificationReason = $classificationReason
         sha256Expected = $expectedHash
         sha256Actual = $actualHash
+        checksumAlgorithm = $checksumAlgorithm
         sourceType = [string]$Item.sourceType
         url = $url
+        # Additive catalog metadata (introduced 2026-05-21). Fields are optional in the manifest; missing entries surface as empty strings/false so downstream consumers stay schema-stable.
+        kind = [string]$Item.kind
+        family = [string]$Item.family
+        osCategory = [string]$Item.osCategory
+        architecture = Get-CatalogMetadataString -Value $Item.architecture
+        bootMode = Get-CatalogMetadataString -Value $Item.bootMode
+        recommendedUse = [string]$Item.recommendedUse
+        technicianNotes = [string]$Item.technicianNotes
+        licenseNote = [string]$Item.licenseNote
+        manualOnly = if ($null -ne $Item.manualOnly) { [bool]$Item.manualOnly } else { $false }
+        legacyWarning = [string]$Item.legacyWarning
+        ventoyNotes = [string]$Item.ventoyNotes
+        secureBootNote = [string]$Item.secureBootNote
+        sourceTrust = [string]$Item.sourceTrust
+        downloadMode = [string]$Item.downloadMode
+        actionLabel = [string]$Item.actionLabel
+        secondaryActionLabel = [string]$Item.secondaryActionLabel
+        actionReason = [string]$Item.actionReason
+        promotionStatus = [string]$Item.promotionStatus
+        promotionEvidence = [string]$Item.promotionEvidence
+        legalRisk = [string]$Item.legalRisk
+        checksumRequirement = [string]$Item.checksumRequirement
+        managedPromotionCandidate = if ($null -ne $Item.managedPromotionCandidate) { [bool]$Item.managedPromotionCandidate } else { $false }
+        currentPinnedVersion = [string]$freshness.currentPinnedVersion
+        latestKnownStableVersion = [string]$freshness.latestKnownStableVersion
+        lastFreshnessAuditUtc = [string]$freshness.lastFreshnessAuditUtc
+        freshnessStatus = [string]$freshness.freshnessStatus
+        checksumVerificationMode = [string]$freshness.checksumVerificationMode
+        updateRecommendation = [string]$freshness.updateRecommendation
     }
 }
 
@@ -685,11 +837,62 @@ if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
     throw "Manifest was not found: $manifestPath"
 }
 
-Write-ToolkitLog ("Toolkit health scan started for {0}" -f $resolvedTargetRoot)
-Write-ToolkitLog ("Manifest: {0}" -f $manifestPath)
+$scanStartedUtc = (Get-Date).ToUniversalTime()
+$totalStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
+Write-ToolkitLog ("Toolkit health scan started for {0} (mode={1})" -f $resolvedTargetRoot, $(if ($FullVerify) { "FullVerify" } else { "FastCached" }))
+Write-ToolkitLog ("Manifest: {0}" -f $manifestPath)
+Write-ToolkitLog "Phase: Checking catalog..."
+
+$manifestStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 $items = @($manifest.items | Where-Object { $null -eq $_.enabled -or $_.enabled -eq $true })
+$manifestHash = Get-ManifestContentHash -ManifestPath $manifestPath
+$manifestStopwatch.Stop()
+$manifestLoadMs = $manifestStopwatch.ElapsedMilliseconds
+
+# Cache lookup is keyed by sanitized target root + manifest hash, with the
+# volume serial as an extra integrity check. -FullVerify ignores the cache.
+$localReportRoot = Get-LocalReportRoot
+New-Item -ItemType Directory -Path $localReportRoot -Force | Out-Null
+$cachePath = Get-ToolkitHealthCachePath -LocalReportRoot $localReportRoot
+$targetIdentityKey = Get-ToolkitTargetIdentityKey -TargetRoot $resolvedTargetRoot
+$volumeSerial = Get-ToolkitTargetVolumeSerial -TargetRoot $resolvedTargetRoot
+
+$cacheStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+$cacheState = Load-ToolkitHealthCache -CachePath $cachePath
+$targetCacheEntry = $null
+$cacheReason = $cacheState.Reason
+if (-not $FullVerify -and $cacheState.Loaded) {
+    $targetCacheEntry = Get-ToolkitCachedTargetEntry `
+        -Cache $cacheState `
+        -TargetIdentityKey $targetIdentityKey `
+        -VolumeSerial $volumeSerial `
+        -ManifestHash $manifestHash
+    if ($null -eq $targetCacheEntry) {
+        $cacheReason = "no-matching-target-entry"
+    }
+}
+elseif ($FullVerify) {
+    $cacheReason = "full-verify-mode"
+}
+$cacheStopwatch.Stop()
+$cacheLoadMs = $cacheStopwatch.ElapsedMilliseconds
+
+Write-ToolkitLog ("Cache state: loaded={0} reason={1} cachePath={2}" -f $cacheState.Loaded, $cacheReason, (Get-ForgerSafePathForLog -Path $cachePath))
+if ($FullVerify) {
+    Write-ToolkitLog "Phase: Full Verify mode - rehashing all installed managed files."
+}
+elseif ($null -ne $targetCacheEntry) {
+    Write-ToolkitLog "Phase: Using cached verification for unchanged files."
+}
+else {
+    Write-ToolkitLog "Phase: No usable cache for this target/manifest; hashing fresh."
+}
+
+$cachedHitCountRef = [ref]0
+$freshHashCountRef = [ref]0
+$verifiedItemsForCache = @{}
 $toolReports = @()
 
 $index = 0
@@ -699,7 +902,14 @@ foreach ($item in $items) {
         Write-ToolkitLog ("Scanned {0}/{1} toolkit items..." -f $index, $items.Count)
     }
 
-    $toolReports += Get-ToolkitItemStatus -Item $item -ResolvedTargetRoot $resolvedTargetRoot
+    $toolReports += Get-ToolkitItemStatus `
+        -Item $item `
+        -ResolvedTargetRoot $resolvedTargetRoot `
+        -TargetCacheEntry $targetCacheEntry `
+        -FullVerify ([bool]$FullVerify) `
+        -CachedHitCount $cachedHitCountRef `
+        -FreshHashCount $freshHashCountRef `
+        -VerifiedItemsForCache $verifiedItemsForCache
 }
 
 Set-ManualShortcutCoverageFromManagedDownloads -Reports $toolReports
@@ -735,11 +945,43 @@ else {
     "READY"
 }
 
-$manualExplanation = "Manual items are download pages, licensed/gated tools, or informational shortcuts that ForgerEMS intentionally does not auto-download. They do not count as required managed-tool failures."
-$coveredExplanation = "Covered/suppressed shortcuts are manual/info shortcuts intentionally omitted because the matching managed download is installed and verified."
+$manualExplanation = "Manual / Vendor links are OEM support pages, model-specific drivers, firmware lookup, licensed/manual tools, and download/info shortcuts that ForgerEMS intentionally does not auto-download. They are surfaced in Toolkit Manager under the 'Manual / Vendor links' chip and are not counted as required managed-tool failures."
+$coveredExplanation = "Covered/suppressed shortcuts are manual/vendor link shortcuts intentionally omitted because the matching managed download is installed and verified."
 
-$localReportRoot = Get-LocalReportRoot
-New-Item -ItemType Directory -Path $localReportRoot -Force | Out-Null
+$placeholderCount = @($toolReports | Where-Object { $_.type -eq "manualDownload" -or $_.status -eq "PLACEHOLDER" -or $_.status -eq "MANUAL_REQUIRED" }).Count
+
+# Persist the cache before writing reports. Failures are best-effort.
+$cacheSavedOk = $false
+if ($verifiedItemsForCache.Count -gt 0) {
+    $cacheSavedOk = Save-ToolkitHealthCache `
+        -CachePath $cachePath `
+        -TargetIdentityKey $targetIdentityKey `
+        -TargetRoot $resolvedTargetRoot `
+        -VolumeSerial $volumeSerial `
+        -ManifestHash $manifestHash `
+        -ManifestPath $manifestPath `
+        -ItemsByRelativePath $verifiedItemsForCache
+}
+
+$totalStopwatch.Stop()
+$totalElapsedMs = $totalStopwatch.ElapsedMilliseconds
+
+$cacheTelemetry = [ordered]@{
+    mode = if ($FullVerify) { "FullVerify" } else { "FastCached" }
+    cachePath = $cachePath
+    cacheLoaded = [bool]$cacheState.Loaded
+    cacheReason = [string]$cacheReason
+    cacheSaved = [bool]$cacheSavedOk
+    cachedItemReuseCount = [int]$cachedHitCountRef.Value
+    freshlyHashedCount = [int]$freshHashCountRef.Value
+    placeholderCount = [int]$placeholderCount
+    manifestHash = $manifestHash
+    volumeSerial = $volumeSerial
+    manifestLoadMs = [int]$manifestLoadMs
+    cacheLoadMs = [int]$cacheLoadMs
+    totalElapsedMs = [int]$totalElapsedMs
+}
+
 $localJsonPath = Join-Path $localReportRoot "toolkit-health-latest.json"
 $localMarkdownPath = Join-Path $localReportRoot "toolkit-health-latest.md"
 
@@ -760,7 +1002,7 @@ else {
 $report = [ordered]@{
     schemaVersion = 1
     product = "ForgerEMS"
-    releaseIdentifier = "ForgerEMS v1.2.1 Public Preview"
+    releaseIdentifier = "ForgerEMS v1.2.3 Public Preview"
     generatedUtc = (Get-Date).ToUniversalTime().ToString("o")
     targetRoot = $resolvedTargetRoot
     manifestPath = $manifestPath
@@ -775,6 +1017,7 @@ $report = [ordered]@{
     hashFailures = @($hashFailureItems | Select-Object tool, category, expectedPath, sha256Expected, sha256Actual, recommendation)
     verificationPending = @($verificationPendingItems | Select-Object tool, category, expectedPath, matchedPath, verification, recommendation)
     items = $toolReports
+    cacheTelemetry = $cacheTelemetry
     reportPaths = [ordered]@{
         localJson = $localJsonPath
         localMarkdown = $localMarkdownPath
@@ -812,6 +1055,16 @@ $markdown = New-Object System.Collections.Generic.List[string]
 [void]$markdown.Add(("- Covered by managed item: {0}" -f $summary.coveredByManaged))
 [void]$markdown.Add(("- Skipped: {0}" -f $summary.skipped))
 [void]$markdown.Add(("- Unknown: {0}" -f $summary.unknown))
+[void]$markdown.Add("")
+[void]$markdown.Add("## Verification timing")
+[void]$markdown.Add(("- Mode: {0}" -f $cacheTelemetry.mode))
+[void]$markdown.Add(("- Cached/skipped (unchanged): {0}" -f $cacheTelemetry.cachedItemReuseCount))
+[void]$markdown.Add(("- Freshly hashed: {0}" -f $cacheTelemetry.freshlyHashedCount))
+[void]$markdown.Add(("- Placeholder/manual shortcuts: {0}" -f $cacheTelemetry.placeholderCount))
+[void]$markdown.Add(("- Manifest load: {0} ms" -f $cacheTelemetry.manifestLoadMs))
+[void]$markdown.Add(("- Cache load: {0} ms" -f $cacheTelemetry.cacheLoadMs))
+[void]$markdown.Add(("- Total elapsed: {0} ms" -f $cacheTelemetry.totalElapsedMs))
+[void]$markdown.Add("Cached matches are reused from the previous verified scan when size/last-write/expected-checksum/manifest identity are unchanged; freshly hashed entries were re-computed this run.")
 [void]$markdown.Add("")
 [void]$markdown.Add("## Required Managed Missing")
 if ($requiredManagedMissing.Count -eq 0) {
@@ -883,6 +1136,7 @@ if ($targetReportsWritten) {
 }
 
 Write-ToolkitLog ("Toolkit health scan complete. Verdict={0}; Installed={1}, MissingRequired={2}, Updates={3}, Failed={4}, Pending={5}, Manual={6}, Placeholder={7}, Covered={8}, Skipped={9}" -f $healthVerdict, $summary.installed, $summary.missing, $summary.updates, $summary.failed, $summary.verificationPending, $summary.manual, $summary.placeholder, $summary.coveredByManaged, $summary.skipped) "OK"
+Write-ToolkitLog ("Verification timing: mode={0} cached={1} freshly hashed={2} placeholder/manual={3} totalElapsedMs={4} cacheLoaded={5} cacheReason={6} cacheSaved={7}" -f $cacheTelemetry.mode, $cacheTelemetry.cachedItemReuseCount, $cacheTelemetry.freshlyHashedCount, $cacheTelemetry.placeholderCount, $cacheTelemetry.totalElapsedMs, $cacheTelemetry.cacheLoaded, $cacheTelemetry.cacheReason, $cacheTelemetry.cacheSaved) "OK"
 Write-ToolkitLog ("Local JSON report: {0}" -f $localJsonPath) "OK"
 Write-ToolkitLog ("Local Markdown report: {0}" -f $localMarkdownPath) "OK"
 if ($targetReportsWritten) {

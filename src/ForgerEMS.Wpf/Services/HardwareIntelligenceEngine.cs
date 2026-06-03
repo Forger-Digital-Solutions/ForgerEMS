@@ -83,17 +83,87 @@ public sealed class SensorMatrixResult
 
     public IReadOnlyList<SensorProviderManifest> SensorProviders { get; init; } = Array.Empty<SensorProviderManifest>();
 
+    public ForgerSensorStackState ForgerSensorStack { get; init; } = ForgerSensorStackState.Create();
+
     public DeepSensorModeResolution DeepSensorMode { get; init; } = DeepSensorModeResolver.Resolve();
 
     public string Confidence { get; init; } = "Medium";
 
     public string DeepSensorModeNote { get; init; } =
-        "Some sensors require admin access, firmware support, vendor drivers, or an optional reviewed sensor provider.";
+        "Some board-level sensors require the future Forger Deep Sensor Driver. Many laptops do not expose CPU package power, fan speed, VRM, or EC telemetry through standard Windows APIs.";
 
     public string CoverageSummary =>
         string.Join("; ", Groups.Select(group => $"{group.Category}: {group.KnownFields}/{group.TotalFields} fields known"));
 
     public string SummaryLine => $"{CoverageSummary}. Confidence: {Confidence}.";
+}
+
+public sealed class ForgerSensorStackState
+{
+    public string Name { get; init; } = "Forger Sensor Stack";
+
+    public string ForgerSensorCore { get; init; } = "Active";
+
+    public bool ForgerSensorCoreActive { get; init; } = true;
+
+    public string ElevatedScan { get; init; } = "Recommended";
+
+    public string SensorService { get; init; } = "Not installed";
+
+    public string SensorServiceDescription { get; init; } =
+        "Future optional ForgerEMS-owned local elevated service; not a network service.";
+
+    public string DeepSensorDriver { get; init; } = "Not included";
+
+    public string DeepSensorDriverDescription { get; init; } =
+        "Roadmap only in this build; future signed read-only driver would require explicit install consent.";
+
+    public string ExternalTools { get; init; } = "Not required";
+
+    public bool GeneratesFakeSensorValues { get; init; }
+
+    public IReadOnlyList<string> SourcePolicy { get; init; } =
+    [
+        "Windows/native APIs",
+        "WMI/CIM where useful",
+        "SetupAPI/device inventory where available",
+        "power/battery APIs and reports",
+        "storage/NVMe/SMART paths where exposed",
+        "USB topology paths already supported",
+        "GPU/vendor-safe paths already supported",
+        "ACPI thermal zones where available",
+        "bundled reviewed LibreHardwareMonitor provider only when packaged and enabled"
+    ];
+
+    public IReadOnlyList<string> SensorLimitations { get; init; } =
+    [
+        "Some board-level sensors require the future Forger Deep Sensor Driver.",
+        "Many laptops do not expose CPU package power, fan speed, VRM, or EC telemetry through standard Windows APIs.",
+        "This is not a failure; unavailable readings are source-labeled coverage limits and ForgerEMS does not invent values."
+    ];
+
+    public static ForgerSensorStackState Create(string elevatedScan = "Recommended") => new()
+    {
+        ElevatedScan = NormalizeElevatedScanState(elevatedScan)
+    };
+
+    public static string NormalizeElevatedScanState(string? state)
+    {
+        if (string.IsNullOrWhiteSpace(state))
+        {
+            return "Recommended";
+        }
+
+        return state.Trim() switch
+        {
+            var value when value.Equals("Complete", StringComparison.OrdinalIgnoreCase) => "Complete",
+            var value when value.Equals("Partial", StringComparison.OrdinalIgnoreCase) => "Partial",
+            var value when value.Equals("Failed", StringComparison.OrdinalIgnoreCase) => "Failed",
+            var value when value.Equals("Running", StringComparison.OrdinalIgnoreCase) => "Running",
+            var value when value.Equals("Recommended", StringComparison.OrdinalIgnoreCase) => "Recommended",
+            _ => "Recommended"
+        };
+    }
 }
 
 public sealed class SensorProviderResult
@@ -160,7 +230,8 @@ public sealed class SensorProviderCapabilities
             "No voltage control",
             "No clock control",
             "No BIOS or firmware writes"
-        ]
+        ],
+        DataClasses = Array.Empty<SensorDataClassAvailability>()
     };
 
     public IReadOnlyList<string> SupportedCapabilities { get; init; } = Array.Empty<string>();
@@ -168,7 +239,56 @@ public sealed class SensorProviderCapabilities
     public IReadOnlyList<string> MissingCapabilities { get; init; } = Array.Empty<string>();
 
     public IReadOnlyList<string> ReadOnlyGuarantees { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Typed per-data-class availability map. Additive to the free-text
+    /// SupportedCapabilities / MissingCapabilities lists so existing
+    /// markdown/JSON consumers keep working.
+    /// </summary>
+    public IReadOnlyList<SensorDataClassAvailability> DataClasses { get; init; } = Array.Empty<SensorDataClassAvailability>();
 }
+
+/// <summary>
+/// Concrete sensor data classes ForgerEMS knows how to report. Read-only.
+/// </summary>
+public enum SensorDataClass
+{
+    CpuTemperature,
+    CpuPackagePower,
+    CpuLoad,
+    CpuClock,
+    GpuTemperature,
+    GpuLoad,
+    GpuClock,
+    GpuVram,
+    FanRpm,
+    StorageSmart,
+    StorageTemperature,
+    BatteryCycleCount,
+    BatteryWear,
+    BatteryChargeRate,
+    ThermalZone,
+    BoardSensors
+}
+
+/// <summary>
+/// Per-data-class availability for a provider. NotExposed/Permission/Unavailable
+/// distinguishes "we tried and could not" from "we did not try" honestly.
+/// </summary>
+public enum SensorDataClassStatus
+{
+    Available,
+    NotExposed,
+    PermissionRequired,
+    ProviderUnavailable,
+    NotPackaged,
+    NotApplicable
+}
+
+public sealed record SensorDataClassAvailability(
+    SensorDataClass DataClass,
+    SensorDataClassStatus Status,
+    string Detail = "");
 
 public sealed class ThirdPartyNotice
 {
@@ -231,7 +351,7 @@ public interface IHardwareSensorProvider
 
 public sealed class WindowsBuiltInSensorProvider : IHardwareSensorProvider
 {
-    public string Name => "Windows Native";
+    public string Name => "Forger Sensor Core";
 
     public SensorProviderResult Read(SystemProfile profile)
     {
@@ -250,6 +370,7 @@ public sealed class WindowsBuiltInSensorProvider : IHardwareSensorProvider
             {
                 SupportedCapabilities =
                 [
+                    "Forger Sensor Core local user-mode/elevated safe provider",
                     "WMI/CIM hardware inventory",
                     "Storage reliability counters where Windows exposes them",
                     "powercfg/Win32_Battery battery fields",
@@ -270,6 +391,7 @@ public sealed class WindowsBuiltInSensorProvider : IHardwareSensorProvider
             Readings = Array.Empty<SensorReading>(),
             Notes =
             [
+                "Forger Sensor Core active.",
                 "Uses ForgerEMS normalized WMI/CIM/registry/powercfg/report fields already collected by System Intelligence.",
                 "Does not require internet or user-downloaded tools.",
                 "Does not perform unsafe hardware probing."
@@ -292,7 +414,9 @@ public static class SensorProviderRegistry
     {
         var providers = new IHardwareSensorProvider[]
         {
-            new BundledDeepSensorProvider()
+            new BundledDeepSensorProvider(),
+            new AcpiThermalZoneSensorProvider(),
+            new NvidiaSmiSensorProvider()
         };
         var manifests = new List<SensorProviderManifest>
         {
@@ -302,7 +426,7 @@ public static class SensorProviderRegistry
             .Select(provider => SensorProviderHost.RunProvider(provider, profile))
             .ToArray());
 
-        manifests.Add(CreateAdminBridgeManifest());
+        manifests.Add(CreateSensorServiceManifest());
         manifests.Add(CreateDriverRoadmapManifest());
         return manifests;
     }
@@ -332,7 +456,7 @@ public static class SensorProviderRegistry
 
     private static SensorProviderManifest CreateWindowsNativeManifest(IReadOnlyList<SensorGroup> builtInGroups) => new()
     {
-        ProviderName = "Windows Native",
+        ProviderName = "Forger Sensor Core",
         ProviderVersion = "1.0",
         ProviderKind = "WindowsBuiltInSensorProvider",
         IsBundled = true,
@@ -344,6 +468,7 @@ public static class SensorProviderRegistry
         {
             SupportedCapabilities =
             [
+                "Forger Sensor Core local user-mode/elevated safe provider",
                 "WMI/CIM hardware inventory",
                 "MSFT_PhysicalDisk and MSFT_StorageReliabilityCounter where Windows exposes them",
                 "powercfg and Win32_Battery fields",
@@ -358,50 +483,73 @@ public static class SensorProviderRegistry
                 "Fan RPM without vendor/deep provider support",
                 "Package power without vendor/deep provider support"
             ],
-            ReadOnlyGuarantees = SensorProviderCapabilities.None.ReadOnlyGuarantees
+            ReadOnlyGuarantees = SensorProviderCapabilities.None.ReadOnlyGuarantees,
+            DataClasses =
+            [
+                new(SensorDataClass.CpuLoad, SensorDataClassStatus.Available, "Inventory + safe perf counters"),
+                new(SensorDataClass.CpuClock, SensorDataClassStatus.Available, "Reported base clock from Win32_Processor"),
+                new(SensorDataClass.CpuTemperature, SensorDataClassStatus.NotExposed, "Standard WMI rarely exposes CPU temperature; vendor driver or deep provider required."),
+                new(SensorDataClass.CpuPackagePower, SensorDataClassStatus.NotExposed, "Not exposed via safe built-in Windows APIs."),
+                new(SensorDataClass.GpuLoad, SensorDataClassStatus.NotExposed, "DX/WMI inventory only; live load needs vendor driver counters or deep provider."),
+                new(SensorDataClass.GpuClock, SensorDataClassStatus.NotExposed, "Vendor driver required for live clocks."),
+                new(SensorDataClass.GpuTemperature, SensorDataClassStatus.NotExposed, "Vendor driver or deep provider required."),
+                new(SensorDataClass.GpuVram, SensorDataClassStatus.NotExposed, "Inventory only; live VRAM utilisation needs driver counters."),
+                new(SensorDataClass.FanRpm, SensorDataClassStatus.NotExposed, "Standard Windows APIs do not expose fan RPM."),
+                new(SensorDataClass.StorageSmart, SensorDataClassStatus.Available, "MSFT_PhysicalDisk / MSFT_StorageReliabilityCounter when exposed."),
+                new(SensorDataClass.StorageTemperature, SensorDataClassStatus.NotExposed, "Exposed only for some NVMe; honestly reported per-disk."),
+                new(SensorDataClass.BatteryCycleCount, SensorDataClassStatus.NotExposed, "powercfg /batteryreport may include it; often hidden by firmware."),
+                new(SensorDataClass.BatteryWear, SensorDataClassStatus.Available, "Derived from powercfg /batteryreport design vs full-charge capacity when exposed."),
+                new(SensorDataClass.BatteryChargeRate, SensorDataClassStatus.NotExposed, "Not normalized by the safe scan."),
+                new(SensorDataClass.ThermalZone, SensorDataClassStatus.NotExposed, "Use the ACPI Thermal Zones optional probe when available."),
+                new(SensorDataClass.BoardSensors, SensorDataClassStatus.NotExposed, "Board sensors require LibreHardwareMonitor or vendor SDK.")
+            ]
         },
         Readings = builtInGroups.SelectMany(group => group.Readings).ToArray(),
         TechnicianNotes =
         [
+            "Forger Sensor Core active.",
             "Active by default. Uses local Windows APIs and ForgerEMS reports only.",
             "No internet, cloud service, or user-downloaded sensor tool is required."
         ]
     };
 
-    private static SensorProviderManifest CreateAdminBridgeManifest() => new()
+    private static SensorProviderManifest CreateSensorServiceManifest() => new()
     {
-        ProviderName = "ForgerEMS Admin Sensor Bridge",
-        ProviderVersion = "0.1-design",
-        ProviderKind = "AdminReadOnlyBridgeShell",
+        ProviderName = "Forger Sensor Service",
+        ProviderVersion = "0.1-roadmap",
+        ProviderKind = "FutureLocalReadOnlySensorService",
         IsBundled = false,
         IsEnabled = false,
         RequiresAdmin = true,
         IsReadOnly = true,
         TrustLevel = SensorProviderTrustLevels.AdminRequired,
         RuntimeMode = SensorProviderRuntimeModes.Disabled,
-        FailureReason = "Design scaffold only; not enabled in this beta.",
+        FailureReason = "Not installed. Future optional ForgerEMS-owned local service; no network endpoints by default.",
         Capabilities = new SensorProviderCapabilities
         {
             SupportedCapabilities =
             [
-                "Future on-demand admin read-only deep scan IPC"
+                "Future central elevated read-only telemetry broker",
+                "Future repeated-scan UAC reduction after explicit install consent"
             ],
             MissingCapabilities =
             [
-                "Signed bridge binary not included",
-                "UAC opt-in not implemented"
+                "Service binary not included",
+                "Installer consent and repair flow not implemented"
             ],
             ReadOnlyGuarantees = SensorProviderCapabilities.None.ReadOnlyGuarantees
         },
         TechnicianNotes =
         [
-            "Deep Sensor Mode is local/read-only. Running Elevated Scan as administrator may improve sensor coverage; Windows UAC approval is still required at runtime."
+            "Deep Sensor Service not installed.",
+            "This is the future deeper built-in sensor layer, not an external tool bridge.",
+            "Local only by design; no network service endpoint is exposed by default."
         ]
     };
 
     private static SensorProviderManifest CreateDriverRoadmapManifest() => new()
     {
-        ProviderName = "ForgerEMS Signed Driver Provider",
+        ProviderName = "Forger Deep Sensor Driver",
         ProviderVersion = "roadmap",
         ProviderKind = "FutureReadOnlyDriver",
         IsBundled = false,
@@ -409,21 +557,24 @@ public static class SensorProviderRegistry
         IsReadOnly = true,
         TrustLevel = SensorProviderTrustLevels.ExperimentalDisabled,
         RuntimeMode = SensorProviderRuntimeModes.Disabled,
-        FailureReason = "Not included. Future releases would require Microsoft driver signing and installer-managed distribution.",
+        FailureReason = "Deep Sensor Driver not included in this build. Roadmap only; future releases would require driver signing, explicit consent, and release gates.",
         Capabilities = new SensorProviderCapabilities
         {
             SupportedCapabilities =
             [
-                "Future read-only sensors unavailable to user-mode providers"
+                "Future read-only board-level sensors unavailable to user-mode providers"
             ],
             MissingCapabilities =
             [
-                "No driver included in current beta"
+                "No driver included in this build",
+                "No signing/revocation/update pipeline implemented"
             ],
             ReadOnlyGuarantees = SensorProviderCapabilities.None.ReadOnlyGuarantees
         },
         TechnicianNotes =
         [
+            "Deep Sensor Driver not included in this build.",
+            "Some board-level sensors require the future Forger Deep Sensor Driver.",
             "Driver path is documentation-only for this beta. Users do not need to download it separately."
         ]
     };
@@ -680,6 +831,7 @@ public static class SensorMatrixBuilder
             {
                 Confidence = "Low",
                 DeepSensorMode = DeepSensorModeResolver.Resolve(),
+                ForgerSensorStack = ForgerSensorStackState.Create(),
                 Groups =
                 [
                     Group("System", now, Unavailable("System profile", "System", "Run System Intelligence first.", "NotApplicable", now))
@@ -707,6 +859,7 @@ public static class SensorMatrixBuilder
         {
             Groups = groups,
             DeepSensorMode = DeepSensorModeResolver.Resolve(),
+            ForgerSensorStack = ForgerSensorStackState.Create(),
             SensorProviders = SensorProviderRegistry.BuildDefaultManifests(profile, groups),
             Confidence = confidenceRatio >= 0.7 ? "High" : confidenceRatio >= 0.45 ? "Medium" : "Low"
         };
@@ -719,7 +872,7 @@ public static class SensorMatrixBuilder
             Known("CPU model", "CPU", p.Cpu, string.Empty, "WMI/CIM Win32_Processor", now, "Processor identity is inventory data, not a live sensor."),
             KnownIf("CPU cores", "CPU", p.CpuCores?.ToString(CultureInfo.InvariantCulture), "cores", "WMI/CIM Win32_Processor.NumberOfCores", now),
             KnownIf("CPU logical processors", "CPU", p.CpuThreads?.ToString(CultureInfo.InvariantCulture), "threads", "WMI/CIM Win32_Processor.NumberOfLogicalProcessors", now),
-            Unavailable("CPU temperature", "CPU", "Windows did not expose CPU package temperature in the normalized scan. Deep sensor mode/vendor driver may be required.", "RequiresExternalProvider", now),
+            Unavailable("CPU temperature", "CPU", "Windows did not expose CPU package temperature in the normalized scan. Forger Deep Sensor coverage or a vendor-safe path may be required.", "RequiresExternalProvider", now),
             Unavailable("CPU package power", "CPU", "Package power is usually not exposed through safe built-in Windows inventory.", "RequiresExternalProvider", now),
             Unavailable("CPU throttling", "CPU", "Thermal throttling needs live counters or a reviewed sensor provider.", "RequiresExternalProvider", now)
         };
@@ -742,7 +895,7 @@ public static class SensorMatrixBuilder
         }
 
         readings.Add(Unavailable("GPU temperature", "GPU", "GPU temperature is not exposed by standard WMI on many systems.", "RequiresVendorDriver", now));
-        readings.Add(Unavailable("GPU clocks/load", "GPU", "GPU clocks/load need driver counters or optional deep sensor provider.", "RequiresExternalProvider", now));
+        readings.Add(Unavailable("GPU clocks/load", "GPU", "GPU clocks/load need driver counters or the Forger deep sensor layer.", "RequiresExternalProvider", now));
         readings.Add(Unavailable("GPU VRAM detail", "GPU", "VRAM was not normalized by this scan; ForgerEMS will infer lightly from model only.", "NotExposedByFirmware", now));
         return Group("GPU", now, readings.ToArray());
     }

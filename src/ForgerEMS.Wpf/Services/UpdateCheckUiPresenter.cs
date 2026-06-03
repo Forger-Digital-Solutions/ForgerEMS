@@ -77,8 +77,8 @@ public static class UpdateCheckUiPresenter
             UpdateCheckFailureKind.ReleaseEndpointNotFound => "Update source could not be reached.",
             UpdateCheckFailureKind.UpdateSourceUnreachable => "Update source could not be reached (GitHub or TLS/proxy).",
             UpdateCheckFailureKind.AccessDeniedOrRateLimited =>
-                (result.ErrorMessage ?? string.Empty).Contains("rate", StringComparison.OrdinalIgnoreCase)
-                    ? "GitHub rate-limited this update check. Wait and try again."
+                UpdateCheckDiagnosticsFormatter.IsGitHubRateLimited(result)
+                    ? "Update check paused: GitHub rate limit (temporary). Nothing changed on this PC — try again later in Settings."
                     : "GitHub denied access to the update endpoint (403).",
             UpdateCheckFailureKind.ReleaseMetadataInvalid => "Update check: invalid release metadata from GitHub.",
             UpdateCheckFailureKind.Cancelled => "Update check was cancelled.",
@@ -89,12 +89,15 @@ public static class UpdateCheckUiPresenter
         string? diag = null;
         if (!string.IsNullOrWhiteSpace(result.DiagnosticDetail))
         {
-            diag = $"[Update] {result.FailureKind}: {result.DiagnosticDetail}";
+            diag = $"[Update] {result.FailureKind}: {UpdateCheckDiagnosticsFormatter.RedactForLog(result.DiagnosticDetail)}";
         }
 
         var detail = !string.IsNullOrWhiteSpace(result.ErrorMessage)
             ? result.ErrorMessage!
             : result.DiagnosticDetail ?? "Unknown error.";
+        var bannerTitle = UpdateCheckDiagnosticsFormatter.IsGitHubRateLimited(result)
+            ? "Update check paused"
+            : "Update check failed";
 
         if (isManualCheck)
         {
@@ -102,7 +105,7 @@ public static class UpdateCheckUiPresenter
                 StatusText: status,
                 LatestChannelSummary: "Latest release: unable to check right now · GitHub Releases",
                 BannerVisibility: Visibility.Visible,
-                BannerTitle: "Update check failed",
+                BannerTitle: bannerTitle,
                 BannerDetail: detail,
                 DownloadButtonVisibility: Visibility.Collapsed,
                 IgnoreButtonVisibility: Visibility.Collapsed,

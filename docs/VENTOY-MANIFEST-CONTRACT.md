@@ -60,6 +60,15 @@ Related files:
 | `fallbackRule` | No | string | Short operator summary for repairing or demoting a managed `file` item safely. |
 | `maintenanceRank` | No | integer >= 1 | Maintenance ordering for managed `file` items. Lower ranks should be checked first. |
 | `borderline` | No | boolean | Explicit flag for safe items that are one upstream change away from demotion back to `review-first`. |
+| `downloadMode` | No | enum | First-class technician action. Missing values are inferred for legacy manifests. |
+| `actionLabel` | No | string | Optional primary UI label; otherwise derived from `downloadMode`. |
+| `secondaryActionLabel` | No | string | Optional secondary UI label. |
+| `actionReason` | No | string | Short reason for the selected action. |
+| `promotionStatus` | No | string | Promotion audit status. |
+| `promotionEvidence` | No | string | Checksum, official page, legal, or manual blocker evidence. |
+| `legalRisk` | No | string | Plain-English licensing/legal risk summary. |
+| `checksumRequirement` | No | string | Checksum/signature requirement summary. |
+| `managedPromotionCandidate` | No | boolean | True when a page entry should be revisited for possible managed promotion. |
 | `enabled` | No | boolean | Defaults to `true`. |
 | `archive` | No | boolean | Defaults to `true` for file items. |
 | `timeoutSec` | No | integer >= 1 | Per-item timeout override. |
@@ -70,13 +79,17 @@ Related files:
 The canonical manifest also expresses the practical support boundary for the
 download catalog:
 
-- `file` items are manifest-managed downloads. In the current baseline these
-  are the `auto-download safe` entries and must keep checksum coverage.
-- `page` items are manifest-managed shortcuts only. They represent `manual
-  only` or `review-first` entries and do not claim that the third-party
-  payload itself is updater-managed.
+- `file` items are manifest-managed downloads. They must map to
+  `downloadMode: ManagedDownload` and keep checksum coverage.
+- `page` items are manifest-managed shortcuts only. They must use a non-managed
+  `downloadMode` such as `OfficialDownloadPage`, `ManualMediaRequired`,
+  `ReviewFirst`, `VendorPortal`, `OEMSpecific`, `LicenseRestricted`,
+  `DynamicMirrorOnly`, `FirmwareBlocked`, `CommunityToolkit`, `Unsupported`, or
+  `InfoOnly`.
 - A managed shortcut is still useful provenance, but it is intentionally not
   treated as equivalent to a managed artifact download.
+- Legacy manifests without `downloadMode` infer it from `type`, `manualOnly`,
+  `kind`, `sourceTrust`, notes, family, destination, and legacy warning fields.
 
 ## Managed File Resilience Metadata
 
@@ -117,6 +130,7 @@ The shipping scripts reject the manifest before writes when:
 - `buildTimestampUtc` is present but not parseable as a date/time string
 - `releaseType` is present but not `dev`, `candidate`, or `stable`
 - `managedChecksumPolicy` is present but not `warn` or `require-for-release`
+- `downloadMode` is present but not one of the schema enum values
 - `enabled` or `archive` is not a JSON boolean
 - `sha256` is present but not a valid SHA-256 hex string
 - `sha256Url` is attached to a `page` item
@@ -124,6 +138,14 @@ The shipping scripts reject the manifest before writes when:
 - `fragilityLevel` is present but not `low`, `medium`, or `high`
 - `maintenanceRank` is present but not a positive integer
 - `borderline` is present but not a JSON boolean
+- `ManagedDownload` is attached to anything other than a `file` item
+- a `file` item does not map to `ManagedDownload`
+- `ManualMediaRequired`, `FirmwareBlocked`, `VendorPortal`, `OEMSpecific`, or
+  `LicenseRestricted` is attached to anything other than a `page` item
+- a `page` item declares checksum fields
+- restricted Windows/macOS/iOS/Android firmware, community WinPE, BIOS, UEFI,
+  or model-specific media is classified as `ManagedDownload`
+- `actionLabel` is raw `Info` outside `InfoOnly`
 - a `page` item declares `sourceType`, `fragilityLevel`, `fallbackRule`, or
   `maintenanceRank`
 - a `page` item declares `borderline`
@@ -230,6 +252,10 @@ The vendor inventory now carries provenance-oriented metadata:
 - `checksum`
 - `verified`
 - `source_trust`
+- `downloadMode`
+- `actionLabel`
+- `managedReason`
+- `verificationMode`
 - `releaseType`
 
 That metadata improves auditability, but it does not automatically make those
@@ -249,8 +275,14 @@ Each vendor inventory item is expected to declare:
 | `checksum` | Yes | SHA-256 hex or blank | Integrity data when available. |
 | `verified` | Yes | boolean | Whether the current source/provenance has been manually verified. |
 | `source_trust` | Yes | `official`, `community`, or `manual` | Provenance/trust classification. |
+| `downloadMode` | No | manifest download mode enum | Technician action for vendor inventory entry. |
+| `actionLabel` | No | string | UI/action label for the vendor inventory entry. |
+| `managedReason` | No | string | Why the entry is manual root, page shortcut, or verified file. |
+| `verificationMode` | No | `manual-root`, `managed-page-shortcut`, or `verified-file-checksum` | Distinguishes local roots from verified page shortcuts or true checksum-backed files. |
 | `notes` | No | string | Human notes about ownership or maintenance limits. |
 
 Offline validation ensures the vendor inventory structure is coherent. Optional
 online verification adds warnings for missing checksums, missing source URLs,
-upstream probe failures, and redirect drift to different hosts.
+upstream probe failures, and redirect drift to different hosts. Manual roots
+must remain `verificationMode: manual-root`; official driver shortcuts must
+remain portal/page modes rather than file downloads.

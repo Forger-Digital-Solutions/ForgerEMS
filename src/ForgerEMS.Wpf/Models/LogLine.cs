@@ -46,7 +46,10 @@ public sealed class LogLine
 
     public LiveLogChannel Channel { get; }
 
-    public string DisplayText => $"[{Timestamp:HH:mm:ss}] {Text}";
+    public string DisplayText =>
+        !string.IsNullOrEmpty(Text) && Text[0] == '['
+            ? $"[{Timestamp:HH:mm:ss}]{Text}"
+            : $"[{Timestamp:HH:mm:ss}] {Text}";
 
     public Brush Foreground =>
         Severity switch

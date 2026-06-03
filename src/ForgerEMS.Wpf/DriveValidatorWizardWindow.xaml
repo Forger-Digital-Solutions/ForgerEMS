@@ -1,0 +1,284 @@
+<Window x:Class="VentoyToolkitSetup.Wpf.DriveValidatorWizardWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Drive Validator Wizard"
+        Width="780"
+        Height="720"
+        MinWidth="640"
+        MinHeight="560"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        FontFamily="Segoe UI">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <Style x:Key="WizardBtn" TargetType="Button">
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="Margin" Value="0,0,8,8" />
+            <Setter Property="MinWidth" Value="100" />
+            <Setter Property="Foreground" Value="#FFF5F5F5" />
+            <Setter Property="Background" Value="#FF2A2F3A" />
+            <Setter Property="BorderBrush" Value="#FF4B6CB7" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#FF343B4A" />
+                    <Setter Property="BorderBrush" Value="#FF6C8FE8" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#FF1F242E" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.45" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="WizardPrimaryBtn" TargetType="Button" BasedOn="{StaticResource WizardBtn}">
+            <Setter Property="Background" Value="#FF1F5E4B" />
+            <Setter Property="BorderBrush" Value="#FF3AD49A" />
+            <Setter Property="Foreground" Value="#FFFFFFFF" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#FF28765F" />
+                    <Setter Property="BorderBrush" Value="#FF63E6B6" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#FF174637" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.45" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Region tile style: keyed by the VM's StatusToken via DataTriggers. -->
+        <Style x:Key="RegionTileBorder" TargetType="Border">
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="Margin" Value="2" />
+            <Setter Property="CornerRadius" Value="3" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="#FF2A2F3A" />
+            <Setter Property="BorderBrush" Value="#FF4B6CB7" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding StatusToken}" Value="Active">
+                    <Setter Property="Background" Value="#FF1B4B7A" />
+                    <Setter Property="BorderBrush" Value="#FF67B7E8" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding StatusToken}" Value="Passed">
+                    <Setter Property="Background" Value="#FF1F5E4B" />
+                    <Setter Property="BorderBrush" Value="#FF3AD49A" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding StatusToken}" Value="Warning">
+                    <Setter Property="Background" Value="#FF7A5A1B" />
+                    <Setter Property="BorderBrush" Value="#FFFBBF24" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding StatusToken}" Value="Failed">
+                    <Setter Property="Background" Value="#FF7A2222" />
+                    <Setter Property="BorderBrush" Value="#FFEF6B6B" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding StatusToken}" Value="Cancelled">
+                    <Setter Property="Background" Value="#FF22272F" />
+                    <Setter Property="BorderBrush" Value="#FF7E8898" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Border Padding="20" Background="{DynamicResource PanelBackgroundBrush}" BorderBrush="{DynamicResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10" Margin="16">
+        <DockPanel>
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock FontSize="20" FontWeight="SemiBold"
+                               Foreground="{DynamicResource HeroTextBrush}"
+                               Text="Drive Validator Wizard" />
+                    <TextBlock Margin="0,4,0,12"
+                               Foreground="{DynamicResource PanelMutedTextBrush}"
+                               TextWrapping="Wrap"
+                               Text="Writes temporary ForgerEMS test files into removable USB free space and reads them back to look for verification errors or suspicious capacity behavior. Safe modes never format the drive and never delete your existing files. Results are advisory evidence for a technician, not a guarantee about the underlying media." />
+
+                    <!-- Step 1: Select Target -->
+                    <StackPanel Visibility="{Binding IsSelectTargetStep, Converter={StaticResource BoolToVis}}">
+                        <TextBlock FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource HeroTextBrush}" Text="Step 1 — Select target" />
+                        <TextBlock Margin="0,4,0,10" Foreground="{DynamicResource PanelTextBrush}" TextWrapping="Wrap"
+                                   Text="Choose the USB drive you want to validate. Unsafe targets (system drives, EFI partitions, undersized companion volumes) are blocked." />
+                        <ListBox MinHeight="200"
+                                 ItemsSource="{Binding Targets}"
+                                 SelectedItem="{Binding SelectedTarget, Mode=TwoWay}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,2" Padding="8" CornerRadius="4"
+                                            Background="#B80A101A" BorderBrush="#3357C7E8" BorderThickness="1">
+                                        <StackPanel>
+                                            <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelTextBrush}">
+                                                <Run Text="{Binding RootPath, Mode=OneWay}" />
+                                                <Run Text=" · " />
+                                                <Run Text="{Binding LabelDisplay, Mode=OneWay}" />
+                                            </TextBlock>
+                                            <TextBlock FontSize="11" Foreground="{DynamicResource PanelMutedTextBrush}">
+                                                <Run Text="Capacity " /><Run Text="{Binding CapacityDisplay, Mode=OneWay}" />
+                                                <Run Text=" · free " /><Run Text="{Binding FreeSpaceDisplay, Mode=OneWay}" />
+                                                <Run Text=" · " /><Run Text="{Binding FileSystemDisplay, Mode=OneWay}" />
+                                            </TextBlock>
+                                            <TextBlock FontSize="11" Foreground="{DynamicResource PanelMutedTextBrush}" Text="{Binding BusModelDisplay}" />
+                                            <TextBlock FontSize="11" Foreground="{DynamicResource PanelMutedTextBrush}">
+                                                <Run Text="Port: " /><Run Text="{Binding PortLabel, Mode=OneWay}" />
+                                            </TextBlock>
+                                            <TextBlock FontSize="11" Foreground="{DynamicResource PanelLabelBrush}" Text="{Binding SafetyDisplay}" />
+                                            <TextBlock FontSize="11" Foreground="{DynamicResource PanelMutedTextBrush}" Text="{Binding LastValidationSummary}" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <TextBlock Margin="0,8,0,0" Foreground="#FFEF6B6B" TextWrapping="Wrap"
+                                   Text="{Binding SelectedTargetBlockedReason}"
+                                   Visibility="{Binding SelectedTarget.IsSafe, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}" />
+                        <TextBlock Margin="0,4,0,0" Foreground="{DynamicResource PanelLabelBrush}" TextWrapping="Wrap"
+                                   Text="{Binding SelectedTargetPortHint}"
+                                   Visibility="{Binding SelectedTargetPortAmbiguous, Converter={StaticResource BoolToVis}}" />
+                        <WrapPanel Margin="0,12,0,0">
+                            <Button Style="{StaticResource WizardPrimaryBtn}" Content="Next: Choose mode" Command="{Binding NextFromSelectTargetCommand}" />
+                            <Button Style="{StaticResource WizardBtn}" Content="Refresh list" Command="{Binding RefreshTargetsCommand}" />
+                            <Button Style="{StaticResource WizardBtn}" Content="Open USB Mapping Wizard" Command="{Binding OpenUsbMappingWizardCommand}" />
+                            <Button Style="{StaticResource WizardBtn}" Content="Close" Command="{Binding CloseCommand}" />
+                        </WrapPanel>
+                    </StackPanel>
+
+                    <!-- Step 2: Choose Mode -->
+                    <StackPanel Visibility="{Binding IsChooseModeStep, Converter={StaticResource BoolToVis}}">
+                        <TextBlock FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource HeroTextBrush}" Text="Step 2 — Choose validation mode" />
+                        <TextBlock Margin="0,4,0,10" Foreground="{DynamicResource PanelTextBrush}" TextWrapping="Wrap"
+                                   Text="Speed Benchmark and Drive Validator are different. Benchmark measures speed (and cached reads may be untrusted). Drive Validator checks whether written data comes back correctly. A fast drive can still fail validation. A slow drive can still be valid but may not be ideal for a technician toolkit." />
+                        <ListBox MinHeight="200"
+                                 ItemsSource="{Binding Modes}"
+                                 SelectedItem="{Binding SelectedMode, Mode=TwoWay}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,2" Padding="10" CornerRadius="4"
+                                            Background="#B80A101A" BorderBrush="#3357C7E8" BorderThickness="1">
+                                        <StackPanel>
+                                            <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding HeaderLine}" />
+                                            <TextBlock Margin="0,4,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" TextWrapping="Wrap" Text="{Binding Description}" />
+                                            <TextBlock Margin="0,4,0,0" Foreground="{DynamicResource PanelLabelBrush}">
+                                                <Run Text="Heaviness: " /><Run Text="{Binding Heaviness, Mode=OneWay}" />
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <WrapPanel Margin="0,12,0,0">
+                            <Button Style="{StaticResource WizardPrimaryBtn}" Content="Next: Safety review" Command="{Binding NextFromChooseModeCommand}" />
+                            <Button Style="{StaticResource WizardBtn}" Content="Back" Command="{Binding BackFromChooseModeCommand}" />
+                            <Button Style="{StaticResource WizardBtn}" Content="Close" Command="{Binding CloseCommand}" />
+                        </WrapPanel>
+                    </StackPanel>
+
+                    <!-- Step 3: Safety Review -->
+                    <StackPanel Visibility="{Binding IsSafetyReviewStep, Converter={StaticResource BoolToVis}}">
+                        <TextBlock FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource HeroTextBrush}" Text="Step 3 — Safety review" />
+                        <Border Margin="0,8,0,8" Padding="10" CornerRadius="4"
+                                Background="#B80A101A" BorderBrush="#3357C7E8" BorderThickness="1">
+                            <TextBlock FontFamily="Consolas" FontSize="12" Foreground="{DynamicResource PanelTextBrush}"
+                                       Text="{Binding SafetyReviewBody}" TextWrapping="Wrap" />
+                        </Border>
+                        <CheckBox Margin="0,4,0,4"
+                                  Foreground="{DynamicResource PanelLabelBrush}"
+                                  IsChecked="{Binding FullModeUserAcknowledged, Mode=TwoWay}"
+                                  Visibility="{Binding NeedsFullModeConfirmation, Converter={StaticResource BoolToVis}}"
+                                  Content="I understand that Full Free-Space Validation writes a large amount of data and can take a long time." />
+                        <WrapPanel Margin="0,12,0,0">
+                            <Button Style="{StaticResource WizardPrimaryBtn}" Content="Start validation" Command="{Binding StartValidationCommand}" />
+                            <Button Style="{StaticResource WizardBtn}" Content="Back" Command="{Binding BackFromSafetyCommand}" />
+                            <Button Style="{StaticResource WizardBtn}" Content="Close" Command="{Binding CloseCommand}" />
+                        </WrapPanel>
+                    </StackPanel>
+
+                    <!-- Step 4: Running -->
+                    <StackPanel Visibility="{Binding IsRunningStep, Converter={StaticResource BoolToVis}}">
+                        <TextBlock FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource HeroTextBrush}" Text="Step 4 — Validation running" />
+                        <TextBlock Margin="0,4,0,0" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding RunningPhaseText}" TextWrapping="Wrap" />
+                        <ProgressBar Margin="0,6,0,4" Height="8" Maximum="100" Value="{Binding RunningProgressValue, Mode=OneWay}" />
+                        <Grid Margin="0,2,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock FontSize="11" Foreground="{DynamicResource PanelMutedTextBrush}" Text="{Binding RunningProgressText}" />
+                            <TextBlock Grid.Column="1" FontSize="11" Foreground="{DynamicResource PanelMutedTextBrush}">
+                                <Run Text="elapsed " /><Run Text="{Binding RunningElapsedText, Mode=OneWay}" />
+                            </TextBlock>
+                        </Grid>
+                        <TextBlock Margin="0,4,0,0" FontSize="11" Foreground="{DynamicResource PanelMutedTextBrush}" Text="{Binding RunningBytesText}" />
+                        <TextBlock FontSize="11" Foreground="{DynamicResource PanelMutedTextBrush}" Text="{Binding RunningSpeedText}" />
+                        <TextBlock Margin="0,6,0,0" FontSize="11" Foreground="{DynamicResource PanelLabelBrush}"
+                                   Text="{Binding HeartbeatMessage}"
+                                   Visibility="{Binding HeartbeatActive, Converter={StaticResource BoolToVis}}" />
+                        <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Foreground="{DynamicResource PanelTextBrush}" Text="Media integrity map" />
+                        <Border Padding="6" CornerRadius="4" Background="#B80A101A" BorderBrush="#3357C7E8" BorderThickness="1">
+                            <ItemsControl ItemsSource="{Binding RegionTiles}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource RegionTileBorder}" ToolTip="{Binding ToolTipText}">
+                                            <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                       FontSize="10" Foreground="#FFFFFFFF" Text="{Binding Index}" />
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                        <TextBlock Margin="0,6,0,0" FontSize="10" Foreground="{DynamicResource PanelMutedTextBrush}"
+                                   Text="Tile color: gray = planned · blue = active · green = passed · yellow = warning · red = mismatch/alias/I-O error · dim = cancelled" />
+                        <WrapPanel Margin="0,12,0,0">
+                            <Button Style="{StaticResource WizardBtn}" Content="Cancel" Command="{Binding CancelValidationCommand}" />
+                        </WrapPanel>
+                    </StackPanel>
+
+                    <!-- Step 5: Results -->
+                    <StackPanel Visibility="{Binding IsResultsStep, Converter={StaticResource BoolToVis}}">
+                        <TextBlock FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource HeroTextBrush}" Text="Step 5 — Results" />
+                        <TextBlock Margin="0,6,0,0" FontWeight="SemiBold" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding ResultSummary}" TextWrapping="Wrap" />
+                        <Border Margin="0,10,0,0" Padding="10" CornerRadius="4"
+                                Background="#B80A101A" BorderBrush="#3357C7E8" BorderThickness="1">
+                            <TextBlock FontFamily="Consolas" FontSize="12" Foreground="{DynamicResource PanelTextBrush}"
+                                       Text="{Binding ResultEvidence}" TextWrapping="Wrap" />
+                        </Border>
+                        <TextBlock Margin="0,8,0,0" FontWeight="SemiBold" Foreground="{DynamicResource PanelTextBrush}" Text="Media integrity map" />
+                        <Border Padding="6" CornerRadius="4" Background="#B80A101A" BorderBrush="#3357C7E8" BorderThickness="1">
+                            <ItemsControl ItemsSource="{Binding RegionTiles}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource RegionTileBorder}" ToolTip="{Binding ToolTipText}">
+                                            <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                       FontSize="10" Foreground="#FFFFFFFF" Text="{Binding Index}" />
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Border>
+                        <TextBlock Margin="0,10,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" Text="{Binding ResultLimitations}" TextWrapping="Wrap" />
+                        <WrapPanel Margin="0,12,0,0">
+                            <Button Style="{StaticResource WizardPrimaryBtn}" Content="Run another mode" Command="{Binding RunAnotherCommand}" />
+                            <Button Style="{StaticResource WizardBtn}" Content="Choose another target" Command="{Binding BackToTargetSelectionFromResultsCommand}" />
+                            <Button Style="{StaticResource WizardBtn}" Content="Copy summary" Command="{Binding CopySummaryCommand}" />
+                            <Button Style="{StaticResource WizardBtn}" Content="Open USB Mapping Wizard" Command="{Binding OpenUsbMappingWizardCommand}" />
+                            <Button Style="{StaticResource WizardBtn}" Content="Return to USB Builder" Command="{Binding CloseCommand}" />
+                        </WrapPanel>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </DockPanel>
+    </Border>
+</Window>

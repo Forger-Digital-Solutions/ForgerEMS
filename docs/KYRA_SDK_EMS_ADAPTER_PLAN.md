@@ -69,7 +69,7 @@ ForgerEMS.exe --kyra-sdk-dogfood [--kyra-sdk-prompt "optional prompt"]
 The tool can also be run directly for dev:
 
 ```text
-tools\kyra-sdk-dogfood\ForgerEMS.Kyra.SdkDogfood.exe --kyra-sdk-version 1.2.1-preview.1
+tools\kyra-sdk-dogfood\ForgerEMS.Kyra.SdkDogfood.exe --kyra-sdk-version 1.2.3-preview.1
 ```
 
 Requires **`FORGEREMS_KYRA_SDK_ENABLED=true`**. Otherwise returns **`NotWired`** and exit code `1`.

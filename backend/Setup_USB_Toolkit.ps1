@@ -66,7 +66,8 @@ param(
     [switch]$OpenManualPages,
     [switch]$SeedManifest,
     [switch]$ForceManifestOverwrite,
-    [switch]$ShowVersion
+    [switch]$ShowVersion,
+    [string[]]$IncludedCategories = @()
 )
 
 $forwarded = @{}

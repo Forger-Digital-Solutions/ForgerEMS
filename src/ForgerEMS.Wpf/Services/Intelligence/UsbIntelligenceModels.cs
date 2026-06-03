@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using VentoyToolkitSetup.Wpf.Models;
 
 namespace VentoyToolkitSetup.Wpf.Services.Intelligence;
 
@@ -205,6 +206,12 @@ public sealed class UsbKnownPortRecord
     public int LabelConfirmedDeviceSeenCount { get; set; }
 
     public string? LabelConfirmedDriveLetter { get; set; }
+
+    public DriveValidationPortStatus LastDriveValidationPortStatus { get; set; }
+
+    public string? LastDriveValidationSummary { get; set; }
+
+    public DateTimeOffset? LastDriveValidationUtc { get; set; }
 }
 
 public sealed class UsbControllerInfo
@@ -431,6 +438,16 @@ public sealed class UsbDiagnosticsEmbeddedSection
 
     /// <summary>Best ranked labeled port by measured write speed, if any.</summary>
     public string UsbBestKnownPortSummary { get; init; } = string.Empty;
+
+    public string ElevatedTelemetrySummary { get; init; } = string.Empty;
+
+    public string ElevatedTelemetrySource { get; init; } = string.Empty;
+
+    public string ElevatedTelemetryConfidence { get; init; } = string.Empty;
+
+    public DateTimeOffset? ElevatedTelemetryCollectedAtUtc { get; init; }
+
+    public bool ElevatedTelemetryIsStale { get; init; }
 }
 
 public sealed class KyraUsbNarrative
@@ -485,6 +502,16 @@ public sealed class UsbTopologySnapshot
     public int CombinedConfidenceScore { get; init; }
 
     public string CombinedConfidenceReason { get; init; } = string.Empty;
+
+    public ElevatedScanTelemetryState ElevatedTelemetryState { get; init; } = ElevatedScanTelemetryState.Missing;
+
+    public DateTimeOffset? ElevatedTelemetryCollectedAtUtc { get; init; }
+
+    public string ElevatedTelemetrySource { get; init; } = string.Empty;
+
+    public string ElevatedTelemetryConfidence { get; init; } = string.Empty;
+
+    public string ElevatedTelemetrySummary { get; init; } = string.Empty;
 }
 
 public sealed class UsbBuilderPreflightResult
@@ -506,4 +533,6 @@ public sealed class UsbTopologyBuildOptions
     public UsbTopologySnapshot? PreviousSnapshot { get; init; }
 
     public UsbMachineProfile? MachineProfile { get; init; }
+
+    public ElevatedScanTelemetrySnapshot? ElevatedScanTelemetry { get; init; }
 }

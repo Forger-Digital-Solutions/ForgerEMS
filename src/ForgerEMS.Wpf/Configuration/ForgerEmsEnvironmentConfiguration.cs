@@ -96,6 +96,19 @@ public static class ForgerEmsEnvironmentConfiguration
     public static string UpdateChannel => GetString("FORGEREMS_UPDATE_CHANNEL", ReleaseChannel);
     public static bool UpdateIncludePrerelease => GetBool("FORGEREMS_UPDATE_INCLUDE_PRERELEASE", true);
     public static string UpdateUserAgent => GetString("FORGEREMS_UPDATE_USER_AGENT", "ForgerEMS");
+
+    /// <summary>Optional PAT for GitHub Releases API (operator/dev only). Never commit; raises rate limits when set.</summary>
+    public static string GitHubApiToken
+    {
+        get
+        {
+            var v = GetConfigString("FORGEREMS_GITHUB_TOKEN", "");
+            return VentoyToolkitSetup.Wpf.Services.KyraProviderConfigResolver.IsPlaceholderSecretOrValue(v)
+                ? string.Empty
+                : v;
+        }
+    }
+
     public static int UpdateTimeoutSeconds => GetInt("FORGEREMS_UPDATE_TIMEOUT_SECONDS", 20, 5, 120);
 
     // Kyra

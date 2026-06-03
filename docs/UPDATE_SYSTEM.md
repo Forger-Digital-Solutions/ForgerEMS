@@ -2,7 +2,7 @@
 
 This document describes how **in-app update checks** relate to **GitHub Releases** — not to every git push or branch tip.
 
-**Public Preview (v1.2.1+):** shipping tags use semver prereleases such as **`v1.2.1-preview.1`**. The in-app display line is **ForgerEMS v1.2.1 Public Preview** (see `AppReleaseInfo`). Env overrides: `FORGEREMS_GITHUB_OWNER`, `FORGEREMS_GITHUB_REPO`, `FORGEREMS_UPDATE_USER_AGENT` — see `docs/ENVIRONMENT.md` and `docs/UPDATE-SYSTEM-v1.2.0.md`.
+**Public Preview (v1.2.1+):** shipping tags use semver prereleases such as **`v1.2.3-preview.1`**. The in-app display line is **ForgerEMS v1.2.3 Public Preview** (see `AppReleaseInfo`). Env overrides: `FORGEREMS_GITHUB_OWNER`, `FORGEREMS_GITHUB_REPO`, `FORGEREMS_UPDATE_USER_AGENT` — see `docs/ENVIRONMENT.md` and `docs/UPDATE-SYSTEM-v1.2.0.md`.
 
 ---
 
@@ -23,7 +23,7 @@ The app uses the GitHub **Releases** API, reads the list of releases, and picks 
 - **Include Beta / RC** (typical for beta builds): prereleases are allowed.  
 - **Stable only**: prereleases are skipped; only non-prerelease releases count.
 
-The **version** used for comparison comes from the release **`tag_name`** / **`name`** (for example `v1.2.1-preview.1`, `1.2.1-preview.1`, or `ForgerEMS v1.2.1-preview.1`; older tags used `v1.1.12-rc.*`), **not** from guessing based on asset filenames.
+The **version** used for comparison comes from the release **`tag_name`** / **`name`** (for example `v1.2.3-preview.1`, `1.2.3-preview.1`, or `ForgerEMS v1.2.3-preview.1`; older tags used `v1.1.12-rc.*`), **not** from guessing based on asset filenames.
 
 ---
 
@@ -89,6 +89,7 @@ Nothing in ForgerEMS **auto-installs** or **auto-runs** an update; downloads go 
 | No published ForgerEMS release / no stable release | No matching release for the selected channel, or only prereleases when **Stable only** is on. |
 | Network / timeout | Offline, DNS, firewall, or GitHub unreachable. |
 | Update source could not be reached | Often a 404 on the releases API (wrong repo, private repo, or path). |
+| Access denied / rate limited (403/429) | GitHub rejected the API call. Common causes: **missing or invalid User-Agent** (fixed in app builds that send `ForgerEMS/{version}` via `HttpClient.DefaultRequestHeaders.UserAgent`), **unauthenticated rate limit** (60 requests/hour per IP — wait and retry), corporate proxy blocking `api.github.com`, or a private/wrong repo. Operators may set optional `FORGEREMS_GITHUB_TOKEN` (PAT with **public_repo** read scope only) in the user environment to raise limits — never commit tokens. |
 | Recommended ZIP asset was not found | A release exists, but the expected ZIP naming was not found; still open the release page and pick assets manually if needed. |
 
 Always prefer **official release assets** over cloning main or downloading from unofficial mirrors.

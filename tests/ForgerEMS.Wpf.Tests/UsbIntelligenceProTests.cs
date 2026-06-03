@@ -8,6 +8,7 @@ using Xunit;
 
 namespace ForgerEMS.Wpf.Tests;
 
+[Collection(UsbPortLabelResolverSerialFixture.Name)]
 public sealed class UsbIntelligenceProTests
 {
     private static readonly JsonSerializerOptions _jsonOptions = new()

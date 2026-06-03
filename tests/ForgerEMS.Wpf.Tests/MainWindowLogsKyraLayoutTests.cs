@@ -61,6 +61,9 @@ public sealed class MainWindowLogsKyraLayoutTests
         Assert.Contains("CopySupportEmailCommand", region, StringComparison.Ordinal);
         Assert.Contains("OpenSupportEmailCommand", region, StringComparison.Ordinal);
         Assert.Contains("CopyBetaReportTemplateCommand", region, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Open support email\"", region, StringComparison.Ordinal);
+        Assert.DoesNotContain("Open support email…", region, StringComparison.Ordinal);
+        Assert.Contains("<WrapPanel", region, StringComparison.Ordinal);
     }
 
     [Fact]

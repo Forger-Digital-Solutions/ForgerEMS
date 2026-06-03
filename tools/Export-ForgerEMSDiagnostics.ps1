@@ -6,7 +6,7 @@
 #>
 param(
     [string]$OutputZip = "",
-    [string]$Version = "1.2.1-preview.1"
+    [string]$Version = "1.2.3-preview.1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -31,7 +31,7 @@ $meta = @"
 ForgerEMS diagnostics export (operator script)
 GeneratedUtc: $((Get-Date).ToUniversalTime().ToString("o"))
 AppSemanticVersion: $Version
-DisplayVersion: ForgerEMS v1.2.1 Public Preview
+DisplayVersion: ForgerEMS v1.2.3 Public Preview
 FORGEREMS_RELEASE_CHANNEL: $env:FORGEREMS_RELEASE_CHANNEL
 Update owner/repo: $env:FORGEREMS_GITHUB_OWNER / $env:FORGEREMS_GITHUB_REPO
 

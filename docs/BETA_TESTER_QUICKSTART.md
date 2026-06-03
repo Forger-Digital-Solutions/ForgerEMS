@@ -1,4 +1,4 @@
-# ForgerEMS beta tester quickstart (Public Preview v1.2.1-preview.1)
+# ForgerEMS beta tester quickstart (Public Preview v1.2.3-preview.1)
 
 **Forger Engineering Maintenance Suite** — built by **Forger Digital Solutions**.
 
@@ -8,7 +8,7 @@
 
 ## 1. Download the ZIP from GitHub Releases
 
-Get **`ForgerEMS-v1.2.1-preview.1.zip`** or **`ForgerEMS-Beta-v1.2.1-preview.1.zip`** when published (same bundle style; pick one). Optionally verify **`CHECKSUMS.sha256`** from the same release. Older `v1.1.12-rc.*` assets remain on prior GitHub tags for history only.
+Get **`ForgerEMS-v1.2.3-preview.1.zip`** or **`ForgerEMS-Beta-v1.2.3-preview.1.zip`** when published (same bundle style; pick one). Optionally verify **`CHECKSUMS.sha256`** from the same release. Older `v1.1.12-rc.*` assets remain on prior GitHub tags for history only.
 
 If the browser download behaves oddly, read **[DOWNLOAD_TROUBLESHOOTING.md](DOWNLOAD_TROUBLESHOOTING.md)** and **[FIRST_TESTER_DOWNLOAD_FLOW.md](FIRST_TESTER_DOWNLOAD_FLOW.md)**.
 
@@ -42,11 +42,9 @@ For deeper coverage, use **Run Elevated Scan**. If ForgerEMS is not already runn
 
 ---
 
-## 6. Check Visual Effects if the app feels slow
+## 6. Check responsiveness during normal work
 
-For public preview, **Settings → Visual Effects** defaults to **Static / Low Power** for responsiveness. Use **Animated** only if you want the motion, or **Off / Plain dark** for slower machines, remote sessions, or battery-saving testing.
-
----
+ForgerEMS now uses a packaged static command-center background. During testing, focus on launch speed, scrolling, toolkit checks, and Kyra responsiveness while USB workflows are running.
 
 ## 7. Select USB
 

@@ -62,6 +62,7 @@ public static class UsbIntelligenceLatestPanelReader
         var lastBench = "—";
         var mapping = "—";
         var bestPortFromDiag = string.Empty;
+        var elevatedTelemetrySummary = string.Empty;
         var benchSucceeded = false;
         DateTimeOffset? benchStamp = null;
         var combinedScore = 0;
@@ -69,6 +70,7 @@ public static class UsbIntelligenceLatestPanelReader
         if (root.TryGetProperty("usbDiagnostics", out var usbDiag) && usbDiag.ValueKind == JsonValueKind.Object)
         {
             bestPortFromDiag = GetStr(usbDiag, "usbBestKnownPortSummary");
+            elevatedTelemetrySummary = GetStr(usbDiag, "elevatedTelemetrySummary");
         }
 
         if (root.TryGetProperty("selectedTargetRecommendation", out var rec) && rec.ValueKind == JsonValueKind.Object)
@@ -152,6 +154,18 @@ public static class UsbIntelligenceLatestPanelReader
             {
                 confReason = reason;
             }
+        }
+
+        if (string.IsNullOrWhiteSpace(elevatedTelemetrySummary))
+        {
+            elevatedTelemetrySummary = GetStr(root, "elevatedTelemetrySummary");
+        }
+
+        if (!string.IsNullOrWhiteSpace(elevatedTelemetrySummary))
+        {
+            confReason = string.IsNullOrWhiteSpace(confReason)
+                ? elevatedTelemetrySummary.Trim()
+                : $"{confReason.Trim()} {elevatedTelemetrySummary.Trim()}";
         }
 
         var statusLine = GetStr(root, "selectedTargetPortLabelStatusLine");

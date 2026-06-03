@@ -13,7 +13,7 @@ public sealed class KyraProviderConfigResolverTests
     [InlineData("local-model-name")]
     [InlineData("model-name")]
     [InlineData("https://example.local/v1")]
-    [InlineData("sk-REPLACE_ME")]
+    [InlineData("OPENAI_API_KEY_PLACEHOLDER")]
     [InlineData("changeme")]
     [InlineData("TODO")]
     [InlineData("PASTE_YOUR_REAL_GITHUB_MODELS_PAT")]

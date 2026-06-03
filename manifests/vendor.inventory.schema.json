@@ -79,6 +79,37 @@
               "manual"
             ]
           },
+          "downloadMode": {
+            "type": "string",
+            "enum": [
+              "ManagedDownload",
+              "OfficialDownloadPage",
+              "ManualMediaRequired",
+              "ReviewFirst",
+              "VendorPortal",
+              "LicenseRestricted",
+              "DynamicMirrorOnly",
+              "OEMSpecific",
+              "FirmwareBlocked",
+              "CommunityToolkit",
+              "Unsupported",
+              "InfoOnly"
+            ]
+          },
+          "actionLabel": {
+            "type": "string"
+          },
+          "managedReason": {
+            "type": "string"
+          },
+          "verificationMode": {
+            "type": "string",
+            "enum": [
+              "manual-root",
+              "managed-page-shortcut",
+              "verified-file-checksum"
+            ]
+          },
           "notes": {
             "type": "string"
           }
