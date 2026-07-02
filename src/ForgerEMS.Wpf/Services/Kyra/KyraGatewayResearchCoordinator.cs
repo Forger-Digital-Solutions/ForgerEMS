@@ -244,7 +244,7 @@ public static class KyraGatewayResearchCoordinator
         else
         {
             sb.AppendLine("Confirmed from local scan:");
-            sb.AppendLine("- No current System Intelligence scan was available to read battery facts.");
+            sb.AppendLine("- No current local device snapshot was available to read battery facts.");
         }
 
         sb.AppendLine();

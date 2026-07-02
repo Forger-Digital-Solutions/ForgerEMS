@@ -32,7 +32,7 @@ public static class KyraProviderTroubleshootingAnswerBuilder
         var body = $"""
             Tool-status style readout (nothing sensitive here):
 
-            • **Why Local Kyra / offline sometimes wins:** truth guard may discard an online answer that disagrees with your System Intelligence scan, or every configured provider failed, timed out, hit a rate limit, or is cooling down after errors.
+            • **Why Local Kyra / offline sometimes wins:** truth guard may discard an online answer that disagrees with your local device snapshot, or every configured provider failed, timed out, hit a rate limit, or is cooling down after errors.
             • **ForgerEMS Gateway:** beta path for **live research tools** (crypto, weather, news, etc.) on the worker — not a general “chat for every hello” endpoint. Casual chat uses your normal LLM providers (Groq, OpenRouter, …) when configured.
             • **Cooldowns:** after repeated failures, a provider is skipped briefly so Kyra doesn’t hammer the same broken route every message. Check Kyra Advanced → provider status; fix URL/keys; use **Check gateway status** for coarse worker readiness.
             • **Secrets:** I never echo API keys, gateway tokens, or passwords. Safe to share in support: app version, channel, and **masked** provider status — not raw tokens.

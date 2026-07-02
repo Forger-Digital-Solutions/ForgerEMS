@@ -72,6 +72,19 @@ Test-FileExists "tools\build-release.ps1" "build-release"
 Test-FileExists "installer\ForgerEMS.iss" "installer-iss"
 Test-FileExists "docs\ENVIRONMENT.md" "doc-environment"
 Test-FileExists ".env.example" "env-example"
+foreach ($legalDoc in @(
+    "docs\ABOUT_FORGEREMS.md",
+    "docs\FAQ.md",
+    "docs\TERMS_OF_USE.md",
+    "docs\PRIVACY_AND_DATA_HANDLING.md",
+    "docs\LEGAL_NOTICES.md",
+    "docs\THIRD_PARTY_NOTICES.md",
+    "docs\USER_CONSENT_FLOW.md",
+    "docs\RELEASE_NOTES_v1.2.3-preview.1.md",
+    "docs\reports\FORGEREMS_V1_2_3_FULL_PROJECT_AUDIT.md"
+)) {
+    Test-FileExists $legalDoc ("doc-" + ([System.IO.Path]::GetFileNameWithoutExtension($legalDoc) -replace '[^A-Za-z0-9]+','-'))
+}
 # Historical v1.2.0 docs remain in repo as release-record snapshots; downgraded to WARN since
 # they are reference archives, not required release deliverables for v1.2.1.
 $archiveDocs = @(
@@ -120,6 +133,13 @@ else { Add-Row -Level "FAIL" -Id "csproj-InformationalVersion" -Message "Expecte
 # --- README / CHANGELOG copy ---
 Test-FileContains -Rel "README.md" -Pattern "ForgerEMS v1\.2\.3 Public Preview" -Id "readme-display"
 Test-FileContains -Rel "README.md" -Pattern ([regex]::Escape($Version)) -Id "readme-semver"
+Test-FileContains -Rel "README.md" -Pattern "TERMS_OF_USE\.md" -Id "readme-terms"
+Test-FileContains -Rel "README.md" -Pattern "portable ZIP" -Id "readme-portable-zip"
+Test-FileContains -Rel "docs\ABOUT_FORGEREMS.md" -Pattern "Public Preview" -Id "about-preview"
+Test-FileContains -Rel "docs\FAQ.md" -Pattern ([regex]::Escape($Version)) -Id "faq-semver"
+Test-FileContains -Rel "docs\TERMS_OF_USE.md" -Pattern "2026-07-02\.v1\.2\.3-preview\.1" -Id "terms-version"
+Test-FileContains -Rel "docs\PRIVACY_AND_DATA_HANDLING.md" -Pattern "support bundles" -Id "privacy-support-bundles"
+Test-FileContains -Rel "docs\USER_CONSENT_FLOW.md" -Pattern "terms-consent\.json" -Id "consent-flow-storage"
 Test-FileContains -Rel "CHANGELOG.md" -Pattern ([regex]::Escape($Version)) -Id "changelog-version"
 
 # --- AppReleaseInfo (source) ---
@@ -202,12 +222,40 @@ if (-not [string]::IsNullOrWhiteSpace($ReleaseRoot) -and (Test-Path -LiteralPath
     if (Test-Path -LiteralPath $inst) { Add-Row -Level "PASS" -Id "installer-artifact" -Message "Installer present" }
     else { Add-Row -Level "WARN" -Id "installer-artifact" -Message "Installer not found (use build-release without -SkipInstaller)" }
 
-    if (Test-Path -LiteralPath $zip) { Add-Row -Level "PASS" -Id "zip-artifact" -Message "Primary ZIP present" }
+    if (Test-Path -LiteralPath $zip) {
+        Add-Row -Level "PASS" -Id "zip-artifact" -Message "Primary ZIP present"
+        try {
+            Add-Type -AssemblyName System.IO.Compression
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
+            try {
+                $entries = @($archive.Entries | ForEach-Object { $_.FullName })
+                if ($entries -match '(^|/)ForgerEMS\.exe$') { Add-Row -Level "PASS" -Id "zip-portable-exe" -Message "Portable ZIP contains ForgerEMS.exe" }
+                else { Add-Row -Level "FAIL" -Id "zip-portable-exe" -Message "Portable ZIP does not contain ForgerEMS.exe" }
+                foreach ($requiredDoc in @("TERMS_OF_USE.md","PRIVACY_AND_DATA_HANDLING.md","LEGAL_NOTICES.md","THIRD_PARTY_NOTICES.md","USER_CONSENT_FLOW.md")) {
+                    if ($entries -match ('(^|/)docs/' + [regex]::Escape($requiredDoc) + '$')) { Add-Row -Level "PASS" -Id ("zip-doc-" + $requiredDoc) -Message "Portable ZIP contains docs/$requiredDoc" }
+                    else { Add-Row -Level "FAIL" -Id ("zip-doc-" + $requiredDoc) -Message "Portable ZIP missing docs/$requiredDoc" }
+                }
+            }
+            finally {
+                $archive.Dispose()
+            }
+        }
+        catch {
+            Add-Row -Level "WARN" -Id "zip-inspect" -Message "Could not inspect ZIP entries: $($_.Exception.Message)"
+        }
+    }
     else { Add-Row -Level "WARN" -Id "zip-artifact" -Message "ForgerEMS-v$Version`.zip not found (expected after full installer build)" }
 
     $exe = Join-Path $ReleaseRoot "app\ForgerEMS.exe"
     if (Test-Path -LiteralPath $exe) { Add-Row -Level "PASS" -Id "published-exe" -Message "app\ForgerEMS.exe present" }
     else { Add-Row -Level "WARN" -Id "published-exe" -Message "Published exe missing under release\current\app" }
+
+    foreach ($requiredDoc in @("TERMS_OF_USE.md","PRIVACY_AND_DATA_HANDLING.md","LEGAL_NOTICES.md","THIRD_PARTY_NOTICES.md","USER_CONSENT_FLOW.md")) {
+        $docPath = Join-Path $ReleaseRoot ("app\docs\{0}" -f $requiredDoc)
+        if (Test-Path -LiteralPath $docPath) { Add-Row -Level "PASS" -Id ("published-doc-" + $requiredDoc) -Message "app\docs\$requiredDoc present" }
+        else { Add-Row -Level "FAIL" -Id ("published-doc-" + $requiredDoc) -Message "app\docs\$requiredDoc missing" }
+    }
 }
 else {
     Add-Row -Level "WARN" -Id "release-output" -Message "No release\current - run tools\build-release.ps1 before artifact checks"

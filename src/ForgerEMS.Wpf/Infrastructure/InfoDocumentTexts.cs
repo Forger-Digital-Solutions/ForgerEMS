@@ -6,7 +6,41 @@ namespace VentoyToolkitSetup.Wpf.Infrastructure;
 public static class InfoDocumentTexts
 {
     private const string DeepSensorShortDisclosure =
-        "Hardware X-Ray uses local read-only hardware sensors. When Deep Sensor Mode is enabled, ForgerEMS may use the bundled LibreHardwareMonitor provider to improve sensor coverage for temperatures, clocks, load, fan RPM, and storage wear where supported. Sensor access is local; ForgerEMS does not control fans, voltages, clocks, overclocking, undervolting, BIOS, firmware, or hardware writes. Deep Sensor Mode is not permanent admin permission; Windows may ask for UAC approval when you run Elevated Scan. Unavailable readings are coverage limits, not failures.";
+        "Hardware X-Ray uses local read-only hardware sensors. When Deep Sensor Mode is enabled, ForgerEMS may use the bundled LibreHardwareMonitor provider to improve sensor coverage for temperatures, clocks, load, fan RPM, and storage wear where supported. Sensor access is local; ForgerEMS does not control fans, voltages, clocks, overclocking, undervolting, BIOS, firmware, or hardware writes. Deep Sensor Mode is not permanent admin permission; Windows may ask for UAC approval when you run Admin Inventory Scan. Unavailable readings are coverage limits, not failures.";
+
+    public static string BuildDrForgeRoadmap()
+    {
+        return $"""
+            Dr. Forge Advanced Sensors — Planned companion tool
+
+            STATUS: Planned. Not installed. Not running.
+
+            WHAT DR. FORGE WILL BE
+            Dr. Forge will be a separate read-only technician sensor app for deeper hardware telemetry where supported: temperatures, fan signals, battery/power details, storage SMART detail, sensor inventory, and board/device capabilities. It will not control fans, voltage, charging, firmware flashing, or bypass OS/driver security.
+
+            WHY IT IS A SEPARATE APP
+            ForgerEMS is a stable Windows inventory + USB maintenance toolkit. Deep sensor reads belong in a focused, read-only companion so ForgerEMS stays usable even if a sensor provider stalls, throws, or cannot read a particular board. Dr. Forge runs in its own process, ships on its own cadence, and never blocks ForgerEMS.
+
+            FIRST-VERSION SCOPE (READ-ONLY)
+            • Windows APIs, WMI / CIM where useful, and performance counters.
+            • Storage / SMART APIs where the OS exposes them.
+            • Battery and power APIs (designed capacity, cycle count, charge rate where exposed).
+            • LibreHardwareMonitor-style read-only access where safe, licensed, and compatible.
+            • No fan control, voltage control, charging control, overclocking, firmware flashing, or kernel driver hacks in the first version.
+
+            FUTURE OPTIONAL DEPTH
+            A signed local helper service or driver only after threat model, legal review, signing/revocation plan, crash containment, rollback strategy, and a beta hardware validation pass — not before.
+
+            HANDOFF TO FORGEREMS
+            Dr. Forge will write a local read-only sensor snapshot JSON. ForgerEMS will pick up the latest snapshot when present. Snapshots will include source, timestamp, confidence, and unavailable reasons. Stale snapshots will be marked stale. ForgerEMS will never invent missing sensor values.
+
+            HONEST TRUTHFULNESS
+            ForgerEMS will not fake CPU/GPU temperature, fan RPM, voltage, wattage, amperage, charge speed, or unsupported telemetry — not now, not in Dr. Forge, ever. Unavailable means the OS / driver / firmware did not expose it on this hardware.
+
+            ROADMAP STATUS
+            Dr. Forge is design-only today. There is no installer, no download, no signed driver, no service. The "Download Dr. Forge" button is intentionally absent until the first preview is published.
+            """;
+    }
 
     public static string BuildAbout(string appVersion, string displayVersion, string frontendVersion, string backendVersion)
     {
@@ -21,16 +55,16 @@ public static class InfoDocumentTexts
             {BetaSupportInfo.BetaIssueSupportLine}
 
             WHAT THIS BUILD IS
-            ForgerEMS v1.2.3 Public Preview is a free, offline-first Windows technician toolkit for safer Ventoy-oriented USB maintenance media, toolkit health, local system scans, USB benchmarking on removable targets, and Kyra — a grounded assistant that prefers facts from your own scans.
+            ForgerEMS v1.2.3 Public Preview is a Windows technician utility suite for local-device support workflows, safer Ventoy-oriented USB maintenance media, Driver Hub/vendor guidance, USB/port mapping, drive validation, battery health and system specs summaries, safe removable-target benchmarks, and Kyra — a local-first assistant that prefers facts from your own scans.
 
             CORE AREAS (honest maturity)
             • USB Builder — Beta: removable targets only; blocks Windows/system/internal OS drives and unsafe partitions.
-            • System Intelligence — Beta: Hardware X-Ray, health scoring, FlipValue, Best Use / Device Fit, and local reports under %LOCALAPPDATA%\ForgerEMS\.
-            • Hardware X-Ray — Beta: local read-only providers show detected hardware and available sensor coverage. Deep Sensor Mode may use bundled LibreHardwareMonitor technology where packaged and enabled.
+            • Local Device Snapshot / Hardware X-Ray — Beta: local read-only providers show detected hardware and available sensor coverage. Deep Sensor Mode may use bundled LibreHardwareMonitor technology where packaged and enabled.
+            • Driver Hub — Preview: vendor-first links and guidance; no automatic driver install, service-tag upload, or firmware flashing.
             • FlipValue — Beta: local/offline resale guidance unless a live provider and location are configured.
             • Best Use / Device Fit — Beta: practical device-fit guidance for repair, resale, development, gaming, school, and technician use.
             • Toolkit Manager — Beta: managed vs manual/info items; manual links are expected where redistribution is gated.
-            • Diagnostics — Beta: checklist, logs, experimental WSL helpers where enabled.
+            • Support / safety tools — Beta: persistent Live Logs panel and exportable redacted support bundles.
             • Kyra — Preview: offline/local deterministic answers first; optional online providers only when configured (Kyra Advanced).
             • Kyra Intelligence Network — Preview foundation: local-first repair memory plus optional anonymous community learning controls. Default is Local Only; community upload is off/disabled in this phase.
             • USB Intelligence / port mapping — Preview (all features available during beta): best-effort port topology on Windows; benchmark-driven hints when you measure.
@@ -40,13 +74,13 @@ public static class InfoDocumentTexts
             Third-party notices: providers\sensors\THIRD-PARTY-NOTICES.txt and docs\THIRD-PARTY-SENSOR-NOTICES.md.
 
             PRIVACY / SAFETY (summary)
-            Telemetry and crash reporting default to off unless you enable them via environment variables (see docs/ENVIRONMENT.md). Reports, logs, and sensor data stay local unless you choose to export or share them. Review exports before sending. {BetaSupportInfo.DoNotEmailSecretsWarning}
+            Telemetry and crash reporting default to off unless you enable them via environment variables (see docs/ENVIRONMENT.md). Reports, logs, support bundles, Kyra context, and sensor data stay local unless you choose to export or share them. Review exports before sending. {BetaSupportInfo.DoNotEmailSecretsWarning}
 
             INDEPENDENCE / TRADEMARKS
             ForgerEMS is independent and is not affiliated with, sponsored by, or endorsed by Microsoft, Linux distributions, hardware vendors, driver vendors, or third-party tools referenced in the app. Names are used only to identify compatibility, official resources, or supported technician workflows.
 
             KYRA (OPTIONAL ONLINE PROVIDERS)
-            Offline Kyra needs no API keys. Public beta can use ForgerEMS Kyra Gateway with only FORGEREMS_KYRA_GATEWAY_URL + FORGEREMS_KYRA_GATEWAY_BETA_TOKEN. Provider API keys stay server-side. Optional BYOK providers (OpenAI-compatible, LM Studio, Ollama, Gemini/Anthropic paths where stubbed, custom base URL): see docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md and docs/ENVIRONMENT.md. Kyra Advanced shows status without revealing secrets.
+            Offline Kyra needs no API keys. Public beta can use ForgerEMS Kyra Gateway with only FORGEREMS_KYRA_GATEWAY_URL + FORGEREMS_KYRA_GATEWAY_BETA_TOKEN. Provider API keys stay server-side. Optional BYOK providers (OpenAI-compatible, LM Studio, Ollama, Gemini, Anthropic, custom base URL): see docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md and docs/ENVIRONMENT.md. Kyra Advanced shows status without revealing secrets.
 
             KYRA INTELLIGENCE NETWORK
             Local Kyra Memory stores sanitized machine-scoped repair notes on this PC. Anonymous community intelligence sharing is off by default and requires explicit opt-in. Community sharing is not active in this release — the setting is visible for preview only. ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless you explicitly enable a future sharing option. Provider API keys are stored server-side and are not included in the desktop app.
@@ -59,7 +93,7 @@ public static class InfoDocumentTexts
             Bundled backend / compatibility: {backendVersion}
 
             PUBLIC PREVIEW
-            Prerelease software is provided “as-is”. Behavior may change between builds. Prefer the ZIP download from GitHub Releases; see FAQ. When reporting issues, include version and steps — never secrets in email.
+            Prerelease software is provided “as-is”. Behavior may change between builds. GitHub Releases provide both the installer and portable ZIP. When reporting issues, include version and steps — never secrets in email.
             """;
     }
 
@@ -111,7 +145,7 @@ public static class InfoDocumentTexts
             Yes, where packaged, ForgerEMS includes LibreHardwareMonitorLib as a bundled local read-only sensor provider under MPL-2.0 with license and notice files included.
 
             Can I turn Deep Sensor Mode off?
-            Yes. Deep Sensor Mode can be Off or Read-only local sensors. Environment variable/testing overrides may also be supported.
+            Deep Sensor Mode defaults to Off. The in-app Settings toggle was retired in v1.2.3-preview.1; the mode is only enabled through the optional installer checkbox or an environment variable/testing override, and older saved values are ignored safely when unsupported.
 
             What does Kyra see?
             Offline Kyra uses rules and optional local reports you already generated. With your permission, a sanitized summary (no product keys, raw serials, or full private paths in the safe summary path) can be included for online providers and gateway paths.
@@ -120,13 +154,13 @@ public static class InfoDocumentTexts
             A 0–100 score for your current toolkit state on the selected USB target. Starts at 100 and is reduced by missing required items, checksum failures, managed updates available, Verify Links failures, USB target warnings, and Ventoy issues. Labels: Ready (85 or above), Mostly Ready (70–84), Needs Attention (45–69), Not Ready (below 45 or hard blockers present). Run Refresh Health to recalculate. The score also shows your top strengths, top blockers, and a next recommended action.
 
             What is a machine profile?
-            A local file ForgerEMS saves under %LOCALAPPDATA%\ForgerEMS\Runtime\profiles\ to remember this machine's health score, toolkit readiness, USB benchmark results, and resale estimates between sessions. The profile uses a ForgerEMS-generated ID — not your hardware serial number. It is never uploaded automatically. You can export or delete it from Settings → Kyra Intelligence → Export Memory / Delete Memory.
+            A local file ForgerEMS saves under %LOCALAPPDATA%\ForgerEMS\Runtime\profiles\ to remember this machine's health score, toolkit readiness, USB benchmark results, and resale estimates between sessions. The profile uses a ForgerEMS-generated ID — not your hardware serial number. It is never uploaded automatically. You can export or delete it from Settings → Kyra Assistant → Export Memory / Delete Memory.
 
             What does Verify Links do?
             Verify Links checks whether toolkit source URLs are reachable using safe HTTP HEAD requests, with a small ranged GET fallback for hosts that block HEAD. It records reachability, HTTP status, redirect hosts, and content-length hints — without downloading full installers or ISOs and without executing anything. Runs are timeout-bounded and cancellable. Offline gracefully shows Unknown / Offline rather than a false result. Broken links reduce the Readiness Score; verified links add confidence.
 
             What is Kyra Intelligence Network?
-            Local-first repair memory + optional anonymous community learning. Default is Local Only. Local Kyra Memory can store sanitized machine-scoped repair notes on this PC; community sharing is off by default. Community sharing is not active in this release — the setting is visible for preview only. Use Settings → Kyra Intelligence to export or delete Kyra memory. ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless you explicitly enable a future sharing option. Provider API keys are stored server-side and are not included in the desktop app.
+            Local-first repair memory + optional anonymous community learning. Default is Local Only. Local Kyra Memory can store sanitized machine-scoped repair notes on this PC; community sharing is off by default. Community sharing is not active in this release — the setting is visible for preview only. Use Settings → Kyra Assistant to export or delete Kyra memory. ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless you explicitly enable a future sharing option. Provider API keys are stored server-side and are not included in the desktop app.
 
             What is Kyra Research Mode?
             Current/live prompts such as crypto, stocks, weather, news, latest versions, drivers, Ventoy/tool releases, resale comps, current Windows issues, and CVEs route to configured live tools/providers first. If unavailable, Kyra should say the live tool/provider is unavailable or not configured and should not invent current data.
@@ -151,9 +185,6 @@ public static class InfoDocumentTexts
 
             Does ForgerEMS download everything automatically?
             No. Managed items follow the manifest; many items are manual by design.
-
-            What does Diagnostics do?
-            Read-only style guidance and utilities: checklist, logs, WSL helpers, link/file heuristics — use only what you understand.
             """;
     }
 
@@ -200,7 +231,7 @@ public static class InfoDocumentTexts
             You are responsible for complying with software licenses and local laws, and for backing up data before destructive steps.
 
             TECHNICIAN-ASSIST SCOPE
-            ForgerEMS is a Dev Beta / Public Preview technician-assist tool. It is not a replacement for professional judgement and does not promise guaranteed repair, guaranteed data recovery, guaranteed malware removal, guaranteed hardware diagnosis, guaranteed driver/component compatibility, guaranteed pricing or marketplace accuracy, or guaranteed legal/regulatory compliance. Technicians remain responsible for confirming official vendor links, licensing, and safe use before they act on any output from this app.
+            ForgerEMS is a Public Preview technician-assist tool. It is not a replacement for professional judgement and does not promise guaranteed repair, guaranteed data recovery, guaranteed malware removal, guaranteed hardware diagnosis, guaranteed driver/component compatibility, guaranteed pricing or marketplace accuracy, or guaranteed legal/regulatory compliance. Technicians remain responsible for confirming official vendor links, licensing, and safe use before they act on any output from this app.
 
             SYSTEM INTELLIGENCE
             Diagnostics, Hardware X-Ray, sensor coverage, and resale guidance are informative and may not be perfectly accurate. System Intelligence and Hardware X-Ray may report Unknown / NotExposed / Inferred when firmware, drivers, permissions, or sensor providers do not expose data; missing readings are coverage limits, not failures. Confirm critical decisions with additional testing. There is no warranty that every sensor is exposed on every machine.
@@ -222,6 +253,45 @@ public static class InfoDocumentTexts
             """;
     }
 
+    public static string BuildTermsOfService()
+    {
+        return $"""
+            {BetaSupportInfo.CopyrightNotice}
+            Support: {BetaSupportInfo.SupportEmail}
+            {BetaSupportInfo.DoNotEmailSecretsWarning}
+
+            TERMS VERSION
+            {TermsConsentStore.CurrentTermsVersion}
+
+            NOT LEGAL ADVICE
+            These are project-provided software terms for this preview build. They are plain-English software-use terms, not legal advice, and no attorney review is claimed.
+
+            WHAT FORGEREMS IS
+            ForgerEMS is a Windows technician utility/toolkit: USB build maintenance, portable technician USB profiles, Driver Hub/vendor guidance, local device summaries (battery health and system specs), safe removable-target benchmark workflows, drive validation, port/USB mapping, and Kyra assistance. It is a tool that helps you work; it does not act on your behalf without your input, and it does not replace professional judgement.
+
+            WHAT FORGEREMS IS NOT
+            ForgerEMS is not a finished enterprise product, a magic automatic fixer, a complete replacement for OEM tools, a full live sensor suite, legal/warranty/compliance advice, or a substitute for certified repair services.
+
+            YOUR RESPONSIBILITY
+            You are responsible for reviewing and verifying any change, repair step, USB build, driver action, or recommendation before acting on it. Always confirm the correct target device, back up data before destructive operations, and use your own judgement alongside ForgerEMS output.
+
+            NO GUARANTEES
+            ForgerEMS does not guarantee diagnostics accuracy, repair results, data recovery, driver safety/compatibility, or the accuracy of Kyra (AI) responses. Prerelease software is provided "as-is", without warranties express or implied. Use at your own risk.
+
+            DRIVER / USB / VENDOR TERMS
+            Driver Hub and USB Builder links are informational and vendor-first. Some media, tools, drivers, firmware, and utilities require internet access, manual downloads, user-supplied files, official vendor accounts, system permissions, separate licenses, or acceptance of third-party terms. You are responsible for those licenses and terms.
+
+            LOGS, SUPPORT BUNDLES, AND KYRA CONTEXT
+            General Terms acceptance does not authorize sharing logs or context. ForgerEMS asks again before exporting support bundles or Kyra memory. Review exported files before sending them.
+
+            ACCEPTABLE USE
+            ForgerEMS must not be used for unauthorized access, password bypass on devices you do not own, malware, credential theft, piracy, or other illegal activity.
+
+            CHANGES
+            These terms may change between builds. If the terms version changes, ForgerEMS asks for acceptance again before unlocking the main tools. See Legal and Privacy in Settings for related disclosures.
+            """;
+    }
+
     public static string BuildPrivacy()
     {
         return $"""
@@ -231,7 +301,7 @@ public static class InfoDocumentTexts
             {BetaSupportInfo.DoNotEmailSecretsWarning}
 
             LOCAL STORAGE
-            ForgerEMS stores reports, profiles, and logs under %LOCALAPPDATA%\ForgerEMS\ (including Runtime reports and logs). Nothing is uploaded automatically to Forger Digital Solutions when you run scans locally.
+            ForgerEMS stores reports, profiles, consent records, and logs under %LOCALAPPDATA%\ForgerEMS\ (including Runtime reports and logs). Nothing is uploaded automatically to Forger Digital Solutions when you run scans locally.
 
             SYSTEM INTELLIGENCE / HARDWARE X-RAY / DEEP SENSOR MODE
             ForgerEMS runs diagnostics locally. Deep Sensor Mode reads supported local hardware sensor data only while the app is running or System Intelligence / Hardware X-Ray scans are executed. No sensor data is sold, automatically uploaded, or automatically sent to support.
@@ -246,7 +316,7 @@ public static class InfoDocumentTexts
             ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the user explicitly enables a future sharing option. Realtime Kyra Gateway sends only sanitized request context needed to answer current-data questions. Provider API keys are stored server-side and are not included in the desktop app. Anonymous Community Intelligence sharing is optional and off by default.
 
             LOGS AND REPORTS
-            Technical diagnostics may appear in local logs. Anything you copy for sharing (for example “Copy Safe Summary”) should be reviewed first. Full logs may contain paths or device detail — redact before sending.
+            Technical diagnostics may appear in local logs. Anything you copy/export for sharing, including support bundles, Kyra context, reports, or safe summaries, should be reviewed first. Full logs may contain paths or device detail — redact before sending.
 
             ONLINE AI PROVIDERS
             If you configure an online provider in Kyra Advanced, prompts and optional context are sent according to that provider’s settings and your toggles. Offline/local modes remain available where implemented.
@@ -259,6 +329,28 @@ public static class InfoDocumentTexts
 
             BETA
             Privacy-related behavior may evolve between beta builds; prefer the in-app Kyra Advanced panel for the current provider and sharing state.
+            """;
+    }
+
+    public static string BuildThirdPartyNotices()
+    {
+        return $"""
+            {BetaSupportInfo.CopyrightNotice}
+
+            THIRD-PARTY NOTICES
+            ForgerEMS references vendor names, operating systems, hardware brands, utilities, and download portals only to identify official resources or technician workflows. Those names remain the property of their owners.
+
+            BUNDLED SENSOR PROVIDER
+            Where packaged, ForgerEMS includes LibreHardwareMonitorLib as a local read-only sensor provider for Hardware X-Ray / Deep Sensor Mode.
+            License: MPL-2.0.
+            Notice path: providers\sensors\THIRD-PARTY-NOTICES.txt.
+            License path: providers\sensors\LICENSES\LibreHardwareMonitor-MPL-2.0.txt.
+
+            MANAGED DOWNLOADS AND USB BUILDER
+            USB Builder may create vendor links, managed-download shortcuts, manual folders, and user-supplied file drop zones. Downloaded media and third-party tools are governed by their own licenses, vendor terms, redistribution rules, and privacy policies.
+
+            INDEPENDENCE
+            ForgerEMS is independent and is not affiliated with, sponsored by, or endorsed by Microsoft, Linux distributions, OEMs, driver vendors, hardware vendors, Ventoy, or third-party utilities referenced in the app unless a separate written agreement says otherwise.
             """;
     }
 }

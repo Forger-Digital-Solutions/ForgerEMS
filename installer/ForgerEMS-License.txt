@@ -1,0 +1,26 @@
+ForgerEMS Terms of Use Summary
+Version: 2026-07-02.v1.2.3-preview.1
+
+ForgerEMS is a Windows technician utility suite and preview build from Forger
+Digital Solutions. It helps with local-device support workflows, USB toolkit
+building, Driver Hub/vendor guidance, USB/port mapping, drive validation,
+safe removable-target benchmark workflows, battery health/system specs
+summaries, and support/Kyra context review.
+
+ForgerEMS is not a finished enterprise product, a magic automatic fixer, a
+complete replacement for OEM tools, a complete live sensor suite, a substitute
+for certified repair services, or legal, warranty, safety, compliance, medical,
+or financial advice.
+
+Use ForgerEMS at your own risk. Verify vendor guidance, downloads, media,
+drivers, firmware, repairs, and support actions before acting on them. You are
+responsible for third-party licenses, vendor terms, and downloaded files.
+
+ForgerEMS stores its Terms acceptance locally. It does not upload logs, support
+bundles, Kyra context, reports, or local device snapshots automatically. If you
+choose to export or share those files, review them first because they may
+include local device/context information.
+
+The complete project-provided software terms are installed with the app and are
+available in docs/TERMS_OF_USE.md, docs/PRIVACY_AND_DATA_HANDLING.md, and
+docs/LEGAL_NOTICES.md. These terms are not claimed to be attorney-reviewed.

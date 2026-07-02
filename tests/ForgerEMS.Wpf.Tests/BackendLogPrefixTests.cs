@@ -52,6 +52,18 @@ public sealed class BackendLogPrefixTests
         Assert.DoesNotContain("2026-05-27", line.DisplayText);
     }
 
+    [Theory]
+    [InlineData("[19:51:40] System Intelligence elevated scan READY")]
+    [InlineData("[2026-05-27 19:51:40] System Intelligence elevated scan READY")]
+    [InlineData("[2026-05-27T19:51:40] System Intelligence elevated scan READY")]
+    public void DisplayText_PreStampedLiveLogLine_DoesNotAddSecondTimestamp(string text)
+    {
+        var stamp = new DateTimeOffset(2026, 5, 27, 19, 51, 40, TimeSpan.Zero);
+        var line = new LogLine(stamp, text, LogSeverity.Info);
+
+        Assert.Equal(text, line.DisplayText);
+    }
+
     [Fact]
     public void DisplayText_RawFrontendLine_GetsExactlyOneTimestamp()
     {

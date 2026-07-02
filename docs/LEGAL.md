@@ -4,6 +4,8 @@
 
 **Not legal advice.** This document is ordinary software disclaimer language for operators and beta testers; it is not legal counsel.
 
+**Current v1.2.3-preview.1 legal docs:** see [TERMS_OF_USE.md](TERMS_OF_USE.md), [PRIVACY_AND_DATA_HANDLING.md](PRIVACY_AND_DATA_HANDLING.md), [LEGAL_NOTICES.md](LEGAL_NOTICES.md), and [USER_CONSENT_FLOW.md](USER_CONSENT_FLOW.md). Those files are the current first-run consent and packaging references; this page remains as a practical preview notice.
+
 ---
 
 ## Public Preview / prerelease — as-is
@@ -124,7 +126,7 @@ Current prices, availability, latest versions, weather, news, stocks, crypto, an
 
 ## Kyra Intelligence Network
 
-Kyra Intelligence Network is a beta foundation for **Local-first repair memory + optional anonymous community learning**.
+Kyra Intelligence Network is **Local-first repair memory + optional anonymous community learning**.
 
 - Local Kyra Memory stores sanitized machine-scoped repair notes on the user's PC.
 - Anonymous community intelligence sharing is optional, off by default, and requires explicit opt-in.
@@ -135,9 +137,9 @@ ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the
 
 ---
 
-## Technician-assist scope (Dev Beta)
+## Technician-assist scope (Public Preview)
 
-ForgerEMS is **technician-assist software**, not a replacement for professional judgement. The Public Preview / Dev Beta line specifically **does not promise**:
+ForgerEMS is **technician-assist software**, not a replacement for professional judgement. The Public Preview line specifically **does not promise**:
 
 - Guaranteed **repair** of any device, OS, application, or partition.
 - Guaranteed **data recovery** from failing, corrupted, encrypted, or wiped media.

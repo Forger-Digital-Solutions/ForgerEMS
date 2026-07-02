@@ -38,12 +38,13 @@
 
 ---
 
-## 3. Diagnostics
+## 3. Diagnostics (moved to Dr. Forge)
 
-- [ ] **WSL:** If WSL is installed, run a **status** or **list** action from the app’s WSL/diagnostics area. Confirm output appears and the app stays responsive.
-- [ ] **WSL missing:** If WSL is not installed (or command fails), confirm the app **does not crash** and shows a sensible error or empty state.
-- [ ] **Link Safety Checker:** Paste a known-safe `https://` vendor URL and a deliberately “suspicious” example; confirm heuristic results and no execution of remote code.
-- [ ] **Downloaded File Safety Checker:** Choose a **harmless** file (e.g. small text renamed `.exe`). Confirm **read-only** analysis (hash/heuristics) and that the app **does not run** the file.
+The in-app **Diagnostics** tab and the **System Intelligence** tab were removed from the ForgerEMS shell. Full diagnostics, system/hardware intelligence, elevated scan flows, WSL helpers, and the link/file safety checkers now belong to **Dr. Forge**, the dedicated technician companion app (planned download from **Toolkit Manager**).
+
+- [ ] Confirm there is **no Diagnostics tab** and **no System Intelligence tab** in the ForgerEMS sidebar/tab strip.
+- [ ] On **Toolkit Manager**, confirm the **Dr. Forge** card explains that diagnostics moved to Dr. Forge and that **Learn about Dr. Forge** opens a read-only roadmap (no live installer/download yet).
+- [ ] Confirm **Create Support Bundle** (sanitized log/report export) is still reachable from **Toolkit Manager**.
 
 ---
 

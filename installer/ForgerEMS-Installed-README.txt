@@ -60,7 +60,7 @@ ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the
 
 The installer Kyra Intelligence page starts local-only. Leave every box unchecked to keep Kyra Local Only. Optional community sharing choices are applied the first time ForgerEMS creates Kyra settings on this Windows profile.
 
-You can change everything later in the app under Settings → Kyra Intelligence:
+You can change everything later in the app under Settings → Kyra Assistant:
 - Keep Local Only / turn off community sharing
 - export Kyra memory
 - delete or reset Kyra memory

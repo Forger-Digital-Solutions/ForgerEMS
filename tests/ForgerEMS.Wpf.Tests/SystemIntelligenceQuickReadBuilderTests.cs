@@ -76,8 +76,11 @@ public sealed class SystemIntelligenceQuickReadBuilderTests
     }
 
     [Fact]
-    public void QuickRead_AppendsNetworkPulseWhenLatestReportExists()
+    public void QuickRead_IgnoresStaleNetworkPulseReports()
     {
+        // Network Pulse was retired in v1.2.3-preview.1. Machines upgrading from an
+        // older preview may still have network-pulse-latest.json on disk; the quick
+        // read must ignore it instead of surfacing retired-feature lines.
         var dir = Path.Combine(Path.GetTempPath(), "si-np-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         try
@@ -88,8 +91,8 @@ public sealed class SystemIntelligenceQuickReadBuilderTests
 
             using var doc = JsonDocument.Parse(PrecisionReportJson());
             var summary = SystemIntelligenceQuickReadBuilder.Build(doc.RootElement, dir);
-            Assert.Contains("Network Pulse:", summary, StringComparison.Ordinal);
-            Assert.Contains("Wi-Fi", summary, StringComparison.Ordinal);
+            Assert.DoesNotContain("Network Pulse", summary, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("ForgerEMS System Intelligence — Quick Read", summary, StringComparison.Ordinal);
         }
         finally
         {

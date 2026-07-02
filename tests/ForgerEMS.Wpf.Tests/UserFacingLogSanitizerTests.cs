@@ -31,6 +31,18 @@ public sealed class UserFacingLogSanitizerTests
     }
 
     [Fact]
+    public void Sanitize_RedactsProgramFilesPathWithoutPartialRemainder()
+    {
+        var raw = @"Backend root: C:\Program Files\ForgerEMS\backend";
+        var sanitized = UserFacingLogSanitizer.Sanitize(raw, UsbSafeRoots);
+
+        Assert.Contains("REDACTED_PRIVATE_PATH", sanitized);
+        Assert.DoesNotContain("Program Files", sanitized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(@"Files\ForgerEMS", sanitized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(@"ForgerEMS\backend", sanitized, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Sanitize_RedactsOneDrivePath()
     {
         var raw = @"Staging cache: C:\Users\Alice\OneDrive\Stuff\file.tmp";

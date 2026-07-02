@@ -18,7 +18,7 @@ public static class KyraListingDraft
     {
         if (profile is null)
         {
-            return "Run System Intelligence first — I need sanitized specs before drafting a listing.";
+            return "Add a local device snapshot first — I need sanitized specs before drafting a listing.";
         }
 
         var title = channel switch

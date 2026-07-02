@@ -12,7 +12,7 @@
     <Product>ForgerEMS</Product>
     <Company>Forger Digital Solutions</Company>
     <Title>ForgerEMS v1.2.3 Public Preview</Title>
-    <Description>ForgerEMS Public Preview — Windows technician suite (USB toolkit, System Intelligence, Kyra offline-first).</Description>
+    <Description>ForgerEMS Public Preview - Windows technician utility suite for USB toolkit workflows, Driver Hub guidance, port/USB mapping, drive validation, battery/system summaries, and Kyra local-first help.</Description>
     <Authors>Forger Digital Solutions</Authors>
     <ApplicationIcon>Assets\ForgerEMS.ico</ApplicationIcon>
     <Version>1.2.3-preview.1</Version>
@@ -64,6 +64,49 @@
     </Content>
     <Content Include="$(ForgerLibreHardwareMonitorDll)" Condition="Exists('$(ForgerLibreHardwareMonitorDll)')">
       <Link>providers\sensors\LibreHardwareMonitorLib.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\docs\ABOUT_FORGEREMS.md">
+      <Link>docs\ABOUT_FORGEREMS.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\FAQ.md">
+      <Link>docs\FAQ.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\TERMS_OF_USE.md">
+      <Link>docs\TERMS_OF_USE.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\PRIVACY_AND_DATA_HANDLING.md">
+      <Link>docs\PRIVACY_AND_DATA_HANDLING.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\LEGAL_NOTICES.md">
+      <Link>docs\LEGAL_NOTICES.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\THIRD_PARTY_NOTICES.md">
+      <Link>docs\THIRD_PARTY_NOTICES.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\USER_CONSENT_FLOW.md">
+      <Link>docs\USER_CONSENT_FLOW.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\RELEASE_NOTES_v1.2.3-preview.1.md">
+      <Link>docs\RELEASE_NOTES_v1.2.3-preview.1.md</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>
     </Content>

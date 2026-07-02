@@ -4,6 +4,8 @@
 
 **Support:** [ForgerDigitalSolutions@outlook.com](mailto:ForgerDigitalSolutions@outlook.com) — never send secrets in email.
 
+**Current v1.2.3-preview.1 data-handling docs:** see [PRIVACY_AND_DATA_HANDLING.md](PRIVACY_AND_DATA_HANDLING.md), [TERMS_OF_USE.md](TERMS_OF_USE.md), [LEGAL_NOTICES.md](LEGAL_NOTICES.md), and [USER_CONSENT_FLOW.md](USER_CONSENT_FLOW.md). ForgerEMS keeps Terms acceptance local and requires a separate warning before support bundles, logs, Kyra context, or exported reports are packaged for sharing.
+
 ---
 
 ## What is **not** collected by Forger Digital Solutions
@@ -125,7 +127,7 @@ Optional Anonymous Community Learning is off by default and requires explicit op
 
 ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the user explicitly enables a future sharing option. Realtime Kyra Gateway sends only sanitized request context needed to answer current-data questions. Provider API keys are stored server-side and are not included in the desktop app. Anonymous Community Intelligence sharing is optional and off by default.
 
-To opt out or manage memory: open **Settings → Kyra Intelligence**, turn off **Local Kyra Memory** and/or **Community Intelligence Sharing**, then use **Export Memory** or **Delete Memory** if needed. **Gateway Research** is separate and controls realtime public-info lookup when configured.
+To opt out or manage memory: open **Settings → Kyra Assistant**, turn off **Local Kyra Memory** and/or **Community Intelligence Sharing**, then use **Export Memory** or **Delete Memory** if needed. **Gateway Research** is separate and controls realtime public-info lookup when configured.
 
 ---
 

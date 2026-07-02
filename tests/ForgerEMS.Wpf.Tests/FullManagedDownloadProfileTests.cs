@@ -169,6 +169,64 @@ public sealed class FullManagedDownloadProfileTests
     }
 
     [Fact]
+    public void Planner_ProfileItemFilter_IncludesOnlySelectedManagedItemsPlusCore()
+    {
+        var plan = UsbBuilderProfileFullManagedDownloadPlanner.Calculate(
+            SourceManifestPath,
+            new HashSet<string>(AllCategories, StringComparer.OrdinalIgnoreCase),
+            usbRootPath: null,
+            includedProfileItems:
+            [
+                "name:Rufus 4.14 Portable (x64)"
+            ]);
+
+        Assert.Contains(plan.EligibleNames, n => n.StartsWith("Rufus 4.14", StringComparison.Ordinal));
+        Assert.Contains(plan.EligibleNames, n => n.Contains("Ventoy", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(plan.EligibleNames, n => n.Contains("CrystalDiskInfo", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(plan.EligibleNames, n => n.Contains("Ubuntu 24.04", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(2, plan.EligibleManagedCount);
+        Assert.True(plan.ExcludedByProfileCount > 0);
+    }
+
+    [Fact]
+    public void Planner_ProfileItemFilter_NameSelectorsAreExact()
+    {
+        var plan = UsbBuilderProfileFullManagedDownloadPlanner.Calculate(
+            SourceManifestPath,
+            new HashSet<string>(AllCategories, StringComparer.OrdinalIgnoreCase),
+            usbRootPath: null,
+            includedProfileItems:
+            [
+                "name:Ubuntu 24.04.4 LTS Desktop (amd64)"
+            ]);
+
+        Assert.Contains(plan.EligibleNames, n => n.Equals("Ubuntu 24.04.4 LTS Desktop (amd64)", StringComparison.Ordinal));
+        Assert.Contains(plan.EligibleNames, n => n.Contains("Ventoy", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(plan.EligibleNames, n => n.StartsWith("Kubuntu 24.04.4", StringComparison.Ordinal));
+        Assert.DoesNotContain(plan.EligibleNames, n => n.StartsWith("Lubuntu 24.04.4", StringComparison.Ordinal));
+        Assert.DoesNotContain(plan.EligibleNames, n => n.StartsWith("Xubuntu 24.04.4", StringComparison.Ordinal));
+        Assert.Equal(2, plan.EligibleManagedCount);
+    }
+
+    [Fact]
+    public void Planner_ProfileItemFilter_LinkOnlyItemIsNotCountedAsManagedDownload()
+    {
+        var plan = UsbBuilderProfileFullManagedDownloadPlanner.Calculate(
+            SourceManifestPath,
+            new HashSet<string>(["windows", "core"], StringComparer.OrdinalIgnoreCase),
+            usbRootPath: null,
+            includedProfileItems:
+            [
+                "name:Windows 11 Download Page"
+            ]);
+
+        Assert.Contains(plan.EligibleNames, n => n.Contains("Ventoy", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(plan.EligibleNames, n => n.Contains("Windows 11", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(1, plan.EligibleManagedCount);
+        Assert.True(plan.ExcludedManualOrVendorCount >= 1);
+    }
+
+    [Fact]
     public void Planner_NotebookPresenceCheck_TreatsExistingFileAsAlreadyPresent()
     {
         // Verify the presence-check honors usbRootPath: drop a stub file at a known managed

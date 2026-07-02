@@ -3,7 +3,7 @@ using VentoyToolkitSetup.Wpf.Services;
 
 namespace VentoyToolkitSetup.Wpf.Services.Kyra;
 
-/// <summary>Local-first hardware facts derived from System Intelligence (no gateway upload; use <see cref="BuildGatewayBands"/> for sanitized bands only).</summary>
+/// <summary>Local-first hardware facts derived from local device snapshots (no gateway upload; use <see cref="BuildGatewayBands"/> for sanitized bands only).</summary>
 public static class KyraHardwareFactsEngine
 {
     public static KyraGatewayKnownLocalFactsDto BuildGatewayBands(SystemProfile profile)

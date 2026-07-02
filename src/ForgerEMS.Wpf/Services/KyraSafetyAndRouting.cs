@@ -342,15 +342,15 @@ public static class KyraPrivacyGate
     }
 
     /// <summary>
-    /// Provider-safe block derived from System Intelligence. Redacted; excludes serials, service tags, paths, and raw logs.
+    /// Provider-safe block derived from local device context. Redacted; excludes serials, service tags, paths, and raw logs.
     /// </summary>
     public static string BuildSanitizedProviderSummary(CopilotContext context)
     {
         if (context.SystemProfile is null)
         {
             var lightweight =
-                "Sanitized system context: no System Intelligence profile is loaded. " +
-                "I need a System Intelligence scan before I can give machine-specific advice." + Environment.NewLine +
+                "Sanitized device context: no local device profile is loaded. " +
+                "I need a local device snapshot before I can give machine-specific advice." + Environment.NewLine +
                 $"Lightweight hints only (not a full scan): {context.SystemContext.CPU}; {context.SystemContext.GPU}; {context.SystemContext.RAM} GB RAM; {context.SystemContext.Storage}; {context.SystemContext.OS}; device {context.SystemContext.Device}.";
             return CopilotRedactor.Redact(lightweight, enabled: true);
         }
@@ -379,7 +379,7 @@ public static class KyraPrivacyGate
         var problems = profile.ObviousProblems.Take(5);
 
         var block =
-            "Sanitized System Intelligence summary (no serials, service tags, usernames, paths, or raw logs):" + Environment.NewLine +
+            "Sanitized local device summary (no serials, service tags, usernames, paths, or raw logs):" + Environment.NewLine +
             $"Device: {profile.Manufacturer} {profile.Model}" + Environment.NewLine +
             $"OS: {profile.OperatingSystem} build {profile.OsBuild}" + Environment.NewLine +
             $"CPU: {profile.Cpu}" + Environment.NewLine +

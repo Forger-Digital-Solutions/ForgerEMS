@@ -28,7 +28,7 @@ public sealed class SystemHealthEvaluator
             {
                 HealthScore = 0,
                 ConfidenceScore = 0,
-                DetectedIssues = ["No System Intelligence scan is available."]
+                DetectedIssues = ["No local device snapshot is available."]
             };
         }
 

@@ -87,6 +87,8 @@ public static class UsbHtmlDocumentationGenerator
         sb.AppendLine("</section>");
 
         sb.AppendLine("<section><h2>Quick links</h2><ul class=\"links\">");
+        AppendLink(sb, "ForgerEMS Portable App", "_apps/ForgerEMS/ForgerEMS.exe");
+        AppendLink(sb, "ForgerEMS legal/help docs", "_docs/ForgerEMS/");
         AppendLink(sb, "Start here checklist", "_docs/start-here.html");
         AppendLink(sb, "Manual media guide", "_docs/manual-media-guide.html");
         AppendLink(sb, "Latest updates", "_docs/latest-updates.html");
@@ -122,6 +124,7 @@ public static class UsbHtmlDocumentationGenerator
 
         sb.AppendLine("<section class=\"safety\"><h2>Safety notes</h2>");
         sb.AppendLine("<ul><li>Verify device model, backups, and licensing before imaging or flashing.</li>");
+        sb.AppendLine("<li>Review ForgerEMS Terms, Privacy/Data Handling, Legal Notices, and third-party notices before using or sharing the portable app.</li>");
         sb.AppendLine("<li>ForgerEMS does not redistribute macOS, iOS IPSW, legacy Windows, or OEM firmware images.</li>");
         sb.AppendLine("<li>Use official vendor sources only. Do not use gray-market mirrors.</li></ul></section>");
 
@@ -159,6 +162,13 @@ public static class UsbHtmlDocumentationGenerator
         {
             ("Managed / current", "ISO\\Windows\\", "Official Microsoft download pages and catalog-managed items."),
             ("Legacy user-supplied", "ISO\\Windows\\Windows-Manual-ISO-Drop\\", "Windows 8.1 and older — supply licensed installation media only.")
+        });
+
+        AppendGuideSection(sb, "ForgerEMS Portable App", "forgerems-portable", null, new[]
+        {
+            ("Portable app", "_apps\\ForgerEMS\\", "Runs ForgerEMS from the USB without installer registration when packaged files are present."),
+            ("Legal/help docs", "_docs\\ForgerEMS\\", "Terms, Privacy/Data Handling, Legal Notices, FAQ, About, and third-party notices."),
+            ("Support folders", "_logs\\ForgerEMS\\", "Local support/log folder. No automatic upload or sync is added.")
         });
 
         AppendGuideSection(sb, "macOS", "macos", null, new[]

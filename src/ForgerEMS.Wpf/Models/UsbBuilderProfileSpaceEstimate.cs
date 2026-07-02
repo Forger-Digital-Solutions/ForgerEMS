@@ -43,4 +43,11 @@ public sealed class UsbBuilderProfileSpaceEstimate
             Confidence = UsbBuilderPackSizeConfidence.UserSupplied,
             DisplayHint = displayHint
         };
+
+    public static UsbBuilderProfileSpaceEstimate UnknownManaged(string displayHint = "size unknown") =>
+        new()
+        {
+            Confidence = UsbBuilderPackSizeConfidence.Estimated,
+            DisplayHint = displayHint
+        };
 }

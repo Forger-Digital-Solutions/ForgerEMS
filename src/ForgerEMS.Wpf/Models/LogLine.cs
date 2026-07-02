@@ -46,10 +46,20 @@ public sealed class LogLine
 
     public LiveLogChannel Channel { get; }
 
-    public string DisplayText =>
-        !string.IsNullOrEmpty(Text) && Text[0] == '['
-            ? $"[{Timestamp:HH:mm:ss}]{Text}"
-            : $"[{Timestamp:HH:mm:ss}] {Text}";
+    public string DisplayText
+    {
+        get
+        {
+            if (StartsWithTimestamp(Text))
+            {
+                return Text;
+            }
+
+            return !string.IsNullOrEmpty(Text) && Text[0] == '['
+                ? $"[{Timestamp:HH:mm:ss}]{Text}"
+                : $"[{Timestamp:HH:mm:ss}] {Text}";
+        }
+    }
 
     public Brush Foreground =>
         Severity switch
@@ -59,4 +69,45 @@ public sealed class LogLine
             LogSeverity.Error => ErrorBrush,
             _ => InfoBrush
         };
+
+    private static bool StartsWithTimestamp(string value)
+    {
+        if (value.Length >= 10 &&
+            value[0] == '[' &&
+            value[3] == ':' &&
+            value[6] == ':' &&
+            value[9] == ']' &&
+            char.IsDigit(value[1]) &&
+            char.IsDigit(value[2]) &&
+            char.IsDigit(value[4]) &&
+            char.IsDigit(value[5]) &&
+            char.IsDigit(value[7]) &&
+            char.IsDigit(value[8]))
+        {
+            return true;
+        }
+
+        return value.Length >= 21 &&
+               value[0] == '[' &&
+               value[5] == '-' &&
+               value[8] == '-' &&
+               (value[11] == ' ' || value[11] == 'T') &&
+               value[14] == ':' &&
+               value[17] == ':' &&
+               value[20] == ']' &&
+               char.IsDigit(value[1]) &&
+               char.IsDigit(value[2]) &&
+               char.IsDigit(value[3]) &&
+               char.IsDigit(value[4]) &&
+               char.IsDigit(value[6]) &&
+               char.IsDigit(value[7]) &&
+               char.IsDigit(value[9]) &&
+               char.IsDigit(value[10]) &&
+               char.IsDigit(value[12]) &&
+               char.IsDigit(value[13]) &&
+               char.IsDigit(value[15]) &&
+               char.IsDigit(value[16]) &&
+               char.IsDigit(value[18]) &&
+               char.IsDigit(value[19]);
+    }
 }

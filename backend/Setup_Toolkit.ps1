@@ -91,7 +91,9 @@ param(
     [switch]$NonInteractive,
     [switch]$ShowVersion,
     # Comma-separated or repeated USB Builder profile category IDs to include for shortcut/extras/update seeding.
-    [string[]]$IncludedCategories = @()
+    [string[]]$IncludedCategories = @(),
+    # Comma-separated or repeated item selectors in name:<manifest name> or dest:<relative path> form.
+    [string[]]$IncludedProfileItems = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -326,6 +328,7 @@ function Resolve-RootChildPath {
 function Get-DefaultUsbBuilderCategoryIds {
     return @(
         "core",
+        "forgerems-portable",
         "windows",
         "legacy-windows",
         "linux-rescue",
@@ -392,6 +395,13 @@ function Get-UsbBuilderCategoryIdForPath {
     $familyText = ([string]$Family).Trim().ToLowerInvariant()
 
     if ($path.Contains("ventoy") -or $nameText.Contains("ventoy")) { return "core" }
+    if ($path.StartsWith("_apps\forgerems") -or
+        $path.StartsWith("_docs\forgerems") -or
+        $path.StartsWith("_logs\forgerems") -or
+        $nameText.Contains("forgerems portable")) {
+        return "forgerems-portable"
+    }
+
     if ($path.StartsWith("iso\macos\")) { return "macos" }
     if ($path.StartsWith("iso\android\") -or $path.StartsWith("tools\android\")) { return "android" }
     if ($path.StartsWith("iso\ios-ipados\") -or $path.StartsWith("tools\apple-mobile\")) { return "ios-ipados" }
@@ -409,7 +419,7 @@ function Get-UsbBuilderCategoryIdForPath {
         return "legacy-windows"
     }
     if ($path.StartsWith("iso\windows\") -or $familyText -eq "windows") { return "windows" }
-    if ($path.StartsWith("iso\linux\") -or $familyText -eq "linux") { return "linux-rescue" }
+    if ($path.StartsWith("iso\linux\") -or $path.StartsWith("iso\bsd\") -or $familyText -eq "linux" -or $familyText -eq "bsd") { return "linux-rescue" }
     if ($path.StartsWith("iso\tools\") -or $path.StartsWith("tools\portable\") -or $path.StartsWith("medicat.usb\")) { return "diagnostics" }
 
     return "diagnostics"
@@ -442,6 +452,102 @@ function Test-UsbBuilderCategoryIncluded {
 
     $categoryId = Get-UsbBuilderCategoryIdForManifestEntry -Entry $Entry -RelativePath $RelativePath
     return $CategorySet.ContainsKey($categoryId)
+}
+
+function Get-NormalizedUsbBuilderProfileItemSelectors {
+    param([string[]]$Selectors)
+
+    $tokens = @()
+    foreach ($raw in @($Selectors)) {
+        foreach ($part in (([string]$raw) -split ",")) {
+            $trimmed = $part.Trim()
+            if (-not [string]::IsNullOrWhiteSpace($trimmed)) {
+                $tokens += $trimmed
+            }
+        }
+    }
+
+    return @($tokens | Select-Object -Unique)
+}
+
+function Normalize-UsbBuilderProfileSelectorPath {
+    param([string]$Path)
+
+    return (([string]$Path).Trim() -replace '/', '\').Trim('\').ToLowerInvariant()
+}
+
+function New-UsbBuilderProfileItemFilter {
+    param([string[]]$Selectors)
+
+    $nameSelectors = @()
+    $destSelectors = @()
+    foreach ($selector in (Get-NormalizedUsbBuilderProfileItemSelectors -Selectors $Selectors)) {
+        $prefix = "name"
+        $value = [string]$selector
+        $colon = $value.IndexOf(":")
+        if ($colon -gt 0) {
+            $prefix = $value.Substring(0, $colon).Trim().ToLowerInvariant()
+            $value = $value.Substring($colon + 1).Trim()
+        }
+
+        if ([string]::IsNullOrWhiteSpace($value)) { continue }
+        if ($prefix -eq "dest" -or $prefix -eq "path") {
+            $destSelectors += (Normalize-UsbBuilderProfileSelectorPath -Path $value)
+        }
+        else {
+            $nameSelectors += $value.ToLowerInvariant()
+        }
+    }
+
+    return [PSCustomObject]@{
+        NameSelectors = @($nameSelectors | Select-Object -Unique)
+        DestSelectors = @($destSelectors | Select-Object -Unique)
+        HasSelectors  = (($nameSelectors.Count + $destSelectors.Count) -gt 0)
+    }
+}
+
+function Test-UsbBuilderProfileItemSelected {
+    param(
+        [Parameter(Mandatory)]$ItemFilter,
+        [AllowNull()]$Entry,
+        [string]$RelativePath = "",
+        [string]$CategoryId = ""
+    )
+
+    if (-not $ItemFilter.HasSelectors) { return $true }
+    if ($CategoryId -eq "core") { return $true }
+
+    $name = (Get-ManifestStringProperty -Object $Entry -Name "name").ToLowerInvariant()
+    if (-not [string]::IsNullOrWhiteSpace($name)) {
+        foreach ($selector in @($ItemFilter.NameSelectors)) {
+            if ($name -eq $selector) {
+                return $true
+            }
+        }
+    }
+
+    $destSource = if ([string]::IsNullOrWhiteSpace($RelativePath)) { Get-ManifestStringProperty -Object $Entry -Name "dest" } else { $RelativePath }
+    $dest = Normalize-UsbBuilderProfileSelectorPath -Path $destSource
+    foreach ($selector in @($ItemFilter.DestSelectors)) {
+        if ($dest -eq $selector -or $dest.StartsWith($selector + "\") -or $selector.StartsWith($dest + "\")) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Test-UsbBuilderProfileIncluded {
+    param(
+        [Parameter(Mandatory)]$CategorySet,
+        [Parameter(Mandatory)]$ItemFilter,
+        [AllowNull()]$Entry,
+        [string]$RelativePath = ""
+    )
+
+    $categoryId = Get-UsbBuilderCategoryIdForManifestEntry -Entry $Entry -RelativePath $RelativePath
+    if (-not $CategorySet.ContainsKey($categoryId)) { return $false }
+    return Test-UsbBuilderProfileItemSelected -ItemFilter $ItemFilter -Entry $Entry -RelativePath $RelativePath -CategoryId $categoryId
 }
 
 function Get-BundledManifestTemplatePath {
@@ -1026,14 +1132,15 @@ function Get-ActiveManagedPlaceholderPlanFromManifest {
 function Get-ShortcutDefinitionsFromManifest {
     param(
         [Parameter(Mandatory)][string]$Root,
-        [Parameter(Mandatory)]$IncludedCategorySet
+        [Parameter(Mandatory)]$IncludedCategorySet,
+        [Parameter(Mandatory)]$IncludedItemFilter
     )
 
     $manifest = Get-BundledManifestTemplate -Root $Root
     $links = @()
     $suppressedPaths = @()
     $profileItems = @($manifest.items | Where-Object {
-            Test-UsbBuilderCategoryIncluded -CategorySet $IncludedCategorySet -Entry $_
+            Test-UsbBuilderProfileIncluded -CategorySet $IncludedCategorySet -ItemFilter $IncludedItemFilter -Entry $_
         })
     $activeManagedPlaceholderPlan = Get-ActiveManagedPlaceholderPlanFromManifest -Manifest ([PSCustomObject]@{ items = $profileItems })
 
@@ -1802,7 +1909,8 @@ function Start-ManagedDownloadPassInBackground {
         [Parameter(Mandatory)][string]$Root,
         [Parameter(Mandatory)][string]$ManifestName,
         [Parameter(Mandatory)][string]$LogDirectory,
-        [string[]]$IncludedCategories = @()
+        [string[]]$IncludedCategories = @(),
+        [string[]]$IncludedProfileItems = @()
     )
 
     $powerShellExe = Get-PowerShellExePath
@@ -1815,6 +1923,11 @@ function Start-ManagedDownloadPassInBackground {
     if ($normalizedCategories.Count -gt 0) {
         $argumentList += "-IncludedCategories"
         $argumentList += ($normalizedCategories -join ",")
+    }
+    $normalizedItems = @(Get-NormalizedUsbBuilderProfileItemSelectors -Selectors $IncludedProfileItems)
+    if ($normalizedItems.Count -gt 0) {
+        $argumentList += "-IncludedProfileItems"
+        $argumentList += ($normalizedItems -join ",")
     }
 
     $process = Start-Process `
@@ -1880,6 +1993,114 @@ function Open-UrlsIfRequested {
     }
 }
 
+function Resolve-ForgerEmsPortableSourceRoot {
+    $candidates = @()
+    if (-not [string]::IsNullOrWhiteSpace($env:FORGEREMS_PORTABLE_SOURCE_ROOT)) {
+        $candidates += $env:FORGEREMS_PORTABLE_SOURCE_ROOT
+    }
+    if (-not [string]::IsNullOrWhiteSpace($PSScriptRoot)) {
+        $candidates += (Split-Path -Parent $PSScriptRoot)
+        $candidates += $PSScriptRoot
+    }
+
+    foreach ($candidate in @($candidates | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | Select-Object -Unique)) {
+        try {
+            $full = [IO.Path]::GetFullPath([string]$candidate)
+            if (Test-Path -LiteralPath (Join-Path $full "ForgerEMS.exe") -PathType Leaf) {
+                return $full
+            }
+        }
+        catch {
+        }
+    }
+
+    return $null
+}
+
+function Copy-ForgerEmsPortableAppToUsb {
+    param(
+        [Parameter(Mandatory)][string]$Root,
+        [Parameter(Mandatory)]$CategorySet,
+        [Parameter(Mandatory)]$ItemFilter
+    )
+
+    $includeApp = Test-UsbBuilderProfileIncluded -CategorySet $CategorySet -ItemFilter $ItemFilter -Entry $null -RelativePath "_apps\ForgerEMS\ForgerEMS.exe"
+    $includeDocs = Test-UsbBuilderProfileIncluded -CategorySet $CategorySet -ItemFilter $ItemFilter -Entry $null -RelativePath "_docs\ForgerEMS\TERMS_OF_USE.md"
+    $includeLogs = Test-UsbBuilderProfileIncluded -CategorySet $CategorySet -ItemFilter $ItemFilter -Entry $null -RelativePath "_logs\ForgerEMS"
+
+    if (-not ($includeApp -or $includeDocs -or $includeLogs)) {
+        Write-Log "ForgerEMS Portable App profile item not selected; skipping portable app/docs folders." "INFO"
+        return
+    }
+
+    $appDest = Resolve-RootChildPath -Root $Root -RelativePath "_apps\ForgerEMS"
+    $docsDest = Resolve-RootChildPath -Root $Root -RelativePath "_docs\ForgerEMS"
+    $logsDest = Resolve-RootChildPath -Root $Root -RelativePath "_logs\ForgerEMS"
+
+    foreach ($dir in @($appDest, $docsDest, $logsDest)) {
+        Ensure-Folder -Path $dir
+    }
+
+    if ($includeLogs) {
+        Write-Log "ForgerEMS portable support/log folder ready: _logs\ForgerEMS" "OK"
+    }
+
+    $sourceRoot = Resolve-ForgerEmsPortableSourceRoot
+    if ($includeApp) {
+        if ([string]::IsNullOrWhiteSpace($sourceRoot)) {
+            Write-Log "ForgerEMS portable app source not found beside the backend; _apps\ForgerEMS was created but app files were not copied." "WARN"
+        }
+        else {
+            $normalizedSource = [IO.Path]::GetFullPath($sourceRoot).TrimEnd('\')
+            $normalizedDest = [IO.Path]::GetFullPath($appDest).TrimEnd('\')
+            if ([string]::Equals($normalizedSource, $normalizedDest, [System.StringComparison]::OrdinalIgnoreCase)) {
+                Write-Log "ForgerEMS portable app is already running from _apps\ForgerEMS; leaving app files in place." "INFO"
+            }
+            elseif ($PSCmdlet.ShouldProcess($appDest, "Copy ForgerEMS portable app from $sourceRoot")) {
+                $excludedNames = @("Runtime", "logs", "cache", "Updates", ".git")
+                foreach ($child in Get-ChildItem -LiteralPath $sourceRoot -Force) {
+                    if ($excludedNames -contains $child.Name) { continue }
+                    Copy-Item -LiteralPath $child.FullName -Destination $appDest -Recurse -Force
+                }
+                Write-Log "ForgerEMS portable app copied to _apps\ForgerEMS." "OK"
+            }
+            else {
+                Write-Log "Would copy ForgerEMS portable app to _apps\ForgerEMS." "INFO"
+            }
+        }
+    }
+
+    if ($includeDocs) {
+        $docsSource = if ([string]::IsNullOrWhiteSpace($sourceRoot)) { $null } else { Join-Path $sourceRoot "docs" }
+        if ($docsSource -and (Test-Path -LiteralPath $docsSource -PathType Container)) {
+            if ($PSCmdlet.ShouldProcess($docsDest, "Copy ForgerEMS legal/help docs")) {
+                foreach ($docChild in Get-ChildItem -LiteralPath $docsSource -Force) {
+                    Copy-Item -LiteralPath $docChild.FullName -Destination $docsDest -Recurse -Force
+                }
+                Write-Log "ForgerEMS legal/help docs copied to _docs\ForgerEMS." "OK"
+            }
+            else {
+                Write-Log "Would copy ForgerEMS legal/help docs to _docs\ForgerEMS." "INFO"
+            }
+        }
+        else {
+            Write-Log "ForgerEMS docs source not found beside the backend; _docs\ForgerEMS was created for user/reference files." "WARN"
+        }
+    }
+
+    $portableReadme = Join-Path $appDest "PORTABLE_README.txt"
+    $portableReadmeText = @"
+ForgerEMS Portable App
+
+Run ForgerEMS.exe from this folder. Review _docs\ForgerEMS for Terms of Use, Privacy/Data Handling, Legal Notices, FAQ, About, and third-party notices.
+
+Logs/support files are local. Review exported logs, Kyra context, reports, and support bundles before sending them.
+"@
+    if ($PSCmdlet.ShouldProcess($portableReadme, "Write ForgerEMS portable README")) {
+        Set-Content -LiteralPath $portableReadme -Value $portableReadmeText -Encoding UTF8
+    }
+}
+
 if ($ShowVersion) {
     Show-VentoyCoreVersionInfo
     return
@@ -1899,7 +2120,9 @@ Write-Log ("Release: " + $versionInfo.ReleaseType) "INFO"
 Write-Log "Using root: $root" "INFO"
 
 $builderCategorySet = New-UsbBuilderCategorySet -CategoryIds $IncludedCategories
+$builderItemFilter = New-UsbBuilderProfileItemFilter -Selectors $IncludedProfileItems
 Write-Log ("USB Builder profile categories included: {0}" -f (($builderCategorySet.Keys | Sort-Object) -join ", ")) "INFO"
+Write-Log ("USB Builder profile item selectors included: {0}" -f (@($builderItemFilter.NameSelectors).Count + @($builderItemFilter.DestSelectors).Count)) "INFO"
 Write-Log "Unchecked categories are skipped for this setup/update run only; existing USB files are not deleted." "INFO"
 
 Move-LegacyDocsFolderIfSafe -Root $root
@@ -1931,14 +2154,20 @@ $paths = @(
     (J $root "Drivers\Storage"),
     (J $root "Drivers\Wireless"),
 
+    (J $root "_apps"),
+    (J $root "_apps\ForgerEMS"),
     (J $root "_logs"),
+    (J $root "_logs\ForgerEMS"),
     (J $root "_docs"),
+    (J $root "_docs\ForgerEMS"),
     (J $root "MediCat.USB")
 )
 
 foreach ($p in $paths) {
     Ensure-Folder -Path $p
 }
+
+Copy-ForgerEmsPortableAppToUsb -Root $root -CategorySet $builderCategorySet -ItemFilter $builderItemFilter
 
 $legacyGeneratedManualFolder = J $root "IfScriptFails(ManualSetup)"
 Remove-LegacyGeneratedTree -Path $legacyGeneratedManualFolder -AllowedFileNames @(
@@ -1978,7 +2207,7 @@ foreach ($legacyShortcut in @(
     Remove-PathIfPresent -Path $legacyShortcut -Description "Remove legacy generated shortcut" | Out-Null
 }
 
-$shortcutPlan = Get-ShortcutDefinitionsFromManifest -Root $root -IncludedCategorySet $builderCategorySet
+$shortcutPlan = Get-ShortcutDefinitionsFromManifest -Root $root -IncludedCategorySet $builderCategorySet -IncludedItemFilter $builderItemFilter
 
 foreach ($suppressedPath in @($shortcutPlan.SuppressedPaths | Sort-Object -Unique)) {
     Remove-PathIfPresent -Path $suppressedPath -Description "Remove placeholder shortcut for active managed download" | Out-Null
@@ -2363,6 +2592,7 @@ if (-not $LayoutOnly) {
         UsbRoot            = $root
         ManifestName       = $ManifestName
         IncludedCategories = @(Get-NormalizedUsbBuilderCategoryIds -CategoryIds $IncludedCategories)
+        IncludedProfileItems = @(Get-NormalizedUsbBuilderProfileItemSelectors -Selectors $IncludedProfileItems)
     }
 
     try {
@@ -2386,7 +2616,8 @@ if (-not $LayoutOnly) {
                     -Root $root `
                     -ManifestName $ManifestName `
                     -LogDirectory $logsRoot `
-                    -IncludedCategories (Get-NormalizedUsbBuilderCategoryIds -CategoryIds $IncludedCategories)
+                    -IncludedCategories (Get-NormalizedUsbBuilderCategoryIds -CategoryIds $IncludedCategories) `
+                    -IncludedProfileItems (Get-NormalizedUsbBuilderProfileItemSelectors -Selectors $IncludedProfileItems)
 
                 Write-Log "Managed download pass started in background (PID $($launchInfo.ProcessId))." "OK"
                 Write-Log "Watch $logsRoot for update_*.log and launcher output if you want live progress." "INFO"

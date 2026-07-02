@@ -482,7 +482,7 @@ public abstract class StubPricingProvider : IPricingProvider
         return new PricingProviderResult
         {
             Succeeded = false,
-            DiagnosticMessage = $"{DisplayName} is a pricing provider stub. API/scraping is not implemented."
+            DiagnosticMessage = $"{DisplayName} live pricing is not configured in this build; local estimates are used instead."
         };
     }
 }

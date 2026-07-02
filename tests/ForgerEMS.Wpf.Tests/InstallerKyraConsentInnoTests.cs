@@ -63,7 +63,7 @@ public sealed class InstallerKyraConsentInnoTests
 
         Assert.Contains("ForgerEMS Deep Sensor Mode:", tasksSection, StringComparison.Ordinal);
         Assert.Contains("Enable Deep Sensor Mode by default (read-only local hardware sensors", tasksSection, StringComparison.Ordinal);
-        Assert.Contains("Elevated Scan may still ask for Windows UAC approval", tasksSection, StringComparison.Ordinal);
+        Assert.Contains("Admin Inventory Scan may still ask for Windows UAC approval", tasksSection, StringComparison.Ordinal);
         Assert.Contains("Flags: unchecked", tasksSection, StringComparison.Ordinal);
         Assert.DoesNotContain("checkedonce", tasksSection, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("grant", tasksSection, StringComparison.OrdinalIgnoreCase);
@@ -79,7 +79,7 @@ public sealed class InstallerKyraConsentInnoTests
         Assert.Contains("ValueName: \"DeepSensorMode\"; ValueData: \"ReadOnly\"; Flags: uninsdeletevalue; Tasks: deepsensormode", iss, StringComparison.Ordinal);
         Assert.Contains("ValueName: \"DeepSensorMode\"; ValueData: \"Off\"; Flags: uninsdeletevalue; Check: IsDeepSensorModeTaskDisabled", iss, StringComparison.Ordinal);
         Assert.Contains("the installer does not grant permanent admin permission", iss, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Windows administrator approval when you run Elevated Scan", iss, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Windows administrator approval when you run Admin Inventory Scan", iss, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("bypass UAC", iss, StringComparison.OrdinalIgnoreCase);
     }
 

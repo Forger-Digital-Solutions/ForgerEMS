@@ -42,6 +42,23 @@ public sealed class HardwareIntelligenceEngineTests
         Assert.Equal("Gaming Laptop", result.PrimaryClass);
     }
 
+    [Fact]
+    public void MsiGs63vrWithBatteryNeverClassifiesAsMiniPc()
+    {
+        var result = MachineClassifier.Classify(Profile(
+            "MSI",
+            "GS63VR 7RF Stealth Pro Mini",
+            "Intel Core i7-7700HQ",
+            32,
+            "NVIDIA GeForce GTX 1060",
+            hasBattery: true));
+
+        Assert.Equal("Gaming Laptop", result.PrimaryClass);
+        Assert.DoesNotContain("Mini PC", result.PrimaryClass, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(result.Signals, signal =>
+            signal.Name.Contains("Mobile chassis overrides Mini PC hint", StringComparison.OrdinalIgnoreCase));
+    }
+
     [Theory]
     [InlineData("Dell", "Inspiron 15")]
     [InlineData("HP", "Pavilion 14")]

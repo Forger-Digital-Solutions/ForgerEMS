@@ -119,9 +119,9 @@ public sealed record ElevatedScanTelemetrySnapshot
             ElevatedScanTelemetryState.Fresh =>
                 $"Elevated scan complete. Cached telemetry from {FormatLocalTime(CollectedAtUtc)} ({Source}; confidence {Confidence}).",
             ElevatedScanTelemetryState.CompletePartial =>
-                "Elevated scan complete — some deep telemetry was unavailable on this device.",
+                "Elevated scan complete — some permission-limited detail was unavailable on this device.",
             ElevatedScanTelemetryState.Stale =>
-                $"Elevated scan recommended. Deep scan data is stale/expired; last scan {FormatLocalTime(CollectedAtUtc)}.",
+                $"Elevated scan recommended. Admin inventory data is stale/expired; last scan {FormatLocalTime(CollectedAtUtc)}.",
             ElevatedScanTelemetryState.Running =>
                 "Elevated scan running. Waiting for the elevated report to finish.",
             ElevatedScanTelemetryState.Failed =>
@@ -163,7 +163,7 @@ public sealed class ElevatedScanTelemetryCache : IElevatedScanTelemetryCache
     public static readonly TimeSpan DefaultFreshnessWindow = TimeSpan.FromHours(1);
 
     private const string PartialCompletionMessage =
-        "Elevated scan complete — some deep telemetry was unavailable on this device.";
+        "Elevated scan complete — some permission-limited detail was unavailable on this device.";
 
     private readonly Func<DateTimeOffset> _utcNow;
     private readonly TimeSpan _freshnessWindow;

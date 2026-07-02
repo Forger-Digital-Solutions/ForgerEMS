@@ -53,6 +53,7 @@ SolidCompression=yes
 OutputDir={#OutputDir}
 OutputBaseFilename=ForgerEMS-Setup-v{#AppVersion}
 SetupIconFile=..\src\ForgerEMS.Wpf\Assets\ForgerEMS.ico
+LicenseFile=..\installer\ForgerEMS-License.txt
 UninstallDisplayIcon={app}\{#MyAppIconName}
 VersionInfoVersion={#AppVersionInfo}
 VersionInfoCompany={#MyAppPublisher}
@@ -70,12 +71,12 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "deepsensormode"; Description: "Enable Deep Sensor Mode by default (read-only local hardware sensors). Elevated Scan may still ask for Windows UAC approval."; GroupDescription: "ForgerEMS Deep Sensor Mode:"; Flags: unchecked
+Name: "deepsensormode"; Description: "Enable Deep Sensor Mode by default (read-only local hardware sensors). Admin Inventory Scan may still ask for Windows UAC approval."; GroupDescription: "ForgerEMS Deep Sensor Mode:"; Flags: unchecked
 
 [Registry]
 Root: HKLM; Subkey: "Software\ForgerEMS"; ValueType: string; ValueName: "DeepSensorMode"; ValueData: "ReadOnly"; Flags: uninsdeletevalue; Tasks: deepsensormode
 Root: HKLM; Subkey: "Software\ForgerEMS"; ValueType: string; ValueName: "DeepSensorMode"; ValueData: "Off"; Flags: uninsdeletevalue; Check: IsDeepSensorModeTaskDisabled
-Root: HKLM; Subkey: "Software\ForgerEMS"; ValueType: string; ValueName: "DeepSensorDisclosure"; ValueData: "ForgerEMS includes LibreHardwareMonitorLib as a bundled local read-only sensor provider under MPL-2.0 with notices. Deep Sensor Mode reads supported hardware sensor data while the app is running or System Intelligence scans execute. Sensor access is local only. ForgerEMS does not control fans, voltage, clocks, BIOS, firmware, overclocking, undervolting, or hardware writes. Some deeper sensor/security checks may ask for Windows administrator approval when you run Elevated Scan; the installer does not grant permanent admin permission."; Flags: uninsdeletevalue
+Root: HKLM; Subkey: "Software\ForgerEMS"; ValueType: string; ValueName: "DeepSensorDisclosure"; ValueData: "ForgerEMS includes LibreHardwareMonitorLib as a bundled local read-only sensor provider under MPL-2.0 with notices. Deep Sensor Mode reads supported hardware sensor data while the app is running or System Intelligence scans execute. Sensor access is local only. ForgerEMS does not control fans, voltage, clocks, BIOS, firmware, overclocking, undervolting, or hardware writes. Some deeper sensor/security checks may ask for Windows administrator approval when you run Admin Inventory Scan; the installer does not grant permanent admin permission."; Flags: uninsdeletevalue
 
 [InstallDelete]
 Type: files; Name: "{autodesktop}\ForgerEMS.lnk"
@@ -107,6 +108,14 @@ Source: "{#BackendBundleDir}\*"; DestDir: "{app}\backend"; Flags: ignoreversion 
 Source: "..\manifests\*"; DestDir: "{app}\manifests"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#PublishDir}\providers\*"; DestDir: "{app}\providers"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 Source: "..\installer\ForgerEMS-Installed-README.txt"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "..\docs\ABOUT_FORGEREMS.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "..\docs\FAQ.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "..\docs\TERMS_OF_USE.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "..\docs\PRIVACY_AND_DATA_HANDLING.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "..\docs\LEGAL_NOTICES.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "..\docs\THIRD_PARTY_NOTICES.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "..\docs\USER_CONSENT_FLOW.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "..\docs\RELEASE_NOTES_v1.2.3-preview.1.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\ForgerEMS"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#MyAppIconName}"

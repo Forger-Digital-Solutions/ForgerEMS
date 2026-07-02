@@ -19,7 +19,7 @@ public static class KyraUpgradePathEngine
         }
         else if (wear is null && laptop)
         {
-            lines.Add("Battery wear wasn’t fully exposed — if runtime matters, verify wear with vendor tools or a fresh System Intelligence run before spending on other upgrades.");
+            lines.Add("Battery wear wasn’t fully exposed — if runtime matters, verify wear with vendor tools or a fresh local device snapshot before spending on other upgrades.");
         }
 
         if (nvmeHealthy)

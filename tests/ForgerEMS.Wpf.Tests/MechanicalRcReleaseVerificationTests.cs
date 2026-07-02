@@ -27,10 +27,11 @@ public sealed class MechanicalRcReleaseVerificationTests
     }
 
     [Fact]
-    public void BuildReleaseScript_StartHereLaunchesBundledInstaller()
+    public void BuildReleaseScript_StartHereLaunchesPortableApp()
     {
         var text = File.ReadAllText(Path.Combine(RepoRoot, "tools", "build-release.ps1"));
-        Assert.Contains(@"start """" ""%~dp0ForgerEMS Installer.exe""", text, StringComparison.Ordinal);
+        Assert.Contains(@"start """" ""%~dp0ForgerEMS.exe""", text, StringComparison.Ordinal);
+        Assert.DoesNotContain(@"start """" ""%~dp0ForgerEMS Installer.exe""", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -53,20 +54,34 @@ public sealed class MechanicalRcReleaseVerificationTests
     public void BuildReleaseScript_DownloadBeta_emphasizes_zip_not_exe()
     {
         var text = File.ReadAllText(Path.Combine(RepoRoot, "tools", "build-release.ps1"));
-        Assert.Contains("DOWNLOAD THE ZIP", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("NOT THE EXE", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("ForgerEMS-Beta-v", text, StringComparison.Ordinal);
+        Assert.Contains("DOWNLOAD THE PORTABLE ZIP FIRST", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("portable ForgerEMS app package", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ForgerEMS-v{0}.zip", text, StringComparison.Ordinal);
         Assert.Contains("Kyra Beta Gateway", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("No direct AI provider API keys are included", text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void BuildReleaseScript_VerifyTxt_warns_against_partial_downloads_and_lists_installer_hash_command()
+    public void BuildReleaseScript_ProducesExactlyOnePortableZipArtifact()
+    {
+        // Regression guard: build-release.ps1 used to Copy-Item the primary ZIP under a
+        // second "ForgerEMS-Beta-v<version>.zip" name, producing two identical compressed
+        // copies in release\current. Only one portable ZIP should be produced/referenced now.
+        var text = File.ReadAllText(Path.Combine(RepoRoot, "tools", "build-release.ps1"));
+        Assert.DoesNotContain("ForgerEMS-Beta-v", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("zipBetaBundleName", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("ZipBetaPath", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildReleaseScript_VerifyTxt_warns_against_partial_downloads_and_lists_portable_hash_command()
     {
         var text = File.ReadAllText(Path.Combine(RepoRoot, "tools", "build-release.ps1"));
         Assert.Contains(".crdownload", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Get-FileHash", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("ForgerEMS Installer.exe", text, StringComparison.Ordinal);
+        Assert.Contains("ForgerEMS.exe", text, StringComparison.Ordinal);
+        Assert.Contains("docs\\", text, StringComparison.Ordinal);
+        Assert.Contains("TERMS_OF_USE.md", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -206,6 +221,10 @@ public sealed class MechanicalRcReleaseVerificationTests
         Assert.Contains("providers\\sensors", project, StringComparison.Ordinal);
         Assert.Contains("CopyToPublishDirectory", project, StringComparison.Ordinal);
         Assert.Contains(@"{#PublishDir}\providers\*", installer, StringComparison.Ordinal);
+        Assert.Contains("LicenseFile=..\\installer\\ForgerEMS-License.txt", installer, StringComparison.Ordinal);
+        Assert.Contains("..\\docs\\TERMS_OF_USE.md", installer, StringComparison.Ordinal);
+        Assert.Contains("..\\docs\\PRIVACY_AND_DATA_HANDLING.md", installer, StringComparison.Ordinal);
+        Assert.Contains("..\\docs\\LEGAL_NOTICES.md", installer, StringComparison.Ordinal);
         Assert.Contains("Enable Deep Sensor Mode by default (read-only local hardware sensors", installer, StringComparison.Ordinal);
         Assert.Contains("Windows UAC approval", installer, StringComparison.Ordinal);
         Assert.Contains(@"HKLM", installer, StringComparison.Ordinal);
@@ -214,9 +233,11 @@ public sealed class MechanicalRcReleaseVerificationTests
         Assert.Contains("ReadOnly", installer, StringComparison.Ordinal);
         Assert.Contains("DeepSensorDisclosure", installer, StringComparison.Ordinal);
         Assert.DoesNotContain("service", installer, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Read-only local sensors", settingsXaml, StringComparison.Ordinal);
-        Assert.Contains("DeepSensorModeSelectedIndex", settingsXaml, StringComparison.Ordinal);
-        Assert.Contains("DeepSensorModeConsentNotice", settingsXaml, StringComparison.Ordinal);
+        // The in-app Deep Sensor Mode settings section was retired in v1.2.3-preview.1;
+        // the provider stays packaged (installer opt-in) but Settings must not expose it.
+        Assert.DoesNotContain("Read-only local sensors", settingsXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("DeepSensorModeSelectedIndex", settingsXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("DeepSensorModeConsentNotice", settingsXaml, StringComparison.Ordinal);
         Assert.Contains("MPL-2.0", policy, StringComparison.Ordinal);
         Assert.Contains("Modified MPL-covered files: none", policy, StringComparison.Ordinal);
     }

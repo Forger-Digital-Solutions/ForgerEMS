@@ -45,7 +45,7 @@ public sealed class UsbBuilderProfileFullManagedDownloadPlan
 
     public string ProfileExclusionLine =>
         ExcludedByProfileCount > 0
-            ? $"Profile filter excludes {ExcludedByProfileCount} managed item(s) from off categories."
+            ? $"Profile filter excludes {ExcludedByProfileCount} catalog item(s) not selected for this run."
             : string.Empty;
 
     private static string FormatBytes(long bytes)

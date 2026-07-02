@@ -5,7 +5,6 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using VentoyToolkitSetup.Wpf.Services.Intelligence;
-using VentoyToolkitSetup.Wpf.Services.NetworkPulse;
 
 namespace VentoyToolkitSetup.Wpf.Services;
 
@@ -44,17 +43,14 @@ public static class SystemIntelligenceQuickReadBuilder
             $"Next Action: {nextAction} | Tool recommendations: {JoinList(toolRecommendations, "System Intelligence + Toolkit Manager")}"
         };
 
-        var lineCountBeforePulse = lines.Count;
-        NetworkPulseReportWriter.TryAppendQuickReadLines(lines, reportsDirectory);
-        var pulseAppended = lines.Count > lineCountBeforePulse;
-
+        // Retired network-readiness reports are ignored; quick reads no longer
+        // append pulse lines from stored reports.
         if (needsSensorNote && lines.Count < 8)
         {
             lines.Add("Sensor Notes: Unknown lowers confidence; NotExposed/PermissionRequired means Windows limited optional detail, not failure.");
         }
 
-        var cap = pulseAppended ? Math.Min(lines.Count, 11) : 9;
-        return string.Join(Environment.NewLine, lines.Take(cap));
+        return string.Join(Environment.NewLine, lines.Take(9));
     }
 
     private static MachineClassResult? ReadMachineClass(JsonElement root)

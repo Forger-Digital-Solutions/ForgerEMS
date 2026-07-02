@@ -201,14 +201,14 @@
                                 <Border Style="{StaticResource KyraCardStyle}" Width="620">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Live Tools" />
-                                        <TextBlock Margin="0,8,0,0" FontSize="12" Text="Weather, crypto, calculator, date/time, and System Intelligence can work without general web search. Web Search shows as Gateway search available or Not configured depending on provider setup." TextWrapping="Wrap" />
+                                        <TextBlock Margin="0,8,0,0" FontSize="12" Text="Weather, crypto, calculator, date/time, and local device context can work without general web search. Web Search shows as Gateway search available or Not configured depending on provider setup." TextWrapping="Wrap" />
                                         <TextBlock Margin="0,8,0,0" FontSize="11.5" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Web Search: Ready when Gateway search is available or a BYOK search provider is configured." TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
 
                                 <Border Style="{StaticResource KyraCardStyle}" Width="300">
                                     <StackPanel>
-                                        <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="System Context" />
+                                        <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Device Context" />
                                         <TextBlock Margin="0,10,0,0" FontSize="12" Text="{Binding CopilotContextSummaryText}" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
@@ -328,7 +328,7 @@
                                     </Border>
                                     <Border Style="{StaticResource KyraCardStyle}" Width="300">
                                         <StackPanel>
-                                            <TextBlock FontWeight="Bold" FontSize="14" Text="System Intelligence" />
+                                            <TextBlock FontWeight="Bold" FontSize="14" Text="Local Device Context" />
                                             <TextBlock Margin="0,4,0,0" FontSize="12" Foreground="{StaticResource KyraAdvancedHeaderBrush}" Text="Local only" />
                                             <TextBlock Margin="0,4,0,0" FontSize="11" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="Gives Kyra sanitized local hardware and toolkit facts." TextWrapping="Wrap" />
                                         </StackPanel>
@@ -367,7 +367,7 @@
                                         <TextBlock Style="{StaticResource KyraSectionTitleStyle}" Text="Privacy Controls" />
                                         <CheckBox Margin="0,10,0,6" IsChecked="{Binding AllowOnlineSystemContextSharing, Mode=TwoWay}" Content="Send sanitized system summary to online AI" />
                                         <CheckBox Margin="0,0,0,6" IsChecked="{Binding KyraPersistentMemoryEnabled, Mode=TwoWay}" Content="Include recent Kyra chat context" />
-                                        <CheckBox Margin="0,0,0,6" IsChecked="{Binding KyraUseSanitizedSystemIntelligenceContext, Mode=TwoWay}" Content="Include System Intelligence results" />
+                                        <CheckBox Margin="0,0,0,6" IsChecked="{Binding KyraUseSanitizedSystemIntelligenceContext, Mode=TwoWay}" Content="Include local device context" />
                                         <CheckBox Margin="0,0,0,6" IsChecked="{Binding IncludeUsbToolkitStatusInKyraContext, Mode=TwoWay}" Content="Include USB/toolkit status" />
                                         <CheckBox Margin="0,0,0,6" IsChecked="{Binding KyraRealtimeGatewayResearchEnabled, Mode=TwoWay}" Content="Use live research for current info" />
                                         <TextBlock Margin="0,8,0,0" Foreground="{StaticResource KyraAdvancedMutedTextBrush}" Text="API keys are never sent to support email. Private documents are not automatically sent. Serial numbers, private paths, tokens, product keys, and raw logs should be redacted before sharing. Local scan facts are summarized before online use." TextWrapping="Wrap" />

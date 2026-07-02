@@ -67,14 +67,16 @@ public sealed class MainWindowHeaderSupportTests
     }
 
     [Fact]
-    public void MainWindowXaml_DiagnosticsSafetySections_DefaultCollapsed()
+    public void MainWindowXaml_DiagnosticsSafetySections_AreRemoved()
     {
+        // The Diagnostics tab's Safety Lab (link/file safety checkers, sandbox)
+        // moved to Dr. Forge along with the rest of the diagnostics surface.
         var repoRoot = FindRepoRootContainingMainWindow();
         var xamlPath = Path.Combine(repoRoot, "src", "ForgerEMS.Wpf", "MainWindow.xaml");
         var text = File.ReadAllText(xamlPath);
-        Assert.Contains("Header=\"Link / Download Safety Checker (beta)\" IsExpanded=\"False\"", text, StringComparison.Ordinal);
-        Assert.Contains("Header=\"Downloaded file / EXE safety (read-only)\" IsExpanded=\"False\"", text, StringComparison.Ordinal);
-        Assert.Contains("Header=\"Safe Testing / Sandbox\" IsExpanded=\"False\"", text, StringComparison.Ordinal);
-        Assert.Contains("Content=\"Show full diagnostic detail\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Header=\"Link / Download Safety Checker (beta)\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Header=\"Downloaded file / EXE safety (read-only)\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Header=\"Safe Testing / Sandbox\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"Show full diagnostic detail\"", text, StringComparison.Ordinal);
     }
 }

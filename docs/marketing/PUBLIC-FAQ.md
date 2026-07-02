@@ -10,7 +10,7 @@ The **Public Preview** build line is **free** to try. Future **Pro** packaging m
 
 ## What is Pro Preview?
 
-A **label** for advanced or best-effort surfaces (e.g. deeper USB intelligence). During preview, many capabilities stay unlocked for feedback — see Settings → feature maturity card.
+A **label** for advanced or best-effort surfaces (e.g. deeper USB intelligence). During preview, many capabilities stay unlocked for feedback — see the Settings → What's included card.
 
 ## Is Kyra online?
 

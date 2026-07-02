@@ -63,7 +63,7 @@ Kyra Intelligence Network is **Local-first repair memory + optional anonymous co
 - User can disable Local repair memory in Settings.
 - If disabled, Kyra must not write new local repair memory.
 - Existing memory remains until the user deletes it.
-- Export and delete actions live under Settings → Kyra Intelligence.
+- Export and delete actions live under Settings → Kyra Assistant.
 - Code-fix, general chat, and current-data prompts must not inject local machine memory unless the user explicitly asks about this PC/app.
 
 Allowed local memory fields are summarized categories only: machine class, hardware category summary, health score band, issue category, warning category, user-confirmed fix, USB benchmark summary, USB target safety result, best-use recommendation category, resale prep note category, scan timestamp, confidence level, anonymized model family if safe, and a ForgerEMS-generated local machine profile ID.

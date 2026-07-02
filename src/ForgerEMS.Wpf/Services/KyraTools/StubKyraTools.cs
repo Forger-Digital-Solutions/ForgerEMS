@@ -32,9 +32,9 @@ internal sealed class WebSearchKyraTool : IKyraTool
 
 internal sealed class SystemContextKyraTool : IKyraTool
 {
-    public string Name => "System Context";
+    public string Name => "Device Context";
 
-    public string Description => "Summarized local system context (already in CopilotContext).";
+    public string Description => "Summarized local device context (already in CopilotContext).";
 
     public KyraToolSurfaceCategory SurfaceCategory => KyraToolSurfaceCategory.LocalContext;
 
@@ -66,9 +66,9 @@ internal sealed class ToolkitHealthKyraTool : IKyraTool
 
 internal sealed class DiagnosticsKyraTool : IKyraTool
 {
-    public string Name => "Diagnostics";
+    public string Name => "Repair Context";
 
-    public string Description => "Diagnostics (in context).";
+    public string Description => "Lightweight repair checks already included in context.";
 
     public KyraToolSurfaceCategory SurfaceCategory => KyraToolSurfaceCategory.LocalContext;
 

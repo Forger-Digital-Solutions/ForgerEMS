@@ -149,7 +149,7 @@ public static class KyraSlashCommandRegistry
         new KyraSlashCommand
         {
             Name = "scan",
-            Description = "System Intelligence scan reminder",
+            Description = "Local device snapshot reminder",
             Usage = "/scan",
             Category = KyraSlashCommandCategory.Device,
             HandlerIntent = KyraIntent.SystemHealthSummary
@@ -562,7 +562,7 @@ public static class KyraSlashCommandRouter
                 "Act as Kyra resale advisor: use System Intelligence + pricing engine context. Give local estimate range if available, confidence, what helps/hurts value, upgrade-before-sell priorities, and say clearly if live marketplace comps are not configured."),
             "listing" => ListingInline(host, args),
             "os" => Forward(
-                "Recommend the best OS options for this exact machine using TPM, Secure Boot, CPU generation, RAM, and storage from System Intelligence. Keep it practical."),
+            "Recommend the best OS options for this exact machine using TPM, Secure Boot, CPU generation, RAM, and storage from local device context. Keep it practical."),
             "fixcode" => Forward(
                 string.IsNullOrWhiteSpace(args)
                     ? "Kyra code assist: the user invoked /fixcode with no pasted snippet. Ask them to paste code in the next message and identify language (PowerShell, C#, XAML, JSON, YAML, etc.). Do not execute anything."
@@ -637,7 +637,7 @@ public static class KyraSlashCommandRouter
     {
         var i = string.IsNullOrWhiteSpace(issue) ? "general performance" : issue.Trim();
         return
-            $"Diagnose this PC focusing on: {i}. Use latest System Intelligence context. " +
+            $"Diagnose this PC focusing on: {i}. Use latest local device context. " +
             "Answer with: Short answer → What I noticed → Most likely cause → What to do next → Caution if any.";
     }
 
@@ -645,7 +645,7 @@ public static class KyraSlashCommandRouter
     {
         if (string.IsNullOrWhiteSpace(host.LatestWarningSnippet))
         {
-            return "No obvious warning line was captured from recent logs/diagnostics in context. Ask the user to reproduce the warning or run System Intelligence / Toolkit scan, then try /warning again.";
+            return "No obvious warning line was captured from recent logs/diagnostics in context. Ask the user to reproduce the warning or refresh local device / Toolkit context, then try /warning again.";
         }
 
         return

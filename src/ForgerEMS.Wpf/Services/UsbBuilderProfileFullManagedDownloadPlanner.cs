@@ -18,7 +18,8 @@ public static class UsbBuilderProfileFullManagedDownloadPlanner
     public static UsbBuilderProfileFullManagedDownloadPlan Calculate(
         string manifestPath,
         IReadOnlySet<string> includedCategoryIds,
-        string? usbRootPath = null)
+        string? usbRootPath = null,
+        IEnumerable<string>? includedProfileItems = null)
     {
         ArgumentNullException.ThrowIfNull(manifestPath);
         ArgumentNullException.ThrowIfNull(includedCategoryIds);
@@ -29,6 +30,7 @@ public static class UsbBuilderProfileFullManagedDownloadPlanner
         }
 
         var normalizedCategories = NormalizeIncludedCategoryIds(includedCategoryIds);
+        var itemFilter = UsbBuilderProfileItemFilter.FromSelectors(includedProfileItems);
 
         var rootObject = JsonNode.Parse(File.ReadAllText(manifestPath)) as JsonObject;
         if (rootObject is null || rootObject["items"] is not JsonArray items)
@@ -60,6 +62,13 @@ public static class UsbBuilderProfileFullManagedDownloadPlanner
                           enabledNode is null ||
                           enabledNode.GetValueKind() != JsonValueKind.False;
 
+            var categoryId = ClassifyCategoryId(item);
+            if (!normalizedCategories.Contains(categoryId) || !itemFilter.Includes(item, categoryId))
+            {
+                excludedByProfile++;
+                continue;
+            }
+
             // Manual / vendor landing pages: everything that is not type=file or is explicitly manualOnly.
             if (!string.Equals(type, "file", StringComparison.OrdinalIgnoreCase) || manualOnly)
             {
@@ -82,13 +91,6 @@ public static class UsbBuilderProfileFullManagedDownloadPlanner
             if (!hasChecksum)
             {
                 excludedBySafety++;
-                continue;
-            }
-
-            var categoryId = ClassifyCategoryId(item);
-            if (!normalizedCategories.Contains(categoryId))
-            {
-                excludedByProfile++;
                 continue;
             }
 
@@ -156,6 +158,14 @@ public static class UsbBuilderProfileFullManagedDownloadPlanner
         var familyText = (family ?? string.Empty).Trim().ToLowerInvariant();
 
         if (path.Contains("ventoy") || nameText.Contains("ventoy")) { return "core"; }
+        if (path.StartsWith("_apps\\forgerems", StringComparison.Ordinal) ||
+            path.StartsWith("_docs\\forgerems", StringComparison.Ordinal) ||
+            path.StartsWith("_logs\\forgerems", StringComparison.Ordinal) ||
+            nameText.Contains("forgerems portable"))
+        {
+            return "forgerems-portable";
+        }
+
         if (path.StartsWith("iso\\macos\\", StringComparison.Ordinal)) { return "macos"; }
         if (path.StartsWith("iso\\android\\", StringComparison.Ordinal) || path.StartsWith("tools\\android\\", StringComparison.Ordinal)) { return "android"; }
         if (path.StartsWith("iso\\ios-ipados\\", StringComparison.Ordinal) || path.StartsWith("tools\\apple-mobile\\", StringComparison.Ordinal)) { return "ios-ipados"; }
@@ -267,5 +277,81 @@ public static class UsbBuilderProfileFullManagedDownloadPlanner
             JsonValueKind.False => false,
             _ => false
         };
+    }
+
+    private sealed class UsbBuilderProfileItemFilter
+    {
+        private readonly string[] _nameSelectors;
+        private readonly string[] _destSelectors;
+
+        private UsbBuilderProfileItemFilter(string[] nameSelectors, string[] destSelectors)
+        {
+            _nameSelectors = nameSelectors;
+            _destSelectors = destSelectors;
+        }
+
+        private bool HasSelectors => _nameSelectors.Length > 0 || _destSelectors.Length > 0;
+
+        public static UsbBuilderProfileItemFilter FromSelectors(IEnumerable<string>? selectors)
+        {
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var dests = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var raw in selectors ?? [])
+            {
+                foreach (var token in raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    var trimmed = token.Trim();
+                    if (trimmed.Length == 0)
+                    {
+                        continue;
+                    }
+
+                    var separator = trimmed.IndexOf(':');
+                    var prefix = separator > 0 ? trimmed[..separator].Trim() : "name";
+                    var value = separator > 0 ? trimmed[(separator + 1)..].Trim() : trimmed;
+                    if (string.IsNullOrWhiteSpace(value))
+                    {
+                        continue;
+                    }
+
+                    if (prefix.Equals("dest", StringComparison.OrdinalIgnoreCase) ||
+                        prefix.Equals("path", StringComparison.OrdinalIgnoreCase))
+                    {
+                        dests.Add(NormalizeSelectorPath(value));
+                    }
+                    else
+                    {
+                        names.Add(value.ToLowerInvariant());
+                    }
+                }
+            }
+
+            return new UsbBuilderProfileItemFilter(names.ToArray(), dests.ToArray());
+        }
+
+        public bool Includes(JsonObject item, string categoryId)
+        {
+            if (!HasSelectors || string.Equals(categoryId, "core", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var name = GetJsonString(item, "name").ToLowerInvariant();
+            if (_nameSelectors.Any(selector =>
+                    string.Equals(name, selector, StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+
+            var dest = NormalizeSelectorPath(GetJsonString(item, "dest"));
+            return _destSelectors.Any(selector =>
+                string.Equals(dest, selector, StringComparison.OrdinalIgnoreCase) ||
+                dest.StartsWith(selector + "\\", StringComparison.OrdinalIgnoreCase) ||
+                selector.StartsWith(dest + "\\", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static string NormalizeSelectorPath(string value) =>
+            value.Trim().Replace('/', '\\').Trim('\\').ToLowerInvariant();
     }
 }

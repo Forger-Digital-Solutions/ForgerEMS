@@ -63,7 +63,7 @@ Kyra Intelligence Network is **Local-first repair memory + optional anonymous co
 - Local Kyra Memory stores sanitized machine-scoped repair notes on this PC.
 - Anonymous community intelligence sharing is off by default and requires opt-in.
 - This phase has no live community upload endpoint; the client is disabled/no-op and can only produce sanitized preview/export data.
-- Users can opt out, export Kyra memory, or delete Kyra memory from **Settings → Kyra Intelligence**.
+- Users can opt out, export Kyra memory, or delete Kyra memory from **Settings → Kyra Assistant**.
 
 ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the user explicitly enables a future sharing option. Realtime Kyra Gateway sends only sanitized request context needed to answer current-data questions. Provider API keys are stored server-side and are not included in the desktop app. Anonymous Community Intelligence sharing is optional and off by default.
 

@@ -51,6 +51,7 @@ public static class UserFacingLogSanitizer
         redacted = Regex.Replace(redacted, @"(?i)\b(ghp|gho|github_pat)_[A-Za-z0-9_]{20,}\b", "[REDACTED_TOKEN]");
         redacted = Regex.Replace(redacted, @"(?i)\bsk-[A-Za-z0-9_-]{12,}\b", "[REDACTED_API_KEY]");
         redacted = Regex.Replace(redacted, @"(?i)\bxox[baprs]-[A-Za-z0-9-]+\b", "[REDACTED_TOKEN]");
+        redacted = Regex.Replace(redacted, @"(?i)[A-Z]:\\Program Files(?: \(x86\))?\\[^\r\n\t ""']+", PrivatePathPlaceholder);
 
         // Always redact user-profile / private cache paths up front (anchored on the
         // path fragment, not the drive letter) so we still catch e.g. relative or
@@ -66,6 +67,42 @@ public static class UserFacingLogSanitizer
             @"[A-Za-z]:\\[^\r\n\t ""']*",
             match => ClassifyAndRedactPath(match.Value, roots));
 
+        redacted = Regex.Replace(redacted, @"(?i)\b(service tag|serial|s/n)\s*[:#]?\s*[A-Z0-9-]{5,}\b", "[REDACTED_SERIAL]");
+        redacted = Regex.Replace(redacted, @"(?i)\b(bitlocker|recovery)\s*key\s*[:=]?\s*[^\s\r\n]{8,}", "[REDACTED_RECOVERY_KEY]");
+        redacted = Regex.Replace(redacted, @"(?i)\b(windows|product)\s*key\s*[:=]?\s*[A-Z0-9-]{10,}", "[REDACTED_LICENSE_KEY]");
+        redacted = Regex.Replace(redacted, @"\b(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})\b", "[private ip redacted]");
+        redacted = Regex.Replace(redacted, @"\b([0-9]{1,3}\.){3}[0-9]{1,3}\b", "[ip redacted]");
+        redacted = Regex.Replace(redacted, @"(?i)\b([0-9A-F]{2}[:-]){5}[0-9A-F]{2}\b", "[mac redacted]");
+        redacted = Regex.Replace(redacted, @"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", "[email redacted]");
+        redacted = Regex.Replace(redacted, @"(?i)\b(username|user|owner)\s*[:=]\s*[^;\r\n\t ]+", "[REDACTED_USERNAME]");
+        return redacted;
+    }
+
+    /// <summary>
+    /// Local-log mode for the user's own machine. Strips secrets, tokens, API keys,
+    /// recovery/license keys, serials, emails, IP/MAC addresses, and explicit
+    /// <c>username=</c> assignments — but preserves all path-like strings, including
+    /// install paths under <c>C:\Program Files</c>, working/backend directories,
+    /// script paths, JSON/Markdown report paths under <c>%LOCALAPPDATA%</c>, and
+    /// the user profile root. Local logs are read by the operator sitting at the
+    /// PC, who needs to see exactly what is happening and where. For sanitized
+    /// copies destined for support or sharing, use <see cref="Sanitize"/> with
+    /// safe-root filtering or <c>SensitiveDataRedactor.SanitizeForSupportShare</c>.
+    /// </summary>
+    public static string SanitizeForLocalLog(string value, bool enabled = true)
+    {
+        if (!enabled || string.IsNullOrEmpty(value))
+        {
+            return value;
+        }
+
+        // Secrets first — same patterns as the strict sanitizer, but no path
+        // regex follows so the path stays intact.
+        var redacted = Regex.Replace(value, @"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['""]?[^'""\s;]+", "[REDACTED_TOKEN]");
+        redacted = Regex.Replace(redacted, @"(?i)\b(bearer)\s+[A-Za-z0-9._-]{12,}\b", "[REDACTED_TOKEN]");
+        redacted = Regex.Replace(redacted, @"(?i)\b(ghp|gho|github_pat)_[A-Za-z0-9_]{20,}\b", "[REDACTED_TOKEN]");
+        redacted = Regex.Replace(redacted, @"(?i)\bsk-[A-Za-z0-9_-]{12,}\b", "[REDACTED_API_KEY]");
+        redacted = Regex.Replace(redacted, @"(?i)\bxox[baprs]-[A-Za-z0-9-]+\b", "[REDACTED_TOKEN]");
         redacted = Regex.Replace(redacted, @"(?i)\b(service tag|serial|s/n)\s*[:#]?\s*[A-Z0-9-]{5,}\b", "[REDACTED_SERIAL]");
         redacted = Regex.Replace(redacted, @"(?i)\b(bitlocker|recovery)\s*key\s*[:=]?\s*[^\s\r\n]{8,}", "[REDACTED_RECOVERY_KEY]");
         redacted = Regex.Replace(redacted, @"(?i)\b(windows|product)\s*key\s*[:=]?\s*[A-Z0-9-]{10,}", "[REDACTED_LICENSE_KEY]");

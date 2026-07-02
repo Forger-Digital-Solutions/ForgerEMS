@@ -56,4 +56,19 @@ public sealed class InfoDocumentTextsTests
         Assert.Contains("Provider API keys are stored server-side", privacy, StringComparison.Ordinal);
         Assert.Contains("Anonymous Community Intelligence sharing is optional and off by default.", privacy, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void BuildTermsOfService_IsPlainEnglishAndDoesNotOverpromise()
+    {
+        var terms = InfoDocumentTexts.BuildTermsOfService();
+        Assert.Contains("utility", terms, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("responsible for", terms, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not guarantee", terms, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("diagnostics accuracy", terms, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("data recovery", terms, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("driver safety", terms, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Kyra", terms, StringComparison.Ordinal);
+        Assert.DoesNotContain("Copilot", terms, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("guaranteed", terms, StringComparison.OrdinalIgnoreCase);
+    }
 }

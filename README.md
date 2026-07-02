@@ -2,7 +2,7 @@
 
 **Forger Engineering Maintenance Suite** — a Windows desktop app for technicians who work with USB toolkits, repairs, and diagnostics.
 
-**Current release line:** **v1.2.3-preview.1** — **ForgerEMS v1.2.3 Public Preview** (toolkit catalog metadata, Driver Hub, workflow presets, Toolkit Readiness Score, local machine profiles, Verify Links, Kyra awareness for the technician suite, config/env layer, support bundle export, and documentation pass; core WPF/.NET 8 architecture unchanged).
+**Current release line:** **v1.2.3-preview.1** — **ForgerEMS v1.2.3 Public Preview** (USB Builder Profile picker fix, portable app USB profile, Driver Hub/vendor guidance, near-instant USB hotplug detection, Port / USB Intelligence results dashboard, port/USB mapping, persistent Live Logs cleanup, first-run Terms consent gate with wrapped notices, removed Network Pulse implementation, retired Deep Sensor Mode settings, and docs/legal pass; core WPF/.NET 8 architecture unchanged).
 
 **Kickstarter:** Coming soon.
 
@@ -14,7 +14,7 @@
 
 ForgerEMS helps you **build and maintain a capable USB toolkit**, **understand what the PC is doing** (storage, health signals, diagnostics), and get **guided help from Kyra** — an assistant that works **offline by default**. It is built for repair benches, shops, resellers, and advanced home users who want fewer guess-and-check afternoons.
 
-This is **Public Preview / prerelease** software: behavior and packaging can change between builds. See [docs/LEGAL.md](docs/LEGAL.md) and [docs/PRIVACY.md](docs/PRIVACY.md). Operator environment variables: [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md).
+This is **Public Preview / prerelease** software: behavior and packaging can change between builds. Review [Terms of Use](docs/TERMS_OF_USE.md), [Privacy/Data Handling](docs/PRIVACY_AND_DATA_HANDLING.md), [Legal Notices](docs/LEGAL_NOTICES.md), and [About ForgerEMS](docs/ABOUT_FORGEREMS.md). Operator environment variables: [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md).
 
 ---
 
@@ -22,14 +22,13 @@ This is **Public Preview / prerelease** software: behavior and packaging can cha
 
 | Feature | What it does |
 |--------|----------------|
-| **USB Builder** | Guided flows to verify, prepare, and update Ventoy-oriented USB maintenance media, with managed downloads and careful drive selection. The **USB Builder Profile** lets technicians enable or skip packs per run (Windows, Legacy Windows, Linux Rescue, Diagnostics, OEM Tools, macOS, Android, iOS / iPadOS). Core USB structure is required and cannot be turned off. macOS, Android, and iOS / iPadOS are off by default and treat all media as manual. Unchecking a pack only skips seeding/updating it — files already on the USB are never deleted. |
+| **USB Builder** | Guided flows to verify, prepare, and update Ventoy-oriented USB maintenance media, with managed downloads and careful drive selection. The **USB Builder Profile** lets technicians enable or skip packs per run (ForgerEMS Portable App, Windows, Legacy Windows, Linux Rescue, Diagnostic Tools for USB, OEM Tools, macOS, Android, iOS / iPadOS). Core USB structure is required and cannot be turned off. The portable app profile routes to `_apps\ForgerEMS`, docs to `_docs\ForgerEMS`, and support folders to `_logs\ForgerEMS`. macOS, Android, and iOS / iPadOS are off by default and treat all media as manual. Unchecking a pack only skips seeding/updating it — files already on the USB are never deleted. |
 | **Drive Validator** | Wizard-style non-destructive checks against a removable USB target's free space (Quick Safe Check, Sampled Capacity Check, Full Free-Space Validation) with a **live media-integrity tile map** to flag suspicious capacity, aliasing, short reads/writes, I/O errors, or failing regions before building a toolkit. The USB Builder tab keeps a compact summary card; **Open Drive Validator** launches the Drive Validator Wizard (Select target → Choose mode → Safety review → Running → Results). Safe modes write only into `.forgerems-drive-validator` on the chosen USB; never format, never delete user files, and never run against the Windows OS drive, system / boot / EFI / VTOYEFI partitions, or internal fixed disks by default. Results are advisory evidence for a technician, **not** a guarantee that the drive is genuine and **not** a direct inspection of NAND. Destructive full-media mode is **not available** in this build. |
 | **USB Intelligence** | Measure write/read on a **safe removable** target, flag likely cached read samples honestly, map **which physical USB port** you used, and get practical guidance from benchmarks and topology hints (best-effort; varies by PC). Cache-suspected reads are treated as unverified and do not upgrade recommendation quality on their own. |
-| **System Intelligence** | Local scan summaries with Forger Sensor Stack / Hardware X-Ray coverage, health scoring, FlipValue, Best Use / Device Fit, and honest unknown sensor handling before repair or resale prep. |
-| **Diagnostics** | Unified health checklist, file/link safety helpers, and technician-oriented tools (including WSL-related helpers where applicable). |
+| **Dr. Forge (diagnostics & system intelligence)** | Deep local system scans (Forger Sensor Stack / Hardware X-Ray coverage, health scoring, FlipValue, Best Use / Device Fit, honest unknown-sensor handling), the unified diagnostics health checklist, and file/link safety helpers are moving into **Dr. Forge**, a dedicated technician companion app. ForgerEMS keeps the lightweight scan reports it already has and will offer Dr. Forge as a download (planned; not bundled yet — see [docs/DR-FORGE-ADVANCED-SENSORS.md](docs/DR-FORGE-ADVANCED-SENSORS.md)). The main ForgerEMS shell no longer runs heavy system/hardware scans on its own tabs. |
 | **Toolkit Manager** | Manifest-driven health for what is on your USB, now with technician-focused categories and catalog metadata (purpose, official URL, license/redistribution note, download/checksum status, distribution model, beta safety rating). Health checks distinguish verified managed tools, present-but-not-verified tools, manual/info shortcuts, shortcuts covered/suppressed by installed managed tools, and missing required items. **Verify Links** runs optional **HTTP metadata-only** checks (HEAD / tiny ranged GET): reachability, redirects, and trust hints — **no full downloads and no execution** of third-party payloads. |
 | **Driver Hub** | Curated app-store-style hub for official GPU utilities, OEM support portals, chipset/network/audio driver pages, BIOS/firmware support links, and Linux driver guidance. Recommended cards use System Intelligence hints when available and show brand monograms, official-page/open-download actions, copy-link actions, and safe `.url` USB shortcuts. It does **not** auto-install drivers, auto-download OEM packages, upload service tags, or automate BIOS/firmware flashing. |
-| **Kyra** | In-app assistant: offline local answers first, with optional **Kyra Beta Gateway**, **Bring Your Own Key**, local AI, and live-tool paths shown in **Kyra AI Settings**. BYOK keys are optional, hidden, and never stored as plaintext appsettings. After System Intelligence, Kyra can answer many **hardware / upgrade / parts** questions from local scan data, and can explain dry-run **Technician Workflow Presets** (checklist guidance only; no destructive automation). |
+| **Kyra** | In-app assistant: offline local answers first, with optional **Kyra Beta Gateway**, **Bring Your Own Key**, local AI, and live-tool paths shown in **Kyra AI Settings**. BYOK keys are optional, hidden, and never stored as plaintext appsettings. Kyra can use local device snapshots where enabled, but exported Kyra memory/context requires a separate review-and-share confirmation. |
 | **Kyra Intelligence Network** | Local-first repair memory plus optional anonymous community learning foundations. Default is **Local Only**; community upload is off/disabled in this phase. |
 
 More context: [docs/ABOUT_FORGEREMS.md](docs/ABOUT_FORGEREMS.md) · Behavior notes: [KYRA_BEHAVIOR_SPEC.md](KYRA_BEHAVIOR_SPEC.md) (repository root).
@@ -65,7 +64,7 @@ Kyra Intelligence Network is the safe foundation for **local-first repair memory
 - **Research Mode** routes current/live prompts such as crypto, stocks, weather, news, latest versions, drivers, CVEs, and market pricing to configured live tools/providers first. If no live tool is available, Kyra must say so honestly instead of inventing current data.
 - **Hardware part research** uses the local System Intelligence scan for device facts, then uses configured live research/gateway tools for external truth such as official compatibility, current availability, and pricing. For batteries, Kyra should prefer OEM support/service manuals/parts pages first, treat seller listings as secondary candidates, and tell you to match voltage, watt-hour rating, connector, shape, service manual, and physical label before buying.
 - Normal Kyra chat shows compact privacy/source footers. Provider routing and debug detail stays in logs, diagnostics, support bundles, or explicit technical detail flows.
-- Settings include **Kyra Intelligence** controls to keep local-only, use System Intelligence context, allow gateway research when configured, view what would be shared, export Kyra memory, and delete Kyra memory.
+- Settings include **Kyra Assistant** controls to keep local-only, use System Intelligence context, allow gateway research when configured, view what would be shared, export Kyra memory, and delete Kyra memory.
 
 ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the user explicitly enables a future sharing option. Realtime Kyra Gateway sends only sanitized request context needed to answer current-data questions. Provider API keys are stored server-side and are not included in the desktop app. Anonymous Community Intelligence sharing is optional and off by default.
 
@@ -81,21 +80,20 @@ ForgerEMS never bypasses licenses, activation, DRM, account locks, or vendor aut
 
 ---
 
-## Download (ZIP-first)
+## Download (portable ZIP-first)
 
-**Always download the ZIP from GitHub Releases — not the standalone `.exe` first.** The ZIP is the supported, beginner-friendly path; Windows and browsers are usually kinder to a folder you extract than to a raw installer download.
+**Start with the portable ZIP from GitHub Releases unless you already know you want the installer.** The ZIP extracts to a runnable ForgerEMS app folder and includes legal/help docs for review before first launch.
 
 1. Open **[Releases — Forger-Digital-Solutions/ForgerEMS](https://github.com/Forger-Digital-Solutions/ForgerEMS/releases)**.
-2. Under **Assets**, download **one** of:
-   - `ForgerEMS-v<version>.zip` **or**
-   - `ForgerEMS-Beta-v<version>.zip` (same bundle policy; easier to spot in a long list)
+2. Under **Assets**, download:
+   - `ForgerEMS-v<version>.zip` portable app ZIP
 3. **Wait** until the download finishes completely (see [docs/DOWNLOAD_TROUBLESHOOTING.md](docs/DOWNLOAD_TROUBLESHOOTING.md) if you see `.crdownload` or stalls).
 4. Extract to a **short path** (for example `Desktop\ForgerEMS`).
-5. Open the extracted folder and double-click **`START_HERE.bat`**. It guides you through verification and install.
+5. Open the extracted folder and double-click **`START_HERE.bat`** or **`ForgerEMS.exe`**. The first launch shows the Terms of Use gate before the main tools unlock.
 
 Optionally verify integrity using **`CHECKSUMS.sha256`** from the **same** release page before you run anything.
 
-The standalone **`ForgerEMS-Setup-v<version>.exe`** on the release is an **advanced / direct** asset for people who already know they want it; it is **not** the recommended first download.
+The standalone **`ForgerEMS-Setup-v<version>.exe`** on the release is the installed-app path and includes a license/terms page when built with Inno Setup.
 
 **Helpful links**
 
@@ -115,7 +113,7 @@ The standalone **`ForgerEMS-Setup-v<version>.exe`** on the release is an **advan
 - **Deep Sensor Mode:** sensor access is local to the device and runs only while ForgerEMS is open or System Intelligence / Hardware X-Ray scans execute. Reports are shared only if you copy/export/send them.
 - **Automated quality:** the solution ships with a large automated test suite (`dotnet test` on `ForgerEMS.sln`); the exact count grows with each release.
 
-**Pro / preview labels** during beta are for feedback; licensing is not final. See release notes under `docs/` for the build you are testing.
+**Pro / preview labels** during beta are for feedback; licensing is not final. See [docs/RELEASE_NOTES_v1.2.3-preview.1.md](docs/RELEASE_NOTES_v1.2.3-preview.1.md) for this build.
 
 ---
 
@@ -129,7 +127,7 @@ The app can check **public GitHub Releases** for this repo (no account required 
 
 Prerequisites: Windows 10/11, .NET 8 SDK, PowerShell 5.1+, Inno Setup 6 (for installer builds).
 
-The Inno script (`installer/ForgerEMS.iss`) includes a **Kyra Intelligence** wizard page: optional anonymous community sharing is **off by default** (all checkboxes unchecked). Choices are stored under `HKLM\Software\ForgerEMS` and applied the first time the app creates `copilot-settings.json` for a Windows profile; users can change everything later in **Settings → Kyra Intelligence**.
+The Inno script (`installer/ForgerEMS.iss`) includes a **Kyra Intelligence** wizard page: optional anonymous community sharing is **off by default** (all checkboxes unchecked). Choices are stored under `HKLM\Software\ForgerEMS` and applied the first time the app creates `copilot-settings.json` for a Windows profile; users can change everything later in **Settings → Kyra Assistant**.
 
 ```powershell
 dotnet restore .\ForgerEMS.sln
@@ -149,7 +147,7 @@ Full local release (version follows `src/ForgerEMS.Wpf/ForgerEMS.Wpf.csproj`, cu
 .\tools\build-release.ps1 -Version 1.2.3-preview.1
 ```
 
-Without Inno Setup (skips installer + dual ZIP bundle; still stages `release\current\` app + backend + `release.json` + checksums):
+Without Inno Setup (skips installer; still stages `release\current\` app + backend + docs + `release.json` + checksums):
 
 ```powershell
 .\tools\build-release.ps1 -Version 1.2.3-preview.1 -SkipInstaller

@@ -1,0 +1,202 @@
+<Window x:Class="VentoyToolkitSetup.Wpf.CategoryBuilderWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{Binding WindowTitle}"
+        Width="900"
+        Height="680"
+        MinWidth="640"
+        MinHeight="520"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        FontFamily="Segoe UI">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <Style x:Key="CategoryBuilderBtn" TargetType="Button">
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="MinWidth" Value="120" />
+            <Setter Property="Foreground" Value="#FFF5F5F5" />
+            <Setter Property="Background" Value="#FF2A2F3A" />
+            <Setter Property="BorderBrush" Value="#FF4B6CB7" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style x:Key="CategoryBuilderPrimaryBtn" TargetType="Button" BasedOn="{StaticResource CategoryBuilderBtn}">
+            <Setter Property="Background" Value="#FF1F5E4B" />
+            <Setter Property="BorderBrush" Value="#FF3AD49A" />
+            <Setter Property="Foreground" Value="#FFFFFFFF" />
+        </Style>
+    </Window.Resources>
+    <DockPanel Margin="16">
+        <!-- Header -->
+        <Border DockPanel.Dock="Top"
+                Padding="14"
+                Background="#142A3A"
+                BorderBrush="{DynamicResource PanelBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Margin="0,0,0,10">
+            <StackPanel>
+                <TextBlock FontSize="18"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource HeroTextBrush}"
+                           Text="{Binding CategoryHeader}"
+                           TextWrapping="Wrap" />
+                <TextBlock Margin="0,4,0,0"
+                           FontSize="12"
+                           Foreground="{DynamicResource PanelMutedTextBrush}"
+                           Text="{Binding CategoryPurpose}"
+                           TextWrapping="Wrap" />
+                <WrapPanel Margin="0,8,0,0">
+                    <Border Margin="0,0,8,0" Padding="6,2" Background="#332563EB" BorderBrush="#FF3B82F6" BorderThickness="1" CornerRadius="6">
+                        <TextBlock FontSize="11" Foreground="#FF93C5FD" Text="{Binding SelectionSummary}" />
+                    </Border>
+                    <Border Margin="0,0,8,0" Padding="6,2" Background="#33165F46" BorderBrush="#FF22C55E" BorderThickness="1" CornerRadius="6">
+                        <TextBlock FontSize="11" Foreground="#FF86EFAC">
+                            <Run Text="Selected download: " /><Run Text="{Binding EstimatedSelectedDownloadSize, Mode=OneWay}" />
+                        </TextBlock>
+                    </Border>
+                    <Border Margin="0,0,8,0" Padding="6,2" Background="#3322362F" BorderBrush="#FF64748B" BorderThickness="1" CornerRadius="6">
+                        <TextBlock FontSize="11" Foreground="#FFCBD5E1">
+                            <Run Text="USB space: " /><Run Text="{Binding EstimatedSelectedUsbSpace, Mode=OneWay}" />
+                        </TextBlock>
+                    </Border>
+                    <Border Margin="0,0,8,0" Padding="6,2" Background="#33451A03" BorderBrush="#FFF59E0B" BorderThickness="1" CornerRadius="6">
+                        <TextBlock FontSize="11" Foreground="#FFFCD34D">
+                            <Run Text="New download: " /><Run Text="{Binding NewDownloadSummary, Mode=OneWay}" />
+                        </TextBlock>
+                    </Border>
+                    <Border Margin="0,0,8,0" Padding="6,2" Background="#3322362F" BorderBrush="#FF64748B" BorderThickness="1" CornerRadius="6">
+                        <TextBlock FontSize="11" Foreground="#FFCBD5E1">
+                            <Run Text="Already on USB: " /><Run Text="{Binding AlreadyOnUsbSummary, Mode=OneWay}" />
+                        </TextBlock>
+                    </Border>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Filter + quick-action row -->
+        <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox Grid.Column="0"
+                     Padding="8,6"
+                     FontSize="12"
+                     Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}"
+                     ToolTip="Filter items by name, subcategory, kind, or notes." />
+            <WrapPanel Grid.Column="1" Margin="10,0,0,0">
+                <Button Style="{StaticResource CategoryBuilderBtn}" Content="Select Recommended" Command="{Binding SelectRecommendedCommand}" />
+                <Button Style="{StaticResource CategoryBuilderBtn}" Content="Select All" Command="{Binding SelectAllCommand}" />
+                <Button Style="{StaticResource CategoryBuilderBtn}" Content="Docs / shortcuts only" Command="{Binding SelectDocsShortcutsOnlyCommand}" />
+                <Button Style="{StaticResource CategoryBuilderBtn}" Content="Clear Optional" Command="{Binding ClearOptionalCommand}" />
+            </WrapPanel>
+        </Grid>
+
+        <!-- Footer -->
+        <Border DockPanel.Dock="Bottom"
+                Padding="10"
+                Margin="0,10,0,0"
+                Background="#142A3A"
+                BorderBrush="{DynamicResource PanelBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0"
+                           VerticalAlignment="Center"
+                           FontSize="11"
+                           Foreground="{DynamicResource PanelMutedTextBrush}"
+                           Text="Apply commits this category back to the USB Builder Profile. Cancel discards changes."
+                           TextWrapping="Wrap" />
+                <WrapPanel Grid.Column="1">
+                    <Button Style="{StaticResource CategoryBuilderBtn}" Content="Cancel" Command="{Binding CancelCommand}" />
+                    <Button Style="{StaticResource CategoryBuilderPrimaryBtn}" Content="Apply" Command="{Binding ApplyCommand}" />
+                </WrapPanel>
+            </Grid>
+        </Border>
+
+        <!-- Item list -->
+        <Border Padding="0"
+                Background="#0E1726"
+                BorderBrush="{DynamicResource PanelBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding FilteredItems}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="6"
+                                    Padding="10"
+                                    Background="#0A101A"
+                                    BorderBrush="#FF1F2937"
+                                    BorderThickness="1"
+                                    CornerRadius="6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <CheckBox Grid.Column="0"
+                                              VerticalAlignment="Top"
+                                              Margin="0,2,10,0"
+                                              IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              IsEnabled="{Binding CanToggle}" />
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource PanelLabelBrush}"
+                                                   Text="{Binding DisplayName}"
+                                                   TextWrapping="Wrap" />
+                                        <WrapPanel Margin="0,4,0,0">
+                                            <Border Margin="0,0,6,0" Padding="5,1" Background="#332563EB" BorderBrush="#FF3B82F6" BorderThickness="1" CornerRadius="4">
+                                                <TextBlock FontSize="10" Foreground="#FF93C5FD" Text="{Binding TypeBadgeLabel}" />
+                                            </Border>
+                                            <Border Margin="0,0,6,0" Padding="5,1" Background="#33165F46" BorderBrush="#FF22C55E" BorderThickness="1" CornerRadius="4">
+                                                <TextBlock FontSize="10" Foreground="#FF86EFAC" Text="{Binding TierLabel}" />
+                                            </Border>
+                                            <Border Margin="0,0,6,0" Padding="5,1" Background="#3322362F" BorderBrush="#FF64748B" BorderThickness="1" CornerRadius="4">
+                                                <TextBlock FontSize="10" Foreground="#FFCBD5E1" Text="{Binding Subcategory}" />
+                                            </Border>
+                                            <Border Margin="0,0,6,0" Padding="5,1" Background="#33451A03" BorderBrush="#FFF59E0B" BorderThickness="1" CornerRadius="4">
+                                                <TextBlock FontSize="10" Foreground="#FFFCD34D" Text="{Binding SpaceChipText}" />
+                                            </Border>
+                                            <Border Margin="0,0,6,0" Padding="5,1" Background="#33550000" BorderBrush="#FFEF4444" BorderThickness="1" CornerRadius="4"
+                                                    Visibility="{Binding HasStatusBadge, Converter={StaticResource BoolToVis}}">
+                                                <TextBlock FontSize="10" Foreground="#FFFCA5A5" Text="{Binding StatusBadge}" />
+                                            </Border>
+                                        </WrapPanel>
+                                        <TextBlock Margin="0,4,0,0"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                   Text="{Binding DescriptionText}"
+                                                   TextWrapping="Wrap" />
+                                        <TextBlock Margin="0,3,0,0"
+                                                   FontSize="10.5"
+                                                   Foreground="#FFCBD5E1"
+                                                   TextWrapping="Wrap">
+                                            <Run Text="Source: " />
+                                            <Run Text="{Binding SourceDisplay, Mode=OneWay}" />
+                                        </TextBlock>
+                                        <TextBlock Margin="0,3,0,0"
+                                                   FontSize="10.5"
+                                                   Foreground="#FFFCA5A5"
+                                                   Text="{Binding WarningText}"
+                                                   TextWrapping="Wrap"
+                                                   Visibility="{Binding HasWarningText, Converter={StaticResource BoolToVis}}" />
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+    </DockPanel>
+</Window>

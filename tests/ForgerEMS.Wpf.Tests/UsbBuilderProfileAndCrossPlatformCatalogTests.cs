@@ -258,6 +258,27 @@ public sealed class UsbBuilderProfileAndCrossPlatformCatalogTests
     }
 
     [Fact]
+    public void UpdateScript_ProfileItemSelectionSeedsOnlySelectedLinksAndExtras()
+    {
+        using var temp = new TempFolder();
+        var manifestPath = WriteProfileTestManifest(temp.Path);
+
+        var result = RunUpdate(
+            temp.Path,
+            manifestPath,
+            "macos,android",
+            "-IncludedProfileItems",
+            @"dest:Tools\Android\DOWNLOAD - Android Platform Tools adb fastboot.url");
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.True(File.Exists(Path.Combine(temp.Path, "Tools", "Android", "DOWNLOAD - Android Platform Tools adb fastboot.url")));
+        Assert.False(Directory.Exists(Path.Combine(temp.Path, "ISO", "macOS")));
+        Assert.False(File.Exists(Path.Combine(temp.Path, "ISO", "macOS", "README - macOS installer workflow.txt")));
+        Assert.False(File.Exists(Path.Combine(temp.Path, "ISO", "Android", "README - Android firmware workflow.txt")));
+        Assert.True(File.Exists(Path.Combine(temp.Path, "_docs", "CORE.url")));
+    }
+
+    [Fact]
     public void UpdateScript_WhatIfDoesNotSeedProfileExtras()
     {
         using var temp = new TempFolder();
@@ -294,6 +315,10 @@ public sealed class UsbBuilderProfileAndCrossPlatformCatalogTests
 
         Assert.Contains("[string[]]$IncludedCategories", update, StringComparison.Ordinal);
         Assert.Contains("[string[]]$IncludedCategories", setup, StringComparison.Ordinal);
+        Assert.Contains("[string[]]$IncludedProfileItems", update, StringComparison.Ordinal);
+        Assert.Contains("[string[]]$IncludedProfileItems", setup, StringComparison.Ordinal);
+        Assert.Contains("Test-UsbBuilderProfileIncluded", update, StringComparison.Ordinal);
+        Assert.Contains("Test-UsbBuilderProfileIncluded", setup, StringComparison.Ordinal);
         Assert.Contains("existing USB files are not deleted", update, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("existing USB files are not deleted", setup, StringComparison.OrdinalIgnoreCase);
     }

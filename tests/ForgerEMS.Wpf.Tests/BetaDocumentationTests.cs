@@ -41,6 +41,8 @@ public sealed class BetaDocumentationTests
         foreach (var name in new[]
                  {
                      "FAQ.md", "LEGAL.md", "PRIVACY.md", "THIRD_PARTY_NOTICES.md", "ABOUT_FORGEREMS.md"
+                     , "TERMS_OF_USE.md", "PRIVACY_AND_DATA_HANDLING.md", "LEGAL_NOTICES.md", "USER_CONSENT_FLOW.md",
+                     "RELEASE_NOTES_v1.2.3-preview.1.md", "reports/FORGEREMS_V1_2_3_FULL_PROJECT_AUDIT.md"
                  })
         {
             Assert.True(File.Exists(Path.Combine(root, "docs", name)), $"Missing docs/{name}");
@@ -108,6 +110,25 @@ public sealed class BetaDocumentationTests
         Assert.Contains("docs/DOWNLOAD_TROUBLESHOOTING.md", text, StringComparison.Ordinal);
         Assert.Contains("docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md", text, StringComparison.Ordinal);
         Assert.Contains("docs/FAQ.md", text, StringComparison.Ordinal);
+        Assert.Contains("docs/TERMS_OF_USE.md", text, StringComparison.Ordinal);
+        Assert.Contains("portable ZIP", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void CurrentLegalDocs_ReferenceVersionPreviewAndConsentBoundaries()
+    {
+        var terms = File.ReadAllText(Path.Combine(RepoRoot, "docs", "TERMS_OF_USE.md"));
+        var privacy = File.ReadAllText(Path.Combine(RepoRoot, "docs", "PRIVACY_AND_DATA_HANDLING.md"));
+        var consent = File.ReadAllText(Path.Combine(RepoRoot, "docs", "USER_CONSENT_FLOW.md"));
+        var releaseNotes = File.ReadAllText(Path.Combine(RepoRoot, "docs", "RELEASE_NOTES_v1.2.3-preview.1.md"));
+
+        Assert.Contains("2026-07-02.v1.2.3-preview.1", terms, StringComparison.Ordinal);
+        Assert.Contains("public preview", terms, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not a finished enterprise product", terms, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("support bundles", privacy, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("terms-consent.json", consent, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("First-run Terms", releaseNotes, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ForgerEMS-v1.2.3-preview.1.zip", releaseNotes, StringComparison.Ordinal);
     }
 
     [Fact]

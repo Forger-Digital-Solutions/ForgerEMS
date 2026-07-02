@@ -9,7 +9,7 @@ namespace VentoyToolkitSetup.Wpf.Services.Kyra;
 public static class KyraHardwarePartsAnswerBuilder
 {
     private const string NoScan =
-        "I don’t have a current System Intelligence scan loaded yet. Run System Intelligence (Hardware X-Ray) and ask again — I’ll read NVMe/SATA, RAM type, and battery wear locally first.";
+        "I don’t have a current local device snapshot loaded yet. Use Dr. Forge when available and ask again — I’ll read NVMe/SATA, RAM type, and battery wear locally first.";
 
     public static bool TryBuild(string? prompt, SystemProfile? profile, CopilotSettings settings, out CopilotResponse response)
     {
@@ -50,15 +50,15 @@ public static class KyraHardwarePartsAnswerBuilder
         {
             Text = body.Trim(),
             UsedOnlineData = false,
-            OnlineStatus = "Kyra Mode: Local hardware facts (System Intelligence scan).",
+            OnlineStatus = "Kyra Mode: Local hardware facts (local device snapshot).",
             ProviderType = CopilotProviderType.LocalOffline,
-            ProviderNotes = ["Kyra routing: hardware facts -> local System Intelligence"],
+            ProviderNotes = ["Kyra routing: hardware facts -> local device snapshot"],
             ResponseSource = KyraResponseSource.LocalKyra,
             SourceLabel = KyraResponseComposer.KyraIdentityLabel,
             GroundedInSystemIntelligence = grounded,
             KyraTransparencySummary = grounded
-                ? "Local hardware facts from the latest System Intelligence scan. No live marketplace pricing on this path — enable gateway research for current listings."
-                : "No local scan snapshot was available for hardware facts.",
+                ? "Local hardware facts from the latest local device snapshot. No live marketplace pricing on this path — enable gateway research for current listings."
+                : "No local device snapshot was available for hardware facts.",
             ActionSuggestions = []
         };
 
@@ -244,7 +244,7 @@ public static class KyraHardwarePartsAnswerBuilder
         if (profile.Disks.Count == 0)
         {
             sb.AppendLine("What I know: the last scan didn’t list physical disks.");
-            sb.AppendLine("Best next move: re-run System Intelligence from an elevated PowerShell session if this looks wrong.");
+            sb.AppendLine("Best next move: refresh the local device snapshot with Dr. Forge when available if this looks wrong.");
             return;
         }
 
@@ -295,7 +295,7 @@ public static class KyraHardwarePartsAnswerBuilder
         else
         {
             sb.AppendLine("What I’m inferring: Windows/SMBIOS didn’t expose a clear DDR generation in the scan JSON.");
-            sb.AppendLine("What I need: a fresh System Intelligence run, or live research against your exact CPU/platform if you need certainty.");
+            sb.AppendLine("What I need: a fresh local device snapshot, or live research against your exact CPU/platform if you need certainty.");
             sb.AppendLine("Confidence: low for DDR generation right now.");
         }
     }

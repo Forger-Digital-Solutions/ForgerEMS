@@ -18,7 +18,7 @@ this prerelease — use native Windows for USB writing.
   planner (read-only).
 - Drive Validator wizard (read-only sampled validation; non-destructive).
 - Download manifest viewing and freshness display.
-- Network Pulse measurements.
+- Port / USB Intelligence read-only summaries and latest cached check results.
 - Kyra offline copilot, link safety analyzer, local file safety analyzer.
 - About / FAQ / Legal / Privacy info windows.
 - Compatibility banner with honest "Wine compatibility mode" messaging

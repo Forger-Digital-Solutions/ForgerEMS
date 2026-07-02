@@ -7,6 +7,8 @@ The application may **reference**, **download**, **verify**, or **guide users** 
 - ForgerEMS **does not claim ownership** of third-party tools.
 - Each third-party item remains subject to its **own license**, **terms of use**, and **trademark** holders.
 - Items marked **Manual Required** (or equivalent) must stay clearly labeled; the operator obtains those payloads directly from the vendor or authorized source.
+- USB Builder and Driver Hub guidance may create shortcuts, manifests, folders, or managed-download entries, but users remain responsible for vendor terms, licenses, redistribution limits, downloaded media, and any required manual validation.
+- The ForgerEMS Portable App USB profile copies ForgerEMS-owned app/docs/log folders under `_apps\ForgerEMS`, `_docs\ForgerEMS`, and `_logs\ForgerEMS`; it does not grant rights to redistribute unrelated third-party payloads.
 
 For license texts distributed **inside** this repository (for example vendored components), see project `LICENSE` files and upstream notices where applicable.
 

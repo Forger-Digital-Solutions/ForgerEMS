@@ -29,7 +29,7 @@ public sealed class MachineClassResult
 
     public IReadOnlyList<MachineClassSignal> Signals { get; init; } = Array.Empty<MachineClassSignal>();
 
-    public string TechnicianNote { get; init; } = "Run System Intelligence to classify this machine.";
+    public string TechnicianNote { get; init; } = "Use Dr. Forge when available to classify this machine.";
 
     public string SummaryLine =>
         $"{PrimaryClass} ({Confidence} confidence). {TechnicianNote}";
@@ -392,7 +392,7 @@ public sealed class WindowsBuiltInSensorProvider : IHardwareSensorProvider
             Notes =
             [
                 "Forger Sensor Core active.",
-                "Uses ForgerEMS normalized WMI/CIM/registry/powercfg/report fields already collected by System Intelligence.",
+                "Uses ForgerEMS normalized WMI/CIM/registry/powercfg/report fields already collected in local device snapshots.",
                 "Does not require internet or user-downloaded tools.",
                 "Does not perform unsafe hardware probing."
             ]
@@ -660,10 +660,11 @@ public static class MachineClassifier
         var cpu = profile.Cpu ?? string.Empty;
         var ram = profile.RamTotalGb ?? 0;
         var hasBattery = profile.Batteries.Count > 0;
-        var isLaptopLine = Matches(text, "latitude|thinkpad|elitebook|probook|zbook|precision|inspiron|pavilion|ideapad|xps|legion|rog|tuf|omen|victus|nitro|predator|notebook|laptop|surface");
+        var isLaptopLine = Matches(text, "latitude|thinkpad|elitebook|probook|zbook|precision|inspiron|pavilion|ideapad|xps|legion|rog|tuf|omen|victus|nitro|predator|notebook|laptop|surface|\\b(gs|ge|gp|gl|gt|gf)\\d{2}|stealth|raider|leopard|titan|katana|pulse|creator");
         var isLaptop = hasBattery || isLaptopLine;
         var hasWorkstationGpu = Matches(gpuText, "quadro|rtx\\s*a\\d|radeon\\s+pro|firepro");
         var hasGamingGpu = Matches(gpuText, "geforce|gtx|rtx|radeon\\s+rx");
+        var hasMiniChassisHint = Matches(text, "mini|micro|tiny|nuc|deskmini|beelink|minisforum");
         var scores = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
         {
             ["Business Laptop"] = 0,
@@ -724,10 +725,14 @@ public static class MachineClassifier
             AddSignal("Business desktop OEM line", text, 30, "Model heuristic", signals);
         }
 
-        if (Matches(text, "mini|micro|tiny|nuc|deskmini|beelink|minisforum"))
+        if (hasMiniChassisHint && !isLaptop)
         {
             Add(scores, "Mini PC", 58);
             AddSignal("Mini PC line/chassis hint", text, 44, "Model heuristic", signals);
+        }
+        else if (hasMiniChassisHint)
+        {
+            AddSignal("Mobile chassis overrides Mini PC hint", "Battery or mobile model-line evidence is present; Mini PC classification suppressed.", 44, "Model/Battery heuristic", signals);
         }
 
         if (Matches(text, "all.in.one|aio|inspiron\\s+one|ideacentre\\s+aio|pavilion\\s+all"))
@@ -834,7 +839,7 @@ public static class SensorMatrixBuilder
                 ForgerSensorStack = ForgerSensorStackState.Create(),
                 Groups =
                 [
-                    Group("System", now, Unavailable("System profile", "System", "Run System Intelligence first.", "NotApplicable", now))
+                    Group("System", now, Unavailable("System profile", "System", "Local device snapshot needed.", "NotApplicable", now))
                 ]
             };
         }

@@ -33,7 +33,8 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
     private readonly IUsbIntelligenceService _intelligence;
     private readonly UsbMachineProfileStore _profileStore;
     private readonly Func<IReadOnlyList<UsbTargetInfo>> _getUsbTargets;
-    private readonly Func<UsbTargetInfo, Task>? _runBenchmarkForTargetAsync;
+    private readonly Func<UsbTargetInfo, Task<UsbBenchmarkResult?>>? _runBenchmarkForTargetAsync;
+    private readonly Func<string?>? _getPowerHintLine;
     private readonly Func<string?, bool> _isDriveRootMounted;
     private readonly Func<UsbTopologyBuildOptions>? _buildTopologyOptions;
     private readonly TimeSpan _detectOperationTimeout;
@@ -68,15 +69,17 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         IUsbIntelligenceService intelligence,
         UsbMachineProfileStore profileStore,
         Func<IReadOnlyList<UsbTargetInfo>> getUsbTargets,
-        Func<UsbTargetInfo, Task>? runBenchmarkForTargetAsync = null,
+        Func<UsbTargetInfo, Task<UsbBenchmarkResult?>>? runBenchmarkForTargetAsync = null,
         TimeSpan? detectOperationTimeoutOverride = null,
         Func<string?, bool>? isDriveRootMounted = null,
-        Func<UsbTopologyBuildOptions>? buildTopologyOptions = null)
+        Func<UsbTopologyBuildOptions>? buildTopologyOptions = null,
+        Func<string?>? getPowerHintLine = null)
     {
         _intelligence = intelligence;
         _profileStore = profileStore;
         _getUsbTargets = getUsbTargets;
         _runBenchmarkForTargetAsync = runBenchmarkForTargetAsync;
+        _getPowerHintLine = getPowerHintLine;
         _isDriveRootMounted = isDriveRootMounted ?? DefaultDriveRootMounted;
         _buildTopologyOptions = buildTopologyOptions;
         _detectOperationTimeout = detectOperationTimeoutOverride ?? TimeSpan.FromSeconds(28);
@@ -98,7 +101,9 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         SavePortLabelCommand = new RelayCommand(SavePortLabel, () => !string.IsNullOrWhiteSpace(PortLabelDraft));
         CloseCommand = new RelayCommand(() => CloseRequested?.Invoke(this, true));
         MapAnotherPortCommand = new RelayCommand(RestartWizard);
-        RunBenchmarkOnThisPortCommand = new AsyncRelayCommand(RunBenchmarkFromDoneAsync, () => _doneResult?.MappedTarget is not null && _runBenchmarkForTargetAsync is not null);
+        RunBenchmarkOnThisPortCommand = new AsyncRelayCommand(
+            RunBenchmarkFromDoneAsync,
+            () => _doneResult?.MappedTarget is not null && _runBenchmarkForTargetAsync is not null && !_isWizardBenchmarkRunning);
     }
 
     public event EventHandler<bool>? CloseRequested;
@@ -387,6 +392,9 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
 
     /// <summary>For unit tests — same work as <see cref="DetectPortChangeCommand"/>.</summary>
     internal Task DetectPortChangeAsync() => DetectPortChangeCoreAsync();
+
+    /// <summary>For unit tests — same work as <see cref="RunBenchmarkOnThisPortCommand"/>.</summary>
+    internal Task RunWizardBenchmarkAsync() => RunBenchmarkFromDoneAsync();
 
     private void RefreshDetectChangeChrome()
     {
@@ -1072,6 +1080,12 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
 
         ReloadSavedPortLabels();
         var target = SelectedUsbTarget;
+        // A new mapping means any previous in-wizard benchmark readings belong to another
+        // port/label. Invalidate in-flight runs and clear the panel so stale numbers never
+        // display against the freshly saved port.
+        _wizardBenchmarkRunSequence++;
+        IsWizardBenchmarkRunning = false;
+        ClearWizardBenchmarkResults();
         DoneResult = new UsbMappingWizardResult
         {
             Saved = true,
@@ -1084,14 +1098,270 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         Step = UsbMappingWizardStep.Done;
     }
 
+    // ----- In-wizard benchmark results panel (final "Done" step) -----
+
+    private bool _isWizardBenchmarkRunning;
+    private string _wizardBenchmarkStatusText = string.Empty;
+    private string _wizardBenchmarkErrorText = string.Empty;
+    // Monotonic sequence: readings only apply when the completing run is still the latest one
+    // for the current mapped port; restarts and re-runs invalidate in-flight results so a slow
+    // benchmark can never paint stale numbers over a different port.
+    private int _wizardBenchmarkRunSequence;
+    private string _wizardBenchmarkResultRoot = string.Empty;
+
+    public ObservableCollection<string> WizardBenchmarkReadingLines { get; } = new();
+
+    /// <summary>Root path the current readings belong to (tests: results are tied to the right port).</summary>
+    internal string WizardBenchmarkResultRoot => _wizardBenchmarkResultRoot;
+
+    public bool IsWizardBenchmarkRunning
+    {
+        get => _isWizardBenchmarkRunning;
+        private set
+        {
+            if (SetProperty(ref _isWizardBenchmarkRunning, value))
+            {
+                RunBenchmarkOnThisPortCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public string WizardBenchmarkStatusText
+    {
+        get => _wizardBenchmarkStatusText;
+        private set
+        {
+            if (SetProperty(ref _wizardBenchmarkStatusText, value))
+            {
+                OnPropertyChanged(nameof(HasWizardBenchmarkStatus));
+            }
+        }
+    }
+
+    public bool HasWizardBenchmarkStatus => !string.IsNullOrWhiteSpace(WizardBenchmarkStatusText);
+
+    public string WizardBenchmarkErrorText
+    {
+        get => _wizardBenchmarkErrorText;
+        private set
+        {
+            if (SetProperty(ref _wizardBenchmarkErrorText, value))
+            {
+                OnPropertyChanged(nameof(HasWizardBenchmarkError));
+            }
+        }
+    }
+
+    public bool HasWizardBenchmarkError => !string.IsNullOrWhiteSpace(WizardBenchmarkErrorText);
+
+    public bool HasWizardBenchmarkReadings => WizardBenchmarkReadingLines.Count > 0;
+
     private async Task RunBenchmarkFromDoneAsync()
     {
-        if (_doneResult?.MappedTarget is null || _runBenchmarkForTargetAsync is null)
+        var done = _doneResult;
+        var target = done?.MappedTarget;
+        if (done is null || target is null || _runBenchmarkForTargetAsync is null)
         {
             return;
         }
 
-        await _runBenchmarkForTargetAsync(_doneResult.MappedTarget).ConfigureAwait(true);
+        var runSequence = ++_wizardBenchmarkRunSequence;
+        var runRoot = NormalizeRootPath(target.RootPath);
+        ClearWizardBenchmarkResults();
+        IsWizardBenchmarkRunning = true;
+        WizardBenchmarkStatusText =
+            $"Benchmark running for \"{done.Label}\" ({FormatWizardDriveDisplay(target)})… The wizard stays open; readings appear here when it finishes.";
+
+        try
+        {
+            var result = await _runBenchmarkForTargetAsync(target).ConfigureAwait(true);
+            if (IsWizardBenchmarkRunStale(runSequence, runRoot))
+            {
+                return;
+            }
+
+            ApplyWizardBenchmarkResult(done, target, result);
+        }
+        catch (Exception ex)
+        {
+            StartupDiagnosticLog.AppendException("UsbMappingWizard.RunBenchmarkFromDone", ex);
+            if (IsWizardBenchmarkRunStale(runSequence, runRoot))
+            {
+                return;
+            }
+
+            WizardBenchmarkStatusText = "Benchmark could not complete.";
+            WizardBenchmarkErrorText =
+                "The benchmark hit an unexpected error and no readings are available. " +
+                "The USB drive was not modified beyond the normal safe temp-file test. Details are in Live Logs.";
+        }
+        finally
+        {
+            if (runSequence == _wizardBenchmarkRunSequence)
+            {
+                IsWizardBenchmarkRunning = false;
+            }
+        }
+    }
+
+    private bool IsWizardBenchmarkRunStale(int runSequence, string runRoot) =>
+        runSequence != _wizardBenchmarkRunSequence ||
+        !string.Equals(NormalizeRootPath(_doneResult?.MappedTarget?.RootPath), runRoot, StringComparison.OrdinalIgnoreCase);
+
+    private void ApplyWizardBenchmarkResult(UsbMappingWizardResult done, UsbTargetInfo target, UsbBenchmarkResult? result)
+    {
+        WizardBenchmarkReadingLines.Clear();
+        _wizardBenchmarkResultRoot = NormalizeRootPath(target.RootPath);
+
+        if (result is null)
+        {
+            WizardBenchmarkStatusText = "Benchmark did not start.";
+            WizardBenchmarkErrorText =
+                "The benchmark was skipped before any measurement ran — the target may be busy with another USB action, " +
+                "already benchmarking, or no longer selected. Try again in a few seconds.";
+            OnPropertyChanged(nameof(HasWizardBenchmarkReadings));
+            return;
+        }
+
+        var kind = result.GetEffectiveResultKind();
+        var completed = kind == UsbBenchmarkResultKind.Completed;
+
+        WizardBenchmarkReadingLines.Add($"Port: {done.Label} · {FormatWizardDriveDisplay(target)}");
+        if (!string.IsNullOrWhiteSpace(SpeedClassDisplay))
+        {
+            WizardBenchmarkReadingLines.Add($"Detected port capability: {SpeedClassDisplay} (topology inference, not a measurement)");
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.Classification))
+        {
+            WizardBenchmarkReadingLines.Add($"Connection class from measurement: {result.Classification}");
+        }
+
+        if (completed)
+        {
+            var readSuffix = result.IsReadCacheSuspected || result.ReadLikelyCached || result.ReadIsEstimate
+                ? " (not verified — Windows cache suspected; treat as an upper bound)"
+                : " (measured)";
+            if (result.ReadSpeedMBps > 0)
+            {
+                WizardBenchmarkReadingLines.Add(FormattableString.Invariant(
+                    $"Read speed: {result.ReadSpeedMBps:0.0} MB/s{readSuffix}"));
+            }
+
+            if (result.WriteSpeedMBps > 0)
+            {
+                WizardBenchmarkReadingLines.Add(FormattableString.Invariant(
+                    $"Write speed: {result.WriteSpeedMBps:0.0} MB/s (measured, safe temp file — cleaned up afterwards)"));
+            }
+
+            if (result.BenchmarkDurationMs > 0)
+            {
+                WizardBenchmarkReadingLines.Add(FormattableString.Invariant(
+                    $"Response time: benchmark finished in {result.BenchmarkDurationMs / 1000.0:0.0} s"));
+            }
+        }
+        else
+        {
+            WizardBenchmarkReadingLines.Add($"Read speed: {result.ReadSpeedDisplay}");
+            WizardBenchmarkReadingLines.Add($"Write speed: {result.WriteSpeedDisplay}");
+        }
+
+        var powerHint = _getPowerHintLine?.Invoke();
+        if (!string.IsNullOrWhiteSpace(powerHint))
+        {
+            WizardBenchmarkReadingLines.Add($"Power/charging hint: {powerHint}");
+        }
+
+        var bottleneck = BuildWizardBenchmarkBottleneckLine(result);
+        if (!string.IsNullOrWhiteSpace(bottleneck))
+        {
+            WizardBenchmarkReadingLines.Add($"Bottleneck check: {bottleneck}");
+        }
+
+        if (!completed && !string.IsNullOrWhiteSpace(result.Details))
+        {
+            WizardBenchmarkReadingLines.Add($"Why: {result.Details}");
+        }
+
+        WizardBenchmarkReadingLines.Add($"Result mode: {BuildWizardBenchmarkModeLine(result, kind)}");
+
+        var testedAt = result.LastTestedAt ?? result.CompletedAtUtc;
+        if (testedAt is not null)
+        {
+            WizardBenchmarkReadingLines.Add(
+                $"Benchmarked: {testedAt.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.CurrentCulture)} (local)");
+        }
+
+        WizardBenchmarkReadingLines.Add(BuildWizardBenchmarkNextStepLine(result, kind));
+
+        WizardBenchmarkStatusText = completed
+            ? "Benchmark complete. Readings below are for the mapped port above."
+            : "Benchmark finished without full readings. Details below.";
+        WizardBenchmarkErrorText = kind is UsbBenchmarkResultKind.IoFailed
+            or UsbBenchmarkResultKind.ValidationFailed
+            or UsbBenchmarkResultKind.UnknownFailed
+            or UsbBenchmarkResultKind.BlockedBySafety
+            ? result.UiSummaryLine
+            : string.Empty;
+        OnPropertyChanged(nameof(HasWizardBenchmarkReadings));
+    }
+
+    internal static string BuildWizardBenchmarkModeLine(UsbBenchmarkResult result, UsbBenchmarkResultKind kind) =>
+        kind switch
+        {
+            UsbBenchmarkResultKind.Completed when result.IsReadCacheSuspected || result.ReadLikelyCached || result.ReadIsEstimate =>
+                "Limited — write verified, read could not be verified (cache suspected).",
+            UsbBenchmarkResultKind.Completed => "Full measured benchmark (safe temp-file read/write).",
+            UsbBenchmarkResultKind.BlockedBySafety => "Skipped — the safety gate blocked this target (no data was written).",
+            UsbBenchmarkResultKind.CancelledByUser => "Cancelled by user before completion.",
+            UsbBenchmarkResultKind.DeviceRemoved => "Skipped — the USB drive was removed mid-run.",
+            UsbBenchmarkResultKind.TargetChanged => "Skipped — the selected USB target changed mid-run.",
+            UsbBenchmarkResultKind.SkippedTargetSettling => "Skipped — the USB target was still settling.",
+            UsbBenchmarkResultKind.CancelledByHost or UsbBenchmarkResultKind.CancelledByUsbAction or UsbBenchmarkResultKind.CancelledDuringUsbRefresh =>
+                "Cancelled — another USB action or app shutdown interrupted the run.",
+            _ => "Failed — no valid readings were produced."
+        };
+
+    private static string BuildWizardBenchmarkBottleneckLine(UsbBenchmarkResult result)
+    {
+        if (!string.IsNullOrWhiteSpace(result.AccuracyWarning))
+        {
+            return result.AccuracyWarning;
+        }
+
+        if (result.GetEffectiveResultKind() == UsbBenchmarkResultKind.Completed &&
+            result.WriteSpeedMBps is > 0 and < 15)
+        {
+            return "Write speed is in USB 2.0 territory. If this drive is USB 3 capable, the port, cable, or hub may be the bottleneck.";
+        }
+
+        return string.Empty;
+    }
+
+    private static string BuildWizardBenchmarkNextStepLine(UsbBenchmarkResult result, UsbBenchmarkResultKind kind) =>
+        kind switch
+        {
+            UsbBenchmarkResultKind.Completed =>
+                "Next step: map another port and benchmark it there to compare which physical port is fastest for this drive.",
+            UsbBenchmarkResultKind.BlockedBySafety =>
+                "Next step: pick a removable, non-system USB drive — ForgerEMS refuses to benchmark unsafe targets.",
+            _ =>
+                "Next step: reconnect the drive, wait for Windows to settle, then run the benchmark again from this screen."
+        };
+
+    private static string FormatWizardDriveDisplay(UsbTargetInfo target)
+    {
+        var letter = string.IsNullOrWhiteSpace(target.DriveLetter) ? "—" : target.DriveLetter.TrimEnd('\\');
+        return $"Drive {letter} ({target.LabelDisplay})";
+    }
+
+    private void ClearWizardBenchmarkResults()
+    {
+        _wizardBenchmarkResultRoot = string.Empty;
+        WizardBenchmarkReadingLines.Clear();
+        WizardBenchmarkStatusText = string.Empty;
+        WizardBenchmarkErrorText = string.Empty;
+        OnPropertyChanged(nameof(HasWizardBenchmarkReadings));
     }
 
     private void RestartWizard()
@@ -1111,6 +1381,9 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         ConfidenceTierDisplay = string.Empty;
         RecommendationDisplay = string.Empty;
         DoneResult = null;
+        _wizardBenchmarkRunSequence++;
+        IsWizardBenchmarkRunning = false;
+        ClearWizardBenchmarkResults();
         _pendingSaveMode = UsbPortMappingSaveMode.TopologyInference;
         IsAnalyzingPortChange = false;
         DetectChangePrimaryStatus = string.Empty;
@@ -1140,5 +1413,6 @@ public sealed class UsbMappingWizardViewModel : ObservableObject
         BackFromDetectCommand.RaiseCanExecuteChanged();
         SavePortLabelCommand.RaiseCanExecuteChanged();
         MapAnotherPortCommand.RaiseCanExecuteChanged();
+        RunBenchmarkOnThisPortCommand.RaiseCanExecuteChanged();
     }
 }

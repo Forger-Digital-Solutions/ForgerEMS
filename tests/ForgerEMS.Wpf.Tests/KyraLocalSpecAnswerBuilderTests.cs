@@ -36,7 +36,7 @@ public sealed class KyraLocalSpecAnswerBuilderTests
     public void MissingScan_DoesNotInventSpecs()
     {
         Assert.True(KyraLocalSpecAnswerBuilder.TryBuildLocalSpecAnswer("How much RAM?", null, out var r));
-        Assert.Contains("Run System Intelligence first", r.Text, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("local device snapshot", r.Text, System.StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("_Kyra", r.Text, System.StringComparison.OrdinalIgnoreCase);
         Assert.False(r.GroundedInSystemIntelligence);
     }

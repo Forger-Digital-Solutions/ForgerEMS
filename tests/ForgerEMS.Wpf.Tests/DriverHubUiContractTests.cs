@@ -40,8 +40,8 @@ public sealed class DriverHubUiContractTests
         Assert.Contains("No Driver Hub cards match your filter.", tab, StringComparison.Ordinal);
 
         var vmCode = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "ViewModels", "MainViewModel.DriverHub.cs"));
-        Assert.Contains("Run System Intelligence to personalize recommendations.", vmCode, StringComparison.Ordinal);
-        Assert.Contains("Run System Intelligence to personalize Driver Hub.", vmCode, StringComparison.Ordinal);
+        Assert.Contains("Add a local device snapshot to personalize recommendations.", vmCode, StringComparison.Ordinal);
+        Assert.Contains("No local device snapshot loaded. Driver Hub still shows official starting points.", vmCode, StringComparison.Ordinal);
         Assert.Contains("Select a USB target to add Driver Hub shortcuts.", vmCode, StringComparison.Ordinal);
 
         foreach (var filter in new[] { "All", "Recommended", "Driver Apps", "GPU", "OEM", "Network", "Chipset", "BIOS/Firmware", "Linux", "Windows" })

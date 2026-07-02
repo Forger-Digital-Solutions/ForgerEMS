@@ -341,7 +341,7 @@ public sealed class KyraToolRegistry
         {
             return tool.Name.Contains("Toolkit", StringComparison.OrdinalIgnoreCase)
                 ? "Run Toolkit Manager scan to populate health context."
-                : "Run System Intelligence scan for machine-specific context.";
+                : "Add a local device snapshot for machine-specific context.";
         }
 
         if (tool.Name.Equals("Marketplace", StringComparison.OrdinalIgnoreCase))

@@ -70,7 +70,7 @@
     },
     {
       "categoryId": "diagnostics",
-      "categoryDisplayName": "Diagnostics and rescue utilities",
+      "categoryDisplayName": "Diagnostic Tools for USB",
       "defaultIncluded": true,
       "platform": "Tools"
     }

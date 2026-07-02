@@ -44,6 +44,7 @@ portable/
 .verify/*
 !.verify/
 !.verify/README.md
+.qa-smoke/
 .tmp/
 .cache/
 artifacts/
@@ -88,3 +89,6 @@ backend/legacy/VentoyToolkitSetup/IfScriptFails(ManualSetup)/
 nuget.config.ci
 
 # Release folders are generated local/CI outputs.
+
+# Local release artifacts
+release/current/

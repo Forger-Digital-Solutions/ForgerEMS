@@ -82,7 +82,7 @@ public sealed class ElevatedScanTelemetryCacheTests
 
             Assert.Equal(ElevatedScanTelemetryState.CompletePartial, snapshot.State);
             Assert.Equal(ElevatedScanParseQuality.Partial, snapshot.ParseQuality);
-            Assert.Equal("Elevated scan complete — some deep telemetry was unavailable on this device.", snapshot.UserMessage);
+            Assert.Equal("Elevated scan complete — some permission-limited detail was unavailable on this device.", snapshot.UserMessage);
             Assert.Equal(ElevatedScanSeverity.Success, snapshot.Severity);
         }
         finally

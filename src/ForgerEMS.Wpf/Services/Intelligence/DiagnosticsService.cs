@@ -48,7 +48,7 @@ public sealed class DiagnosticsService : IDiagnosticsService
         var overall = AggregateSeverity(items);
         var summary =
             $"Diagnostics: {overall}; {items.Count} item(s). " +
-            $"Sources: System Intelligence, USB Intelligence, Toolkit, WSL probe.";
+            $"Sources: local device snapshot, USB Intelligence, Toolkit, WSL probe.";
 
         IntelligenceLogWriter.Append("diagnostics.log", summary);
 
@@ -111,8 +111,8 @@ public sealed class DiagnosticsService : IDiagnosticsService
                 Source = "SystemIntelligence",
                 Code = "no_report",
                 Severity = DiagnosticSeverityLevel.Warning,
-                Message = "No System Intelligence JSON is available yet.",
-                SuggestedFix = "Run System Intelligence from the app or wait for the background scan to finish."
+                Message = "No local device snapshot JSON is available yet.",
+                SuggestedFix = "Use Dr. Forge when available or refresh local device context."
             });
             return;
         }
@@ -156,7 +156,7 @@ public sealed class DiagnosticsService : IDiagnosticsService
                         Code = "obvious_problem",
                         Severity = DiagnosticSeverityLevel.Warning,
                         Message = SanitizeDiagnosticMessage(text),
-                        SuggestedFix = "Review System Intelligence recommendations and rerun the scan after changes."
+                        SuggestedFix = "Review local device recommendations and refresh the snapshot after changes."
                     });
                 }
             }
@@ -169,7 +169,7 @@ public sealed class DiagnosticsService : IDiagnosticsService
                 Code = "parse_error",
                 Severity = DiagnosticSeverityLevel.Unknown,
                 Message = $"Could not parse system intelligence report: {ex.Message}",
-                SuggestedFix = "Rerun System Intelligence scan."
+                SuggestedFix = "Refresh the local device snapshot."
             });
         }
     }
@@ -406,7 +406,7 @@ public sealed class DiagnosticsService : IDiagnosticsService
                     Source = "Network",
                     Code = "offline",
                     Severity = DiagnosticSeverityLevel.Warning,
-                    Message = "System Intelligence reports the machine is offline or could not verify internet connectivity.",
+                    Message = "Local device context reports the machine is offline or could not verify internet connectivity.",
                     SuggestedFix = "Check Wi-Fi/Ethernet, VPN, and DNS; retry after connectivity returns."
                 });
             }

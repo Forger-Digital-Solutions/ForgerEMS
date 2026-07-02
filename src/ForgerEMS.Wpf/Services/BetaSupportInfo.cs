@@ -15,6 +15,8 @@ public static class BetaSupportInfo
 
     public const string CopyrightNotice = "Copyright © 2026 Forger Digital Solutions. All rights reserved.";
 
+    public const string WelcomeCenterFooterCopyright = "Built and Powered by © Forger Digital Solutions 2026";
+
     public const string MailtoSubject = "ForgerEMS Beta Issue Report";
 
     public static string MailtoUri =>

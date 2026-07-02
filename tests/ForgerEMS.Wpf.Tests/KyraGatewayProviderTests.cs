@@ -304,7 +304,7 @@ public sealed class KyraGatewayProviderTests
 
         Assert.NotNull(gatewayRequest.MachineContext);
         var summary = gatewayRequest.MachineContext!["summary"];
-        Assert.Contains("Sanitized system context", summary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Sanitized device context", summary, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("C:\\Users\\Daddy_FDS", summary, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("SERIAL12345", summary, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("gateway-token", summary, StringComparison.OrdinalIgnoreCase);

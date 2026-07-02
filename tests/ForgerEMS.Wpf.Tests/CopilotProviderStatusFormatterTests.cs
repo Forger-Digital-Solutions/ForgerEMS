@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using VentoyToolkitSetup.Wpf.Services;
@@ -86,8 +87,13 @@ public sealed class CopilotProviderStatusFormatterTests
     }
 
     [Fact]
-    public void AnthropicWithoutKey_ShowsNotConfigured()
+    public void AnthropicWithoutUsableKey_ShowsNotConfigured()
     {
+        var previousStore = KyraProviderCredentialStore.Default;
+        var previousAnthropicKey = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY", EnvironmentVariableTarget.Process);
+        var previousForgerEmsAnthropicKey = Environment.GetEnvironmentVariable("FORGEREMS_ANTHROPIC_API_KEY", EnvironmentVariableTarget.Process);
+        var isolatedStore = new KyraProviderCredentialStore(
+            Path.Combine(Path.GetTempPath(), "forgerems-tests", Guid.NewGuid().ToString("N"), "empty.protected.json"));
         var provider = new FakeProvider(
             "anthropic-claude",
             "Anthropic",
@@ -103,14 +109,19 @@ public sealed class CopilotProviderStatusFormatterTests
 
         try
         {
-            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", null, EnvironmentVariableTarget.Process);
+            KyraProviderCredentialStore.UseDefaultForTests(isolatedStore);
+            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", "REPLACE_ME", EnvironmentVariableTarget.Process);
+            Environment.SetEnvironmentVariable("FORGEREMS_ANTHROPIC_API_KEY", "REPLACE_ME", EnvironmentVariableTarget.Process);
             KyraApiKeyStore.ClearSessionKey("anthropic-claude");
             var label = CopilotProviderStatusFormatter.BuildStatusLabel(provider, cfg);
             Assert.Contains("Not configured", label, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
-            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", null, EnvironmentVariableTarget.Process);
+            KyraApiKeyStore.ClearSessionKey("anthropic-claude");
+            KyraProviderCredentialStore.UseDefaultForTests(previousStore);
+            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", previousAnthropicKey, EnvironmentVariableTarget.Process);
+            Environment.SetEnvironmentVariable("FORGEREMS_ANTHROPIC_API_KEY", previousForgerEmsAnthropicKey, EnvironmentVariableTarget.Process);
         }
     }
 

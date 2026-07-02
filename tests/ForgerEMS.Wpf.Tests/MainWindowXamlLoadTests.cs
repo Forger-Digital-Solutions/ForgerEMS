@@ -31,31 +31,84 @@ public sealed class MainWindowXamlLoadTests
     }
 
     [Fact]
-    public void MainWindow_SystemIntelligenceTab_UsesThreePrimaryActionButtons()
+    public void MainWindow_SystemIntelligenceAndDiagnosticsTabs_AreRemoved_AndDoNotReturn()
+    {
+        // Shell simplification pass: the heavy System Intelligence and Diagnostics
+        // surfaces moved to Dr. Forge (the dedicated diagnostics companion). Guard
+        // against either tab — or its sidebar nav button — quietly returning.
+        var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
+        var text = File.ReadAllText(xamlPath);
+
+        Assert.DoesNotContain("<TabItem Header=\"◎  System Intelligence\">", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("<TabItem Header=\"⚙  Diagnostics\">", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("NavSystemButton", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("NavDiagnosticsButton", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"◎  System Intelligence\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"⚙  Diagnostics\"", text, StringComparison.Ordinal);
+
+        // The diagnostics-only Mission Control / Safety Lab content must be gone too.
+        Assert.DoesNotContain("Text=\"1) Mission Control\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Header=\"2) Evidence &amp; Logs\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Header=\"3) Safety Lab\"", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainWindow_TabStrip_ContainsExactlyTheSixKeptTabsInOrder()
     {
         var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
         var text = File.ReadAllText(xamlPath);
-        var tabStart = text.IndexOf("<TabItem Header=\"◎  System Intelligence\">", StringComparison.Ordinal);
-        Assert.True(tabStart >= 0);
-        var tabEnd = text.IndexOf("<TabItem Header=\"▤  Toolkit Manager\">", tabStart, StringComparison.Ordinal);
-        Assert.True(tabEnd > tabStart);
-        var systemIntelligence = text[tabStart..tabEnd];
 
-        Assert.Contains("Content=\"Elevated Scan\"", systemIntelligence, StringComparison.Ordinal);
-        Assert.Contains("Content=\"Open Files\"", systemIntelligence, StringComparison.Ordinal);
-        Assert.Contains("Content=\"Create Support Bundle\"", systemIntelligence, StringComparison.Ordinal);
-        Assert.Contains("RunElevatedSystemScanCommand", systemIntelligence, StringComparison.Ordinal);
-        Assert.Contains("OpenSystemIntelligenceFilesCommand", systemIntelligence, StringComparison.Ordinal);
-        Assert.Contains("ExportSupportBundleCommand", systemIntelligence, StringComparison.Ordinal);
-        Assert.Contains("SystemIntelligenceScanModeHintText", systemIntelligence, StringComparison.Ordinal);
-        Assert.DoesNotContain("Content=\"Run Standard Scan\"", systemIntelligence, StringComparison.Ordinal);
-        Assert.DoesNotContain("Content=\"Run Elevated Scan\"", systemIntelligence, StringComparison.Ordinal);
-        Assert.DoesNotContain("Content=\"Restart as Administrator\"", systemIntelligence, StringComparison.Ordinal);
-        Assert.DoesNotContain("Content=\"Copy Quick Summary\"", systemIntelligence, StringComparison.Ordinal);
-        Assert.DoesNotContain("Content=\"Open JSON Report\"", systemIntelligence, StringComparison.Ordinal);
-        Assert.DoesNotContain("Content=\"Open Markdown Report\"", systemIntelligence, StringComparison.Ordinal);
-        Assert.DoesNotContain("Content=\"Refresh Results\"", systemIntelligence, StringComparison.Ordinal);
-        Assert.DoesNotContain("CopyElevatedScanAdminCommand", systemIntelligence, StringComparison.Ordinal);
+        var headers = System.Text.RegularExpressions.Regex
+            .Matches(text, "<TabItem Header=\"(?<h>[^\"]+)\">")
+            .Select(m => m.Groups["h"].Value)
+            .ToArray();
+
+        var expected = new[]
+        {
+            "USB Builder",
+            "Port / USB Intelligence",
+            "▤  Toolkit Manager",
+            "▥  Driver Hub",
+            "◇  Kyra (Beta)",
+            "☰  Settings"
+        };
+
+        Assert.Equal(expected, headers);
+    }
+
+    [Fact]
+    public void MainWindow_LiveLogsTab_IsRemoved_AndDoesNotReturn()
+    {
+        // Live Logs is a single always-visible side panel (plus the View Full Logs
+        // overlay) — it must not also exist as a dedicated tab / sidebar nav button.
+        var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
+        var text = File.ReadAllText(xamlPath);
+
+        Assert.DoesNotContain("<TabItem Header=\"Live Logs\">", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("NavLiveLogsButton", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("LiveLogsTabTextBox", text, StringComparison.Ordinal);
+
+        // The persistent side panel and its full-logs overlay entry point must remain.
+        Assert.Contains("Text=\"Live Logs\"", text, StringComparison.Ordinal);
+        Assert.Contains("View Full Logs", text, StringComparison.Ordinal);
+        Assert.Contains("FullLogsOverlay", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainWindow_SupportBundleAndDrForge_StayReachableInToolkitManager()
+    {
+        // Create Support Bundle (still needed by support flows) and the honest,
+        // read-only "Learn about Dr. Forge" entry were relocated out of the removed
+        // System Intelligence tab into Toolkit Manager — they must remain present.
+        var text = LoadMainWindowXaml();
+        var toolkit = ExtractTab(text, "▤  Toolkit Manager");
+
+        Assert.Contains("Content=\"Create Support Bundle\"", toolkit, StringComparison.Ordinal);
+        Assert.Contains("ExportSupportBundleCommand", toolkit, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Learn about Dr. Forge\"", toolkit, StringComparison.Ordinal);
+        Assert.Contains("Dr. Forge will be available here as a dedicated download", toolkit, StringComparison.Ordinal);
+        Assert.DoesNotContain("Deep system scans", toolkit, StringComparison.Ordinal);
+        Assert.DoesNotContain("hardware/sensor intelligence", toolkit, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -72,27 +125,22 @@ public sealed class MainWindowXamlLoadTests
     }
 
     [Fact]
-    public void MainWindow_NetworkPulseInternetWidget_IsInsideRightStatusGrid_NotFullHeaderRow()
+    public void MainWindow_NetworkPulse_IsFullyRetiredFromTheShell()
     {
+        // v1.2.3: the always-visible Internet widget was removed from the shell header,
+        // and the whole Network Pulse feature was then retired in v1.2.3-preview.1.
+        // No Network Pulse widget, settings section, command, or binding may remain
+        // anywhere in the main window.
         var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
         var text = File.ReadAllText(xamlPath);
         Assert.Contains("HeaderRightStatusGrid", text, StringComparison.Ordinal);
-        Assert.Contains("NetworkPulseHeaderCompactIsland", text, StringComparison.Ordinal);
-        Assert.Contains("NetworkPulseFlyoutTarget", text, StringComparison.Ordinal);
         Assert.Contains("HeaderLeftSupportCopyGroup", text, StringComparison.Ordinal);
 
-        var rightGrid = text.IndexOf("HeaderRightStatusGrid", StringComparison.Ordinal);
-        var compactIsland = text.IndexOf("NetworkPulseHeaderCompactIsland", StringComparison.Ordinal);
-        var flyout = text.IndexOf("NetworkPulseFlyoutTarget", StringComparison.Ordinal);
-        Assert.True(rightGrid >= 0 && compactIsland > rightGrid && flyout > compactIsland);
-
-        var rightOpenEnd = text.IndexOf('>', rightGrid);
-        var rightOpenTag = text[rightGrid..rightOpenEnd];
-        Assert.Contains("Grid.Column=\"1\"", rightOpenTag, StringComparison.Ordinal);
-        Assert.Contains("InternetWidgetLine1", text, StringComparison.Ordinal);
-        Assert.Contains("InternetWidgetLine2", text, StringComparison.Ordinal);
-        Assert.Contains("NetworkPulse.InternetWidgetLine3", text, StringComparison.Ordinal);
-        Assert.Contains("HorizontalAlignment=\"Right\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("NetworkPulse", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Network Pulse", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("InternetWidgetLine1", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Run Network Check", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("HeaderWidgetVisibility", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -144,35 +192,6 @@ public sealed class MainWindowXamlLoadTests
     }
 
     [Fact]
-    public void MainWindow_NetworkPulseHeaderCompactIsland_HasNoBulkyMinSizeOrPadding()
-    {
-        var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
-        var text = File.ReadAllText(xamlPath);
-        var start = text.IndexOf("NetworkPulseHeaderCompactIsland", StringComparison.Ordinal);
-        Assert.True(start >= 0);
-        var end = text.IndexOf("NetworkPulseFlyoutTarget", start, StringComparison.Ordinal);
-        Assert.True(end > start);
-        var header = text[start..end];
-        Assert.DoesNotContain("MinHeight", header, StringComparison.Ordinal);
-        Assert.DoesNotContain("MinWidth", header, StringComparison.Ordinal);
-        Assert.DoesNotContain("Padding=\"10,8\"", header, StringComparison.Ordinal);
-        Assert.Contains("Padding=\"5,2\"", header, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void MainWindow_NetworkPulseCompactIsland_DoesNotUseColumnSpanFourUnderHeader()
-    {
-        var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
-        var text = File.ReadAllText(xamlPath);
-        var start = text.IndexOf("NetworkPulseHeaderCompactIsland", StringComparison.Ordinal);
-        Assert.True(start >= 0);
-        var openEnd = text.IndexOf('>', start);
-        Assert.True(openEnd > start);
-        var openTag = text[start..openEnd];
-        Assert.DoesNotContain("ColumnSpan=\"4\"", openTag, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void MainWindow_SettingsTabUsesCompactSafetyAndUpdateWording()
     {
         var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
@@ -181,11 +200,6 @@ public sealed class MainWindowXamlLoadTests
         Assert.True(settingsStart >= 0);
         var settings = text[settingsStart..];
 
-        Assert.Contains("Forger Sensor Stack / Deep Sensor Mode", settings, StringComparison.Ordinal);
-        Assert.Contains("Core: Active", settings, StringComparison.Ordinal);
-        Assert.Contains("Service: Future optional", settings, StringComparison.Ordinal);
-        Assert.Contains("Safety: read-only", settings, StringComparison.Ordinal);
-        Assert.Contains("No fan, voltage, clock, BIOS, or firmware control.", settings, StringComparison.Ordinal);
         Assert.Contains("Keep Local Only", settings, StringComparison.Ordinal);
         Assert.Contains("Help Improve Kyra", settings, StringComparison.Ordinal);
         Assert.Contains("Learn More", settings, StringComparison.Ordinal);
@@ -194,12 +208,18 @@ public sealed class MainWindowXamlLoadTests
         Assert.Contains("Delete Memory", settings, StringComparison.Ordinal);
         Assert.Contains("Reset Learning", settings, StringComparison.Ordinal);
         Assert.Contains("AppUpdateCheckButtonText", settings, StringComparison.Ordinal);
-        Assert.Contains("Network Pulse", settings, StringComparison.Ordinal);
-        Assert.Contains("Lightweight", settings, StringComparison.Ordinal);
         Assert.Contains("AppUpdateCheckHelperText", settings, StringComparison.Ordinal);
         Assert.Contains("Copy Update Diagnostics", settings, StringComparison.Ordinal);
         Assert.Contains("Copies a safe summary for support sharing.", settings, StringComparison.Ordinal);
         Assert.DoesNotContain("Check Now", settings, StringComparison.Ordinal);
+
+        // Retired feature sections must not return to Settings.
+        Assert.DoesNotContain("Forger Sensor Stack / Deep Sensor Mode", settings, StringComparison.Ordinal);
+        Assert.DoesNotContain("Deep Sensor Mode", settings, StringComparison.Ordinal);
+        Assert.DoesNotContain("Deep Sense", settings, StringComparison.Ordinal);
+        Assert.DoesNotContain("Network Pulse", settings, StringComparison.Ordinal);
+        Assert.DoesNotContain("DeepSensorModeSelectedIndex", settings, StringComparison.Ordinal);
+        Assert.DoesNotContain("DeepSensorModeConsentNotice", settings, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -290,15 +310,24 @@ public sealed class MainWindowXamlLoadTests
         throw new FileNotFoundException("Could not locate repo file.", Path.Combine(segments));
     }
 
+    private static string LoadMainWindowXaml() =>
+        File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
+
+    private static string ExtractTab(string xaml, string header)
+    {
+        var start = xaml.IndexOf($"<TabItem Header=\"{header}\">", StringComparison.Ordinal);
+        Assert.True(start >= 0, $"Could not find tab '{header}'.");
+
+        var end = xaml.IndexOf("<TabItem Header=", start + 1, StringComparison.Ordinal);
+        return end > start ? xaml[start..end] : xaml[start..];
+    }
+
     [Fact]
     public void MainWindow_DriveValidatorProgressBar_IsRemovedFromUsbBuilderTab()
     {
-        // The Drive Validator card on the USB Builder tab is now a compact summary only — the
-        // inline ProgressBar bound to DriveValidatorProgressValue was moved into the Drive
-        // Validator Wizard (where the validation actually runs). This test guards against the
-        // inline progress bar being reintroduced into the main tab; the wizard's own
-        // RunningProgressValue ProgressBar lives in DriveValidatorWizardWindow.xaml and is
-        // unaffected.
+        // Drive Validator progress belongs in the Drive Validator Wizard, not the main USB
+        // Builder surface. The wizard's own RunningProgressValue ProgressBar lives in
+        // DriveValidatorWizardWindow.xaml and is unaffected.
         var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
         var text = File.ReadAllText(xamlPath);
 
@@ -377,113 +406,287 @@ public sealed class MainWindowXamlLoadTests
     }
 
     [Fact]
-    public void UsbBuilder_DriveValidatorCard_IsCompactAndDelegatesToWizard()
+    public void MainWindow_UsbProductTabs_UseRequestedSectionShape()
     {
-        // The Drive Validator card on the USB Builder tab is intentionally compact: header
-        // + status pill, target / last check / result key-value lines, and a single
-        // "Open Drive Validator" button. Validation mode dropdown, Start/Cancel buttons,
-        // inline ProgressBar, phase text, and evidence expander were moved into the Drive
-        // Validator Wizard. This test fails if anyone reintroduces those heavy controls.
-        var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
-        var text = File.ReadAllText(xamlPath);
+        var text = LoadMainWindowXaml();
+        var builder = ExtractTab(text, "USB Builder");
+        var intelligence = ExtractTab(text, "Port / USB Intelligence");
 
-        var cardStart = text.IndexOf("UsbBuilderDriveValidatorCompactCard", StringComparison.Ordinal);
-        Assert.True(cardStart >= 0, "Compact Drive Validator card (x:Name) must exist in MainWindow.xaml.");
-        var cardEnd = text.IndexOf("</GroupBox>", cardStart, StringComparison.Ordinal);
-        Assert.True(cardEnd > cardStart);
-        var card = text[cardStart..cardEnd];
+        Assert.Contains("NavUsbButton", text, StringComparison.Ordinal);
+        Assert.Contains("NavPortUsbIntelligenceButton", text, StringComparison.Ordinal);
 
-        // Compact summary bindings.
-        Assert.Contains("DriveValidatorQuickSummary", card, StringComparison.Ordinal);
-        Assert.Contains("DriveValidatorLastStatusDisplay", card, StringComparison.Ordinal);
-        Assert.Contains("DriveValidatorLastValidationAgeDisplay", card, StringComparison.Ordinal);
-        Assert.Contains("DriveValidatorTargetDisplay", card, StringComparison.Ordinal);
-        Assert.Contains("DriveValidatorResultSummary", card, StringComparison.Ordinal);
+        foreach (var header in new[] { "USB Target", "USB Builder Profile", "Ventoy", "Actions" })
+        {
+            Assert.Contains($"<GroupBox Header=\"{header}\">", builder, StringComparison.Ordinal);
+        }
 
-        // Single primary action: opens the wizard.
-        Assert.Contains("Open Drive Validator", card, StringComparison.Ordinal);
-        Assert.Contains("OpenDriveValidatorWizardCommand", card, StringComparison.Ordinal);
+        // v1.2.3-preview.1 dashboard shape: devices at the top, check actions, latest
+        // results, then the safe battery/system-specs summary.
+        foreach (var header in new[] { "Connected USB Devices", "USB / Drive Checks", "Latest Results", "Battery &amp; System Specs" })
+        {
+            Assert.Contains($"<GroupBox Header=\"{header}\">", intelligence, StringComparison.Ordinal);
+        }
 
-        // Heavy controls must NOT live inline in the USB Builder card any more.
-        Assert.DoesNotContain("RunDriveValidatorCommand", card, StringComparison.Ordinal);
-        Assert.DoesNotContain("CancelDriveValidatorCommand", card, StringComparison.Ordinal);
-        Assert.DoesNotContain("DriveValidatorModeIndex", card, StringComparison.Ordinal);
-        Assert.DoesNotContain("DriveValidatorProgressValue", card, StringComparison.Ordinal);
-        Assert.DoesNotContain("DriveValidatorEvidenceDisplay", card, StringComparison.Ordinal);
-        Assert.DoesNotContain("DriveValidatorPhaseDisplay", card, StringComparison.Ordinal);
-        Assert.DoesNotContain("Start validation", card, StringComparison.Ordinal);
-        Assert.DoesNotContain("Quick Safe Check", card, StringComparison.Ordinal);
-        Assert.DoesNotContain("Sampled Capacity Check", card, StringComparison.Ordinal);
-        Assert.DoesNotContain("Full Free-Space Validation", card, StringComparison.Ordinal);
-        Assert.DoesNotContain("Evidence / details", card, StringComparison.Ordinal);
+        Assert.Contains("PortUsbDashboardCardStyle", text, StringComparison.Ordinal);
+        Assert.Contains("PortUsbResultCardStyle", text, StringComparison.Ordinal);
+        Assert.Contains("<WrapPanel>", intelligence, StringComparison.Ordinal);
+        Assert.DoesNotContain("<UniformGrid Columns=\"3\">", intelligence, StringComparison.Ordinal);
+
+        foreach (var retiredHeader in new[] { "Port Map", "USB Validation / Health", "Charging / Power", "Diagnostics" })
+        {
+            Assert.DoesNotContain($"<GroupBox Header=\"{retiredHeader}\">", intelligence, StringComparison.Ordinal);
+        }
     }
 
     [Fact]
-    public void UsbBuilder_PortIntelligenceCard_ComposesUsbAndPowerAndDelegatesHeavyActions()
+    public void UsbBuilder_DoesNotDuplicatePortHealthMapOrChargingControls()
     {
-        // The Port Intelligence card keeps USB mapping and charging summary copy together,
-        // while still delegating heavy benchmark/mapping workflows to the wizard.
-        var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
-        var text = File.ReadAllText(xamlPath);
+        var builder = ExtractTab(LoadMainWindowXaml(), "USB Builder");
 
-        var cardStart = text.IndexOf("UsbBuilderUsbIntelligenceCompactCard", StringComparison.Ordinal);
-        Assert.True(cardStart >= 0, "Compact USB Intelligence card (x:Name) must exist in MainWindow.xaml.");
-        var cardEnd = text.IndexOf("</GroupBox>", cardStart, StringComparison.Ordinal);
-        Assert.True(cardEnd > cardStart);
-        var card = text[cardStart..cardEnd];
-
-        // Compact summary bindings.
-        Assert.Contains("UsbIntelligencePanelTargetDisplay", card, StringComparison.Ordinal);
-        Assert.Contains("UsbIntelligenceDetectedClassDisplay", card, StringComparison.Ordinal);
-        Assert.Contains("UsbIntelligenceBenchmarkReadWriteDisplay", card, StringComparison.Ordinal);
-        Assert.Contains("UsbIntelligenceConfidenceScoreDisplay", card, StringComparison.Ordinal);
-        Assert.Contains("UsbIntelligenceRecommendationQualityDisplay", card, StringComparison.Ordinal);
-        Assert.Contains("UsbIntelligenceMappingLabelDisplay", card, StringComparison.Ordinal);
-        Assert.Contains("PortIntelligenceOverviewText", card, StringComparison.Ordinal);
-        Assert.Contains("PortIntelligencePortMapSummaryText", card, StringComparison.Ordinal);
-        Assert.Contains("PortIntelligenceChargingSummaryText", card, StringComparison.Ordinal);
-        Assert.Contains("PortIntelligencePowerSourceSummaryText", card, StringComparison.Ordinal);
-        Assert.Contains("PortIntelligenceBottlenecksText", card, StringComparison.Ordinal);
-        Assert.Contains("PortIntelligenceRecommendedFixesText", card, StringComparison.Ordinal);
-        Assert.Contains("PortIntelligenceDeepScanSummaryText", card, StringComparison.Ordinal);
-        Assert.DoesNotContain("Header=\"Charging Intelligence\"", text, StringComparison.Ordinal);
-
-        // Single primary action: opens the wizard.
-        Assert.Contains("Open USB Mapping Wizard", card, StringComparison.Ordinal);
-        Assert.Contains("OpenUsbMappingWizardCommand", card, StringComparison.Ordinal);
-
-        // Heavy controls must NOT live inline in the USB Builder card any more.
-        Assert.DoesNotContain("RunUsbIntelligenceBenchmarkCommand", card, StringComparison.Ordinal);
-        Assert.DoesNotContain("CancelUsbIntelligenceBenchmarkCommand", card, StringComparison.Ordinal);
-        Assert.DoesNotContain("StartUsbPortMappingWorkflowCommand", card, StringComparison.Ordinal);
-        Assert.DoesNotContain("CaptureUsbMappingBeforeCommand", card, StringComparison.Ordinal);
-        Assert.DoesNotContain("CaptureUsbMappingAfterCommand", card, StringComparison.Ordinal);
-        Assert.DoesNotContain("SaveUsbMappingLabelCommand", card, StringComparison.Ordinal);
-        Assert.DoesNotContain("UsbMappingLabelDraft", card, StringComparison.Ordinal);
-        Assert.DoesNotContain("Run USB Benchmark", card, StringComparison.Ordinal);
-        Assert.DoesNotContain("Cancel Benchmark", card, StringComparison.Ordinal);
-        Assert.DoesNotContain("Advanced: inline port mapping", card, StringComparison.Ordinal);
+        Assert.DoesNotContain("UsbBuilderUsbIntelligenceCompactCard", builder, StringComparison.Ordinal);
+        Assert.DoesNotContain("UsbBuilderPortPowerDetailsCard", builder, StringComparison.Ordinal);
+        Assert.DoesNotContain("UsbBuilderDriveValidatorCompactCard", builder, StringComparison.Ordinal);
+        Assert.DoesNotContain("Header=\"Port Map\"", builder, StringComparison.Ordinal);
+        Assert.DoesNotContain("Header=\"USB Validation / Health\"", builder, StringComparison.Ordinal);
+        Assert.DoesNotContain("Header=\"Charging / Power\"", builder, StringComparison.Ordinal);
+        Assert.DoesNotContain("RunUsbIntelligenceBenchmarkCommand", builder, StringComparison.Ordinal);
+        Assert.DoesNotContain("CancelUsbIntelligenceBenchmarkCommand", builder, StringComparison.Ordinal);
+        Assert.DoesNotContain("OpenUsbMappingWizardCommand", builder, StringComparison.Ordinal);
+        Assert.DoesNotContain("RefreshPortPowerCommand", builder, StringComparison.Ordinal);
+        Assert.DoesNotContain("UsbIntelligenceBenchmarkReadWriteDisplay", builder, StringComparison.Ordinal);
+        Assert.DoesNotContain("PortIntelligenceChargingSummaryText", builder, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void UsbBuilder_CardsRemainBounded_NoLargeInlineExpanders()
+    public void PortUsbIntelligence_DoesNotDuplicateBuilderWorkflowControls()
     {
-        // The USB Builder cards must stay compact — neither the Drive Validator nor the USB
-        // Intelligence card should contain an <Expander> (those belonged to the old heavy
-        // inline layout and force users to scroll past large technical blocks to reach the
-        // Ventoy and build controls below).
-        var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
+        var intelligence = ExtractTab(LoadMainWindowXaml(), "Port / USB Intelligence");
+
+        Assert.DoesNotContain("SetupUsbCommand", intelligence, StringComparison.Ordinal);
+        Assert.DoesNotContain("UpdateUsbCommand", intelligence, StringComparison.Ordinal);
+        Assert.DoesNotContain("InstallOrUpdateVentoyCommand", intelligence, StringComparison.Ordinal);
+        Assert.DoesNotContain("RefreshVentoyStatusCommand", intelligence, StringComparison.Ordinal);
+        Assert.DoesNotContain("FullManagedDownloadCommand", intelligence, StringComparison.Ordinal);
+        Assert.DoesNotContain("RevalidateManagedDownloadsCommand", intelligence, StringComparison.Ordinal);
+        Assert.DoesNotContain("UsbBuilderProfileOptions", intelligence, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelectRecommendedUsbBuilderProfileCommand", intelligence, StringComparison.Ordinal);
+        Assert.DoesNotContain("FullVerifyToolkitHealthCommand", intelligence, StringComparison.Ordinal);
+        Assert.DoesNotContain("OpenToolkitFolderCommand", intelligence, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UsbBuilder_ExistingCommandsRemainBound()
+    {
+        var builder = ExtractTab(LoadMainWindowXaml(), "USB Builder");
+
+        foreach (var binding in new[]
+        {
+            "RefreshUsbTargetsCommand",
+            "OpenDriveValidatorWizardCommand",
+            "SelectRecommendedUsbBuilderProfileCommand",
+            "SelectAllUsbBuilderProfileCommand",
+            "ResetUsbBuilderProfileCommand",
+            "FullManagedDownloadCommand",
+            "InstallOrUpdateVentoyCommand",
+            "RefreshVentoyStatusCommand",
+            "RevalidateManagedDownloadsCommand",
+            "SetupUsbCommand",
+            "UpdateUsbCommand",
+            "FullVerifyToolkitHealthCommand",
+            "OpenToolkitFolderCommand",
+            "RenameUsbCommand",
+            "RefreshAllCommand",
+            "RetryFailedManagedDownloadsCommand",
+            "OpenLogsFolderCommand"
+        })
+        {
+            Assert.Contains(binding, builder, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void UsbBuilder_ProfileCardsExposeItemLevelSummariesAndPickerAction()
+    {
+        var builder = ExtractTab(LoadMainWindowXaml(), "USB Builder");
+
+        Assert.Contains("SelectedItemSummaryText", builder, StringComparison.Ordinal);
+        Assert.Contains("ManagedDownloadsSummaryText", builder, StringComparison.Ordinal);
+        Assert.Contains("SelectedUsbFootprintSummaryText", builder, StringComparison.Ordinal);
+        Assert.Contains("ManualUserSuppliedSummaryText", builder, StringComparison.Ordinal);
+        Assert.Contains("Presets are editable starting points", builder, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Pick items\"", builder, StringComparison.Ordinal);
+        Assert.Contains("CustomizeUsbBuilderCategoryCommand", builder, StringComparison.Ordinal);
+        Assert.Contains("CommandParameter=\"{Binding}\"", builder, StringComparison.Ordinal);
+        Assert.Contains("OnUsbBuilderProfileCardMouseLeftButtonUp", builder, StringComparison.Ordinal);
+        Assert.Contains("Cursor=\"Hand\"", builder, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UsbBuilder_PickItemsButton_UsesCompactSecondaryStyle_AndOldWordingIsGone()
+    {
+        // The picker button was relabelled "Choose items" -> "Pick items" and made
+        // compact so it reads as a secondary action and stays aligned/readable at
+        // 1366x768. Guard both the wording swap and the compact styling.
+        var xaml = LoadMainWindowXaml();
+        var builder = ExtractTab(xaml, "USB Builder");
+
+        Assert.DoesNotContain("Content=\"Choose items\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Pick items\"", builder, StringComparison.Ordinal);
+
+        // The button uses the dedicated compact style rather than the heavy
+        // SecondaryButtonStyle (MinHeight 40 / Padding 14,10).
+        Assert.Contains("UsbBuilderCategoryPickerButtonStyle", builder, StringComparison.Ordinal);
+
+        var styleStart = xaml.IndexOf("x:Key=\"UsbBuilderCategoryPickerButtonStyle\"", StringComparison.Ordinal);
+        Assert.True(styleStart >= 0, "Compact picker button style must be defined.");
+        var styleEnd = xaml.IndexOf("</Style>", styleStart, StringComparison.Ordinal);
+        Assert.True(styleEnd > styleStart);
+        var style = xaml[styleStart..styleEnd];
+
+        Assert.Contains("BasedOn=\"{StaticResource SecondaryButtonStyle}\"", style, StringComparison.Ordinal);
+        Assert.Contains("Property=\"MinHeight\" Value=\"26\"", style, StringComparison.Ordinal);
+        Assert.Contains("Property=\"FontSize\" Value=\"11.5\"", style, StringComparison.Ordinal);
+        Assert.Contains("Property=\"Padding\" Value=\"10,4\"", style, StringComparison.Ordinal);
+        Assert.Contains("Property=\"Margin\" Value=\"0\"", style, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UsbBuilder_PickItemsButton_IsTuckedBottomCenter_NotSharingStatusRow()
+    {
+        // The picker button sits on its own row, docked to the bottom-center of each
+        // category card, so it never overlaps the status/summary wording (previously
+        // it shared a 2-column Grid row with the status text and overlapped it in the
+        // longer-labelled OS / Tool categories).
+        var builder = ExtractTab(LoadMainWindowXaml(), "USB Builder");
+
+        var buttonStart = builder.IndexOf("Style=\"{StaticResource UsbBuilderCategoryPickerButtonStyle}\"", StringComparison.Ordinal);
+        Assert.True(buttonStart >= 0, "Pick items button should be present.");
+
+        // Find the opening tag of the button and assert its layout attributes.
+        var openTagStart = builder.LastIndexOf("<Button", buttonStart, StringComparison.Ordinal);
+        var openTagEnd = builder.IndexOf("/>", buttonStart, StringComparison.Ordinal);
+        Assert.True(openTagStart >= 0 && openTagEnd > openTagStart);
+        var buttonTag = builder[openTagStart..openTagEnd];
+
+        Assert.Contains("DockPanel.Dock=\"Bottom\"", buttonTag, StringComparison.Ordinal);
+        Assert.Contains("HorizontalAlignment=\"Center\"", buttonTag, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Pick items\"", buttonTag, StringComparison.Ordinal);
+
+        // The card is a DockPanel now (button docked bottom) and the status summary no
+        // longer lives in a two-column Grid shared with the button.
+        Assert.Contains("<DockPanel LastChildFill=\"True\">", builder, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CategoryBuilderWindow_ExposesRequiredPickerActionsAndRowFields()
+    {
+        var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "CategoryBuilderWindow.xaml");
         var text = File.ReadAllText(xamlPath);
 
-        var dvStart = text.IndexOf("UsbBuilderDriveValidatorCompactCard", StringComparison.Ordinal);
-        var dvEnd = text.IndexOf("</GroupBox>", dvStart, StringComparison.Ordinal);
-        var dv = text[dvStart..dvEnd];
-        Assert.DoesNotContain("<Expander", dv, StringComparison.Ordinal);
+        foreach (var expected in new[]
+        {
+            "Title=\"{Binding WindowTitle}\"",
+            "Select Recommended",
+            "Select All",
+            "Clear Optional",
+            "Selected download:",
+            "EstimatedSelectedDownloadSize",
+            "USB space:",
+            "EstimatedSelectedUsbSpace",
+            "Apply",
+            "Cancel",
+            "TypeBadgeLabel",
+            "SourceDisplay",
+            "WarningText",
+            "SpaceChipText",
+            "IsSelected"
+        })
+        {
+            Assert.Contains(expected, text, StringComparison.Ordinal);
+        }
 
-        var uiStart = text.IndexOf("UsbBuilderUsbIntelligenceCompactCard", StringComparison.Ordinal);
-        var uiEnd = text.IndexOf("</GroupBox>", uiStart, StringComparison.Ordinal);
-        var ui = text[uiStart..uiEnd];
-        Assert.DoesNotContain("<Expander", ui, StringComparison.Ordinal);
+        Assert.Contains("Width=\"900\"", text, StringComparison.Ordinal);
+        Assert.Contains("Height=\"680\"", text, StringComparison.Ordinal);
+        Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("FullManagedDownloadCommand", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("SetupUsbCommand", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("UpdateUsbCommand", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PortUsbIntelligence_SummariesAndDiagnosticsRemainBound()
+    {
+        var intelligence = ExtractTab(LoadMainWindowXaml(), "Port / USB Intelligence");
+
+        foreach (var binding in new[]
+        {
+            "UsbTargets",
+            "RefreshUsbTargetsCommand",
+            "OpenUsbMappingWizardCommand",
+            "RunUsbIntelligenceBenchmarkCommand",
+            "CancelUsbIntelligenceBenchmarkCommand",
+            "OpenDriveValidatorWizardCommand",
+            "UsbIntelligencePanelTargetDisplay",
+            "UsbIntelligenceDetectedClassDisplay",
+            "UsbIntelligenceMappingLabelDisplay",
+            "UsbIntelligenceBestKnownPortDisplay",
+            "UsbIntelligenceBenchmarkReadWriteDisplay",
+            "UsbIntelligenceLastBenchmarkTimeDisplay",
+            "UsbIntelligenceConfidenceReasonDisplay",
+            "DriveValidatorQuickSummary",
+            "DriveValidatorLastStatusDisplay",
+            "DriveValidatorLastValidationAgeDisplay",
+            "DriveValidatorResultSummary",
+            "DriveValidatorBusPortDisplay",
+            "PortIntelligenceOverviewText",
+            "PortIntelligencePortMapSummaryText",
+            "PortIntelligenceChargingSummaryText",
+            "PortIntelligencePowerSourceSummaryText",
+            "PortIntelligenceElevatedInventorySummaryText",
+            "PortIntelligenceTelemetryLimitationsText",
+            "PortPowerSummaryText",
+            "PortPowerBatteryPercentDisplay",
+            "PortPowerVoltageCurrentDisplay",
+            "PortPowerTelemetryConfidenceDisplay",
+            "SystemIntelligenceLastScanText",
+            "CopySystemSummaryCommand",
+            "OpenSystemIntelligenceFilesCommand"
+        })
+        {
+            Assert.Contains(binding, intelligence, StringComparison.Ordinal);
+        }
+
+        // Retired deep-diagnostics surfaces must not come back to this tab.
+        Assert.DoesNotContain("PortIntelligenceDeepScanSummaryText", intelligence, StringComparison.Ordinal);
+        Assert.DoesNotContain("SystemIntelligenceSensorStackStatusText", intelligence, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PortUsbIntelligence_UsesSafeCheckWordingOnly()
+    {
+        // v1.2.3-preview.1 safe-checks boundary: PC/laptop checks in this tab are limited
+        // to battery health, system specs, and the local device/USB map. Broad hardware
+        // diagnostics wording must not return.
+        var intelligence = ExtractTab(LoadMainWindowXaml(), "Port / USB Intelligence");
+
+        foreach (var forbidden in new[]
+        {
+            "deep scan",
+            "PC diagnostics",
+            "hardware stress",
+            "stress test",
+            "thermal prob",
+            "fan prob",
+            "sensor deep scan",
+            "intensive diagnostic"
+        })
+        {
+            Assert.DoesNotContain(forbidden, intelligence, StringComparison.OrdinalIgnoreCase);
+        }
+
+        Assert.Contains("Battery", intelligence, StringComparison.Ordinal);
+        Assert.Contains("System specs", intelligence, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Connected USB Devices", intelligence, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -520,8 +723,8 @@ public sealed class MainWindowXamlLoadTests
     {
         var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
         var text = File.ReadAllText(xamlPath);
-        Assert.Contains("Header=\"Kyra Intelligence (Beta)\"", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("Header=\"Kyra Intelligence\"", text, StringComparison.Ordinal);
+        Assert.Contains("Header=\"Kyra Assistant (Beta)\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Header=\"Kyra Assistant\"", text, StringComparison.Ordinal);
     }
 
     [Fact]

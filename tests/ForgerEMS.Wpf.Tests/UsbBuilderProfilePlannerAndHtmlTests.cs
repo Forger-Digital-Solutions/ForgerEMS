@@ -14,13 +14,43 @@ public sealed class UsbBuilderProfilePlannerAndHtmlTests
     [Fact]
     public void Catalog_DefinesEstimatesForEveryCategory()
     {
-        Assert.Equal(9, UsbBuilderProfileCatalog.All.Count);
+        Assert.Equal(10, UsbBuilderProfileCatalog.All.Count);
         foreach (var definition in UsbBuilderProfileCatalog.All)
         {
             Assert.False(string.IsNullOrWhiteSpace(definition.DisplayName));
             Assert.NotEmpty(definition.MediaScanRelativePaths);
             Assert.False(string.IsNullOrWhiteSpace(definition.ManualMediaExplanation));
         }
+    }
+
+    [Fact]
+    public void Catalog_DiagnosticsCategoryCopyClarifiesUsbToolsAndDrForgeBoundary()
+    {
+        var definition = UsbBuilderProfileCatalog.GetRequired("diagnostics");
+
+        Assert.Equal("diagnostics", definition.CategoryId);
+        Assert.Equal("Diagnostic Tools for USB", definition.DisplayName);
+        Assert.Equal("Diagnostic Tools for USB", UsbBuilderProfileCatalog.GetSummaryLabel("diagnostics"));
+        Assert.Contains("USB/downloadable", definition.ShortDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Dr. Forge", definition.ShortDescription, StringComparison.Ordinal);
+        Assert.Contains("not the removed ForgerEMS Diagnostics tab", definition.ManualMediaExplanation, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("expanded repair analysis and advanced system inventory", definition.ManualMediaExplanation, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("deep hardware diagnostics", definition.ManualMediaExplanation, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ForgerEMS builds and manages the repair USB", definition.ManualMediaExplanation, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Catalog_ForgerEmsPortableCategoryUsesUsbAppDocsAndLogsFolders()
+    {
+        var definition = UsbBuilderProfileCatalog.GetRequired("forgerems-portable");
+
+        Assert.Equal("ForgerEMS Portable App", definition.DisplayName);
+        Assert.True(definition.DefaultIncluded);
+        Assert.Equal("ForgerEMS Portable App", UsbBuilderProfileCatalog.GetSummaryLabel("forgerems-portable"));
+        Assert.Contains(@"_apps\ForgerEMS", definition.MediaScanRelativePaths);
+        Assert.Contains(@"_docs\ForgerEMS", definition.MediaScanRelativePaths);
+        Assert.Contains(@"_logs\ForgerEMS", definition.MediaScanRelativePaths);
+        Assert.Contains("Terms", definition.ManualMediaExplanation, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -61,6 +91,64 @@ public sealed class UsbBuilderProfilePlannerAndHtmlTests
         var mac = UsbBuilderProfileOption.FromDefinition(UsbBuilderProfileCatalog.GetRequired("macos"), included: true);
         var line = UsbBuilderProfileEstimateCalculator.FormatSpaceLine(mac.SpaceEstimate);
         Assert.Contains("User-supplied", line, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void EstimateCalculator_UsesSelectedItemsAndSeparatesManagedFromManual()
+    {
+        var windows = UsbBuilderProfileOption.FromDefinition(UsbBuilderProfileCatalog.GetRequired("windows"), included: true);
+        windows.LoadItems(UsbBuilderProfileItemCatalog.ForCategory("windows"), new HashSet<string>());
+
+        var win11Link = windows.Items.First(i => string.Equals(i.ManifestEntryName, "Windows 11 Download Page", StringComparison.Ordinal));
+        var win11Drop = windows.Items.First(i => i.Id == "windows.win11-drop");
+        var adkGuide = windows.Items.First(i => string.Equals(i.ManifestEntryName, "Windows ADK and WinPE Info", StringComparison.Ordinal));
+
+        win11Link.IsSelected = true;
+        win11Drop.IsSelected = true;
+        adkGuide.IsSelected = true;
+
+        var totals = UsbBuilderProfileEstimateCalculator.CalculateTotals([windows]);
+
+        Assert.Equal(3, totals.SelectedItemCount);
+        Assert.Equal(0, totals.ManagedDownloadBytes);
+        Assert.Equal(1, totals.ManualUserSuppliedItemCount);
+        Assert.Equal("none", totals.ManagedDownloadDisplay);
+        Assert.Equal("varies", totals.ManualUserSuppliedDisplay);
+        Assert.Contains("Selected: 3", windows.SelectedItemSummaryText, StringComparison.Ordinal);
+        Assert.Equal("Managed downloads: none", windows.ManagedDownloadsSummaryText);
+        Assert.Equal("USB space: 202 KB + manual varies", windows.SelectedUsbFootprintSummaryText);
+        Assert.Equal("Manual/user-supplied: varies", windows.ManualUserSuppliedSummaryText);
+    }
+
+    [Fact]
+    public void ProfileItemSelection_BuildsSerializableManifestSelectors()
+    {
+        var diagnostics = UsbBuilderProfileOption.FromDefinition(UsbBuilderProfileCatalog.GetRequired("diagnostics"), included: true);
+        diagnostics.LoadItems(UsbBuilderProfileItemCatalog.ForCategory("diagnostics"), new HashSet<string>());
+        diagnostics.Items.First(i => string.Equals(i.ManifestEntryName, "Rufus 4.14 Portable (x64)", StringComparison.Ordinal)).IsSelected = true;
+
+        var selectors = UsbBuilderProfileItemSelection.BuildSelectedManifestSelectors([diagnostics]);
+
+        Assert.Contains("name:Rufus 4.14 Portable (x64)", selectors);
+        Assert.Contains(@"dest:Tools\Portable\USB\rufus-4.14p.exe", selectors);
+        Assert.DoesNotContain(selectors, s => s.Contains("Download Page", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ProfileItemSelection_IncludesForgerEmsPortableAppPaths()
+    {
+        var portable = UsbBuilderProfileOption.FromDefinition(UsbBuilderProfileCatalog.GetRequired("forgerems-portable"), included: true);
+        portable.LoadItems(UsbBuilderProfileItemCatalog.ForCategory("forgerems-portable"), new HashSet<string>());
+        foreach (var item in portable.Items)
+        {
+            item.IsSelected = true;
+        }
+
+        var selectors = UsbBuilderProfileItemSelection.BuildSelectedManifestSelectors([portable]);
+
+        Assert.Contains(@"dest:_apps\ForgerEMS\ForgerEMS.exe", selectors);
+        Assert.Contains(@"dest:_docs\ForgerEMS\TERMS_OF_USE.md", selectors);
+        Assert.Equal(3, portable.SelectedItemCount);
     }
 
     [Fact]
@@ -115,12 +203,17 @@ public sealed class UsbBuilderProfilePlannerAndHtmlTests
 
         var dashboard = File.ReadAllText(Path.Combine(temp.Path, "README.html"));
         Assert.Contains("ForgerEMS Technician USB", dashboard, StringComparison.Ordinal);
+        Assert.Contains("ForgerEMS Portable App", dashboard, StringComparison.Ordinal);
+        Assert.Contains("_apps/ForgerEMS/ForgerEMS.exe", dashboard, StringComparison.Ordinal);
         Assert.Contains("Windows", dashboard, StringComparison.Ordinal);
         Assert.Contains("Estimated space", dashboard, StringComparison.Ordinal);
         Assert.DoesNotContain("Markdown README", dashboard, StringComparison.OrdinalIgnoreCase);
 
         var guide = File.ReadAllText(Path.Combine(temp.Path, "_docs", "manual-media-guide.html"));
         Assert.Contains("guided", guide, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(@"_apps\ForgerEMS", guide, StringComparison.Ordinal);
+        Assert.Contains(@"_docs\ForgerEMS", guide, StringComparison.Ordinal);
+        Assert.Contains(@"_logs\ForgerEMS", guide, StringComparison.Ordinal);
         Assert.Contains("official", guide, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("cannot be legally redistributed", guide, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("thepiratebay", guide, StringComparison.OrdinalIgnoreCase);

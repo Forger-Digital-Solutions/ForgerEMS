@@ -146,9 +146,10 @@ public sealed class PortIntelligenceSummaryBuilderTests
 
         var summary = PortIntelligenceSummaryBuilder.Build(TypicalUsbState(), null, elevated, Target(), now);
 
-        Assert.Contains("Deep scan data collected 3 minutes ago", summary.DeepScanSummary, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("cached elevated inventory", summary.DeepScanSummary, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("System Intelligence Elevated Scan", summary.DeepScanSummary, StringComparison.Ordinal);
+        Assert.Contains("Admin inventory data collected 3 minutes ago", summary.ElevatedInventorySummary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("cached elevated inventory", summary.ElevatedInventorySummary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("System Intelligence Elevated Scan", summary.ElevatedInventorySummary, StringComparison.Ordinal);
+        Assert.DoesNotContain("deep scan", summary.ElevatedInventorySummary, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -156,7 +157,7 @@ public sealed class PortIntelligenceSummaryBuilderTests
     {
         var summary = PortIntelligenceSummaryBuilder.Build(TypicalUsbState(), null, ElevatedScanTelemetrySnapshot.Missing(), Target());
 
-        Assert.Contains("Run Elevated Scan to include permission-limited controller, hub, and driver details", summary.DeepScanSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Run Elevated Scan to include permission-limited controller, hub, and driver details", summary.ElevatedInventorySummary, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -168,14 +169,14 @@ public sealed class PortIntelligenceSummaryBuilderTests
             CollectedAtUtc = At("2026-05-31T12:00:00Z"),
             Source = "System Intelligence Elevated Scan",
             ParseQuality = ElevatedScanParseQuality.Partial,
-            UserMessage = "Elevated scan complete — some deep telemetry was unavailable on this device.",
+            UserMessage = "Elevated scan complete — some permission-limited detail was unavailable on this device.",
             Confidence = PortPowerTelemetryConfidence.Unavailable
         };
 
         var summary = PortIntelligenceSummaryBuilder.Build(TypicalUsbState(), null, elevated, Target(), At("2026-05-31T12:01:00Z"));
 
-        Assert.Equal("Elevated scan complete — some deep telemetry was unavailable on this device.", summary.DeepScanSummary);
-        Assert.DoesNotContain("Run Elevated Scan", summary.DeepScanSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("Elevated scan complete — some permission-limited detail was unavailable on this device.", summary.ElevatedInventorySummary);
+        Assert.DoesNotContain("Run Elevated Scan", summary.ElevatedInventorySummary, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -192,9 +193,9 @@ public sealed class PortIntelligenceSummaryBuilderTests
 
         var summary = PortIntelligenceSummaryBuilder.Build(TypicalUsbState(), null, elevated, Target());
 
-        Assert.Contains("Elevated scan failed", summary.DeepScanSummary, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("ForgerEMS stayed open", summary.DeepScanSummary, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("cached elevated inventory", summary.DeepScanSummary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Elevated scan failed", summary.ElevatedInventorySummary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ForgerEMS stayed open", summary.ElevatedInventorySummary, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("cached elevated inventory", summary.ElevatedInventorySummary, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -213,19 +214,25 @@ public sealed class PortIntelligenceSummaryBuilderTests
     }
 
     [Fact]
-    public void MainWindow_UsesUnifiedPortIntelligenceCardWithoutDisconnectedChargingHeader()
+    public void MainWindow_UsesPortUsbIntelligenceTabWithoutDisconnectedChargingHeader()
     {
         var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
 
-        Assert.Contains("Header=\"Port Intelligence\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Header=\"Port / USB Intelligence\"", xaml, StringComparison.Ordinal);
+        // v1.2.3-preview.1 dashboard sections (devices → checks → results → battery/specs).
+        Assert.Contains("Header=\"Connected USB Devices\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Header=\"USB / Drive Checks\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Header=\"Latest Results\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Header=\"Battery &amp; System Specs\"", xaml, StringComparison.Ordinal);
         Assert.Contains("PortIntelligencePortMapSummaryText", xaml, StringComparison.Ordinal);
         Assert.Contains("PortIntelligenceChargingSummaryText", xaml, StringComparison.Ordinal);
         Assert.Contains("PortIntelligencePowerSourceSummaryText", xaml, StringComparison.Ordinal);
         Assert.Contains("PortIntelligenceBottlenecksText", xaml, StringComparison.Ordinal);
         Assert.Contains("PortIntelligenceRecommendedFixesText", xaml, StringComparison.Ordinal);
-        Assert.Contains("UsbBuilderPortPowerDetailsCard", xaml, StringComparison.Ordinal);
+        Assert.Contains("PortPowerVoltageCurrentDisplay", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Header=\"Charging Intelligence\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("UsbBuilderChargingIntelligenceCard", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("UsbBuilderPortPowerDetailsCard", xaml, StringComparison.Ordinal);
     }
 
     private static UsbIntelligencePanelUiState TypicalUsbState() =>

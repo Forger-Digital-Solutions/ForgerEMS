@@ -2,38 +2,35 @@ using Xunit;
 
 namespace ForgerEMS.Wpf.Tests;
 
+// The Diagnostics tab (Mission Control / Evidence & Logs / Safety Lab / Command
+// Center) was removed from the main ForgerEMS shell. Full diagnostics moved to
+// Dr. Forge. These tests guard that the surface — and its allowlisted command
+// center / safety-lab actions — does not reappear in MainWindow.xaml.
 public sealed class DiagnosticsMissionControlLayoutTests
 {
     [Fact]
-    public void DiagnosticsLayout_UsesMissionControlSections()
+    public void DiagnosticsMissionControlSections_AreRemovedFromShell()
     {
         var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
-        Assert.Contains("Text=\"1) Mission Control\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("Action Center", xaml, StringComparison.Ordinal);
-        Assert.Contains("Header=\"2) Evidence &amp; Logs\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Header=\"3) Safety Lab\" IsExpanded=\"False\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<TabItem Header=\"⚙  Diagnostics\">", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"1) Mission Control\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Header=\"2) Evidence &amp; Logs\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Header=\"3) Safety Lab\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void EvidenceAndLogs_RetainsCopySafeSummaryButton()
+    public void DiagnosticsCommandCenterAndSafetyLab_ActionsAreRemovedFromShell()
     {
         var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
-        var evidenceStart = xaml.IndexOf("Header=\"2) Evidence &amp; Logs\"", StringComparison.Ordinal);
-        var safetyStart = xaml.IndexOf("Header=\"3) Safety Lab\"", StringComparison.Ordinal);
-        Assert.True(evidenceStart >= 0 && safetyStart > evidenceStart);
-        var evidenceRegion = xaml[evidenceStart..safetyStart];
-        Assert.Contains("CopySafeTestingSummaryCommand", evidenceRegion, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void DiagnosticsLayout_CommandCenter_IsAllowlistedAndNoArbitraryInput()
-    {
-        var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
-        Assert.Contains("Content=\"Check WSL installed\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Content=\"Check PowerShell version\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Content=\"Check backend files\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Content=\"Check release identity\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Content=\"Check network/DNS\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"Check WSL installed\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"Check PowerShell version\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"Check backend files\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"Check release identity\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Content=\"Check network/DNS\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("CopySafeTestingSummaryCommand", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("AnalyzeLinkSafetyCommand", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("AnalyzeLocalFileSafetyCommand", xaml, StringComparison.Ordinal);
+        // An embedded arbitrary-command terminal must never appear.
         Assert.DoesNotContain("RunWslRunnerCommand", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("WslRunnerCommandInput", xaml, StringComparison.Ordinal);
     }

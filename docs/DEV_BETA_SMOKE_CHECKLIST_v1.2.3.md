@@ -4,7 +4,7 @@
 
 For broader regression coverage, see [FINAL_MANUAL_SMOKE_TEST.md](../FINAL_MANUAL_SMOKE_TEST.md). This checklist is additive, not a replacement.
 
-**Build under test:** `release/current/ForgerEMS-Setup-v1.2.3-preview.1.exe` or the matching ZIP. Single-file portable exe at `release/current/app/ForgerEMS.exe`.
+**Build under test:** `release/current/ForgerEMS-Setup-v1.2.3-preview.1.exe` or the matching portable ZIP `release/current/ForgerEMS-v1.2.3-preview.1.zip`. Published app staging remains at `release/current/app/ForgerEMS.exe`.
 
 **Trademark / non-endorsement check:** ForgerEMS is independent and is not affiliated with, sponsored by, or endorsed by Microsoft, Linux distributions, hardware vendors, driver vendors, or third-party tools referenced in the app. Names are used only to identify compatibility, official resources, or supported technician workflows.
 
@@ -15,16 +15,27 @@ For broader regression coverage, see [FINAL_MANUAL_SMOKE_TEST.md](../FINAL_MANUA
 - [ ] Install (or unzip) the build. Launch ForgerEMS.
 - [ ] Title bar reads **ForgerEMS**. Main window opens centered, not off-screen.
 - [ ] About / status area shows **1.2.3-preview.1**.
-- [ ] Network Pulse header renders. No "Internet: Paused" without an explicit pause.
+- [ ] On a clean consent state, the **Terms of Use** first-run gate appears before main tools are usable.
+- [ ] Terms, Privacy/Data Handling, Legal Notices, Third-party Notices, and About buttons open readable docs from the gate.
+- [ ] Accepting both checkboxes unlocks the app; declining does not unlock it.
+- [ ] Settings / About can reopen Terms, Privacy/Data Handling, Legal Notices, and Third-party Notices after acceptance.
+- [ ] The removed shell Internet widget/status card is still gone, and **Network Pulse is fully retired** — Settings has no Network Pulse section and no "Internet: Paused" header/widget appears.
+- [ ] Settings has no **Forger Sensor Stack / Deep Sensor Mode** section — retired features do not appear anywhere in Settings.
+- [ ] Terms gate at 1366x768: both checkbox notices wrap onto multiple lines and are fully readable (no clipped "…and I s..." text). The header shows **Document revision** and **Applies to ForgerEMS** lines.
 - [ ] Main background art uses ForgerEMS-owned shield/USB/circuit artwork and generic technician glyphs only; no Windows, Linux distro, Ventoy, Rufus, balenaEtcher, HWiNFO, CrystalDiskInfo, Clonezilla, GParted, SystemRescue, RustDesk, Angry IP Scanner, DriverStoreExplorer, or other third-party logos/icons/marks appear as decorative art.
 
 ## 2. Tab smoke
 
+- [ ] Tab strip shows exactly: **USB Builder**, **Port / USB Intelligence**, **Toolkit Manager**, **Driver Hub**, **Kyra (Beta)**, **Settings** — plus the always-visible **Live Logs** side panel.
+- [ ] No **System Intelligence** tab and no **Diagnostics** tab are present. (Both moved to **Dr. Forge**, the dedicated diagnostics / hardware-scan companion.)
+- [ ] App launches without a post-launch lag spike — no automatic background system scan kicks off on startup.
 - [ ] USB Builder tab opens. With no USB attached, the no-drive state is clear.
+- [ ] USB Builder Profile includes **ForgerEMS Portable App** by default and routes it to `_apps\ForgerEMS`, docs to `_docs\ForgerEMS`, and support folders to `_logs\ForgerEMS`.
+- [ ] Port / USB Intelligence tab opens (it does not depend on the removed Diagnostics tab).
 - [ ] Kyra (Beta) tab opens. Send `Hi` — get a response (local or online).
-- [ ] System Intelligence tab opens. Status reads without errors.
 - [ ] Driver Hub tab opens. Header, safety pill, detected-hardware summary, search, filters, recommendation cards, and compact catalog cards render.
-- [ ] Logs tab opens. Filter dropdown populated.
+- [ ] Settings tab opens.
+- [ ] Live Logs side panel shows app activity; **View Full Logs** opens the full-logs overlay.
 
 ## 3. Toolkit Manager — new surface
 
@@ -57,8 +68,8 @@ For broader regression coverage, see [FINAL_MANUAL_SMOKE_TEST.md](../FINAL_MANUA
 
 - [ ] Open **Driver Hub**.
 - [ ] Confirm header copy: "Official driver apps, OEM support, GPU tools, firmware guidance, and Linux driver help." and the safety pill: "Official links only • No auto BIOS flashing • No driver installs without your action".
-- [ ] With no System Intelligence report, **Recommended for this PC** says: "Run System Intelligence to personalize recommendations."
-- [ ] Run **System Intelligence**, return to Driver Hub, and confirm the detected-hardware card lists OEM, GPU, CPU, Network, and OS when available.
+- [ ] With no system scan report present, **Recommended for this PC** shows its generic state (e.g. "Run System Intelligence to personalize recommendations.") and the full catalog still renders. Personalized hardware detection now comes from a **Dr. Forge** scan report (planned companion); ForgerEMS no longer runs that scan from its own tab.
+- [ ] If a prior `system-intelligence-latest.json` report exists, confirm the detected-hardware card lists OEM, GPU, CPU, Network, and OS when available. (Skip if no report is present — Driver Hub must degrade gracefully to the generic state, not error.)
 - [ ] Confirm **Recommended for this PC** shows 3-4 store-style cards: brand tile, app name, vendor, badges, **one** prominent primary action, and a small `⋯` overflow button. No visible **Copy Link** or **Add Shortcut** buttons clutter the primary row.
 - [ ] Click `⋯` on a recommended card. The overflow popup shows **Open Page** (only when it differs from the primary action), **Copy Link**, and **Add Shortcut to USB**.
 - [ ] Confirm recommendation copy says "Recommended based on detected ..." or similar detected-source wording, not "Needed", "outdated", "latest installed", or "required".

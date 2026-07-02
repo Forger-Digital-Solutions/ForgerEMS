@@ -53,6 +53,17 @@ public sealed class CopilotServiceTests
     }
 
     [Fact]
+    public void RedactorRedactsProgramFilesPathWithoutPartialRemainder()
+    {
+        var redacted = CopilotRedactor.Redact(@"Backend root: C:\Program Files\ForgerEMS\backend", enabled: true);
+
+        Assert.Contains("[REDACTED_PRIVATE_PATH]", redacted, StringComparison.Ordinal);
+        Assert.DoesNotContain("Program Files", redacted, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(@"Files\ForgerEMS", redacted, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(@"ForgerEMS\backend", redacted, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void ContextBuilderMapsSystemProfileHealthAndRecommendations()
     {
         var reportPath = WriteTempSystemReport();
@@ -910,7 +921,7 @@ public sealed class CopilotServiceTests
 
         Assert.False(response.UsedOnlineData);
         Assert.Equal(0, online.CallCount);
-        Assert.Contains("System Intelligence", response.SourceLabel, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("device context", response.SourceLabel, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("machine-specific with online context sharing OFF", string.Join('|', response.ProviderNotes), StringComparison.OrdinalIgnoreCase);
     }
 
@@ -982,7 +993,7 @@ public sealed class CopilotServiceTests
             Settings = settings
         });
 
-        Assert.Contains("System Intelligence scan", response.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("local device snapshot", response.Text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -1037,7 +1048,7 @@ public sealed class CopilotServiceTests
 
         var summary = KyraPrivacyGate.BuildSanitizedProviderSummary(context);
 
-        Assert.Contains("Sanitized System Intelligence", summary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Sanitized local device summary", summary, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Latitude 5400", summary, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Recent safe log", summary, StringComparison.OrdinalIgnoreCase);
     }
@@ -1165,7 +1176,7 @@ public sealed class CopilotServiceTests
 
         var shared = KyraPrivacyGate.BuildProviderContext(context, allowSystemContextSharing: true);
 
-        Assert.Contains("Sanitized system context", shared.ContextText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Sanitized device context", shared.ContextText, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Intel i7", shared.ContextText, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("C:\\Users\\", shared.ContextText, StringComparison.OrdinalIgnoreCase);
     }

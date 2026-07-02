@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using VentoyToolkitSetup.Wpf.Services;
 using Xunit;
@@ -117,16 +118,48 @@ public sealed class UsbDeviceChangeDebouncerTests
     }
 
     [Fact]
-    public void DefaultDebounceInterval_Is750msOrMore()
+    public void ShellDebounceInterval_KeepsHotplugNearInstant()
     {
-        // Spec: debounce window must be at least 750ms so Windows has time to
-        // mount the new volume before we re-query targets.
-        using var debouncer = new UsbDeviceChangeDebouncer(
-            _ => { },
-            TimeSpan.FromMilliseconds(1200));
+        // Spec (v1.2.3-preview.1 hotplug pass): the DBT_DEVTYP_VOLUME arrival
+        // broadcast only fires after Windows has mounted the volume, so the
+        // shell debounce just needs to collapse multi-partition bursts. It must
+        // stay >= the 50ms debouncer floor and <= 400ms so a plugged USB shows
+        // up in the app within roughly one second including enumeration.
+        var interval = VentoyToolkitSetup.Wpf.ViewModels.MainViewModel.UsbDeviceChangeDebounceInterval;
 
-        Assert.True(debouncer.DebounceInterval >= TimeSpan.FromMilliseconds(750));
-        Assert.True(debouncer.DebounceInterval <= TimeSpan.FromMilliseconds(1500));
+        Assert.True(interval >= TimeSpan.FromMilliseconds(50), "debounce below the burst-collapse floor");
+        Assert.True(interval <= TimeSpan.FromMilliseconds(400), "debounce too slow for near-instant hotplug UX");
+
+        using var debouncer = new UsbDeviceChangeDebouncer(_ => { }, interval);
+        Assert.Equal(interval, debouncer.DebounceInterval);
+    }
+
+    [Fact]
+    public void MainViewModelSource_ReusesSignatureScanForEventDrivenRefresh()
+    {
+        // The debounced handler enumerates once for the change-signature check and
+        // must hand that result to RefreshUsbTargetsAsync instead of scanning twice.
+        var source = System.IO.File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "ViewModels", "MainViewModel.cs"));
+
+        Assert.Contains("await RefreshUsbTargetsAsync(detectionResult)", source, StringComparison.Ordinal);
+        Assert.Contains("UsbDetectionResult? prefetchedDetectionResult = null", source, StringComparison.Ordinal);
+    }
+
+    private static string FindRepoFile(params string[] segments)
+    {
+        var current = new System.IO.DirectoryInfo(System.IO.Directory.GetCurrentDirectory());
+        while (current is not null)
+        {
+            var candidate = System.IO.Path.Combine(new[] { current.FullName }.Concat(segments).ToArray());
+            if (System.IO.File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            current = current.Parent;
+        }
+
+        throw new System.IO.FileNotFoundException("Could not locate repo file.", System.IO.Path.Combine(segments));
     }
 
     /// <summary>

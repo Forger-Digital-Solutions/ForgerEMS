@@ -23,7 +23,7 @@ public sealed class RecommendationEngine
     {
         if (profile is null)
         {
-            return ["Run System Intelligence first so Kyra can use local hardware facts."];
+            return ["Add a local device snapshot so Kyra can use local hardware facts."];
         }
 
         var recommendations = new List<string>();

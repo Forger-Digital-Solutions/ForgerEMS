@@ -117,8 +117,10 @@ public sealed class OnboardingAndUsbPromptTests
         var path = Path.Combine(RepoRoot, "src", "ForgerEMS.Wpf", "MainWindow.xaml");
         var xaml = File.ReadAllText(path);
         Assert.Contains("Welcome to ForgerEMS", xaml, System.StringComparison.Ordinal);
-        Assert.Contains("Run Standard Scan", xaml, System.StringComparison.Ordinal);
         Assert.Contains("Run USB Benchmark", xaml, System.StringComparison.Ordinal);
         Assert.Contains("Open USB Builder", xaml, System.StringComparison.Ordinal);
+        // The system-scan quick action was removed, so the Welcome Center no
+        // longer recommends an inventory scan.
+        Assert.DoesNotContain("Run Windows Inventory Scan", xaml, System.StringComparison.Ordinal);
     }
 }

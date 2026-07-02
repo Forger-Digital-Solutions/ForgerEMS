@@ -89,12 +89,17 @@ public sealed class DeepSensorDisclosureCopyTests
         var mainViewModel = Read("src", "ForgerEMS.Wpf", "ViewModels", "MainViewModel.cs");
         var installer = Read("installer", "ForgerEMS.iss");
 
-        Assert.Contains("Read-only local sensors", mainViewModel, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Running Elevated Scan as administrator may improve sensor/security coverage", mainViewModel, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("ForgerEMS does not control fans, voltages, clocks, BIOS, firmware, or hardware writes", mainViewModel, StringComparison.OrdinalIgnoreCase);
+        // The dedicated Deep Sensor Mode settings section was retired in
+        // v1.2.3-preview.1: Settings no longer exposes the mode, and the shell view
+        // model no longer carries the settings-panel bindings. The read-only /
+        // no-control disclosure must survive in the remaining sensor summaries and
+        // in the installer copy where the opt-in still lives.
+        Assert.DoesNotContain("DeepSensorModeSettingsSummary", mainViewModel, StringComparison.Ordinal);
+        Assert.DoesNotContain("DeepSensorModeSelectedIndex", mainViewModel, StringComparison.Ordinal);
+        Assert.Contains("no fan/voltage/clock/firmware control", mainViewModel, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Enable Deep Sensor Mode by default (read-only local hardware sensors", installer, StringComparison.Ordinal);
         Assert.Contains("bundled local read-only sensor provider", installer, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Windows administrator approval when you run Elevated Scan", installer, StringComparison.Ordinal);
+        Assert.Contains("Windows administrator approval when you run Admin Inventory Scan", installer, StringComparison.Ordinal);
         Assert.Contains("does not grant permanent admin permission", installer, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("MPL-2.0", installer, StringComparison.Ordinal);
     }

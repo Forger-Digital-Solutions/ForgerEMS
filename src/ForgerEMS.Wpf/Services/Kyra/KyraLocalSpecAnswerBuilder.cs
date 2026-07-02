@@ -12,7 +12,7 @@ namespace VentoyToolkitSetup.Wpf.Services.Kyra;
 public static class KyraLocalSpecAnswerBuilder
 {
     private const string NoScanBody =
-        "I do not have a current System Intelligence scan yet. Run System Intelligence first.";
+        "I do not have a current local device snapshot yet. Use Dr. Forge when available, then ask again.";
 
     public static bool TryBuildLocalSpecAnswer(string? prompt, SystemProfile? profile, out CopilotResponse response)
     {
@@ -35,9 +35,9 @@ public static class KyraLocalSpecAnswerBuilder
         {
             Text = text,
             UsedOnlineData = false,
-            OnlineStatus = "Kyra Mode: Local hardware facts (System Intelligence scan).",
+            OnlineStatus = "Kyra Mode: Local hardware facts (local device snapshot).",
             ProviderType = CopilotProviderType.LocalOffline,
-            ProviderNotes = ["Kyra routing: hardware facts -> local System Intelligence"],
+            ProviderNotes = ["Kyra routing: hardware facts -> local device snapshot"],
             ResponseSource = KyraResponseSource.LocalKyra,
             SourceLabel = KyraResponseComposer.KyraIdentityLabel,
             GroundedInSystemIntelligence = grounded,
@@ -173,18 +173,18 @@ public static class KyraLocalSpecAnswerBuilder
     {
         var cores = p.CpuCores is { } c ? $"{c}P/" : string.Empty;
         var threads = p.CpuThreads is { } th ? $"{th}T" : "threads unknown";
-        return $"CPU (from System Intelligence): {p.Cpu} ({cores}{threads}).";
+        return $"CPU (from local device snapshot): {p.Cpu} ({cores}{threads}).";
     }
 
     private static string FormatGpu(SystemProfile p)
     {
         if (p.Gpus.Count == 0)
         {
-            return "GPU (from System Intelligence): no discrete/integrated GPU rows were captured in the last scan.";
+            return "GPU (from local device snapshot): no discrete/integrated GPU rows were captured in the last snapshot.";
         }
 
         var lines = p.Gpus.Select(g => $"• {g.Name} ({g.GpuKind})").ToArray();
-        return "GPU (from System Intelligence):" + Environment.NewLine + string.Join(Environment.NewLine, lines);
+        return "GPU (from local device snapshot):" + Environment.NewLine + string.Join(Environment.NewLine, lines);
     }
 
     private static string FormatRam(SystemProfile p)
@@ -193,14 +193,14 @@ public static class KyraLocalSpecAnswerBuilder
             ? FormattableString.Invariant($"{g:0.#} GB")
             : p.RamTotal;
         var mem = string.IsNullOrWhiteSpace(p.MemoryTypeSummary) ? string.Empty : $" ({p.MemoryTypeSummary})";
-        return $"RAM (from System Intelligence): {gb} total{mem}. Reported speed summary: {p.RamSpeed}.";
+        return $"RAM (from local device snapshot): {gb} total{mem}. Reported speed summary: {p.RamSpeed}.";
     }
 
     private static string FormatStorage(SystemProfile p)
     {
         if (p.Disks.Count == 0)
         {
-            return "Storage (from System Intelligence): no physical disks were listed in the last scan JSON.";
+            return "Storage (from local device snapshot): no physical disks were listed in the last snapshot.";
         }
 
         var lines = p.Disks.Select(d =>
@@ -209,19 +209,19 @@ public static class KyraLocalSpecAnswerBuilder
                 return $"• {d.Name}: {bus}{d.Size}, {d.MediaType}, health {d.Health} ({d.Status})";
             })
             .ToArray();
-        return "Storage (from System Intelligence):" + Environment.NewLine + string.Join(Environment.NewLine, lines);
+        return "Storage (from local device snapshot):" + Environment.NewLine + string.Join(Environment.NewLine, lines);
     }
 
     private static string FormatPc(SystemProfile p)
     {
         var machineClass = MachineClassifier.Classify(p);
-        return $"This PC (from System Intelligence): {p.Manufacturer} {p.Model}, running {p.OperatingSystem}. Machine class: {machineClass.PrimaryClass} ({machineClass.Confidence} confidence).";
+        return $"This PC (from local device snapshot): {p.Manufacturer} {p.Model}, running {p.OperatingSystem}. Machine class: {machineClass.PrimaryClass} ({machineClass.Confidence} confidence).";
     }
 
     private static string FormatDeviceFit(SystemProfile p)
     {
         var fit = new DeviceFitEngine().Evaluate(p);
-        return "Best use / device fit (from System Intelligence):" + Environment.NewLine +
+        return "Best use / device fit (from local device snapshot):" + Environment.NewLine +
                DeviceFitEngine.FormatCard(fit) + Environment.NewLine +
                "Inference note: this fit is inferred from scanned CPU/RAM/GPU/storage/battery signals. Gaming, thermals, and runtime are confidence-limited unless benchmarked.";
     }
@@ -231,7 +231,7 @@ public static class KyraLocalSpecAnswerBuilder
         var machineClass = MachineClassifier.Classify(p);
         var signals = machineClass.Signals.Take(4).Select(signal => $"- {signal.Name}: {signal.Value}");
         return
-            $"Machine class (from System Intelligence): {machineClass.PrimaryClass} ({machineClass.Confidence} confidence)." + Environment.NewLine +
+            $"Machine class (from local device snapshot): {machineClass.PrimaryClass} ({machineClass.Confidence} confidence)." + Environment.NewLine +
             $"Secondary: {string.Join("; ", machineClass.SecondaryClasses.DefaultIfEmpty("none"))}" + Environment.NewLine +
             machineClass.TechnicianNote + Environment.NewLine +
             string.Join(Environment.NewLine, signals);
@@ -253,7 +253,7 @@ public static class KyraLocalSpecAnswerBuilder
             .Take(6)
             .Select(reading => $"- {reading.Name}: {reading.UnavailableReason}. {reading.TechnicianNote}");
         return
-            "Sensor / Hardware X-Ray coverage (from System Intelligence):" + Environment.NewLine +
+            "Sensor / Hardware X-Ray coverage (from local device snapshot):" + Environment.NewLine +
             sensors.CoverageSummary + Environment.NewLine +
             $"Confidence: {sensors.Confidence}" + Environment.NewLine +
             "Unavailable sensors are usually permission-limited or not exposed by firmware/driver, not hardware failures." + Environment.NewLine +
@@ -264,7 +264,7 @@ public static class KyraLocalSpecAnswerBuilder
     private static string FormatSpecs(SystemProfile p)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("Specs (from System Intelligence, latest scan):");
+        sb.AppendLine("Specs (from local device snapshot):");
         sb.AppendLine($"- System: {p.Manufacturer} {p.Model}");
         sb.AppendLine($"- OS: {p.OperatingSystem} ({p.OsBuild})");
         sb.AppendLine($"- CPU: {p.Cpu}");

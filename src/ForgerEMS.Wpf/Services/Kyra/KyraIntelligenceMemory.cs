@@ -275,7 +275,7 @@ public static partial class KyraMemorySanitizer
         intent switch
         {
             KyraIntent.USBBuilderHelp => "USB Builder",
-            KyraIntent.SystemHealthSummary => "System Intelligence",
+            KyraIntent.SystemHealthSummary => "Device Context",
             KyraIntent.ToolkitManagerHelp => "Toolkit Manager",
             KyraIntent.PerformanceLag or KyraIntent.AppFreezing or KyraIntent.SlowBoot or KyraIntent.StorageIssue
                 or KyraIntent.MemoryIssue or KyraIntent.DriverIssue or KyraIntent.GPUQuestion or KyraIntent.UpgradeAdvice
@@ -576,7 +576,7 @@ public static partial class KyraMemorySanitizer
             return "Check official vendor driver or BIOS support page";
         }
 
-        return "Review latest System Intelligence scan and follow safe repair steps";
+        return "Review latest local device snapshot and follow safe repair steps";
     }
 
     private static string ClassifyUsbBenchmark(string prompt, string response)

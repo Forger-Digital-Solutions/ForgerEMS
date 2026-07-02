@@ -6,14 +6,14 @@
 
 ---
 
-## Rule #1: download the ZIP — not the EXE first
+## Rule #1: download the portable ZIP first
 
 On **[GitHub Releases](https://github.com/Forger-Digital-Solutions/ForgerEMS/releases)** → open the version you want → **Assets**.
 
-- **Do download:** `ForgerEMS-v<version>.zip` **or** `ForgerEMS-Beta-v<version>.zip` (same bundle style; pick one).  
-- **Do not start here:** `ForgerEMS-Setup-v<version>.exe` — that file is real, but it is the **advanced / direct** installer. Browsers and **SmartScreen** are usually **stricter** on a raw `.exe` than on a `.zip` you extract yourself.
+- **Do download:** `ForgerEMS-v<version>.zip`.  
+- **Do not start here unless you specifically want installed mode:** `ForgerEMS-Setup-v<version>.exe` — that file is real, but it is the direct installer. Browsers and **SmartScreen** are usually **stricter** on a raw `.exe` than on a `.zip` you extract yourself.
 
-ForgerEMS does **not** bypass Windows security. The **safe, recommended path** is: **ZIP → extract → `START_HERE.bat` → installer inside the bundle**.
+ForgerEMS does **not** bypass Windows security. The **recommended preview path** is: **ZIP → extract → `START_HERE.bat` or `ForgerEMS.exe` → first-run Terms gate**. The installer is a separate asset for users who prefer installed mode.
 
 ---
 
@@ -21,11 +21,11 @@ ForgerEMS does **not** bypass Windows security. The **safe, recommended path** i
 
 1. **Download the ZIP** from **Assets** and wait until it is **100% finished** (see the next section if the filename looks wrong).  
 2. **Right-click the ZIP → Extract All…** (or use your favorite zip tool). Choose a **short folder name**, for example `Desktop\ForgerEMS`.  
-3. Open the new folder. You should see files such as **`START_HERE.bat`**, `VERIFY.txt`, and an installer with a clear name inside the bundle.  
-4. Double-click **`START_HERE.bat`**. Read what it prints. It is the supported entry point for verification and install.  
-5. Complete the installer **only when you are comfortable** you got the ZIP from the **official** release page.
+3. Open the new folder. You should see files such as **`ForgerEMS.exe`**, **`START_HERE.bat`**, `VERIFY.txt`, `docs\`, `backend\`, and `CHECKSUMS.sha256`.
+4. Double-click **`START_HERE.bat`**, or run **`ForgerEMS.exe`** directly. Read what the script prints.
+5. On first launch, read and accept the ForgerEMS Terms of Use before the main tools unlock.
 
-That is the whole idea: **one official ZIP** → **extract** → **`START_HERE.bat`** → **installer**.
+That is the whole idea: **one official portable ZIP** → **extract** → **`START_HERE.bat` / `ForgerEMS.exe`** → **local first-run consent**.
 
 ---
 
@@ -79,7 +79,7 @@ Get-FileHash .\ForgerEMS-v1.2.3-preview.1.zip -Algorithm SHA256
 
 Compare the `Hash` value to the line in `CHECKSUMS.sha256` for that exact filename. **They must match** before you treat the file as trustworthy.
 
-Inside the extracted folder, there may be another **`CHECKSUMS.sha256`** listing **inner** files (installer, batch files). Use that to confirm extraction was not corrupted.
+Inside the extracted folder, there may be another **`CHECKSUMS.sha256`** listing **inner** files (`ForgerEMS.exe`, backend/docs files, batch files). Use that to confirm extraction was not corrupted.
 
 ---
 
@@ -99,4 +99,4 @@ Inside the extracted folder, there may be another **`CHECKSUMS.sha256`** listing
 
 - [FAQ.md](FAQ.md) — short answers to common questions  
 - [FIRST_TESTER_DOWNLOAD_FLOW.md](FIRST_TESTER_DOWNLOAD_FLOW.md) — first-run narrative  
-- [LEGAL.md](LEGAL.md) / [PRIVACY.md](PRIVACY.md) — beta notices and data handling summary  
+- [TERMS_OF_USE.md](TERMS_OF_USE.md), [PRIVACY_AND_DATA_HANDLING.md](PRIVACY_AND_DATA_HANDLING.md), and [LEGAL_NOTICES.md](LEGAL_NOTICES.md) — current preview terms and data handling notes

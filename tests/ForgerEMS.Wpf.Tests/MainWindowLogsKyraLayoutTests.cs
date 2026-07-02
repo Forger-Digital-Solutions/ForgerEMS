@@ -38,14 +38,27 @@ public sealed class MainWindowLogsKyraLayoutTests
         Assert.DoesNotContain("Content=\"Hide\"", mainXaml, StringComparison.Ordinal);
 
         var liveIdx = mainXaml.IndexOf("Text=\"Live Logs\"", StringComparison.Ordinal);
-        var fullLogsIdx = mainXaml.IndexOf("FullLogsOverlay", StringComparison.Ordinal);
-        Assert.True(liveIdx >= 0 && fullLogsIdx > liveIdx);
+        var mainTabIdx = mainXaml.IndexOf("<TabControl x:Name=\"MainTabControl\"", liveIdx, StringComparison.Ordinal);
+        Assert.True(liveIdx >= 0 && mainTabIdx > liveIdx);
 
-        var liveRegion = mainXaml[liveIdx..fullLogsIdx];
+        var liveRegion = mainXaml[liveIdx..mainTabIdx];
         Assert.DoesNotContain("CopyLogsCommand", liveRegion, StringComparison.Ordinal);
         Assert.DoesNotContain("ClearLogsCommand", liveRegion, StringComparison.Ordinal);
         Assert.DoesNotContain("CopySupportEmailCommand", liveRegion, StringComparison.Ordinal);
         Assert.DoesNotContain("OpenSupportEmailCommand", liveRegion, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainWindowXaml_LiveLogsTab_IsNotPresent()
+    {
+        // Live Logs was a dedicated TabItem duplicating the side panel / Full Logs
+        // overlay; it has been removed so there is exactly one live-logging surface
+        // (the side panel) plus its View Full Logs overlay expansion.
+        var root = FindRepoRootWithMainWindow();
+        var mainXaml = File.ReadAllText(Path.Combine(root, "src", "ForgerEMS.Wpf", "MainWindow.xaml"));
+        Assert.DoesNotContain("<TabItem Header=\"Live Logs\">", mainXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("LiveLogsTabTextBox", mainXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("NavLiveLogsButton", mainXaml, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -61,6 +74,7 @@ public sealed class MainWindowLogsKyraLayoutTests
         Assert.Contains("CopySupportEmailCommand", region, StringComparison.Ordinal);
         Assert.Contains("OpenSupportEmailCommand", region, StringComparison.Ordinal);
         Assert.Contains("CopyBetaReportTemplateCommand", region, StringComparison.Ordinal);
+        Assert.Contains("LogsText", region, StringComparison.Ordinal);
         Assert.Contains("Content=\"Open support email\"", region, StringComparison.Ordinal);
         Assert.DoesNotContain("Open support email…", region, StringComparison.Ordinal);
         Assert.Contains("<WrapPanel", region, StringComparison.Ordinal);
@@ -82,9 +96,11 @@ public sealed class MainWindowLogsKyraLayoutTests
         var root = FindRepoRootWithMainWindow();
         var mainXaml = File.ReadAllText(Path.Combine(root, "src", "ForgerEMS.Wpf", "MainWindow.xaml"));
         var kyraStart = mainXaml.IndexOf("<TabItem Header=\"◇  Kyra (Beta)\">", StringComparison.Ordinal);
-        var diagnosticsStart = mainXaml.IndexOf("<TabItem Header=\"⚙  Diagnostics\">", StringComparison.Ordinal);
-        Assert.True(kyraStart >= 0 && diagnosticsStart > kyraStart);
-        var kyra = mainXaml[kyraStart..diagnosticsStart];
+        // Kyra is now immediately followed by Settings (the Diagnostics tab that
+        // used to sit between them moved to Dr. Forge).
+        var nextTabStart = mainXaml.IndexOf("<TabItem Header=\"☰  Settings\">", StringComparison.Ordinal);
+        Assert.True(kyraStart >= 0 && nextTabStart > kyraStart);
+        var kyra = mainXaml[kyraStart..nextTabStart];
 
         Assert.Contains("<RowDefinition Height=\"Auto\" />", kyra, StringComparison.Ordinal);
         Assert.Contains("<RowDefinition Height=\"*\" MinHeight=\"260\" />", kyra, StringComparison.Ordinal);
@@ -115,40 +131,30 @@ public sealed class MainWindowLogsKyraLayoutTests
     }
 
     [Fact]
-    public void MainWindowXaml_DiagnosticsStatusChipsAndExpanders_UseHighContrastStyles()
+    public void MainWindowXaml_StatusChipStyles_StaySharedAndDiagnosticsMissionControlIsGone()
     {
         var root = FindRepoRootWithMainWindow();
         var mainXaml = File.ReadAllText(Path.Combine(root, "src", "ForgerEMS.Wpf", "MainWindow.xaml"));
 
+        // The high-contrast status-chip styles outlived the Diagnostics tab: the
+        // Settings tab reuses them for its preview / sensor-stack / update chips,
+        // so the shared style definitions must remain.
         Assert.Contains("DiagnosticsStatusChipTextStyle", mainXaml, StringComparison.Ordinal);
         Assert.Contains("DiagnosticsStatusChipReadyStyle", mainXaml, StringComparison.Ordinal);
         Assert.Contains("DiagnosticsStatusChipWarningStyle", mainXaml, StringComparison.Ordinal);
         Assert.Contains("DiagnosticsStatusChipProblemStyle", mainXaml, StringComparison.Ordinal);
         Assert.Contains("DiagnosticsStatusChipNeutralStyle", mainXaml, StringComparison.Ordinal);
-        Assert.Contains("DiagnosticsExpanderHeaderToggleStyle", mainXaml, StringComparison.Ordinal);
-        Assert.Contains("DiagnosticsExpanderStyle", mainXaml, StringComparison.Ordinal);
-        Assert.Contains("Fill=\"#FFFFC58F\"", mainXaml, StringComparison.Ordinal);
 
-        var missionStart = mainXaml.IndexOf("Text=\"1) Mission Control\"", StringComparison.Ordinal);
-        var evidenceStart = mainXaml.IndexOf("Header=\"2) Evidence &amp; Logs\"", StringComparison.Ordinal);
-        Assert.True(missionStart >= 0 && evidenceStart > missionStart);
-        var missionRegion = mainXaml[missionStart..evidenceStart];
-
-        Assert.Contains("DiagnosticsStatusChipTextStyle", missionRegion, StringComparison.Ordinal);
-        Assert.DoesNotContain("SuccessPillStyle", missionRegion, StringComparison.Ordinal);
-        Assert.DoesNotContain("WarningPillStyle", missionRegion, StringComparison.Ordinal);
-        Assert.DoesNotContain("WorkingPillStyle", missionRegion, StringComparison.Ordinal);
-        Assert.DoesNotContain("PartialPillStyle", missionRegion, StringComparison.Ordinal);
-
-        var safetyStart = mainXaml.IndexOf("Header=\"3) Safety Lab\"", StringComparison.Ordinal);
         var settingsStart = mainXaml.IndexOf("<TabItem Header=\"☰  Settings\">", StringComparison.Ordinal);
-        Assert.True(safetyStart >= 0 && settingsStart > safetyStart);
-        var safetyRegion = mainXaml[safetyStart..settingsStart];
+        Assert.True(settingsStart >= 0);
+        var settingsRegion = mainXaml[settingsStart..];
+        Assert.Contains("DiagnosticsStatusChipTextStyle", settingsRegion, StringComparison.Ordinal);
 
-        Assert.Equal(4, CountOccurrences(safetyRegion, "Style=\"{StaticResource DiagnosticsExpanderStyle}\""));
-        Assert.Contains("Header=\"Link / Download Safety Checker (beta)\" IsExpanded=\"False\" Style=\"{StaticResource DiagnosticsExpanderStyle}\"", safetyRegion, StringComparison.Ordinal);
-        Assert.Contains("Header=\"Downloaded file / EXE safety (read-only)\" IsExpanded=\"False\" Style=\"{StaticResource DiagnosticsExpanderStyle}\"", safetyRegion, StringComparison.Ordinal);
-        Assert.Contains("Header=\"Safe Testing / Sandbox\" IsExpanded=\"False\" Style=\"{StaticResource DiagnosticsExpanderStyle}\"", safetyRegion, StringComparison.Ordinal);
+        // The Diagnostics mission-control / evidence / safety-lab surface is gone.
+        Assert.DoesNotContain("Text=\"1) Mission Control\"", mainXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Header=\"2) Evidence &amp; Logs\"", mainXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Header=\"3) Safety Lab\"", mainXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Style=\"{StaticResource DiagnosticsExpanderStyle}\"", mainXaml, StringComparison.Ordinal);
     }
 
     private static int CountOccurrences(string text, string value)

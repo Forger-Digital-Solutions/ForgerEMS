@@ -3,7 +3,7 @@ using VentoyToolkitSetup.Wpf.Services;
 
 namespace VentoyToolkitSetup.Wpf.Services.Kyra;
 
-/// <summary>Compares the last two stored System Intelligence scan snapshots from local Kyra machine memory.</summary>
+/// <summary>Compares the last two stored local device snapshots from local Kyra machine memory.</summary>
 public static class KyraScanDeltaAnswerBuilder
 {
     private const int MaxPromptLen = 220;
@@ -52,7 +52,7 @@ public static class KyraScanDeltaAnswerBuilder
             response = new CopilotResponse
             {
                 Text =
-                    "I only have one stored System Intelligence snapshot in local Kyra memory so far. Run System Intelligence again after you change hardware or drivers, then ask again — I’ll compare the newest stored scan to the previous one.",
+                    "I only have one stored local device snapshot in local Kyra memory so far. Refresh the device snapshot after you change hardware or drivers, then ask again — I’ll compare the newest stored snapshot to the previous one.",
                 UsedOnlineData = false,
                 OnlineStatus = "Kyra local memory comparison.",
                 ProviderType = CopilotProviderType.LocalOffline,
@@ -71,7 +71,7 @@ public static class KyraScanDeltaAnswerBuilder
         var older = scans[1];
         var lines = new List<string>
         {
-            "Here’s what changed between the last two System Intelligence snapshots stored in local Kyra memory (sanitized bands only):"
+            "Here’s what changed between the last two local device snapshots stored in local Kyra memory (sanitized bands only):"
         };
 
         void AddIfChanged(string label, string a, string b)
@@ -93,7 +93,7 @@ public static class KyraScanDeltaAnswerBuilder
         }
 
         lines.Add("");
-        lines.Add("If this doesn’t match what you see in System Intelligence, run a fresh scan and confirm local Kyra memory is enabled.");
+        lines.Add("If this doesn’t match what you see in Dr. Forge or the latest local snapshot, refresh device context and confirm local Kyra memory is enabled.");
 
         response = new CopilotResponse
         {

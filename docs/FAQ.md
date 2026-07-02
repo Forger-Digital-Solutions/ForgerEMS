@@ -4,7 +4,7 @@
 
 **Support:** [ForgerDigitalSolutions@outlook.com](mailto:ForgerDigitalSolutions@outlook.com)
 
-This page is practical guidance, not legal advice. See also [LEGAL.md](LEGAL.md) and [PRIVACY.md](PRIVACY.md). Environment variables: [ENVIRONMENT.md](ENVIRONMENT.md). Campaign FAQ: [marketing/PUBLIC-FAQ.md](marketing/PUBLIC-FAQ.md).
+This page is practical guidance, not legal advice. See also [TERMS_OF_USE.md](TERMS_OF_USE.md), [PRIVACY_AND_DATA_HANDLING.md](PRIVACY_AND_DATA_HANDLING.md), and [LEGAL_NOTICES.md](LEGAL_NOTICES.md). Environment variables: [ENVIRONMENT.md](ENVIRONMENT.md). Campaign FAQ: [marketing/PUBLIC-FAQ.md](marketing/PUBLIC-FAQ.md).
 
 ForgerEMS is independent and is not affiliated with, sponsored by, or endorsed by Microsoft, Linux distributions, hardware vendors, driver vendors, or third-party tools referenced in the app. Names are used only to identify compatibility, official resources, or supported technician workflows.
 
@@ -12,7 +12,7 @@ ForgerEMS is independent and is not affiliated with, sponsored by, or endorsed b
 
 ## What should I download first?
 
-**The ZIP — not the standalone EXE.** On [GitHub Releases](https://github.com/Forger-Digital-Solutions/ForgerEMS/releases), under **Assets**, choose `ForgerEMS-v<version>.zip` or `ForgerEMS-Beta-v<version>.zip`, extract, then run **`START_HERE.bat`**.
+**The portable ZIP — not the standalone EXE first.** On [GitHub Releases](https://github.com/Forger-Digital-Solutions/ForgerEMS/releases), under **Assets**, choose `ForgerEMS-v<version>.zip`, extract, review the included docs, then run **`START_HERE.bat`** or **`ForgerEMS.exe`**.
 
 Step-by-step: [FIRST_TESTER_DOWNLOAD_FLOW.md](FIRST_TESTER_DOWNLOAD_FLOW.md) · Browser issues: [DOWNLOAD_TROUBLESHOOTING.md](DOWNLOAD_TROUBLESHOOTING.md).
 
@@ -28,7 +28,7 @@ ForgerEMS does **not** ask you to disable Windows security. Prefer **ZIP → `ST
 
 ## Why should I download the ZIP instead of the EXE?
 
-You get **one bundle** with `START_HERE.bat`, verification hints, checksums, and the installer — a clearer and **safer first path** than double-clicking an unfamiliar **`.exe`** straight from the browser. Chrome and Edge also behave differently on `.exe` vs `.zip`.
+You get a portable app folder with `ForgerEMS.exe`, `START_HERE.bat`, verification hints, checksums, and legal/help docs — a clearer first path than double-clicking an unfamiliar **`.exe`** straight from the browser. Chrome and Edge also behave differently on `.exe` vs `.zip`.
 
 ---
 
@@ -40,7 +40,19 @@ ForgerEMS uses a packaged static command-center image so the preview app stays r
 
 ## What is `START_HERE.bat`?
 
-It is the **supported entry point** after you extract the release ZIP. It walks you through checks and launches the installer **from the verified folder** you chose, instead of fighting the strictest “unknown EXE from the internet” path first.
+It is the **supported entry point** after you extract the release ZIP. It walks you through checks and launches the portable app from the verified folder you chose. The first app launch shows the Terms of Use gate before main tools unlock.
+
+---
+
+## Do I need to accept Terms before using the app?
+
+Yes. On first launch, ForgerEMS shows a Terms of Use gate before the main tools are usable. Acceptance is stored locally with the terms version, accepted timestamp, app version/build, and terms hash. If the terms version changes, the app prompts again.
+
+---
+
+## Does Terms acceptance allow log or Kyra sharing?
+
+No. Exporting support bundles, Kyra memory, Kyra Intelligence memory, logs, or reports requires a separate confirmation because those files may include local device/context information. Review exported files before sending them.
 
 ---
 
@@ -93,7 +105,7 @@ Kyra keeps recent chat context locally so troubleshooting stays coherent, with a
 
 Kyra Intelligence Network adds **Local Kyra Memory** for sanitized machine-scoped repair notes. It may store categories and summaries such as machine class, health score band, issue/warning category, user-confirmed fix, USB target safety result, best-use category, resale prep category, confidence, scan timestamp, and a ForgerEMS-generated local machine profile ID. It should not store giant prompt transcripts or raw logs.
 
-Use **Settings → Kyra Intelligence** to turn Local repair memory off, export Kyra memory, delete Kyra memory, or view the sanitized preview for optional community learning.
+Use **Settings → Kyra Assistant** to turn Local repair memory off, export Kyra memory, delete Kyra memory, or view the sanitized preview for optional community learning.
 
 ---
 
@@ -157,16 +169,17 @@ Releases run an optional link-health pass via [`tools/Test-DriverHubLinks.ps1`](
 The **USB Builder tab → USB Builder Profile** lets you pick which toolkit packs Setup USB and Update USB seed or refresh on the selected target. Each pack is one of:
 
 - **Core ForgerEMS USB structure** (required, cannot be turned off): the folders, logs, manifest, and Ventoy safety structure ForgerEMS needs to operate.
+- **ForgerEMS Portable App** (default on): packaged app files under `_apps\ForgerEMS`, legal/help docs under `_docs\ForgerEMS`, and local support folders under `_logs\ForgerEMS`.
 - **Windows installers and recovery** (default on): official Microsoft Windows 10 / 11 / Server download shortcuts, ADK / WinPE references, and the modern Windows workflow folders.
 - **Legacy Windows manual media drop folders** (default on): tracking folders for Windows 8.1 and older. ForgerEMS never downloads legacy Windows ISOs.
 - **Linux rescue and installer tools** (default on): managed Linux rescue ISOs and installer/recovery workflows.
-- **Diagnostics and rescue utilities** (default on): disk, imaging, hardware, network, security, and portable technician utilities.
+- **Diagnostic Tools for USB** (default on): USB/downloadable disk, imaging, hardware-test utility links, security, and portable technician utilities. This is not the removed in-app Diagnostics tab; expanded repair analysis and advanced system inventory are moving to Dr. Forge.
 - **OEM recovery links and vendor tools** (default on): official vendor support, driver, and recovery utility shortcuts.
 - **macOS installer workflow** (default off, manual media required).
 - **Android platform tools and firmware workflow** (default off, manual media required).
 - **iOS / iPadOS restore workflow** (default off, manual media required).
 
-Buttons: **Select recommended** restores the default set, **Select all** turns every pack on, **Reset to defaults** matches a fresh install. Your choice is saved per user at `%LOCALAPPDATA%\ForgerEMS\Runtime\config\usb-builder-profile.json`.
+Buttons: **Select recommended** restores the default set, **Select all** turns every pack on, **Reset to defaults** matches a fresh install. Each pack card also has a **Pick items** button that opens a focused picker for that category, where you can check or uncheck individual downloads, OS installers, ISOs, drop folders, recovery links, and vendor shortcuts. The picker only edits the selection — nothing downloads until you run a build/download action — and Cancel discards changes. Your choice is saved per user at `%LOCALAPPDATA%\ForgerEMS\Runtime\config\usb-builder-profile.json`.
 
 Important behavior:
 
@@ -220,7 +233,7 @@ A 0–100 score for your current toolkit state on the selected USB target. It st
 
 ## What is a machine profile?
 
-A local file ForgerEMS saves under `%LOCALAPPDATA%\ForgerEMS\Runtime\profiles\` to remember this machine's health score, toolkit readiness, USB benchmark results, best-use category, and resale estimates between sessions. The profile uses a ForgerEMS-generated ID — not your hardware serial number. It is never uploaded automatically. You can view, export, or delete it from **Settings → Kyra Intelligence → Export Memory / Delete Memory**.
+A local file ForgerEMS saves under `%LOCALAPPDATA%\ForgerEMS\Runtime\profiles\` to remember this machine's health score, toolkit readiness, USB benchmark results, best-use category, and resale estimates between sessions. The profile uses a ForgerEMS-generated ID — not your hardware serial number. It is never uploaded automatically. You can view, export, or delete it from **Settings → Kyra Assistant → Export Memory / Delete Memory**.
 
 ---
 
@@ -321,7 +334,7 @@ Yes, where packaged, ForgerEMS includes **LibreHardwareMonitorLib** as a bundled
 
 ## Can I turn Deep Sensor Mode off?
 
-Yes. Deep Sensor Mode can be **Off** or **Read-only local sensors**. Environment variable/testing overrides may also be supported.
+Deep Sensor Mode defaults to **Off**. The in-app Settings toggle was retired in v1.2.3-preview.1; the mode is only enabled through the optional installer checkbox or an environment variable/testing override, and older saved values are ignored safely when unsupported.
 
 Related docs: [FORGER-SENSOR-STACK.md](FORGER-SENSOR-STACK.md), [SENSOR-LIMITATIONS.md](SENSOR-LIMITATIONS.md), and [FORGER-DEEP-SENSOR-DRIVER-ROADMAP.md](FORGER-DEEP-SENSOR-DRIVER-ROADMAP.md).
 
@@ -329,7 +342,7 @@ Related docs: [FORGER-SENSOR-STACK.md](FORGER-SENSOR-STACK.md), [SENSOR-LIMITATI
 
 ## What does Kyra see?
 
-**Offline Kyra** uses built-in rules and optional **local reports** you already generated. With your permission, a **sanitized** summary may be sent to configured online providers — not raw serials, product keys, or full private paths in the safe-summary path.
+**Offline Kyra** uses built-in rules and optional **local reports** you already generated. With your permission and configured settings, a **sanitized** summary may be sent to configured online providers — not raw serials, product keys, or full private paths in the safe-summary path. Exports and support bundles still ask separately before packaging local context.
 
 ---
 
@@ -373,13 +386,13 @@ Email **ForgerDigitalSolutions@outlook.com** with app version, Windows version, 
 
 ## What is ForgerEMS in one sentence?
 
-A Windows technician suite for **USB toolkit building**, **USB Intelligence**, **System Intelligence**, **Driver Hub**, **Diagnostics**, **Toolkit Manager**, and **Kyra**.
+A Windows technician utility suite for **USB toolkit building**, **USB Intelligence / port mapping**, **drive validation**, **local device snapshots (battery health and system specs)**, **Driver Hub**, **Toolkit Manager**, and **Kyra**.
 
 ---
 
 ## Does ForgerEMS guarantee repair, data recovery, malware removal, hardware diagnosis, or compatibility?
 
-**No.** ForgerEMS is **technician-assist software**, not a replacement for professional judgement. Dev Beta builds do not promise guaranteed repair, guaranteed data recovery, guaranteed malware removal, guaranteed hardware diagnosis, guaranteed driver/component compatibility, guaranteed pricing or marketplace accuracy, or guaranteed legal/regulatory compliance. System Intelligence and Hardware X-Ray may report **Unknown**, **NotExposed**, or **Inferred** when firmware, drivers, permissions, or sensor providers do not expose data — these are coverage limits, not failures. Confirm critical decisions with additional testing and treat third-party tools, OS images, and vendor utilities under their own licenses and terms.
+**No.** ForgerEMS is **technician-assist software**, not a replacement for professional judgement. Public Preview builds do not promise guaranteed repair, guaranteed data recovery, guaranteed malware removal, guaranteed hardware diagnosis, guaranteed driver/component compatibility, guaranteed pricing or marketplace accuracy, or guaranteed legal/regulatory compliance. System Intelligence and Hardware X-Ray may report **Unknown**, **NotExposed**, or **Inferred** when firmware, drivers, permissions, or sensor providers do not expose data — these are coverage limits, not failures. Confirm critical decisions with additional testing and treat third-party tools, OS images, and vendor utilities under their own licenses and terms.
 
 ---
 

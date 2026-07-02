@@ -45,7 +45,7 @@ git push origin v1.1.12-rc.3
 
 After GitHub Actions (for example `.github/workflows/release.yml`) finishes, the release page should show assets such as:
 
-- `ForgerEMS-Beta-v{version}.zip` or `ForgerEMS-v{version}.zip` (**recommended** for humans)  
+- `ForgerEMS-v{version}.zip` (**recommended** for humans)  
 - `ForgerEMS-Setup-v{version}.exe` (**advanced / direct**; SmartScreen is often stricter)  
 - `CHECKSUMS.sha256`, `DOWNLOAD_BETA.txt`, and other release metadata as you publish them  
 

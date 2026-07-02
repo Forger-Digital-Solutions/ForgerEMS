@@ -18,6 +18,7 @@ public static class CopilotRedactor
         redacted = Regex.Replace(redacted, @"(?i)\b(ghp|gho|github_pat)_[A-Za-z0-9_]{20,}\b", "[REDACTED_TOKEN]");
         redacted = Regex.Replace(redacted, @"(?i)\bsk-[A-Za-z0-9_-]{12,}\b", "[REDACTED_API_KEY]");
         redacted = Regex.Replace(redacted, @"(?i)\bxox[baprs]-[A-Za-z0-9-]+\b", "[REDACTED_TOKEN]");
+        redacted = Regex.Replace(redacted, @"(?i)[A-Z]:\\Program Files(?: \(x86\))?\\[^\r\n\t ""']+", "[REDACTED_PRIVATE_PATH]");
         redacted = Regex.Replace(redacted, @"[A-Za-z]:\\Users\\([^\\\s]+)", @"[REDACTED_PRIVATE_PATH]");
         redacted = Regex.Replace(redacted, @"[A-Za-z]:\\[^\r\n\t ]+", "[REDACTED_PRIVATE_PATH]");
         redacted = Regex.Replace(redacted, @"(?i)\b(service tag|serial|s/n)\s*[:#]?\s*[A-Z0-9-]{5,}\b", "[REDACTED_SERIAL]");

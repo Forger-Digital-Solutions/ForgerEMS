@@ -88,7 +88,8 @@ param(
     [switch]$WaitForManagedDownloads,
     [switch]$NonInteractive,
     [switch]$ShowVersion,
-    [string[]]$IncludedCategories = @()
+    [string[]]$IncludedCategories = @(),
+    [string[]]$IncludedProfileItems = @()
 )
 
 $forwarded = @{}

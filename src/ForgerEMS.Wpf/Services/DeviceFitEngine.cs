@@ -76,11 +76,11 @@ public sealed class DeviceFitEngine
         {
             return new DeviceFitResult
             {
-                PrimaryFit = "Unknown / run System Intelligence",
+                PrimaryFit = "Unknown / local device snapshot needed",
                 Confidence = "Low",
-                WeakFits = ["Machine-specific use guidance needs a System Intelligence scan."],
-                UpgradeFirstAdvice = ["Run System Intelligence before recommending workloads, games, or resale positioning."],
-                ListingPositioning = "Do not market until specs are scanned."
+                WeakFits = ["Machine-specific use guidance needs a local device snapshot."],
+                UpgradeFirstAdvice = ["Use Dr. Forge when available before recommending workloads, games, or resale positioning."],
+                ListingPositioning = "Do not market until specs are available."
             };
         }
 

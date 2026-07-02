@@ -256,7 +256,7 @@ public sealed class LocalRulesCopilotEngine
             During beta, ForgerEMS expects online models to be configured by the developer or operator (environment variables or shipped configuration). You do not need to paste your own API key to use Kyra.
 
             Offline Kyra:
-            Works with no keys—local rules and your System Intelligence scan context stay on this PC.
+            Works with no keys—local rules and local device context stay on this PC.
 
             Online Kyra:
             Only activates when a provider is already configured for this install. If you are a tester, ask your operator what is enabled; do not send API keys in screenshots, logs, or support email.
@@ -270,7 +270,7 @@ public sealed class LocalRulesCopilotEngine
     {
         var profile = context.SystemProfile!;
         var tpmLine = profile.TpmReady == true
-            ? "TPM looks ready in the scan—if Windows still complains, re-run System Intelligence after a BIOS update."
+            ? "TPM looks ready in the snapshot—if Windows still complains, refresh local device context after a BIOS update."
             : "TPM / security readiness: open Windows Security → Device security → Processor/TPM/Secure Boot status. If TPM is off or not ready, reboot into firmware (BIOS/UEFI) and enable TPM/PTT/fTPM, then save and exit.";
 
         var apipa = profile.ApipaAdapterCount > 0
@@ -305,7 +305,7 @@ public sealed class LocalRulesCopilotEngine
 
             Storage:
             {storage}
-            Steps: run System Intelligence storage checks again after changes, use vendor/CrystalDisk-style SMART tools if health is unknown, and back up important data before any repair or wipe.
+            Steps: refresh storage checks after changes, use vendor/CrystalDisk-style SMART tools if health is unknown, and back up important data before any repair or wipe.
 
             Network / DHCP:
             {net}
@@ -359,13 +359,13 @@ public sealed class LocalRulesCopilotEngine
     {
         return $"""
             Short answer:
-            I need a System Intelligence scan before I can give machine-specific advice.
+            I need a local device snapshot before I can give machine-specific advice.
 
             What I can see without a scan:
             {DescribeSystemContext(systemContext)}
 
             What to do next:
-            Run System Intelligence from this app, then ask again.
+            Use Dr. Forge when available, then ask again.
             """;
     }
 
@@ -533,7 +533,7 @@ public sealed class LocalRulesCopilotEngine
             var profileLine = FindLine(context.ContextText, "Machine profile:");
             var saved = FindLine(context.ContextText, "Profile last scan:");
             return string.IsNullOrWhiteSpace(profileLine)
-                ? "I do not see a previous local machine profile yet. Run System Intelligence again after profile save to compare scans."
+                ? "I do not see a previous local machine profile yet. Refresh local device context after profile save to compare snapshots."
                 : $"{profileLine} {saved}".Trim();
         }
 
@@ -950,13 +950,13 @@ public sealed class LocalRulesCopilotEngine
         {
             return """
                 Short answer:
-                Beta testing is mostly “does install, USB Builder, USB Intelligence, System Intelligence, Toolkit Manager, Diagnostics, and Kyra behave on real PCs?”
+                Beta testing is mostly “does install, USB Builder, Port / USB Intelligence, Toolkit Manager, Driver Hub, Kyra, Settings, and Live Logs behave on real PCs?”
 
                 Likely gaps:
                 Unsigned builds can trigger SmartScreen, some WMI fields may be blank, and USB topology is best-effort without benchmarks.
 
                 Next steps:
-                1. Run System Scan, USB Benchmark, Toolkit Refresh, and Diagnostics; skim logs under %LOCALAPPDATA%\ForgerEMS\logs\.
+                1. Run USB Benchmark, Toolkit Refresh, Driver Hub review, and Live Logs checks; skim logs under %LOCALAPPDATA%\ForgerEMS\logs\.
                 2. Follow docs/BETA_TESTER_QUICKSTART.md and the versioned docs/BETA_HUMAN_TESTING_CHECKLIST_v*.md that matches your build from the repo or release bundle.
                 3. Note anything confusing with screenshots + log snippets (no secrets).
                 """;
@@ -990,13 +990,13 @@ public sealed class LocalRulesCopilotEngine
             ForgerEMS helps you prep, inspect, and build repair USBs with guided scans and Kyra.
 
             What Kyra can do here:
-            1. Explain System Intelligence summaries (no raw serials in chat context).
+            1. Explain local device summaries (no raw serials in chat context).
             2. Suggest USB Builder + USB Intelligence steps (benchmark + mapping).
             3. Clarify Toolkit Manager statuses (Managed vs Manual Required).
-            4. Point to Diagnostics for a read-only health checklist.
+            4. Point to Dr. Forge for deep diagnostics/system intelligence when available.
 
             Next step:
-            Run System Intelligence and USB Benchmark, then ask a specific question so I stay concise.
+            Run USB Benchmark and add a local device snapshot when available, then ask a specific question so I stay concise.
             """;
     }
 
@@ -1111,7 +1111,7 @@ public sealed class LocalRulesCopilotEngine
         {
             var profile = context.SystemProfile;
             var facts = profile is null
-                ? "I need a System Intelligence scan before I can give machine-specific advice."
+                ? "I need a local device snapshot before I can give machine-specific advice."
                 : $"Health score: {context.HealthEvaluation?.HealthScore ?? 0}/100. RAM: {profile.RamTotal}. Storage: {JoinOrFallback(profile.Disks.Select(disk => $"{disk.MediaType} health {disk.Health} status {disk.Status}"), "storage health unknown")}. Battery: {profile.BatteryStatus}.";
             var memoryHint = context.PreviousIntent is KyraIntent.PerformanceLag or KyraIntent.AppFreezing or KyraIntent.SlowBoot
                 ? "Since we were already looking at lag, I’ll keep this focused instead of repeating the whole scan."
@@ -1128,7 +1128,7 @@ public sealed class LocalRulesCopilotEngine
                 {FormatNumbered(context.Recommendations.Take(5), "Check Task Manager, SMART health, Windows Update activity, thermals, and driver status.")}
 
                 Technical details:
-                I’m using the local System Intelligence scan only, so I’m not sending your device details anywhere.
+                I’m using local device context only, so I’m not sending your device details anywhere.
                 """;
         }
 
@@ -1168,7 +1168,7 @@ public sealed class LocalRulesCopilotEngine
                 Short answer:
                 Based on this {device}, I can compare upgrade paths, but I need how you use it (gaming, business, school) and a rough budget.
 
-                What I already know from System Intelligence:
+                What I already know from local device context:
                 {DescribeSystemContext(context.SystemContext)}
 
                 What to do next:
@@ -1331,7 +1331,7 @@ public sealed class LocalRulesCopilotEngine
             Running WSL output capture inside the main WPF window couples your distro lifecycle to the UI thread and graphics stack. That is convenient for demos but brittle during beta.
 
             What to do instead:
-            1. Use Open WSL Terminal in Diagnostics so Windows Terminal or wsl.exe opens outside the app window.
+            1. Use Open WSL Terminal from the external tools flow so Windows Terminal or wsl.exe opens outside the app window.
             2. Use Windows Sandbox or a full VM when you are unsure about installers or scripts.
             3. Do not run risky downloads or unknown scripts inside the main ForgerEMS window—treat the host app as your control plane, not a lab VM.
             """;

@@ -157,7 +157,7 @@ public sealed class KyraOrchestrator
                 if (plan.StayLocalReason == KyraStayLocalReason.MachineContextPrivacy &&
                     settings.Mode is not CopilotMode.OfflineOnly and not CopilotMode.AskFirst)
                 {
-                    notes.Add("Kyra routing: machine-specific with online context sharing OFF -> Local Kyra (System Intelligence)");
+                    notes.Add("Kyra routing: machine-specific with online context sharing OFF -> Local Kyra (device context)");
                 }
                 else if (plan.StayLocalReason == KyraStayLocalReason.DeviceToolkitRouting &&
                          plan.ShouldUseLocalToolAnswer &&
@@ -513,7 +513,7 @@ public sealed class KyraOrchestrator
         {
             return new CopilotResponse
             {
-                Text = "Kyra hit an internal error and fell back safely. Try again after refreshing the System Intelligence scan.",
+                Text = "Kyra hit an internal error and fell back safely. Try again after refreshing local device context.",
                 OnlineStatus = "Error state - safe fallback",
                 ProviderNotes = [$"Internal Kyra error: {exception.Message}"]
             };

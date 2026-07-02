@@ -15,10 +15,10 @@ public sealed partial class MainViewModel
     private readonly List<DriverHubEntryView> _driverHubEntryViews = [];
     private string _driverHubSearchText = string.Empty;
     private string _selectedDriverHubFilter = "All";
-    private string _driverHubRecommendationSummaryText = "Run System Intelligence to personalize recommendations.";
+    private string _driverHubRecommendationSummaryText = "Add a local device snapshot to personalize recommendations.";
     private string _driverHubEmptyStateText = string.Empty;
     private string _driverHubStatusText = "Driver Hub is ready. Official links only; no automatic installs or firmware flashing.";
-    private string _driverHubDetectedHardwareText = "Run System Intelligence to personalize Driver Hub.";
+    private string _driverHubDetectedHardwareText = "No local device snapshot loaded. Driver Hub still shows official starting points.";
 
     public ObservableCollection<DriverHubEntryView> DriverHubVisibleEntries { get; } = [];
 
@@ -163,7 +163,7 @@ public sealed partial class MainViewModel
     {
         if (profile is null)
         {
-            return "Run System Intelligence to personalize recommendations.";
+            return "Add a local device snapshot to personalize recommendations.";
         }
 
         if (recommendations.All(item => item.Reason == DriverHubRecommendationReason.UniversalStartingPoint))
@@ -178,7 +178,7 @@ public sealed partial class MainViewModel
     {
         if (profile is null)
         {
-            return "Run System Intelligence to personalize Driver Hub.";
+            return "No local device snapshot loaded. Driver Hub still shows official starting points.";
         }
 
         var gpu = profile.Gpus.Count == 0

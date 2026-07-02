@@ -40,7 +40,8 @@ public static class UsbBuilderProfileCatalog
             "android" => "Android",
             "ios-ipados" => "iOS/iPadOS",
             "oem-tools" => "OEM Tools",
-            "diagnostics" => "Diagnostics",
+            "diagnostics" => "Diagnostic Tools for USB",
+            "forgerems-portable" => "ForgerEMS Portable App",
             "core" => "Core",
             _ => GetRequired(categoryId).DisplayName
         };
@@ -62,6 +63,19 @@ public static class UsbBuilderProfileCatalog
             UsbBuilderProfileSpaceEstimate.Range(40 * Mb, 120 * Mb, 400 * Mb, UsbBuilderPackSizeConfidence.Known, "structure and docs"),
             "Core structure is created by ForgerEMS; no user ISOs are required.",
             ["_docs", "_logs", "_reports"]);
+
+        yield return new(
+            "forgerems-portable",
+            "ForgerEMS Portable App",
+            "Portable ForgerEMS app, legal/help docs, and support folders for technician USB profiles.",
+            "ForgerEMS",
+            IsRequired: false,
+            DefaultIncluded: true,
+            RequiresManualMedia: false,
+            UsbBuilderPackDownloadMode.Mixed,
+            UsbBuilderProfileSpaceEstimate.Range(90 * Mb, 180 * Mb, 420 * Mb, UsbBuilderPackSizeConfidence.Estimated, "portable app, backend, docs, providers"),
+            "Copies the packaged ForgerEMS portable app to _apps\\ForgerEMS, Terms/legal/help docs to _docs\\ForgerEMS, and creates _logs\\ForgerEMS. It does not place app files at the USB root.",
+            ["_apps\\ForgerEMS", "_docs\\ForgerEMS", "_logs\\ForgerEMS"]);
 
         yield return new(
             "windows",
@@ -158,15 +172,15 @@ public static class UsbBuilderProfileCatalog
 
         yield return new(
             "diagnostics",
-            "Diagnostics and rescue utilities",
-            "Disk, imaging, hardware, USB, network, security, and portable technician utilities.",
+            "Diagnostic Tools for USB",
+            "USB/downloadable hardware test, disk, imaging, USB, network, security, and portable technician utilities. Deep diagnostics/system intelligence live in Dr. Forge.",
             "Tools",
             IsRequired: false,
             DefaultIncluded: true,
             RequiresManualMedia: false,
             UsbBuilderPackDownloadMode.AutoDownloadable,
             UsbBuilderProfileSpaceEstimate.Range(1 * Gb, 4 * Gb, 12 * Gb, UsbBuilderPackSizeConfidence.Estimated, "depending on enabled portable tools"),
-            "Catalog-managed portable utilities download when pinned; large optional tools may remain link-only.",
+            "This category only adds USB/downloadable utilities and shortcuts. It is not the removed ForgerEMS Diagnostics tab; expanded repair analysis and advanced system inventory are moving to Dr. Forge. ForgerEMS builds and manages the repair USB.",
             ["Tools\\Portable"]);
     }
 }

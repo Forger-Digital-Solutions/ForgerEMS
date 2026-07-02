@@ -73,7 +73,7 @@ public static class KyraCopilotResponseBuilder
         {
             var label = plan.StayLocalReason switch
             {
-                KyraStayLocalReason.MachineContextPrivacy => "Kyra • Local (System Intelligence)",
+                KyraStayLocalReason.MachineContextPrivacy => "Kyra • Local (device context)",
                 KyraStayLocalReason.DeviceToolkitRouting => "Kyra • Local",
                 KyraStayLocalReason.LiveDataNotConfigured => "Kyra • Local (live tools unavailable)",
                 KyraStayLocalReason.CodeAssistIsolation => "Kyra • Local (Code assist)",
@@ -86,7 +86,7 @@ public static class KyraCopilotResponseBuilder
             context.SystemProfile is not null &&
             KyraMachineContextRouter.IsMachineAnchoredIntent(context.Intent, prompt))
         {
-            return WithSourceLabel(response, "Kyra • Local (System Intelligence)");
+            return WithSourceLabel(response, "Kyra • Local (device context)");
         }
 
         return response;

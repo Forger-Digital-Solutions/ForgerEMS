@@ -4,9 +4,11 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Navigation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services;
 using VentoyToolkitSetup.Wpf.ViewModels;
 
@@ -15,6 +17,7 @@ namespace VentoyToolkitSetup.Wpf;
 public partial class MainWindow : Window
 {
     private bool _initialized;
+    private bool _viewModelInitialized;
     private bool _logScrollPending;
     private MainViewModel? _currentViewModel;
     private readonly DispatcherTimer _logScrollTimer;
@@ -80,20 +83,37 @@ public partial class MainWindow : Window
         _initialized = true;
         if (DataContext is MainViewModel viewModel)
         {
-            try
+            viewModel.PostConsentInitializeAsync = () => InitializeViewModelAfterConsentAsync(viewModel);
+            if (viewModel.MainToolsEnabled)
             {
-                // Install the WM_DEVICECHANGE hook before initialization so the
-                // debounced refresh path is ready as soon as the first device
-                // arrival/removal arrives. This is required for the "no USB at
-                // launch + later plug-in" flow: the hook will refresh the target
-                // list automatically once Windows broadcasts the volume mount.
-                viewModel.AttachUsbDeviceChangeNotifier(this);
-                await viewModel.InitializeAsync();
+                await InitializeViewModelAfterConsentAsync(viewModel);
             }
-            catch (Exception exception)
-            {
-                StartupDiagnosticLog.AppendException("MainWindow.OnLoaded.Initialize", exception);
-            }
+        }
+
+        UpdateSidebarSelection();
+    }
+
+    private async Task InitializeViewModelAfterConsentAsync(MainViewModel viewModel)
+    {
+        if (_viewModelInitialized)
+        {
+            return;
+        }
+
+        _viewModelInitialized = true;
+        try
+        {
+            // Install the WM_DEVICECHANGE hook before initialization so the
+            // debounced refresh path is ready as soon as the first device
+            // arrival/removal arrives. This is required for the "no USB at
+            // launch + later plug-in" flow: the hook will refresh the target
+            // list automatically once Windows broadcasts the volume mount.
+            viewModel.AttachUsbDeviceChangeNotifier(this);
+            await viewModel.InitializeAsync();
+        }
+        catch (Exception exception)
+        {
+            StartupDiagnosticLog.AppendException("MainWindow.OnLoaded.Initialize", exception);
         }
 
         UpdateSidebarSelection();
@@ -120,6 +140,7 @@ public partial class MainWindow : Window
             _currentViewModel.CopilotMessages.CollectionChanged += OnCopilotMessagesChanged;
             _currentViewModel.OpenKyraAdvancedSettingsAction = OpenKyraAdvancedSettingsWindow;
             _currentViewModel.MainTabNavigationAction = NavigateMainTab;
+            _currentViewModel.WelcomeCenterInfoAction = ShowWelcomeCenterInfoWindow;
         }
     }
 
@@ -131,6 +152,7 @@ public partial class MainWindow : Window
             viewModel.CopilotMessages.CollectionChanged -= OnCopilotMessagesChanged;
             viewModel.OpenKyraAdvancedSettingsAction = null;
             viewModel.MainTabNavigationAction = null;
+            viewModel.WelcomeCenterInfoAction = null;
         }
     }
 
@@ -361,6 +383,26 @@ public partial class MainWindow : Window
         dialog.ShowDialog();
     }
 
+    private static void ShowWelcomeCenterInfoWindow(string title, string body, string? actionText, Action? action)
+    {
+        ScrollableInfoWindow.ShowModeless(null, title, body, actionText, action);
+    }
+
+    // Opens the Dr. Forge Advanced Sensors roadmap copy. Intentionally not wired
+    // to any download — Dr. Forge is design-only today; the button (now on the
+    // Toolkit Manager tab, where the planned Dr. Forge download will live) exists
+    // so users have an honest, clickable place to learn about the planned
+    // companion app instead of a fake "Download" CTA.
+    private void OnLearnAboutDrForgeClick(object sender, RoutedEventArgs e)
+    {
+        ScrollableInfoWindow.ShowModeless(
+            this,
+            "Dr. Forge Advanced Sensors — Roadmap",
+            VentoyToolkitSetup.Wpf.Infrastructure.InfoDocumentTexts.BuildDrForgeRoadmap(),
+            actionText: null,
+            action: null);
+    }
+
     private void OnSidebarNavigateClick(object sender, RoutedEventArgs e)
     {
         if (sender is Button button &&
@@ -391,14 +433,17 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Order must match the MainTabControl TabItem order (and the sidebar
+        // button Tag indices). System Intelligence and Diagnostics were removed
+        // when those surfaces moved to Dr. Forge; the duplicate Live Logs tab and
+        // its NavLiveLogsButton were removed in favor of the always-visible side panel.
         var navButtons = new[]
         {
             NavUsbButton,
-            NavSystemButton,
+            NavPortUsbIntelligenceButton,
             NavToolkitButton,
             NavDriverHubButton,
             NavCopilotButton,
-            NavDiagnosticsButton,
             NavSettingsButton
         };
 
@@ -414,13 +459,42 @@ public partial class MainWindow : Window
 
     private void OnShowFullLogsClick(object sender, RoutedEventArgs e)
     {
+        // Tell the VM first: the joined full-log text is rebuilt lazily and is
+        // intentionally stale while the overlay is hidden (perf: no O(all lines)
+        // string join per live-log flush when nothing displays it).
+        if (DataContext is MainViewModel viewModel)
+        {
+            viewModel.IsFullLogsOverlayVisible = true;
+        }
+
         FullLogsOverlay.Visibility = Visibility.Visible;
         LogTextBox.ScrollToEnd();
     }
 
     private void OnCloseFullLogsClick(object sender, RoutedEventArgs e)
     {
+        if (DataContext is MainViewModel viewModel)
+        {
+            viewModel.IsFullLogsOverlayVisible = false;
+        }
+
         FullLogsOverlay.Visibility = Visibility.Collapsed;
+    }
+
+    private void OnUsbBuilderProfileCardMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (IsFromInteractiveControl(e.OriginalSource as DependencyObject))
+        {
+            return;
+        }
+
+        if (sender is FrameworkElement { DataContext: UsbBuilderProfileOption option } &&
+            DataContext is MainViewModel viewModel &&
+            viewModel.CustomizeUsbBuilderCategoryCommand.CanExecute(option))
+        {
+            e.Handled = true;
+            viewModel.CustomizeUsbBuilderCategoryCommand.Execute(option);
+        }
     }
 
     private void SupportMailto_OnRequestNavigate(object sender, RequestNavigateEventArgs e)
@@ -438,25 +512,7 @@ public partial class MainWindow : Window
     private void OnStartUsbBuilderFromBetaWelcomeClick(object sender, RoutedEventArgs e)
     {
         MainTabControl.SelectedIndex = 0;
-        if (DataContext is MainViewModel viewModel)
-        {
-            viewModel.DismissBetaWelcome();
-        }
-    }
-
-    private void OnRunSystemScanFromWelcomeClick(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is not MainViewModel viewModel)
-        {
-            return;
-        }
-
-        viewModel.DismissBetaWelcome();
-        MainTabControl.SelectedIndex = 1;
-        if (viewModel.RunSystemScanCommand.CanExecute(null))
-        {
-            viewModel.RunSystemScanCommand.Execute(null);
-        }
+        UpdateSidebarSelection();
     }
 
     private void OnRunUsbBenchmarkFromWelcomeClick(object sender, RoutedEventArgs e)
@@ -466,12 +522,34 @@ public partial class MainWindow : Window
             return;
         }
 
-        viewModel.DismissBetaWelcome();
-        MainTabControl.SelectedIndex = 0;
+        MainTabControl.SelectedIndex = 1;
+        UpdateSidebarSelection();
+        if (viewModel.SelectedUsbTarget is null)
+        {
+            ShowWelcomeCenterInfoWindow(
+                "Run USB Benchmark",
+                "No removable USB target is selected. Insert a USB drive, pick it in USB Builder, then return here or use Run USB Benchmark from Port / USB Intelligence.",
+                null,
+                null);
+            return;
+        }
+
         if (viewModel.RunUsbIntelligenceBenchmarkCommand.CanExecute(null))
         {
             viewModel.RunUsbIntelligenceBenchmarkCommand.Execute(null);
+            ShowWelcomeCenterInfoWindow(
+                "Run USB Benchmark",
+                "USB benchmark started. The Port / USB Intelligence tab is open behind the Welcome Center, and the Welcome Center will stay available until you close it.",
+                null,
+                null);
+            return;
         }
+
+        ShowWelcomeCenterInfoWindow(
+            "Run USB Benchmark",
+            "USB benchmark is not available for the current target. It may be busy, unsafe to test, not removable, already running, or still settling after insertion.",
+            null,
+            null);
     }
 
     private void OnOpenLogsFromBetaWelcomeClick(object sender, RoutedEventArgs e)
@@ -479,7 +557,19 @@ public partial class MainWindow : Window
         if (DataContext is MainViewModel viewModel && viewModel.OpenLogsFolderCommand.CanExecute(null))
         {
             viewModel.OpenLogsFolderCommand.Execute(null);
+            ShowWelcomeCenterInfoWindow(
+                "Open Logs Folder",
+                "ForgerEMS asked Windows to open the logs folder. If File Explorer does not appear, use Create Support Bundle on the Toolkit Manager tab to copy a safe support summary without sharing API keys, passwords, private paths, or raw logs.",
+                null,
+                null);
+            return;
         }
+
+        ShowWelcomeCenterInfoWindow(
+            "Open Logs Folder",
+            "The logs folder is not available yet. Start ForgerEMS initialization or run a diagnostic action, then try again.",
+            null,
+            null);
     }
 
     private void OnDismissBetaWelcomeClick(object sender, RoutedEventArgs e)
@@ -500,6 +590,21 @@ public partial class MainWindow : Window
             }
 
             source = System.Windows.Media.VisualTreeHelper.GetParent(source);
+        }
+
+        return false;
+    }
+
+    private static bool IsFromInteractiveControl(DependencyObject? source)
+    {
+        while (source is not null)
+        {
+            if (source is ButtonBase or TextBox or ComboBox or Selector)
+            {
+                return true;
+            }
+
+            source = VisualTreeHelper.GetParent(source);
         }
 
         return false;

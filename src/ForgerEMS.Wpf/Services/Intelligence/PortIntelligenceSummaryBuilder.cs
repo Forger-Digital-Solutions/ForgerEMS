@@ -26,7 +26,7 @@ public sealed record PortIntelligenceUiSummary
     public string RecommendedFixesSummary { get; init; } =
         "Map the current port, run a USB benchmark, and refresh charging telemetry before making hardware changes.";
 
-    public string DeepScanSummary { get; init; } = ElevatedScanTelemetrySnapshot.RunElevatedScanPrompt;
+    public string ElevatedInventorySummary { get; init; } = ElevatedScanTelemetrySnapshot.RunElevatedScanPrompt;
 
     public string TelemetryLimitationsSummary { get; init; } =
         PortIntelligenceSummaryBuilder.DefaultTelemetryLimitations;
@@ -60,7 +60,7 @@ public static class PortIntelligenceSummaryBuilder
             RecommendedFixesSummary = FormatLines(
                 fixes,
                 "Map the current port, run a USB benchmark, and refresh charging telemetry before making hardware changes."),
-            DeepScanSummary = BuildDeepScanSummary(elevated, now),
+            ElevatedInventorySummary = BuildElevatedInventorySummary(elevated, now),
             TelemetryLimitationsSummary = DefaultTelemetryLimitations
         };
     }
@@ -246,7 +246,7 @@ public static class PortIntelligenceSummaryBuilder
         return fixes.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
-    private static string BuildDeepScanSummary(ElevatedScanTelemetrySnapshot? elevated, DateTimeOffset nowUtc)
+    private static string BuildElevatedInventorySummary(ElevatedScanTelemetrySnapshot? elevated, DateTimeOffset nowUtc)
     {
         if (elevated is null || elevated.IsMissing)
         {
@@ -275,15 +275,15 @@ public static class PortIntelligenceSummaryBuilder
         {
             if (elevated.State == ElevatedScanTelemetryState.CompletePartial)
             {
-                return "Elevated scan complete — some deep telemetry was unavailable on this device.";
+                return "Elevated scan complete — some permission-limited detail was unavailable on this device.";
             }
 
             var age = FormatAge(elevated.CollectedAtUtc, nowUtc);
-            return $"Deep scan data collected {age}. Port Intelligence is using cached elevated inventory where available. Source: {elevated.Source}; confidence {elevated.Confidence}.";
+            return $"Admin inventory data collected {age}. Port Intelligence is using cached elevated inventory where available. Source: {elevated.Source}; confidence {elevated.Confidence}.";
         }
 
         var staleAge = FormatAge(elevated.CollectedAtUtc, nowUtc);
-        return $"Deep scan data is stale/expired; last collected {staleAge}. Run Elevated Scan to refresh permission-limited controller, hub, and driver details.";
+        return $"Admin inventory data is stale/expired; last collected {staleAge}. Run Elevated Scan to refresh permission-limited controller, hub, and driver details.";
     }
 
     private static string FormatAge(DateTimeOffset? collectedAtUtc, DateTimeOffset nowUtc)

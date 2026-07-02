@@ -8,7 +8,7 @@
 
 ## 1. Download the ZIP from GitHub Releases
 
-Get **`ForgerEMS-v1.2.3-preview.1.zip`** or **`ForgerEMS-Beta-v1.2.3-preview.1.zip`** when published (same bundle style; pick one). Optionally verify **`CHECKSUMS.sha256`** from the same release. Older `v1.1.12-rc.*` assets remain on prior GitHub tags for history only.
+Get **`ForgerEMS-v1.2.3-preview.1.zip`** when published. Optionally verify **`CHECKSUMS.sha256`** from the same release. Older `v1.1.12-rc.*` assets remain on prior GitHub tags for history only.
 
 If the browser download behaves oddly, read **[DOWNLOAD_TROUBLESHOOTING.md](DOWNLOAD_TROUBLESHOOTING.md)** and **[FIRST_TESTER_DOWNLOAD_FLOW.md](FIRST_TESTER_DOWNLOAD_FLOW.md)**.
 
@@ -87,12 +87,12 @@ Normal Kyra replies use compact privacy/source footers. Detailed provider routin
 
 ## 11. Check Kyra Intelligence Network settings
 
-Open **Settings → Kyra Intelligence**.
+Open **Settings → Kyra Assistant**.
 
 - **Local Kyra Memory** stores sanitized repair notes on this PC.
 - **Gateway Research** allows realtime public-info lookup when configured and needed.
 - **Use System Intelligence Context** lets Kyra use local scan summaries.
-- **Community Intelligence Sharing** is preview/off by default.
+- **Community Intelligence Sharing** is off by default.
 - **View Shared Preview** shows only sanitized preview fields.
 - **Export Memory** exports sanitized local Kyra memory.
 - **Delete Memory** deletes local Kyra memory after confirmation.

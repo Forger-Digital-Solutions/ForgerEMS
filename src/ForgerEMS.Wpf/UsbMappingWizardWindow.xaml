@@ -229,10 +229,51 @@
                                    Text="{Binding DoneResult.BenchmarkStatus, StringFormat=Benchmark status: {0}}" />
                         <TextBlock Margin="0,8,0,0" Foreground="{DynamicResource PanelMutedTextBrush}" Text="{Binding DoneResult.Recommendation, Mode=OneWay}" TextWrapping="Wrap" />
                         <StackPanel Margin="0,16,0,0" Orientation="Horizontal">
-                            <Button Style="{StaticResource WizardBtn}" Content="Run Benchmark on This Port" Command="{Binding RunBenchmarkOnThisPortCommand}" />
+                            <Button Style="{StaticResource WizardPrimaryBtn}" Content="Run Benchmark on This Port" Command="{Binding RunBenchmarkOnThisPortCommand}" />
                             <Button Style="{StaticResource WizardBtn}" Content="Close" Command="{Binding CloseCommand}" />
                             <Button Style="{StaticResource WizardBtn}" Content="Map Another Port" Command="{Binding MapAnotherPortCommand}" />
                         </StackPanel>
+
+                        <!-- In-wizard benchmark progress + readings: results stay inside the
+                             wizard so the user never has to open another page to read them. -->
+                        <TextBlock Margin="0,12,0,0"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource PanelTextBrush}"
+                                   Text="{Binding WizardBenchmarkStatusText}"
+                                   TextWrapping="Wrap"
+                                   Visibility="{Binding HasWizardBenchmarkStatus, Converter={StaticResource BoolToVis}}" />
+                        <ProgressBar Margin="0,8,0,0"
+                                     Height="6"
+                                     IsIndeterminate="{Binding IsWizardBenchmarkRunning}"
+                                     Visibility="{Binding IsWizardBenchmarkRunning, Converter={StaticResource BoolToVis}}" />
+                        <Border Margin="0,10,0,0"
+                                Padding="12,10"
+                                Background="#22101824"
+                                BorderBrush="#553A4B63"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Visibility="{Binding HasWizardBenchmarkReadings, Converter={StaticResource BoolToVis}}">
+                            <StackPanel>
+                                <TextBlock FontWeight="SemiBold"
+                                           Foreground="{DynamicResource HeroTextBrush}"
+                                           Text="Benchmark readings" />
+                                <ItemsControl Margin="0,6,0,0" ItemsSource="{Binding WizardBenchmarkReadingLines}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Margin="0,2,0,0"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       Text="{Binding}"
+                                                       TextWrapping="Wrap" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Margin="0,10,0,0"
+                                   Foreground="#FFFCA5A5"
+                                   Text="{Binding WizardBenchmarkErrorText}"
+                                   TextWrapping="Wrap"
+                                   Visibility="{Binding HasWizardBenchmarkError, Converter={StaticResource BoolToVis}}" />
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>

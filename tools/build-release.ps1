@@ -5,7 +5,7 @@ Builds a complete ForgerEMS release staging folder.
 .DESCRIPTION
 Publishes the .NET 8 WPF app, builds and stages the PowerShell backend bundle,
 copies public manifests, optionally compiles the Inno Setup installer, produces a
-versioned ZIP bundle for beta distribution, and writes SHA256 checksums under
+versioned portable app ZIP for beta distribution, and writes SHA256 checksums under
 release\current\.
 
 .PARAMETER Version
@@ -123,6 +123,32 @@ function Copy-CleanDirectory {
     Copy-Item -Path (Join-Path $Source "*") -Destination $Destination -Recurse -Force
 }
 
+function Copy-ReleaseDocs {
+    param([Parameter(Mandatory)][string]$Destination)
+
+    $docsDest = Join-Path $Destination "docs"
+    Ensure-Dir -Path $docsDest
+    $docs = @(
+        "ABOUT_FORGEREMS.md",
+        "FAQ.md",
+        "TERMS_OF_USE.md",
+        "PRIVACY_AND_DATA_HANDLING.md",
+        "LEGAL_NOTICES.md",
+        "THIRD_PARTY_NOTICES.md",
+        "USER_CONSENT_FLOW.md",
+        "RELEASE_NOTES_v1.2.3-preview.1.md"
+    )
+
+    foreach ($doc in $docs) {
+        $source = Join-Path $repoRoot ("docs\{0}" -f $doc)
+        if (-not (Test-Path -LiteralPath $source)) {
+            throw "Required release doc was not found: $source"
+        }
+
+        Copy-Item -LiteralPath $source -Destination (Join-Path $docsDest $doc) -Force
+    }
+}
+
 function Write-Checksums {
     param(
         [Parameter(Mandatory)][string]$Root,
@@ -150,9 +176,7 @@ function Get-DistributionChecksumText {
         [Parameter(Mandatory)][string]$ReleaseJsonPath,
         [Parameter(Mandatory)][string]$DownloadBetaPath,
         [Parameter(Mandatory)][string]$InstallerRelativeName,
-        [Parameter(Mandatory)][string]$ZipRelativeName,
-        [string]$ZipBetaPath = "",
-        [string]$ZipBetaRelativeName = ""
+        [Parameter(Mandatory)][string]$ZipRelativeName
     )
 
     $installerHash = Get-ForgerSha256 -LiteralPath $InstallerPath
@@ -163,19 +187,6 @@ function Get-DistributionChecksumText {
     $lines = [System.Collections.Generic.List[string]]::new()
     $lines.Add(("{0} *{1}" -f $installerHash, ($InstallerRelativeName -replace '\\', '/')))
     $lines.Add(("{0} *{1}" -f $zipHash, ($ZipRelativeName -replace '\\', '/')))
-    if (-not [string]::IsNullOrWhiteSpace($ZipBetaPath)) {
-        if (-not (Test-Path -LiteralPath $ZipBetaPath)) {
-            throw "Beta alias ZIP was not found: $ZipBetaPath"
-        }
-        $zipBetaHash = Get-ForgerSha256 -LiteralPath $ZipBetaPath
-        if ($zipBetaHash -ne $zipHash) {
-            throw "Beta alias ZIP SHA256 does not match primary ZIP (copy step failed)."
-        }
-        if ([string]::IsNullOrWhiteSpace($ZipBetaRelativeName)) {
-            throw "ZipBetaRelativeName is required when ZipBetaPath is set."
-        }
-        $lines.Add(("{0} *{1}" -f $zipBetaHash, ($ZipBetaRelativeName -replace '\\', '/')))
-    }
     $lines.Add(("{0} *release.json" -f $jsonHash))
     $lines.Add(("{0} *DOWNLOAD_BETA.txt" -f $downloadBetaHash))
     return ($lines -join "`n") + "`n"
@@ -213,18 +224,18 @@ function Write-DownloadBetaTxt {
         [Parameter(Mandatory)][string]$Version
     )
     $zipPrimary = "ForgerEMS-v{0}.zip" -f $Version
-    $zipBeta = "ForgerEMS-Beta-v{0}.zip" -f $Version
     $content = @"
 ================================================================================
-  DOWNLOAD THE ZIP  —  NOT THE EXE  (read this first)
+  DOWNLOAD THE PORTABLE ZIP FIRST  (read this first)
 ================================================================================
 
-On the GitHub Release -> Assets list, download ONE of these (same contents):
-  PRIMARY:  $zipPrimary
-  ALIAS:    $zipBeta   (easier to spot in a long asset list)
+On the GitHub Release -> Assets list, download:
+  $zipPrimary
 
-Do NOT download ForgerEMS-Setup-v$Version.exe first unless you are an advanced user.
-Chrome and Edge often warn harder on a raw .exe from the browser. The ZIP flow is the supported beta path.
+The ZIP is the portable ForgerEMS app package. It contains ForgerEMS.exe, bundled
+runtime/backend content, docs, START_HERE.bat, VERIFY.txt, release metadata, and
+checksums. The installer is still published separately for users who prefer an
+installed app and are comfortable running a standalone .exe.
 
 INCOMPLETE DOWNLOADS
 - If the filename ends in .crdownload (Chrome) or looks like a partial/temp name, the download is NOT finished.
@@ -234,8 +245,9 @@ INCOMPLETE DOWNLOADS
 AFTER YOU HAVE A REAL .ZIP
 1. Extract the ZIP (Right-click -> Extract All). Do not run from inside the zip viewer.
 2. Open the extracted folder: ForgerEMS-v$Version
-3. Double-click START_HERE.bat
-4. If Windows SmartScreen appears, only choose More info -> Run anyway if this ZIP came from the official GitHub release and you verified hashes.
+3. Double-click START_HERE.bat, or run ForgerEMS.exe directly.
+4. On first launch, read and accept the ForgerEMS Terms of Use before using the main tools.
+5. If Windows SmartScreen appears, only choose More info -> Run anyway if this ZIP came from the official GitHub release and you verified hashes.
 
 DEEP SENSOR MODE
 - The installer or Settings may enable ForgerEMS Deep Sensor Mode.
@@ -246,7 +258,8 @@ DEEP SENSOR MODE
 - To turn off the testing override: remove FORGEREMS_DEEP_SENSOR_MODE or set it to Off.
 
 SUPPORT PRIVACY
-- Send logs/screenshots only if comfortable.
+- Send logs/screenshots/support bundles/Kyra context only if comfortable.
+- Review exported files before sending them.
 - Do not send product keys, API keys, tokens, passwords, private documents, or sensitive files.
 
 KYRA BETA GATEWAY
@@ -266,17 +279,20 @@ function Write-StartHereBat {
     param([Parameter(Mandatory)][string]$Path)
     $content = @"
 @echo off
-title ForgerEMS Installer
+title ForgerEMS Portable
 echo.
-echo Starting ForgerEMS Installer...
+echo Starting ForgerEMS Portable...
 echo.
 echo If Windows shows SmartScreen, choose More info -^> Run anyway ONLY if this
 echo folder came from the official ForgerEMS GitHub release and you verified CHECKSUMS.sha256.
 echo.
+echo First launch requires accepting the ForgerEMS Terms of Use before the main tools unlock.
+echo Review docs\TERMS_OF_USE.md, docs\PRIVACY_AND_DATA_HANDLING.md, and docs\LEGAL_NOTICES.md.
+echo.
 echo Deep Sensor Mode uses bundled local read-only hardware sensors when enabled.
 echo No separate LibreHardwareMonitor download is needed.
 echo.
-start "" "%~dp0ForgerEMS Installer.exe"
+start "" "%~dp0ForgerEMS.exe"
 "@
     Set-Content -LiteralPath $Path -Value $content -Encoding ascii
 }
@@ -352,7 +368,7 @@ function Write-VerifyTxt {
         [Parameter(Mandatory)][string]$Version
     )
     $content = @"
-ForgerEMS Official Beta Package
+ForgerEMS Official Portable Preview Package
 Version: $Version
 
 Official source only:
@@ -367,23 +383,27 @@ DO NOT RUN
 - Random installers from chat or unofficial mirrors.
 
 Expected files inside this folder:
-- ForgerEMS Installer.exe
+- ForgerEMS.exe
+- backend\
+- manifests\
+- docs\
 - START_HERE.bat
 - VERIFY.txt
 - CHECKSUMS.sha256 (hashes for the files inside this folder)
 - release.json
 
-How to install:
+How to run:
 1. You must extract the ZIP first (do not run from the zip preview alone).
 2. Double-click START_HERE.bat.
-3. If Windows SmartScreen appears, use More info -> Run anyway only for this official release.
+3. On first launch, accept the ForgerEMS Terms of Use before using the main tools.
+4. If Windows SmartScreen appears, use More info -> Run anyway only for this official release.
 
 Verify this folder (PowerShell, run inside the extracted folder):
-  Get-FileHash ".\ForgerEMS Installer.exe" -Algorithm SHA256
-Compare the Hash line to CHECKSUMS.sha256 in this folder for ForgerEMS Installer.exe.
+  Get-FileHash ".\ForgerEMS.exe" -Algorithm SHA256
+Compare the Hash line to CHECKSUMS.sha256 in this folder for ForgerEMS.exe.
 
 The GitHub release page also publishes a root CHECKSUMS.sha256 for the standalone
-installer, both ZIP variants, release.json, and DOWNLOAD_BETA.txt.
+installer, the portable ZIP, release.json, and DOWNLOAD_BETA.txt.
 
 Support:
 ForgerDigitalSolutions@outlook.com
@@ -405,7 +425,7 @@ Deep Sensor Mode:
 - Unavailable readings are coverage limits, not failures.
 
 Review before sharing:
-Reports may include hardware details, network adapter data, USB device details, and diagnostic notes. Do not send product keys, API keys, tokens, passwords, private documents, or sensitive files.
+Reports, support bundles, logs, Kyra context, and exported files may include hardware details, network adapter data, USB device details, local paths, and diagnostic notes. Do not send product keys, API keys, tokens, passwords, private documents, or sensitive files.
 "@
     Set-Content -LiteralPath $Path -Value $content -Encoding utf8
 }
@@ -431,7 +451,7 @@ $installerOutputDir = Join-Path $distRoot "installer"
 $installerReleaseName = "ForgerEMS-Setup-v{0}.exe" -f $Version
 $installerReleasePath = Join-Path $releaseRoot $installerReleaseName
 $displayVersionLabel = "ForgerEMS v1.2.3 Public Preview"
-$releaseIdentifierLabel = "ForgerEMS v1.2.3 Public Preview - package $Version (ZIP-first technician bundle)"
+$releaseIdentifierLabel = "ForgerEMS v1.2.3 Public Preview - package $Version (portable app ZIP plus installer)"
 
 $buildTempRoot = Join-Path $distRoot "tmp"
 Ensure-Dir -Path $buildTempRoot
@@ -489,6 +509,7 @@ Ensure-Dir -Path $releaseRoot
 Copy-CleanDirectory -Source $publishDir -Destination $releaseAppRoot
 Copy-CleanDirectory -Source $backendStageRoot -Destination $releaseBackendRoot
 Copy-CleanDirectory -Source $manifestRoot -Destination $releaseManifestRoot
+Copy-ReleaseDocs -Destination $releaseAppRoot
 
 if ($DryRun -or $SkipInstaller) {
     Write-Step "Skipping installer compilation"
@@ -552,40 +573,26 @@ if ($DryRun -or $SkipInstaller) {
     Write-Checksums -Root $releaseRoot -OutputPath $checksumsPath
 }
 else {
-    Write-Step "Creating ZIP distribution bundle"
+    Write-Step "Creating portable ZIP distribution bundle"
     $zipBundleName = "ForgerEMS-v{0}.zip" -f $Version
     $zipBundlePath = Join-Path $releaseRoot $zipBundleName
     $packageParent = Join-Path $releaseRoot "package"
     $packageDirName = "ForgerEMS-v{0}" -f $Version
     $packageRoot = Join-Path $packageParent $packageDirName
 
-    if (-not (Test-Path -LiteralPath $installerReleasePath)) {
-        throw "Installer not found for bundling: $installerReleasePath"
-    }
-
     if (Test-Path -LiteralPath $packageParent) {
         Remove-Item -LiteralPath $packageParent -Recurse -Force
     }
     Ensure-Dir -Path $packageRoot
 
-    Copy-Item -LiteralPath $installerReleasePath -Destination (Join-Path $packageRoot "ForgerEMS Installer.exe") -Force
+    Copy-CleanDirectory -Source $releaseAppRoot -Destination $packageRoot
     Copy-Item -LiteralPath $releaseJsonPath -Destination (Join-Path $packageRoot "release.json") -Force
     Write-StartHereBat -Path (Join-Path $packageRoot "START_HERE.bat")
     Write-VerifyTxt -Path (Join-Path $packageRoot "VERIFY.txt") -Version $Version
 
-    $packageChecksumText = Get-PackageLooseFilesChecksumText `
-        -PackageRoot $packageRoot `
-        -InstallerInZipName "ForgerEMS Installer.exe" `
-        -StartHereName "START_HERE.bat" `
-        -VerifyName "VERIFY.txt" `
-        -ReleaseJsonName "release.json"
-    Set-ChecksumFileLf -Path (Join-Path $packageRoot "CHECKSUMS.sha256") -Text $packageChecksumText
+    Write-Checksums -Root $packageRoot -OutputPath (Join-Path $packageRoot "CHECKSUMS.sha256")
 
     Compress-PackageFolderZip -PackageRoot $packageRoot -EntryFolderName $packageDirName -DestinationZipPath $zipBundlePath
-
-    $zipBetaBundleName = "ForgerEMS-Beta-v{0}.zip" -f $Version
-    $zipBetaBundlePath = Join-Path $releaseRoot $zipBetaBundleName
-    Copy-Item -LiteralPath $zipBundlePath -Destination $zipBetaBundlePath -Force
 
     $downloadBetaPath = Join-Path $releaseRoot "DOWNLOAD_BETA.txt"
     Write-DownloadBetaTxt -Path $downloadBetaPath -Version $Version
@@ -596,9 +603,7 @@ else {
         -ReleaseJsonPath $releaseJsonPath `
         -DownloadBetaPath $downloadBetaPath `
         -InstallerRelativeName $installerReleaseName `
-        -ZipRelativeName $zipBundleName `
-        -ZipBetaPath $zipBetaBundlePath `
-        -ZipBetaRelativeName $zipBetaBundleName
+        -ZipRelativeName $zipBundleName
     Set-ChecksumFileLf -Path $checksumsPath -Text $distributionChecksumText
     if (Test-Path -LiteralPath $packageParent) {
         Remove-Item -LiteralPath $packageParent -Recurse -Force

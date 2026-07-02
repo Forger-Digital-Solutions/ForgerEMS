@@ -67,7 +67,8 @@ param(
     [switch]$SeedManifest,
     [switch]$ForceManifestOverwrite,
     [switch]$ShowVersion,
-    [string[]]$IncludedCategories = @()
+    [string[]]$IncludedCategories = @(),
+    [string[]]$IncludedProfileItems = @()
 )
 
 $forwarded = @{}

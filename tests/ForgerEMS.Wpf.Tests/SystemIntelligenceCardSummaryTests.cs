@@ -201,16 +201,10 @@ public sealed class SystemIntelligenceCardSummaryTests
         Assert.Contains("Disk health: 96% estimated from MSFT_StorageReliabilityCounter.Wear", storage);
     }
 
-    [Fact]
-    public void SystemIntelligenceLayout_UsesIndependentColumnsInsteadOfUniformGrid()
-    {
-        var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
-
-        Assert.DoesNotContain("<UniformGrid Columns=\"2\"", xaml, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("<StackPanel Grid.Column=\"0\"", xaml, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("<StackPanel Grid.Column=\"1\"", xaml, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Focusable\" Value=\"False\"", xaml, StringComparison.OrdinalIgnoreCase);
-    }
+    // The System Intelligence tab was removed from the shell (moved to Dr. Forge),
+    // so its XAML layout is no longer asserted here. The card-summary builders
+    // below remain and stay covered because Dr. Forge and any future surface still
+    // consume them.
 
     [Fact]
     public void AutomationLine_UsesScanConfidenceLabel()
@@ -274,32 +268,7 @@ public sealed class SystemIntelligenceCardSummaryTests
         Assert.Contains("Permission required: 1", text);
         Assert.Contains("Firmware/driver-limited: 1", text);
         Assert.Contains("Provider blocked/errors: 1", text);
-        Assert.Contains("Elevated Scan unlocks extra detail when Windows allows it.", text);
-    }
-
-    [Fact]
-    public void SystemIntelligenceLayout_ExposesThreePrimaryActions()
-    {
-        var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
-        var tabStart = xaml.IndexOf("<TabItem Header=\"◎  System Intelligence\">", StringComparison.Ordinal);
-        Assert.True(tabStart >= 0);
-        var tabEnd = xaml.IndexOf("<TabItem Header=\"▤  Toolkit Manager\">", tabStart, StringComparison.Ordinal);
-        Assert.True(tabEnd > tabStart);
-        var systemIntelligence = xaml[tabStart..tabEnd];
-
-        Assert.Contains("HorizontalAlignment=\"Stretch\"", systemIntelligence, StringComparison.Ordinal);
-        Assert.Contains("MinWidth=\"168\"", systemIntelligence, StringComparison.Ordinal);
-        Assert.Contains("Elevated Scan", systemIntelligence, StringComparison.Ordinal);
-        Assert.Contains("Open Files", systemIntelligence, StringComparison.Ordinal);
-        Assert.Contains("Create Support Bundle", systemIntelligence, StringComparison.Ordinal);
-        Assert.Contains("RunElevatedSystemScanCommand", systemIntelligence, StringComparison.Ordinal);
-        Assert.Contains("OpenSystemIntelligenceFilesCommand", systemIntelligence, StringComparison.Ordinal);
-        Assert.Contains("SystemIntelligenceScanStatusText", systemIntelligence, StringComparison.Ordinal);
-        Assert.Contains("SystemIntelligenceHealthStatusText", systemIntelligence, StringComparison.Ordinal);
-        Assert.Contains("SystemIntelligenceSensorStackStatusText", systemIntelligence, StringComparison.Ordinal);
-        Assert.Contains("Forger Sensor Stack", systemIntelligence, StringComparison.Ordinal);
-        Assert.DoesNotContain("Run Standard Scan", systemIntelligence, StringComparison.Ordinal);
-        Assert.DoesNotContain("Refresh Results", systemIntelligence, StringComparison.Ordinal);
+        Assert.Contains("Admin Inventory Scan unlocks extra Windows detail when allowed; deep sensors require Dr. Forge (planned).", text);
     }
 
     [Fact]
@@ -313,14 +282,30 @@ public sealed class SystemIntelligenceCardSummaryTests
     }
 
     [Fact]
-    public void OpenSystemIntelligenceFiles_UsesPickOptionPicker()
+    public void SystemIntelligenceReports_LocalPathCopyAndSanitizedSummaryStaySeparate()
     {
         var source = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "ViewModels", "MainViewModel.cs"));
-        Assert.Contains("OpenSystemIntelligenceFiles()", source, StringComparison.Ordinal);
-        Assert.Contains("_userPromptService.PickOption(", source, StringComparison.Ordinal);
-        Assert.Contains("Latest JSON report", source, StringComparison.Ordinal);
-        Assert.Contains("Latest Markdown report", source, StringComparison.Ordinal);
-        Assert.Contains("Reports folder", source, StringComparison.Ordinal);
+
+        Assert.Contains("OpenSystemJsonReportCommand", source, StringComparison.Ordinal);
+        Assert.Contains("OpenSystemMarkdownReportCommand", source, StringComparison.Ordinal);
+        Assert.Contains("OpenSystemReportFolderCommand", source, StringComparison.Ordinal);
+        Assert.Contains("Clipboard.SetText(GetSystemIntelligenceJsonPath())", source, StringComparison.Ordinal);
+        Assert.Contains("SensitiveDataRedactor.SanitizeForSupportShare(summary)", source, StringComparison.Ordinal);
+        Assert.Contains("SystemIntelligenceJsonReportPathText", source, StringComparison.Ordinal);
+        Assert.Contains("SystemIntelligenceMarkdownReportPathText", source, StringComparison.Ordinal);
+        Assert.Contains("SystemIntelligenceReportsFolderPathText", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SystemIntelligenceElevatedFindings_ExplainUnlockedChecksAndSensorTruth()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "ViewModels", "MainViewModel.cs"));
+
+        Assert.Contains("Standard scan checked: Windows inventory", source, StringComparison.Ordinal);
+        Assert.Contains("Elevated scan checked: TPM/Secure Boot admin paths", source, StringComparison.Ordinal);
+        Assert.Contains("storage reliability counters", source, StringComparison.Ordinal);
+        Assert.Contains("USB/port telemetry", source, StringComparison.Ordinal);
+        Assert.Contains("Truth rule: no fake CPU/GPU temps, fan RPM, voltage, current, wattage, or sensor values are shown.", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -371,8 +356,8 @@ public sealed class SystemIntelligenceCardSummaryTests
         var source = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "ViewModels", "MainViewModel.cs"));
 
         Assert.Contains("Elevated scan complete", source, StringComparison.Ordinal);
-        Assert.Contains("Deep hardware and port telemetry is available.", source, StringComparison.Ordinal);
-        Assert.Contains("Elevated scan complete — some deep telemetry was unavailable on this device.", source, StringComparison.Ordinal);
+        Assert.Contains("Admin-approved inventory and port detail is available.", source, StringComparison.Ordinal);
+        Assert.Contains("Elevated scan complete — some permission-limited detail was unavailable on this device.", source, StringComparison.Ordinal);
         Assert.Contains("Elevated scan recommended", source, StringComparison.Ordinal);
         Assert.Contains("Run elevated scan for deeper port and hardware telemetry.", source, StringComparison.Ordinal);
         Assert.Contains("Elevated scan failed", source, StringComparison.Ordinal);
