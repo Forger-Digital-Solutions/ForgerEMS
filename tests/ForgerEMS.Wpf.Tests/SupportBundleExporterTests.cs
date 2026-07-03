@@ -88,4 +88,68 @@ public sealed class SupportBundleExporterTests
             archive.Entries,
             e => e.FullName.Replace('\\', '/').EndsWith("reports/network-pulse-latest.json", StringComparison.OrdinalIgnoreCase));
     }
+
+    [Fact]
+    public void TryCreateSupportBundle_DoesNotIncludeDrForgeArtifactsByDefault()
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), "forgerems-bundle-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tmp);
+        var zip = Path.Combine(tmp, "bundle.zip");
+        var rt = Path.Combine(tmp, "runtime");
+        var fake = new FakeRuntime { RuntimeRoot = rt };
+        fake.EnsureInitialized();
+        var drForgeRoot = Path.Combine(rt, "reports", "drforge");
+        Directory.CreateDirectory(drForgeRoot);
+        File.WriteAllText(Path.Combine(drForgeRoot, "drforge-intake-report-latest.json"), "{\"device\":\"local\"}");
+
+        Assert.True(SupportBundleExporter.TryCreateSupportBundle(
+            zip,
+            fake,
+            usbRootForManagedJson: null,
+            "update",
+            "config",
+            out var err));
+        Assert.Null(err);
+
+        using var archive = ZipFile.OpenRead(zip);
+        Assert.DoesNotContain(
+            archive.Entries,
+            e => e.FullName.Replace('\\', '/').StartsWith("reports/drforge/", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void TryCreateSupportBundle_IncludesDrForgeArtifactsOnlyWhenExplicitlySelected()
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), "forgerems-bundle-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tmp);
+        var zip = Path.Combine(tmp, "bundle.zip");
+        var rt = Path.Combine(tmp, "runtime");
+        var fake = new FakeRuntime { RuntimeRoot = rt };
+        fake.EnsureInitialized();
+        var drForgeRoot = Path.Combine(rt, "reports", "drforge");
+        var archiveRoot = Path.Combine(drForgeRoot, "drforge-intake-archive-latest");
+        Directory.CreateDirectory(archiveRoot);
+        var report = Path.Combine(drForgeRoot, "drforge-intake-report-latest.json");
+        File.WriteAllText(report, "{\"reportSchemaVersion\":\"forge-hardware-intake-report/1.0\"}");
+        File.WriteAllText(Path.Combine(archiveRoot, "manifest.json"), "{\"schema\":\"forge-hardware-intake-archive/1.0\"}");
+        File.WriteAllText(Path.Combine(archiveRoot, "report.json"), "{\"reportSchemaVersion\":\"forge-hardware-intake-report/1.0\"}");
+        File.WriteAllText(Path.Combine(archiveRoot, "private-extra.txt"), "should not be bundled");
+
+        Assert.True(SupportBundleExporter.TryCreateSupportBundle(
+            zip,
+            fake,
+            usbRootForManagedJson: null,
+            "update",
+            "config",
+            out var err,
+            new DrForgeSupportBundleArtifacts(true, report, archiveRoot)));
+        Assert.Null(err);
+
+        using var archive = ZipFile.OpenRead(zip);
+        var names = archive.Entries.Select(e => e.FullName.Replace('\\', '/')).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Assert.Contains("reports/drforge/intake-report.json", names);
+        Assert.Contains("reports/drforge/archive/manifest.json", names);
+        Assert.Contains("reports/drforge/archive/report.json", names);
+        Assert.DoesNotContain("reports/drforge/archive/private-extra.txt", names);
+    }
 }

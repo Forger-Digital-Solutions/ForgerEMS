@@ -12,6 +12,7 @@ ForgerEMS is a local-device support workflow tool, USB toolkit/profile builder, 
 - The removed shell Internet widget remains removed, and the retired Network Pulse and Deep Sensor Mode / Deep Sense settings sections are no longer shown in Settings. The old Network Pulse implementation is not compiled into the app; stale saved files are ignored.
 - USB plug/unplug refresh is event-driven with a short debounce, so connected device changes should appear in the USB lists in about a second.
 - Port / USB Intelligence is now a results dashboard: connected USB devices, Mapping Wizard / Benchmark / Drive Validator actions, latest result cards, and a safe battery health + system specs summary.
+- Toolkit Manager adds the first safe Dr. Forge Intake bridge for packaged CLI artifacts: selected/app-local `drforge.exe`, manifest/checksum inspection, readiness checks, local report/archive generation, unavailable readings rendered as Unavailable, and no full hardware-monitor parity claim.
 - Port Mapping Wizard benchmark readings remain visible in the wizard final screen; benchmarks do not run automatically, and the dashboard shows the latest saved result.
 - PC/laptop wording is limited to battery health, system specs, local device summaries, USB mapping, benchmark, and drive validation. It does not claim broad PC diagnostics, hardware stress, fan probing, thermal probing, or sensor deep scans.
 - Terms of Use, Privacy/Data Handling, Legal/About docs, third-party notices, installer license page, and a First-run Terms gate were added.

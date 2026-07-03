@@ -68,7 +68,7 @@ For broader regression coverage, see [FINAL_MANUAL_SMOKE_TEST.md](../FINAL_MANUA
 
 - [ ] Open **Driver Hub**.
 - [ ] Confirm header copy: "Official driver apps, OEM support, GPU tools, firmware guidance, and Linux driver help." and the safety pill: "Official links only • No auto BIOS flashing • No driver installs without your action".
-- [ ] With no system scan report present, **Recommended for this PC** shows its generic state (e.g. "Run System Intelligence to personalize recommendations.") and the full catalog still renders. Personalized hardware detection now comes from a **Dr. Forge** scan report (planned companion); ForgerEMS no longer runs that scan from its own tab.
+- [ ] With no system scan report present, **Recommended for this PC** shows its generic state (e.g. "Run System Intelligence to personalize recommendations.") and the full catalog still renders. Personalized hardware detection can come from a packaged **Dr. Forge** CLI report when configured; ForgerEMS no longer runs that scan from its own tab.
 - [ ] If a prior `system-intelligence-latest.json` report exists, confirm the detected-hardware card lists OEM, GPU, CPU, Network, and OS when available. (Skip if no report is present — Driver Hub must degrade gracefully to the generic state, not error.)
 - [ ] Confirm **Recommended for this PC** shows 3-4 store-style cards: brand tile, app name, vendor, badges, **one** prominent primary action, and a small `⋯` overflow button. No visible **Copy Link** or **Add Shortcut** buttons clutter the primary row.
 - [ ] Click `⋯` on a recommended card. The overflow popup shows **Open Page** (only when it differs from the primary action), **Copy Link**, and **Add Shortcut to USB**.

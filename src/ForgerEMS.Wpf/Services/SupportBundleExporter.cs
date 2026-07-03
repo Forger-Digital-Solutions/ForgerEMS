@@ -21,7 +21,8 @@ public static class SupportBundleExporter
         string? usbRootForManagedJson,
         string updateDiagnosticsSummary,
         string configHealthSummary,
-        out string? error)
+        out string? error,
+        DrForgeSupportBundleArtifacts? drForgeArtifacts = null)
     {
         error = null;
         try
@@ -70,6 +71,8 @@ public static class SupportBundleExporter
             var driveValidation = Path.Combine(runtime.RuntimeRoot, "cache", "drive-validation-results.json");
             AddRedactedFileIfExists(zip, "cache/drive-validation-results.json", driveValidation);
 
+            AddDrForgeArtifacts(zip, runtime, drForgeArtifacts);
+
             if (!string.IsNullOrWhiteSpace(usbRootForManagedJson))
             {
                 var managed = UsbInternalLayout.ResolveManagedDownloadResultPath(
@@ -101,6 +104,7 @@ public static class SupportBundleExporter
             - Latest System Intelligence JSON (paths redacted)
             - USB benchmark cache JSON (redacted)
             - Drive validation cache JSON (redacted)
+            - Dr. Forge intake report/archive files only when explicitly included from the app
             - Managed download result JSON from the selected USB root (if present)
             - Update-check diagnostics and configuration health summaries from the app
 
@@ -128,6 +132,67 @@ public static class SupportBundleExporter
         sb.AppendLine($"TelemetryEnabled(env): {ForgerEmsEnvironmentConfiguration.TelemetryEnabled}");
         sb.AppendLine($"RuntimeRoot: {CopilotRedactor.Redact(runtime.RuntimeRoot, enabled: true)}");
         AddPlain(zip, "bundle-metadata.txt", sb.ToString());
+    }
+
+    private static void AddDrForgeArtifacts(
+        ZipArchive zip,
+        IAppRuntimeService runtime,
+        DrForgeSupportBundleArtifacts? artifacts)
+    {
+        if (artifacts is not { Include: true })
+        {
+            return;
+        }
+
+        var reportsRoot = Path.Combine(runtime.RuntimeRoot, "reports", "drforge");
+
+        if (IsExistingPathUnderRoot(artifacts.ReportPath, reportsRoot, expectDirectory: false))
+        {
+            AddRedactedFileIfExists(zip, "reports/drforge/intake-report.json", artifacts.ReportPath);
+        }
+
+        if (!IsExistingPathUnderRoot(artifacts.ArchiveDirectory, reportsRoot, expectDirectory: true))
+        {
+            return;
+        }
+
+        foreach (var file in Directory.EnumerateFiles(artifacts.ArchiveDirectory!, "*", SearchOption.TopDirectoryOnly)
+                     .Where(IsAllowedDrForgeArchiveFile)
+                     .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+                     .Take(8))
+        {
+            AddRedactedFileIfExists(zip, "reports/drforge/archive/" + SanitizeEntryFileName(Path.GetFileName(file)), file);
+        }
+    }
+
+    private static bool IsAllowedDrForgeArchiveFile(string path)
+    {
+        var name = Path.GetFileName(path);
+        return name.Equals("manifest.json", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("report.json", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("report.md", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("README.txt", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("snapshot.json", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsExistingPathUnderRoot(string? path, string root, bool expectDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            var fullPath = Path.GetFullPath(path);
+            var fullRoot = Path.GetFullPath(root);
+            var exists = expectDirectory ? Directory.Exists(fullPath) : File.Exists(fullPath);
+            return exists && DrForgeCliManifestReader.IsPathInside(fullPath, fullRoot);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static IEnumerable<(string EntryName, string Path)> CollectRuntimeLogPairs(string logsRoot)
@@ -226,3 +291,8 @@ public static class SupportBundleExporter
         AddRedactedString(zip, entryName, raw);
     }
 }
+
+public sealed record DrForgeSupportBundleArtifacts(
+    bool Include,
+    string? ReportPath,
+    string? ArchiveDirectory);

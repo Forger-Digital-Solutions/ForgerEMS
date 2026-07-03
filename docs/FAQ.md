@@ -274,6 +274,24 @@ There is **no automatic upload** to Forger Digital Solutions when you run local 
 
 ---
 
+## What is Dr. Forge Intake?
+
+Dr. Forge Intake is ForgerEMS' local bridge to a packaged **Dr. Forge CLI**. Select `drforge.exe` in Toolkit Manager or place the package under an app-local Dr. Forge tools folder, then use **Check Package**, **Generate Report**, or **Generate Archive**.
+
+ForgerEMS consumes the packaged CLI/Core contract through a process boundary. It reads `drforge-cli-release-manifest.json` when available, verifies `SHA256SUMS.txt` when present, runs readiness checks with `drforge --version` and `drforge sensor-core --help`, and writes generated reports under the local Runtime reports folder.
+
+If the package is missing or not configured, ForgerEMS shows **Not configured** / setup-needed copy instead of crashing. ForgerEMS does not load Dr. Forge WPF/provider internals.
+
+---
+
+## Does Dr. Forge replace full hardware-monitor tools?
+
+No. Dr. Forge runs as a local user-mode hardware intake/report tool. Unavailable readings are shown as **Unavailable**, not zero. Deep telemetry such as fan RPM, voltage rails, EC/SuperIO/MSR readings remains unavailable until future safe providers or signed privileged components exist.
+
+ForgerEMS does **not** claim full HWiNFO / CPU-Z / LibreHardwareMonitor parity. Reports may include local device/context information, so review them before sharing. Dr. Forge report/archive files are included in support bundles only when you generated them from the app or explicitly choose to include them.
+
+---
+
 ## Does ForgerEMS require HWiNFO, AIDA64, CPU-Z, or vendor tools?
 
 No. ForgerEMS uses its own local **Forger Sensor Stack**. Forger Sensor Core is active by default, and approved bundled providers are used only where legally allowed. There is no paid third-party tool requirement and no user-required HWiNFO, AIDA64, CPU-Z, or vendor-tool download for System Intelligence.

@@ -11,34 +11,34 @@ public static class InfoDocumentTexts
     public static string BuildDrForgeRoadmap()
     {
         return $"""
-            Dr. Forge Advanced Sensors — Planned companion tool
+            Dr. Forge Advanced Sensors — CLI bridge and roadmap
 
-            STATUS: Planned. Not installed. Not running.
+            STATUS: Packaged CLI bridge available when configured. Advanced sensor depth remains roadmap.
 
-            WHAT DR. FORGE WILL BE
-            Dr. Forge will be a separate read-only technician sensor app for deeper hardware telemetry where supported: temperatures, fan signals, battery/power details, storage SMART detail, sensor inventory, and board/device capabilities. It will not control fans, voltage, charging, firmware flashing, or bypass OS/driver security.
+            WHAT DR. FORGE IS IN THIS BUILD
+            Dr. Forge runs as a separate local user-mode hardware intake/report tool. ForgerEMS can point at a packaged drforge.exe, verify its release manifest/checksums when present, run readiness checks, and generate local JSON reports/archives through the CLI process boundary.
 
             WHY IT IS A SEPARATE APP
-            ForgerEMS is a stable Windows inventory + USB maintenance toolkit. Deep sensor reads belong in a focused, read-only companion so ForgerEMS stays usable even if a sensor provider stalls, throws, or cannot read a particular board. Dr. Forge runs in its own process, ships on its own cadence, and never blocks ForgerEMS.
+            ForgerEMS is a stable Windows inventory + USB maintenance toolkit. Hardware intake belongs in a focused, read-only companion so ForgerEMS stays usable even if a provider stalls, throws, or cannot read a particular board. Dr. Forge runs in its own process, ships on its own cadence, and never blocks ForgerEMS.
 
             FIRST-VERSION SCOPE (READ-ONLY)
             • Windows APIs, WMI / CIM where useful, and performance counters.
             • Storage / SMART APIs where the OS exposes them.
             • Battery and power APIs (designed capacity, cycle count, charge rate where exposed).
-            • LibreHardwareMonitor-style read-only access where safe, licensed, and compatible.
-            • No fan control, voltage control, charging control, overclocking, firmware flashing, or kernel driver hacks in the first version.
+            • Local report/archive generation through the packaged CLI/Core contract.
+            • No fan control, voltage control, charging control, overclocking, firmware flashing, service install/start, auto-elevation, network calls, telemetry, or kernel driver hacks in the first bridge.
 
             FUTURE OPTIONAL DEPTH
             A signed local helper service or driver only after threat model, legal review, signing/revocation plan, crash containment, rollback strategy, and a beta hardware validation pass — not before.
 
             HANDOFF TO FORGEREMS
-            Dr. Forge will write a local read-only sensor snapshot JSON. ForgerEMS will pick up the latest snapshot when present. Snapshots will include source, timestamp, confidence, and unavailable reasons. Stale snapshots will be marked stale. ForgerEMS will never invent missing sensor values.
+            ForgerEMS consumes the Dr. Forge packaged CLI/Core contract only. It does not load Dr. Forge WPF or provider internals. Missing packages show a setup-needed state. Reports stay local until you choose to copy, open, export, or include them in a support bundle.
 
             HONEST TRUTHFULNESS
-            ForgerEMS will not fake CPU/GPU temperature, fan RPM, voltage, wattage, amperage, charge speed, or unsupported telemetry — not now, not in Dr. Forge, ever. Unavailable means the OS / driver / firmware did not expose it on this hardware.
+            ForgerEMS will not fake CPU/GPU temperature, fan RPM, voltage, wattage, amperage, charge speed, or unsupported telemetry — not now, not in Dr. Forge, ever. Unavailable means the OS / driver / firmware did not expose it on this hardware. ForgerEMS does not claim full HWiNFO / CPU-Z / LibreHardwareMonitor parity.
 
             ROADMAP STATUS
-            Dr. Forge is design-only today. There is no installer, no download, no signed driver, no service. The "Download Dr. Forge" button is intentionally absent until the first preview is published.
+            The in-app "Download Dr. Forge" button remains intentionally absent. Configure a packaged CLI path only when you already have a trusted Dr. Forge CLI package. Deep telemetry such as fan RPM, voltage rails, EC/SuperIO/MSR readings remains unavailable until future safe providers or signed privileged components exist.
             """;
     }
 
@@ -122,6 +122,12 @@ public static class InfoDocumentTexts
 
             Does ForgerEMS upload my system info?
             No automatic upload. System Intelligence and related reports are written under %LOCALAPPDATA%\ForgerEMS\. If you enable an online Kyra provider and allow context sharing, only the sanitized context described in Kyra Advanced is sent according to your settings.
+
+            What is Dr. Forge Intake?
+            Dr. Forge Intake is a local bridge to a packaged Dr. Forge CLI. Select drforge.exe or place the package under an app-local tools folder, then use Check Package, Generate Report, or Generate Archive. ForgerEMS verifies the release manifest/checksums when available and runs only the packaged CLI process. If the package is missing, ForgerEMS shows a setup-needed state instead of crashing.
+
+            Does Dr. Forge claim full hardware-monitor parity?
+            No. Dr. Forge reports what the local user-mode intake can read. Unavailable readings stay Unavailable, not zero. Deep telemetry such as fan RPM, voltage rails, EC/SuperIO/MSR readings remains unavailable until future safe providers or signed privileged components exist.
 
             Does ForgerEMS require HWiNFO, LibreHardwareMonitor, CPU-Z, or vendor tools?
             No. ForgerEMS ships approved local providers with the app where legally allowed. Deep Sensor Mode uses bundled read-only providers and does not require separate user downloads.
@@ -307,6 +313,9 @@ public static class InfoDocumentTexts
             ForgerEMS runs diagnostics locally. Deep Sensor Mode reads supported local hardware sensor data only while the app is running or System Intelligence / Hardware X-Ray scans are executed. No sensor data is sold, automatically uploaded, or automatically sent to support.
             Reports may include hardware model, CPU/GPU/RAM/storage info, battery info, network adapter details, USB device details, Windows version, provider status, and diagnostic notes.
             Default support reports should be redacted where supported, but you should review reports before sharing. Do not send product keys, serial numbers, service tags, API keys, tokens, passwords, private documents, or sensitive personal files to support.
+
+            DR. FORGE INTAKE
+            The Dr. Forge CLI bridge stores only the selected drforge.exe path, the last readiness state, and last local report/archive paths under ForgerEMS Runtime config. Generated Dr. Forge reports and archives stay under the local Runtime reports folder. They may include local device/context information, sensor availability, findings, notes, and unavailable telemetry reasons. Review reports before sharing. ForgerEMS includes Dr. Forge report/archive files in support bundles only when you generated them from the app or explicitly choose to include them.
 
             KYRA AND SANITIZED SUMMARIES
             Kyra uses sanitized summaries for external/provider paths where implemented. Do not paste API keys, passwords, serial numbers, product keys, private documents, or sensitive files into chat or support email.

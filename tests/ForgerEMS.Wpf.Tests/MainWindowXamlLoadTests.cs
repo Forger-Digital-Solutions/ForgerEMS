@@ -98,15 +98,21 @@ public sealed class MainWindowXamlLoadTests
     public void MainWindow_SupportBundleAndDrForge_StayReachableInToolkitManager()
     {
         // Create Support Bundle (still needed by support flows) and the honest,
-        // read-only "Learn about Dr. Forge" entry were relocated out of the removed
-        // System Intelligence tab into Toolkit Manager — they must remain present.
+        // read-only Dr. Forge Intake bridge live in Toolkit Manager after the
+        // heavy System Intelligence tab was removed.
         var text = LoadMainWindowXaml();
         var toolkit = ExtractTab(text, "▤  Toolkit Manager");
 
         Assert.Contains("Content=\"Create Support Bundle\"", toolkit, StringComparison.Ordinal);
         Assert.Contains("ExportSupportBundleCommand", toolkit, StringComparison.Ordinal);
         Assert.Contains("Content=\"Learn about Dr. Forge\"", toolkit, StringComparison.Ordinal);
-        Assert.Contains("Dr. Forge will be available here as a dedicated download", toolkit, StringComparison.Ordinal);
+        Assert.Contains("Text=\"Dr. Forge Intake\"", toolkit, StringComparison.Ordinal);
+        Assert.Contains("Dr. Forge runs as a local user-mode hardware intake/report tool.", toolkit, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Select CLI\"", toolkit, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Check Package\"", toolkit, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Generate Report\"", toolkit, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Generate Archive\"", toolkit, StringComparison.Ordinal);
+        Assert.Contains("Include latest Dr. Forge report/archive", toolkit, StringComparison.Ordinal);
         Assert.DoesNotContain("Deep system scans", toolkit, StringComparison.Ordinal);
         Assert.DoesNotContain("hardware/sensor intelligence", toolkit, StringComparison.Ordinal);
     }

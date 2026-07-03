@@ -1,134 +1,121 @@
-# ForgerEMS ⇄ Dr. Forge integration contract
+# ForgerEMS <-> Dr. Forge packaged CLI integration contract
 
-Status: design-only. Dr. Forge is not built yet. This document is the
-integration shape ForgerEMS will honor when Dr. Forge is available, and the
-shape Dr. Forge must produce.
+Status: first safe bridge implemented for packaged Dr. Forge CLI artifacts.
+
+ForgerEMS integrates with Dr. Forge only through the packaged CLI/Core process boundary. ForgerEMS does not load Dr. Forge WPF or provider internals, does not vendor unsafe internals, and does not depend on private developer paths.
 
 ## Design principles
 
-1. **ForgerEMS stays stable.** A missing, stale, malformed, or crashed Dr.
-   Forge must never destabilize ForgerEMS.
-2. **Read-only handoff.** Dr. Forge writes; ForgerEMS reads.
-3. **No invented values.** ForgerEMS displays what Dr. Forge reports, marks
-   stale snapshots stale, and surfaces unavailable reasons verbatim.
-4. **No hidden background traffic.** Dr. Forge does not talk to the network,
-   does not call home, and does not report telemetry. ForgerEMS does not push
-   Dr. Forge data anywhere.
-5. **Crash containment.** Dr. Forge runs in its own process. ForgerEMS does not
-   load Dr. Forge in-process.
+1. **ForgerEMS stays stable.** Missing, malformed, timed-out, or failed Dr. Forge packages show friendly setup-needed or failed states.
+2. **Process boundary only.** ForgerEMS starts `drforge.exe` with explicit arguments and captures stdout/stderr. It does not load Dr. Forge assemblies in-process.
+3. **No invented values.** Null or missing readings render as `Unavailable`, never zero.
+4. **Local only.** The bridge adds no telemetry, account, activation, licensing, or network behavior.
+5. **No privilege escalation.** The bridge does not install/start services, load drivers, request auto-elevation, or call `sudo` / `pkexec`.
 
-## Snapshot file
+## Package location
 
-Dr. Forge writes a single JSON snapshot file under the user-local sensor
-directory ForgerEMS already owns:
+ForgerEMS accepts an explicit path to `drforge.exe`.
 
-```
-%LOCALAPPDATA%\ForgerEMS\sensors\dr-forge-latest.json
-```
+When no explicit path is selected, ForgerEMS may search only app-local bundled locations such as:
 
-Schema (illustrative, v0 draft):
+- `tools\drforge\windows-x64\drforge.exe`
+- `tools\drforge\drforge.exe`
+- `drforge\windows-x64\drforge.exe`
+- `drforge\drforge.exe`
+
+Production code must not hardcode developer-private absolute paths.
+
+## Manifest and checksums
+
+When present, ForgerEMS reads `drforge-cli-release-manifest.json` and accepts:
 
 ```json
 {
-  "schemaVersion": 1,
-  "drForgeVersion": "0.1.0-preview",
-  "machineKey": "stable-local-hash",
-  "capturedAtUtc": "2026-06-03T18:21:09Z",
-  "freshnessSeconds": 12,
-  "source": "DrForge",
-  "confidence": "high",
-  "unavailableReasons": [],
-  "cpu": {
-    "packageTempCelsius": 54.0,
-    "coreTempsCelsius": [54.0, 55.0, 52.0, 51.0],
-    "fanRpms": [1850]
-  },
-  "gpu": [
-    { "vendor": "NVIDIA", "model": "RTX 4060", "tempCelsius": 48.0, "fanRpms": [1100] }
-  ],
-  "battery": {
-    "designedCapacityMwh": 90000,
-    "fullChargeCapacityMwh": 81000,
-    "cycleCount": 142,
-    "chargeRateMw": 26500
-  },
-  "storage": [
-    {
-      "model": "Samsung 990 Pro 1TB",
-      "tempCelsius": 41.0,
-      "powerOnHours": 1820,
-      "smartAttributes": { "wearLevel": 4 }
-    }
-  ],
-  "boardCapabilities": {
-    "tpmVersion": "2.0",
-    "secureBootState": "Enabled"
-  }
+  "schema": "drforge-cli-release-manifest/1.0"
 }
 ```
 
-Fields ForgerEMS cares about most:
+If the manifest references `SHA256SUMS.txt`, or a `SHA256SUMS.txt` file exists next to `drforge.exe`, ForgerEMS verifies listed package files before running readiness/report actions. Checksum path entries must stay inside the package directory.
 
-- `schemaVersion` — ForgerEMS refuses unknown major versions.
-- `capturedAtUtc` + `freshnessSeconds` — drives the stale badge.
-- `unavailableReasons` — bubbled up as friendly explanations in the UI.
-- `confidence` — `high` / `medium` / `low` to drive any conservative rounding
-  in summary copy.
+If no checksum file exists, ForgerEMS reports that local checksum verification is unavailable instead of pretending the package was verified.
 
-## ForgerEMS read path
+## Readiness commands
 
-1. On launch and on USB-target change, ForgerEMS checks for
-   `dr-forge-latest.json`.
-2. If present and `schemaVersion` is supported, it is parsed.
-3. `capturedAtUtc` older than a configurable freshness window (default: 5
-   minutes) → snapshot is shown but marked **stale**.
-4. Missing / malformed / unsupported schema → ForgerEMS shows Dr. Forge
-   status **Data unavailable** with the parse reason; no exception bubbles
-   to the user.
-5. ForgerEMS never writes to this file. Dr. Forge owns it.
+ForgerEMS runs:
 
-## Dr. Forge write path
+```powershell
+drforge.exe --version
+drforge.exe sensor-core --help
+```
 
-1. Dr. Forge runs read-only sensor collection.
-2. Writes to `dr-forge-latest.json.tmp` first.
-3. Atomically renames over `dr-forge-latest.json`.
-4. Never partially writes the file.
-5. If a sensor read throws, Dr. Forge records the reason in
-   `unavailableReasons` and proceeds with the remaining sensors. Partial
-   snapshots are better than no snapshot.
+Readiness commands are timeout-bounded. Non-zero exit codes, stderr failures, launch failures, and timeouts return structured failure states for the UI.
 
-## What Dr. Forge **must not** do
+## Report and archive commands
 
-- Modify any ForgerEMS file outside `dr-forge-*.json` in the sensor folder.
-- Modify the system registry.
-- Modify firmware, BIOS, EC, fan curves, voltages, or charging behavior.
-- Install kernel drivers or services without a user-approved installer
-  (out of scope for the first version entirely).
-- Make network calls.
-- Run elevated unless the user explicitly elevated the launch (Admin Inventory
-  parity).
+The first bridge uses the sensor-core CLI contract:
 
-## Failure modes ForgerEMS must handle gracefully
+```powershell
+drforge.exe sensor-core snapshot --json
+drforge.exe sensor-core report <snapshot.json> --format json --out <report.json>
+drforge.exe sensor-core archive <snapshot.json> --out <archive-folder>
+```
 
-- File missing → Dr. Forge: **Not installed / Not running**.
-- File present but `schemaVersion` too new → Dr. Forge: **Update available
-  (ForgerEMS too old to parse)**.
-- File parse error → Dr. Forge: **Data unavailable (parse error)** + log line.
-- File older than freshness window → Dr. Forge: **Stale** badge, snapshot
-  values shown read-only with a stale chip.
-- Dr. Forge process detected but no file → Dr. Forge: **Installed, not yet
-  reporting**.
+ForgerEMS writes the snapshot stdout to the local Runtime reports folder, then asks Dr. Forge to transform that snapshot into a report or archive. The bridge does not pass service/deep-provider flags in this phase.
 
-## Versioning
+## Report JSON contract
 
-- `schemaVersion` is a single integer. Breaking shape changes bump the major.
-- Additive fields are non-breaking; ForgerEMS ignores unknown fields.
-- ForgerEMS pins a supported range (`[minSupported, maxSupported]`). Outside
-  range → graceful "update available" / "ForgerEMS too old" copy.
+ForgerEMS parses enough of `forge-hardware-intake-report/1.0` to display:
 
-## Trust boundary
+- report schema
+- source schema
+- platform
+- safety mode
+- key available readings
+- unavailable readings as `Unavailable`
+- findings
+- notes
+- ring-0/deep telemetry gaps
 
-Dr. Forge is local-only. ForgerEMS treats Dr. Forge data the same way it
-treats any other locally-collected sensor data: it labels the source, shows
-the timestamp, and surfaces unavailable reasons. Nothing from Dr. Forge is
-sent to a remote server by ForgerEMS.
+Null remains unavailable. ForgerEMS never converts null readings to zero.
+
+## UI states
+
+The UI may show:
+
+- `Not configured`
+- `Package found`
+- `Ready`
+- `Running intake`
+- `Report ready`
+- `Archive ready`
+- `Unavailable`
+- `Failed`
+
+Expected actions:
+
+- Select Dr. Forge CLI path
+- Check Dr. Forge package
+- Generate report
+- Generate archive
+- Open report folder
+- Copy summary
+
+## Persistence
+
+ForgerEMS persists only:
+
+- selected Dr. Forge executable path
+- last readiness state
+- last local report/archive output path when it is under the ForgerEMS Runtime reports folder
+
+No secrets, telemetry payloads, account state, activation state, or licensing state are stored by the bridge.
+
+## Support bundles and privacy
+
+Generated Dr. Forge reports and archives may include local device/context information, findings, notes, and unavailable telemetry reasons. Users should review reports before sharing them.
+
+ForgerEMS support bundles include Dr. Forge report/archive files only when the user generated them from the app or explicitly chooses to include them. The exporter only accepts Dr. Forge artifacts under the local Runtime reports folder and only includes a small allowlist of archive files.
+
+## Remaining gaps
+
+Deep telemetry such as fan RPM, voltage rails, EC/SuperIO/MSR readings requires future safe providers or signed privileged components. The first bridge does not claim full HWiNFO / CPU-Z / LibreHardwareMonitor parity.

@@ -12,6 +12,14 @@ ForgerEMS stores runtime data under `%LOCALAPPDATA%\ForgerEMS\Runtime`, includin
 
 Local snapshots may include Windows version, device model, CPU/GPU/RAM/storage details, battery or sensor availability, network adapter summaries, USB target details, toolkit status, benchmark results, and diagnostic notes. Missing readings are coverage limits, not failures.
 
+## Dr. Forge Intake
+
+When configured, ForgerEMS stores the selected `drforge.exe` path, last readiness state, and last local Dr. Forge report/archive paths under the local Runtime config folder. Generated Dr. Forge reports and archives stay under `%LOCALAPPDATA%\ForgerEMS\Runtime\reports\drforge`.
+
+Dr. Forge reports may include local device/context information, sensor availability, findings, notes, and unavailable telemetry reasons. Unavailable readings remain unavailable, not zero. Review reports before sharing.
+
+Dr. Forge report/archive files are included in ForgerEMS support bundles only when the user generated them from the app or explicitly chooses to include them. ForgerEMS does not upload them automatically.
+
 ## Kyra and Providers
 
 Kyra is local-first. Offline/local behavior does not need API keys. If an online provider or gateway is configured and enabled, prompts and optional sanitized context may be sent according to those settings. Provider keys should not be pasted into chat or support email.

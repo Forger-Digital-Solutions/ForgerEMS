@@ -389,10 +389,9 @@ public partial class MainWindow : Window
     }
 
     // Opens the Dr. Forge Advanced Sensors roadmap copy. Intentionally not wired
-    // to any download — Dr. Forge is design-only today; the button (now on the
-    // Toolkit Manager tab, where the planned Dr. Forge download will live) exists
-    // so users have an honest, clickable place to learn about the planned
-    // companion app instead of a fake "Download" CTA.
+    // to a download: the Toolkit Manager surface now accepts a packaged CLI path
+    // and keeps the separate download/install flow out of the app until it is
+    // backed by a real release channel.
     private void OnLearnAboutDrForgeClick(object sender, RoutedEventArgs e)
     {
         ScrollableInfoWindow.ShowModeless(

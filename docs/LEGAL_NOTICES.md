@@ -30,4 +30,4 @@ ForgerEMS is independent and is not affiliated with, sponsored by, or endorsed b
 
 ## Support Bundles
 
-ForgerEMS attempts to redact sensitive values from support bundles, but redaction is best effort. Review every exported file before sharing it.
+ForgerEMS attempts to redact sensitive values from support bundles, but redaction is best effort. Dr. Forge report/archive files are included only when the user generated them from the app or explicitly chooses to include them. Review every exported file before sharing it.

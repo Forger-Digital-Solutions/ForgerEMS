@@ -9,7 +9,7 @@ namespace ForgerEMS.Wpf.Tests;
 // Guards Parts C–E of the System Intelligence / Dr. Forge direction pass:
 //   * Elevated Scan user-visible labels renamed to Admin Inventory Scan
 //   * Standard Scan user-visible labels renamed to Windows Inventory Scan
-//   * Dr. Forge roadmap copy exists and is read-only-honest
+//   * Dr. Forge bridge/roadmap copy exists and is read-only-honest
 //   * Companion docs ship under docs/
 public sealed class DrForgeRoadmapAndAdminInventoryRenameTests
 {
@@ -63,26 +63,28 @@ public sealed class DrForgeRoadmapAndAdminInventoryRenameTests
     {
         var copy = InfoDocumentTexts.BuildDrForgeRoadmap();
         Assert.Contains("Dr. Forge Advanced Sensors", copy, StringComparison.Ordinal);
-        Assert.Contains("Planned", copy, StringComparison.Ordinal);
-        Assert.Contains("Not installed", copy, StringComparison.Ordinal);
+        Assert.Contains("CLI bridge", copy, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("packaged drforge.exe", copy, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("read-only", copy, StringComparison.OrdinalIgnoreCase);
         // First version must NOT promise fan/voltage/charging control.
         Assert.Contains("No fan control", copy, StringComparison.Ordinal);
         Assert.Contains("voltage control", copy, StringComparison.OrdinalIgnoreCase);
         // Honest truthfulness clause.
         Assert.Contains("not fake", copy, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not claim full HWiNFO / CPU-Z / LibreHardwareMonitor parity", copy, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("remains unavailable", copy, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void DrForgeRoadmap_DoesNotPromiseAFakeDownload()
     {
         var copy = InfoDocumentTexts.BuildDrForgeRoadmap();
-        // The phrase may appear as text describing why the button is intentionally
-        // absent today, but there must be no CTA-style "Download Dr. Forge now"
-        // claim and the copy must explicitly note the button is absent.
+        // The bridge accepts an already trusted packaged CLI path. There must be
+        // no CTA-style download claim unless a real release channel exists.
         Assert.Contains("intentionally absent", copy, StringComparison.Ordinal);
         Assert.DoesNotContain("Download Dr. Forge now", copy, StringComparison.Ordinal);
         Assert.DoesNotContain("Click Download Dr. Forge", copy, StringComparison.Ordinal);
+        Assert.DoesNotContain("fake download", copy, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -98,20 +100,21 @@ public sealed class DrForgeRoadmapAndAdminInventoryRenameTests
     {
         var doc = Read("docs", "DR-FORGE-ADVANCED-SENSORS.md");
         Assert.Contains("Status:", doc, StringComparison.Ordinal);
-        Assert.Contains("Planned", doc, StringComparison.Ordinal);
+        Assert.Contains("CLI bridge", doc, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("packaged CLI", doc, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Honest truthfulness", doc, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("LibreHardwareMonitor", doc, StringComparison.Ordinal);
+        Assert.Contains("does not claim full HWiNFO / CPU-Z / LibreHardwareMonitor parity", doc, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void DrForgeIntegrationDoc_DefinesSnapshotContract()
+    public void DrForgeIntegrationDoc_DefinesPackagedCliContract()
     {
         var doc = Read("docs", "FORGEREMS-DR-FORGE-INTEGRATION.md");
-        Assert.Contains("dr-forge-latest.json", doc, StringComparison.Ordinal);
-        Assert.Contains("schemaVersion", doc, StringComparison.Ordinal);
-        Assert.Contains("capturedAtUtc", doc, StringComparison.Ordinal);
-        Assert.Contains("Stale", doc, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("never writes to this file", doc, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("drforge.exe", doc, StringComparison.Ordinal);
+        Assert.Contains("drforge-cli-release-manifest.json", doc, StringComparison.Ordinal);
+        Assert.Contains("forge-hardware-intake-report/1.0", doc, StringComparison.Ordinal);
+        Assert.Contains("Unavailable", doc, StringComparison.Ordinal);
+        Assert.Contains("does not load Dr. Forge WPF or provider internals", doc, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -119,7 +122,7 @@ public sealed class DrForgeRoadmapAndAdminInventoryRenameTests
     {
         var vm = Read("src", "ForgerEMS.Wpf", "ViewModels", "MainViewModel.cs");
         Assert.Contains("Dr. Forge Advanced Sensors", vm, StringComparison.Ordinal);
-        Assert.Contains("Planned companion tool. Not installed.", vm, StringComparison.Ordinal);
+        Assert.Contains("CLI bridge available when configured", vm, StringComparison.Ordinal);
         Assert.Contains("Admin Inventory Scan", vm, StringComparison.Ordinal);
     }
 

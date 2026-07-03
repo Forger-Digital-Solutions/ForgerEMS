@@ -2370,12 +2370,9 @@
                                     </Grid>
 
                                     <!--
-                                        Dr. Forge handoff + support tools. Full diagnostics, system
-                                        intelligence, hardware scanning, elevated scan flows, and deep
-                                        reports now live in Dr. Forge (a dedicated companion app). This
-                                        card is the honest placeholder for the planned in-app download
-                                        and keeps the still-needed Support Bundle export reachable after
-                                        the System Intelligence / Diagnostics tabs were removed.
+                                        Dr. Forge Intake keeps the hardware intake boundary explicit:
+                                        ForgerEMS talks to a packaged CLI, reports unavailable readings
+                                        honestly, and keeps support bundle inclusion user-controlled.
                                     -->
                                     <Border Margin="0,0,0,12"
                                             Padding="12"
@@ -2386,13 +2383,94 @@
                                         <StackPanel>
                                             <TextBlock FontWeight="SemiBold"
                                                        Foreground="{DynamicResource PanelLabelBrush}"
-                                                       Text="Dr. Forge — diagnostics &amp; hardware intelligence" />
+                                                       Text="Dr. Forge Intake" />
                                             <TextBlock Margin="0,6,0,0"
                                                        FontSize="12"
                                                        Foreground="{DynamicResource PanelTextBrush}"
                                                        TextWrapping="Wrap"
-                                                       Text="Expanded repair analysis and advanced system inventory moved out of ForgerEMS into Dr. Forge, the dedicated technician companion. Dr. Forge will be available here as a dedicated download. It is not installed yet — the button below opens the read-only roadmap, not a live installer." />
+                                                       Text="Dr. Forge runs as a local user-mode hardware intake/report tool. ForgerEMS consumes the packaged CLI/Core contract through a process boundary. Unavailable readings are shown as unavailable, not zero. Deep telemetry such as fan RPM, voltage rails, EC/SuperIO/MSR readings requires future safe providers or signed privileged components. ForgerEMS does not claim full hardware-monitor parity." />
+                                            <Grid Margin="0,10,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBox Grid.Column="0"
+                                                         MinHeight="30"
+                                                         Margin="0,0,8,0"
+                                                         VerticalContentAlignment="Center"
+                                                         Text="{Binding DrForgeCliPathInput, UpdateSourceTrigger=PropertyChanged}"
+                                                         ToolTip="Path to packaged drforge.exe. App-local Dr. Forge package folders are also checked when this is blank." />
+                                                <Button Grid.Column="1"
+                                                        Padding="12,6"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Select CLI"
+                                                        Command="{Binding SelectDrForgeCliPathCommand}" />
+                                            </Grid>
+                                            <Grid Margin="0,10,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+                                                <TextBlock Grid.Row="0" Margin="0,0,10,4" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="State" />
+                                                <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,0,0,4" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding DrForgeIntakeStateText}" TextWrapping="Wrap" />
+                                                <TextBlock Grid.Row="1" Margin="0,0,10,4" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Package" />
+                                                <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,0,0,4" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding DrForgePackageStatusText}" TextWrapping="Wrap" />
+                                                <TextBlock Grid.Row="2" Margin="0,0,10,4" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Manifest" />
+                                                <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,0,0,4" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding DrForgeManifestStatusText}" TextWrapping="Wrap" />
+                                                <TextBlock Grid.Row="3" Margin="0,0,10,0" FontWeight="SemiBold" Foreground="{DynamicResource PanelLabelBrush}" Text="Readiness" />
+                                                <TextBlock Grid.Row="3" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding DrForgeVersionStatusText}" TextWrapping="Wrap" />
+                                            </Grid>
+                                            <TextBlock Margin="0,10,0,0"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                       Text="{Binding DrForgeLastReportPath}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,2,0,0"
+                                                       FontSize="11"
+                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                       Text="{Binding DrForgeLastArchivePath}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,10,0,0"
+                                                       FontSize="11.5"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       Text="{Binding DrForgeReportSummaryText}"
+                                                       TextWrapping="Wrap" />
+                                            <CheckBox Margin="0,10,0,0"
+                                                      Foreground="{DynamicResource PanelTextBrush}"
+                                                      IsChecked="{Binding IncludeDrForgeArtifactsInSupportBundle}"
+                                                      Content="Include latest Dr. Forge report/archive in the next support bundle" />
                                             <WrapPanel Margin="0,10,0,0">
+                                                <Button Margin="0,0,8,6"
+                                                        Padding="12,6"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Check Package"
+                                                        Command="{Binding CheckDrForgePackageCommand}" />
+                                                <Button Margin="0,0,8,6"
+                                                        Padding="12,6"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Generate Report"
+                                                        Command="{Binding GenerateDrForgeReportCommand}" />
+                                                <Button Margin="0,0,8,6"
+                                                        Padding="12,6"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Generate Archive"
+                                                        Command="{Binding GenerateDrForgeArchiveCommand}" />
+                                                <Button Margin="0,0,8,6"
+                                                        Padding="12,6"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Open Report Folder"
+                                                        Command="{Binding OpenDrForgeReportFolderCommand}" />
+                                                <Button Margin="0,0,8,6"
+                                                        Padding="12,6"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Copy Summary"
+                                                        Command="{Binding CopyDrForgeSummaryCommand}" />
                                                 <Button x:Name="LearnAboutDrForgeButton"
                                                         Margin="0,0,8,6"
                                                         Padding="12,6"
