@@ -248,7 +248,7 @@ No beta program can promise “100% safe,” but ForgerEMS is designed for **tec
 Open PowerShell in the folder that contains the ZIP and `CHECKSUMS.sha256`. For example:
 
 ```powershell
-Get-FileHash .\ForgerEMS-v1.2.3-preview.1.zip -Algorithm SHA256
+Get-FileHash .\ForgerEMS-v1.2.4-preview.1.zip -Algorithm SHA256
 ```
 
 Compare the `Hash` line to the line in `CHECKSUMS.sha256` for that filename.
@@ -352,7 +352,7 @@ Yes, where packaged, ForgerEMS includes **LibreHardwareMonitorLib** as a bundled
 
 ## Can I turn Deep Sensor Mode off?
 
-Deep Sensor Mode defaults to **Off**. The in-app Settings toggle was retired in v1.2.3-preview.1; the mode is only enabled through the optional installer checkbox or an environment variable/testing override, and older saved values are ignored safely when unsupported.
+Deep Sensor Mode defaults to **Off**. The in-app Settings toggle was retired in v1.2.4-preview.1; the mode is only enabled through the optional installer checkbox or an environment variable/testing override, and older saved values are ignored safely when unsupported.
 
 Related docs: [FORGER-SENSOR-STACK.md](FORGER-SENSOR-STACK.md), [SENSOR-LIMITATIONS.md](SENSOR-LIMITATIONS.md), and [FORGER-DEEP-SENSOR-DRIVER-ROADMAP.md](FORGER-DEEP-SENSOR-DRIVER-ROADMAP.md).
 

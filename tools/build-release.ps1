@@ -136,7 +136,7 @@ function Copy-ReleaseDocs {
         "LEGAL_NOTICES.md",
         "THIRD_PARTY_NOTICES.md",
         "USER_CONSENT_FLOW.md",
-        "RELEASE_NOTES_v1.2.3-preview.1.md"
+        "RELEASE_NOTES_v1.2.4-preview.1.md"
     )
 
     foreach ($doc in $docs) {
@@ -450,8 +450,8 @@ $checksumsPath = Join-Path $releaseRoot "CHECKSUMS.sha256"
 $installerOutputDir = Join-Path $distRoot "installer"
 $installerReleaseName = "ForgerEMS-Setup-v{0}.exe" -f $Version
 $installerReleasePath = Join-Path $releaseRoot $installerReleaseName
-$displayVersionLabel = "ForgerEMS v1.2.3 Public Preview"
-$releaseIdentifierLabel = "ForgerEMS v1.2.3 Public Preview - package $Version (portable app ZIP plus installer)"
+$displayVersionLabel = "ForgerEMS v1.2.4 Public Preview"
+$releaseIdentifierLabel = "ForgerEMS v1.2.4 Public Preview - package $Version (portable app ZIP plus installer)"
 
 $buildTempRoot = Join-Path $distRoot "tmp"
 Ensure-Dir -Path $buildTempRoot

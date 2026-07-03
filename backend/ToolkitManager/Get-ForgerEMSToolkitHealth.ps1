@@ -1002,7 +1002,7 @@ else {
 $report = [ordered]@{
     schemaVersion = 1
     product = "ForgerEMS"
-    releaseIdentifier = "ForgerEMS v1.2.3 Public Preview"
+    releaseIdentifier = "ForgerEMS v1.2.4 Public Preview"
     generatedUtc = (Get-Date).ToUniversalTime().ToString("o")
     targetRoot = $resolvedTargetRoot
     manifestPath = $manifestPath

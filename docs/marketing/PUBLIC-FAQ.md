@@ -1,4 +1,4 @@
-# Public FAQ — ForgerEMS v1.2.3 Public Preview
+# Public FAQ — ForgerEMS v1.2.4 Public Preview
 
 ## What is ForgerEMS?
 

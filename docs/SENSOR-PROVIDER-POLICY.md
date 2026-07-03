@@ -66,7 +66,7 @@ Bundled providers must:
 - clearly label admin requirements
 - be disabled by default if experimental
 
-ForgerEMS v1.2.3 Public Preview pins `LibreHardwareMonitorLib` 0.9.6 as a reviewed local read-only deep sensor provider where packaged. Users do not download it manually; release packaging ships the provider DLL and notices inside the installer and portable bundle.
+ForgerEMS v1.2.4 Public Preview pins `LibreHardwareMonitorLib` 0.9.6 as a reviewed local read-only deep sensor provider where packaged. Users do not download it manually; release packaging ships the provider DLL and notices inside the installer and portable bundle.
 
 ForgerEMS Deep Sensor Mode is disclosed in the installer and Settings. It only reads supported local hardware sensor data while ForgerEMS is running or a System Intelligence / Hardware X-Ray scan is executing. It does not install a background service, create a startup task, send sensor telemetry, use cloud sensor services, require paid third-party tools, or auto-send reports.
 

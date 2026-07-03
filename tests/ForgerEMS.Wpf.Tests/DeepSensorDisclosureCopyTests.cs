@@ -72,7 +72,7 @@ public sealed class DeepSensorDisclosureCopyTests
     public void About_MentionsHardwareXrayAndBundledReadOnlyProviders()
     {
         var docsText = Read("docs", "ABOUT_FORGEREMS.md");
-        var appText = InfoDocumentTexts.BuildAbout("1.2.3-preview.1", "ForgerEMS v1.2.3 Public Preview", "frontend", "backend");
+        var appText = InfoDocumentTexts.BuildAbout("1.2.4-preview.1", "ForgerEMS v1.2.4 Public Preview", "frontend", "backend");
 
         foreach (var text in new[] { docsText, appText })
         {
@@ -90,7 +90,7 @@ public sealed class DeepSensorDisclosureCopyTests
         var installer = Read("installer", "ForgerEMS.iss");
 
         // The dedicated Deep Sensor Mode settings section was retired in
-        // v1.2.3-preview.1: Settings no longer exposes the mode, and the shell view
+        // v1.2.4-preview.1: Settings no longer exposes the mode, and the shell view
         // model no longer carries the settings-panel bindings. The read-only /
         // no-control disclosure must survive in the remaining sensor summaries and
         // in the installer copy where the opt-in still lives.

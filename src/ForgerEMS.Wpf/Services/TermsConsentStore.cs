@@ -21,10 +21,10 @@ public sealed class TermsConsentRecord
 
 public sealed class TermsConsentStore
 {
-    public const string CurrentTermsVersion = "2026-07-02.v1.2.3-preview.1";
+    public const string CurrentTermsVersion = "2026-07-03.v1.2.4-preview.1";
 
     /// <summary>Date-only revision of the consent documents, shown separately from the app version.</summary>
-    public const string CurrentTermsRevisionDate = "2026-07-02";
+    public const string CurrentTermsRevisionDate = "2026-07-03";
 
     public const string RequiredAgreementText =
         "I have read and agree to the ForgerEMS Terms of Use and understand the Privacy/Data Handling notes.";

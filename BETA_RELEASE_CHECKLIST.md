@@ -1,8 +1,8 @@
 # ForgerEMS Beta Release Checklist
 
-## v1.2.3 Public Preview (current line)
+## v1.2.4 Public Preview (current line)
 
-Target: **1.2.3-preview.1** — *ForgerEMS v1.2.3 Public Preview*
+Target: **1.2.4-preview.1** — *ForgerEMS v1.2.4 Public Preview*
 
 - [ ] `docs/PUBLIC_PREVIEW_CHECKLIST_v1.2.0.md` completed for the shipping tag
 - [ ] `dotnet test` green; `tools/Validate-ForgerEMSRelease.ps1` green
@@ -37,7 +37,7 @@ Target (historical): **v1.1.4** — *ForgerEMS Beta v1.1.4 — Whole-App Intelli
 
 ## Installer Readiness
 
-- [ ] Verify installer builds to `dist\installer\ForgerEMS-Setup-v1.1.4.exe` (or current `<Version>` from csproj)
+- [ ] Verify installer builds to `dist\installer\ForgerEMS-Setup-v1.2.4-preview.1.exe` (or current `<Version>` from csproj)
 - [ ] Verify installer scripts and `.iss` inputs point to current publish output
 - [ ] Verify branding/version text is correct for beta
 - [ ] Verify no secrets/user paths are included in packaged output

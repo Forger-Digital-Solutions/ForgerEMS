@@ -4,7 +4,7 @@
 
 **Support:** [ForgerDigitalSolutions@outlook.com](mailto:ForgerDigitalSolutions@outlook.com) — never send secrets in email.
 
-**Current v1.2.3-preview.1 data-handling docs:** see [PRIVACY_AND_DATA_HANDLING.md](PRIVACY_AND_DATA_HANDLING.md), [TERMS_OF_USE.md](TERMS_OF_USE.md), [LEGAL_NOTICES.md](LEGAL_NOTICES.md), and [USER_CONSENT_FLOW.md](USER_CONSENT_FLOW.md). ForgerEMS keeps Terms acceptance local and requires a separate warning before support bundles, logs, Kyra context, or exported reports are packaged for sharing.
+**Current v1.2.4-preview.1 data-handling docs:** see [PRIVACY_AND_DATA_HANDLING.md](PRIVACY_AND_DATA_HANDLING.md), [TERMS_OF_USE.md](TERMS_OF_USE.md), [LEGAL_NOTICES.md](LEGAL_NOTICES.md), and [USER_CONSENT_FLOW.md](USER_CONSENT_FLOW.md). ForgerEMS keeps Terms acceptance local and requires a separate warning before support bundles, logs, Kyra context, or exported reports are packaged for sharing.
 
 ---
 

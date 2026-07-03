@@ -985,7 +985,7 @@
                     <!-- The always-visible Internet status widget was removed from the shell
                          header: it kept a background network monitor running for the whole
                          session, and the network-check feature was retired entirely in
-                         v1.2.3-preview.1. -->
+                         v1.2.4-preview.1. -->
                     <StackPanel Orientation="Horizontal"
                                 HorizontalAlignment="Right">
                         <Border Margin="0,0,12,0"

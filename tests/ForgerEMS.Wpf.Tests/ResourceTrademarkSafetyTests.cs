@@ -204,7 +204,7 @@ public sealed class ResourceTrademarkSafetyTests
                      Path.Combine("docs", "FAQ.md"),
                      Path.Combine("docs", "LEGAL.md"),
                      Path.Combine("docs", "ABOUT_FORGEREMS.md"),
-                     Path.Combine("docs", "DEV_BETA_SMOKE_CHECKLIST_v1.2.3.md")
+                     Path.Combine("docs", "DEV_BETA_SMOKE_CHECKLIST_v1.2.4.md")
                  })
         {
             var text = File.ReadAllText(Path.Combine(RepoRoot, relativePath));
@@ -212,7 +212,7 @@ public sealed class ResourceTrademarkSafetyTests
             Assert.Contains("not affiliated with, sponsored by, or endorsed by", text, StringComparison.OrdinalIgnoreCase);
         }
 
-        Assert.Contains(IndependenceDisclaimer, InfoDocumentTexts.BuildAbout("1.2.3-preview.1", "ForgerEMS v1.2.3 Public Preview", "frontend", "backend"), StringComparison.Ordinal);
+        Assert.Contains(IndependenceDisclaimer, InfoDocumentTexts.BuildAbout("1.2.4-preview.1", "ForgerEMS v1.2.4 Public Preview", "frontend", "backend"), StringComparison.Ordinal);
         Assert.Contains(IndependenceDisclaimer, InfoDocumentTexts.BuildLegal(), StringComparison.Ordinal);
     }
 

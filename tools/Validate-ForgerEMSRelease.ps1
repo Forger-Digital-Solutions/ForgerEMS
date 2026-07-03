@@ -11,14 +11,14 @@
   Repository root (folder containing ForgerEMS.sln).
 
 .PARAMETER Version
-  Expected semantic package version (e.g. 1.2.3-preview.1).
+  Expected semantic package version (e.g. 1.2.4-preview.1).
 
 .PARAMETER ReleaseRoot
   Optional. If set (e.g. ...\release\current), validates release.json + CHECKSUMS + installer/ZIP when present.
 #>
 param(
     [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot),
-    [string]$Version = "1.2.3-preview.1",
+    [string]$Version = "1.2.4-preview.1",
     [string]$ReleaseRoot = ""
 )
 
@@ -80,7 +80,7 @@ foreach ($legalDoc in @(
     "docs\LEGAL_NOTICES.md",
     "docs\THIRD_PARTY_NOTICES.md",
     "docs\USER_CONSENT_FLOW.md",
-    "docs\RELEASE_NOTES_v1.2.3-preview.1.md",
+    "docs\RELEASE_NOTES_v1.2.4-preview.1.md",
     "docs\reports\FORGEREMS_V1_2_3_FULL_PROJECT_AUDIT.md"
 )) {
     Test-FileExists $legalDoc ("doc-" + ([System.IO.Path]::GetFileNameWithoutExtension($legalDoc) -replace '[^A-Za-z0-9]+','-'))
@@ -124,20 +124,20 @@ foreach ($g in $pg) {
 if ($csVer -eq $Version) { Add-Row -Level "PASS" -Id "csproj-Version" -Message "<Version> is $Version" }
 else { Add-Row -Level "FAIL" -Id "csproj-Version" -Message "Expected <Version>$Version</Version>, got '$csVer'" }
 
-if ($asmVer -eq "1.2.3.0") { Add-Row -Level "PASS" -Id "csproj-AssemblyVersion" -Message "AssemblyVersion 1.2.3.0" }
-else { Add-Row -Level "FAIL" -Id "csproj-AssemblyVersion" -Message "Expected 1.2.3.0, got '$asmVer'" }
+if ($asmVer -eq "1.2.4.0") { Add-Row -Level "PASS" -Id "csproj-AssemblyVersion" -Message "AssemblyVersion 1.2.4.0" }
+else { Add-Row -Level "FAIL" -Id "csproj-AssemblyVersion" -Message "Expected 1.2.4.0, got '$asmVer'" }
 
 if ($infoVer -eq $Version) { Add-Row -Level "PASS" -Id "csproj-InformationalVersion" -Message "InformationalVersion matches" }
 else { Add-Row -Level "FAIL" -Id "csproj-InformationalVersion" -Message "Expected $Version, got '$infoVer'" }
 
 # --- README / CHANGELOG copy ---
-Test-FileContains -Rel "README.md" -Pattern "ForgerEMS v1\.2\.3 Public Preview" -Id "readme-display"
+Test-FileContains -Rel "README.md" -Pattern "ForgerEMS v1\.2\.4 Public Preview" -Id "readme-display"
 Test-FileContains -Rel "README.md" -Pattern ([regex]::Escape($Version)) -Id "readme-semver"
 Test-FileContains -Rel "README.md" -Pattern "TERMS_OF_USE\.md" -Id "readme-terms"
 Test-FileContains -Rel "README.md" -Pattern "portable ZIP" -Id "readme-portable-zip"
 Test-FileContains -Rel "docs\ABOUT_FORGEREMS.md" -Pattern "Public Preview" -Id "about-preview"
 Test-FileContains -Rel "docs\FAQ.md" -Pattern ([regex]::Escape($Version)) -Id "faq-semver"
-Test-FileContains -Rel "docs\TERMS_OF_USE.md" -Pattern "2026-07-02\.v1\.2\.3-preview\.1" -Id "terms-version"
+Test-FileContains -Rel "docs\TERMS_OF_USE.md" -Pattern "2026-07-03\.v1\.2\.4-preview\.1" -Id "terms-version"
 Test-FileContains -Rel "docs\PRIVACY_AND_DATA_HANDLING.md" -Pattern "support bundles" -Id "privacy-support-bundles"
 Test-FileContains -Rel "docs\USER_CONSENT_FLOW.md" -Pattern "terms-consent\.json" -Id "consent-flow-storage"
 Test-FileContains -Rel "CHANGELOG.md" -Pattern ([regex]::Escape($Version)) -Id "changelog-version"
@@ -148,7 +148,7 @@ if (Test-Path -LiteralPath $appRel) {
     $src = Get-Content -LiteralPath $appRel -Raw
     if ($src -match 'Version\s*=\s*"' + [regex]::Escape($Version) + '"') { Add-Row -Level "PASS" -Id "AppReleaseInfo-Version" -Message "AppReleaseInfo.Version" }
     else { Add-Row -Level "FAIL" -Id "AppReleaseInfo-Version" -Message "AppReleaseInfo.Version not $Version" }
-    if ($src -match 'ForgerEMS v1\.2\.3 Public Preview') { Add-Row -Level "PASS" -Id "AppReleaseInfo-Display" -Message "DisplayVersion string" }
+    if ($src -match 'ForgerEMS v1\.2\.4 Public Preview') { Add-Row -Level "PASS" -Id "AppReleaseInfo-Display" -Message "DisplayVersion string" }
     else { Add-Row -Level "FAIL" -Id "AppReleaseInfo-Display" -Message "DisplayVersion missing Public Preview wording" }
 }
 else { Add-Row -Level "FAIL" -Id "AppReleaseInfo-file" -Message "AppReleaseInfo.cs missing" }

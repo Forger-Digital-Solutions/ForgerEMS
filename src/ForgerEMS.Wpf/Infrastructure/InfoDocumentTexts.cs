@@ -55,7 +55,7 @@ public static class InfoDocumentTexts
             {BetaSupportInfo.BetaIssueSupportLine}
 
             WHAT THIS BUILD IS
-            ForgerEMS v1.2.3 Public Preview is a Windows technician utility suite for local-device support workflows, safer Ventoy-oriented USB maintenance media, Driver Hub/vendor guidance, USB/port mapping, drive validation, battery health and system specs summaries, safe removable-target benchmarks, and Kyra — a local-first assistant that prefers facts from your own scans.
+            ForgerEMS v1.2.4 Public Preview is a Windows technician utility suite for local-device support workflows, safer Ventoy-oriented USB maintenance media, Dr. Forge Intake, Driver Hub/vendor guidance, USB/port mapping, drive validation, battery health and system specs summaries, safe removable-target benchmarks, and Kyra — a local-first assistant that prefers facts from your own scans.
 
             CORE AREAS (honest maturity)
             • USB Builder — Beta: removable targets only; blocks Windows/system/internal OS drives and unsafe partitions.
@@ -151,7 +151,7 @@ public static class InfoDocumentTexts
             Yes, where packaged, ForgerEMS includes LibreHardwareMonitorLib as a bundled local read-only sensor provider under MPL-2.0 with license and notice files included.
 
             Can I turn Deep Sensor Mode off?
-            Deep Sensor Mode defaults to Off. The in-app Settings toggle was retired in v1.2.3-preview.1; the mode is only enabled through the optional installer checkbox or an environment variable/testing override, and older saved values are ignored safely when unsupported.
+            Deep Sensor Mode defaults to Off. The in-app Settings toggle was retired in v1.2.4-preview.1; the mode is only enabled through the optional installer checkbox or an environment variable/testing override, and older saved values are ignored safely when unsupported.
 
             What does Kyra see?
             Offline Kyra uses rules and optional local reports you already generated. With your permission, a sanitized summary (no product keys, raw serials, or full private paths in the safe summary path) can be included for online providers and gateway paths.

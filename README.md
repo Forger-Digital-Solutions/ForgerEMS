@@ -2,7 +2,7 @@
 
 **Forger Engineering Maintenance Suite** — a Windows desktop app for technicians who work with USB toolkits, repairs, and diagnostics.
 
-**Current release line:** **v1.2.3-preview.1** — **ForgerEMS v1.2.3 Public Preview** (USB Builder Profile picker fix, portable app USB profile, Driver Hub/vendor guidance, near-instant USB hotplug detection, Port / USB Intelligence results dashboard, port/USB mapping, persistent Live Logs cleanup, first-run Terms consent gate with wrapped notices, removed Network Pulse implementation, retired Deep Sensor Mode settings, and docs/legal pass; core WPF/.NET 8 architecture unchanged).
+**Current release line:** **v1.2.4-preview.1** — **ForgerEMS v1.2.4 Public Preview** (first safe Dr. Forge CLI Intake bridge, USB Builder Profile picker fix, portable app USB profile, Driver Hub/vendor guidance, near-instant USB hotplug detection, Port / USB Intelligence results dashboard, port/USB mapping, persistent Live Logs cleanup, first-run Terms consent gate with wrapped notices, removed Network Pulse implementation, retired Deep Sensor Mode settings, and docs/legal pass).
 
 **Kickstarter:** Coming soon.
 
@@ -113,7 +113,7 @@ The standalone **`ForgerEMS-Setup-v<version>.exe`** on the release is the instal
 - **Deep Sensor Mode:** sensor access is local to the device and runs only while ForgerEMS is open or System Intelligence / Hardware X-Ray scans execute. Reports are shared only if you copy/export/send them.
 - **Automated quality:** the solution ships with a large automated test suite (`dotnet test` on `ForgerEMS.sln`); the exact count grows with each release.
 
-**Pro / preview labels** during beta are for feedback; licensing is not final. See [docs/RELEASE_NOTES_v1.2.3-preview.1.md](docs/RELEASE_NOTES_v1.2.3-preview.1.md) for this build.
+**Pro / preview labels** during beta are for feedback; licensing is not final. See [docs/RELEASE_NOTES_v1.2.4-preview.1.md](docs/RELEASE_NOTES_v1.2.4-preview.1.md) for this build.
 
 ---
 
@@ -141,16 +141,16 @@ Staging without compiling the installer:
 .\tools\build-release.ps1 -DryRun
 ```
 
-Full local release (version follows `src/ForgerEMS.Wpf/ForgerEMS.Wpf.csproj`, currently **1.2.3-preview.1** / **ForgerEMS v1.2.3 Public Preview**):
+Full local release (version follows `src/ForgerEMS.Wpf/ForgerEMS.Wpf.csproj`, currently **1.2.4-preview.1** / **ForgerEMS v1.2.4 Public Preview**):
 
 ```powershell
-.\tools\build-release.ps1 -Version 1.2.3-preview.1
+.\tools\build-release.ps1 -Version 1.2.4-preview.1
 ```
 
 Without Inno Setup (skips installer; still stages `release\current\` app + backend + docs + `release.json` + checksums):
 
 ```powershell
-.\tools\build-release.ps1 -Version 1.2.3-preview.1 -SkipInstaller
+.\tools\build-release.ps1 -Version 1.2.4-preview.1 -SkipInstaller
 ```
 
 Release layout, CI, and operator checklists: [RELEASE_PROCESS.md](RELEASE_PROCESS.md), [BETA_RELEASE_CHECKLIST.md](BETA_RELEASE_CHECKLIST.md), [BETA_TESTING_GUIDE.md](BETA_TESTING_GUIDE.md).

@@ -95,7 +95,7 @@ public sealed class DriveValidatorDocsTests
     [Fact]
     public void DevSmokeChecklist_MentionsWizardSteps()
     {
-        var content = ReadDoc("docs/DEV_BETA_SMOKE_CHECKLIST_v1.2.3.md");
+        var content = ReadDoc("docs/DEV_BETA_SMOKE_CHECKLIST_v1.2.4.md");
         Assert.Contains("Drive Validator Wizard", content, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("media integrity tile map", content, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Open Drive Validator", content, StringComparison.OrdinalIgnoreCase);

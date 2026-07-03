@@ -4,19 +4,19 @@
 #define MyAppId "{{9B46E50F-0EF6-4E37-92BB-13C29D43F20B}"
 
 #ifndef AppVersion
-  #define AppVersion "1.2.3-preview.1"
+  #define AppVersion "1.2.4-preview.1"
 #endif
 
 #ifndef AppVersionInfo
-  #define AppVersionInfo "1.2.3.0"
+  #define AppVersionInfo "1.2.4.0"
 #endif
 
 #ifndef ReleaseIdentifier
-  #define ReleaseIdentifier "ForgerEMS v1.2.3 Public Preview"
+  #define ReleaseIdentifier "ForgerEMS v1.2.4 Public Preview"
 #endif
 
 #ifndef DisplayVersion
-  #define DisplayVersion "ForgerEMS v1.2.3 Public Preview"
+  #define DisplayVersion "ForgerEMS v1.2.4 Public Preview"
 #endif
 
 #define MyAppIconName "ForgerEMS-v" + AppVersion + "-transparent.ico"
@@ -115,7 +115,7 @@ Source: "..\docs\PRIVACY_AND_DATA_HANDLING.md"; DestDir: "{app}\docs"; Flags: ig
 Source: "..\docs\LEGAL_NOTICES.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "..\docs\THIRD_PARTY_NOTICES.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 Source: "..\docs\USER_CONSENT_FLOW.md"; DestDir: "{app}\docs"; Flags: ignoreversion
-Source: "..\docs\RELEASE_NOTES_v1.2.3-preview.1.md"; DestDir: "{app}\docs"; Flags: ignoreversion
+Source: "..\docs\RELEASE_NOTES_v1.2.4-preview.1.md"; DestDir: "{app}\docs"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\ForgerEMS"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#MyAppIconName}"

@@ -7,9 +7,9 @@ This document covers the lightweight Windows installer strategy for the native
 
 Current public preview:
 
-- App version: `1.2.3-preview.1`
-- Installer artifact: `ForgerEMS-Setup-v1.2.3-preview.1.exe`
-- Portable artifact: `ForgerEMS-v1.2.3-preview.1.zip`
+- App version: `1.2.4-preview.1`
+- Installer artifact: `ForgerEMS-Setup-v1.2.4-preview.1.exe`
+- Portable artifact: `ForgerEMS-v1.2.4-preview.1.zip`
 
 ForgerEMS now ships both a direct installer and a true portable app ZIP. The
 portable ZIP contains `ForgerEMS.exe`, bundled backend/runtime content, docs,
@@ -79,11 +79,11 @@ Installer note:
 
 Current version example:
 
-- `1.2.3-preview.1`
+- `1.2.4-preview.1`
 
 Installer output name:
 
-- `ForgerEMS-Setup-v1.2.3-preview.1.exe`
+- `ForgerEMS-Setup-v1.2.4-preview.1.exe`
 
 Upgrade behavior:
 
@@ -155,7 +155,7 @@ What the script does:
 Expected installer output:
 
 ```text
-dist\installer\ForgerEMS-Setup-v1.2.3-preview.1.exe
+dist\installer\ForgerEMS-Setup-v1.2.4-preview.1.exe
 ```
 
 Release staging output from `build-release.ps1` is generated under `release\current\`.
@@ -185,12 +185,12 @@ When you move to a new version:
 3. build the installer with:
 
    ```powershell
-   .\tools\build-release.ps1 -Version 1.2.3-preview.1
+   .\tools\build-release.ps1 -Version 1.2.4-preview.1
    ```
 
 4. if desired, update any docs that explicitly mention the installer file name
 
-Versioned distribution artifacts (for example `ForgerEMS-Setup-v1.2.3-preview.1.exe` and `ForgerEMS-v1.2.3-preview.1.zip`) should be attached to a GitHub Release for the matching tag, rather than committed under `release\vX.Y.Z\`.
+Versioned distribution artifacts (for example `ForgerEMS-Setup-v1.2.4-preview.1.exe` and `ForgerEMS-v1.2.4-preview.1.zip`) should be attached to a GitHub Release for the matching tag, rather than committed under `release\vX.Y.Z\`.
 
 The `AppId` should stay the same so upgrades keep working.
 
