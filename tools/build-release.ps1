@@ -123,6 +123,30 @@ function Copy-CleanDirectory {
     Copy-Item -Path (Join-Path $Source "*") -Destination $Destination -Recurse -Force
 }
 
+function Assert-NoDriverArtifacts {
+    # ForgerEMS ships no kernel driver. Dr. Forge driver support is contract-first /
+    # dev-foundation only, so no *.sys / *.inf / *.cat file may reach a normal package.
+    param(
+        [Parameter(Mandatory)][string[]]$Roots,
+        [Parameter(Mandatory)][string]$Context
+    )
+
+    $driverExtensions = @(".sys", ".inf", ".cat")
+    $hits = @()
+    foreach ($root in $Roots) {
+        if ([string]::IsNullOrWhiteSpace($root) -or -not (Test-Path -LiteralPath $root)) { continue }
+        $hits += @(Get-ChildItem -LiteralPath $root -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $driverExtensions -contains $_.Extension.ToLowerInvariant() })
+    }
+
+    if ($hits.Count -gt 0) {
+        $list = ($hits | Select-Object -First 10 | ForEach-Object { $_.FullName }) -join "; "
+        throw "Driver artifacts (*.sys / *.inf / *.cat) are not allowed in ForgerEMS release packages ($Context): $list"
+    }
+
+    Write-Step "Driver-artifact scan clean ($Context): no *.sys / *.inf / *.cat"
+}
+
 function Copy-ReleaseDocs {
     param([Parameter(Mandatory)][string]$Destination)
 
@@ -511,6 +535,9 @@ Copy-CleanDirectory -Source $backendStageRoot -Destination $releaseBackendRoot
 Copy-CleanDirectory -Source $manifestRoot -Destination $releaseManifestRoot
 Copy-ReleaseDocs -Destination $releaseAppRoot
 
+Write-Step "Scanning staged release for driver artifacts"
+Assert-NoDriverArtifacts -Roots @($publishDir, $backendStageRoot, $releaseAppRoot) -Context "staged app/backend"
+
 if ($DryRun -or $SkipInstaller) {
     Write-Step "Skipping installer compilation"
 }
@@ -591,6 +618,8 @@ else {
     Write-VerifyTxt -Path (Join-Path $packageRoot "VERIFY.txt") -Version $Version
 
     Write-Checksums -Root $packageRoot -OutputPath (Join-Path $packageRoot "CHECKSUMS.sha256")
+
+    Assert-NoDriverArtifacts -Roots @($packageRoot) -Context "portable ZIP package"
 
     Compress-PackageFolderZip -PackageRoot $packageRoot -EntryFolderName $packageDirName -DestinationZipPath $zipBundlePath
 

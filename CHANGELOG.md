@@ -10,6 +10,12 @@
 - **Support bundle/privacy:** Dr. Forge report/archive files stay local and are included in support bundles only when generated from the app or explicitly selected. Docs warn users to review reports before sharing.
 - **Version bump:** app/project metadata, installer defaults, release tooling, validation defaults, docs, release notes, smoke checklist, and version-pinned tests moved from `1.2.3-preview.1` to `1.2.4-preview.1`. Windows assembly/file version is `1.2.4.0`.
 
+### Dr. Forge integration readiness pass
+
+- **Driver-artifact packaging guards:** `tools/build-release.ps1` now fails the build if any `*.sys` / `*.inf` / `*.cat` file reaches the staged app, bundled backend, or portable ZIP package (`Assert-NoDriverArtifacts`), and `tools/Validate-ForgerEMSRelease.ps1` adds `driver-artifacts` / `zip-driver-artifacts` FAIL rows for release output and shipped ZIP entries. ForgerEMS ships no kernel driver; Dr. Forge driver support stays dev-foundation / contract-first only.
+- **Safety regression tests:** new `DrForgeIntegrationSafetyTests` pin that app, packaging, and installer sources contain no driver install/start/load verbs (`sc create`, `sc start`, `pnputil`, `devcon`, `NtLoadDriver`, `ZwLoadDriver`, `SeLoadDriverPrivilege`), the shell offers no driver-install / run-as-admin buttons, driver absence renders as the normal user-mode state (never an error), unknown intake-report fields parse conservatively, USB Builder stages no Dr. Forge or driver payloads, and the packaging guards stay in place.
+- **Readiness doc:** added `docs/integrations/DR-FORGE-INTEGRATION-READINESS.md` summarizing what ForgerEMS can do with Dr. Forge today, what remains unavailable, report privacy/support-bundle behavior, enforced safety boundaries, and the gated future integration path.
+
 ## v1.2.3-preview.1 — Public Preview (2026-05-23)
 
 ### Settings polish pass (release-ready)

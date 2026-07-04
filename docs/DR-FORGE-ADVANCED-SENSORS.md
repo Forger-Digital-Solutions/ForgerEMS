@@ -76,7 +76,7 @@ None of that is part of the first ForgerEMS bridge.
 
 ## Handoff to ForgerEMS
 
-See [FORGEREMS-DR-FORGE-INTEGRATION.md](FORGEREMS-DR-FORGE-INTEGRATION.md) for the packaged CLI bridge contract.
+See [FORGEREMS-DR-FORGE-INTEGRATION.md](FORGEREMS-DR-FORGE-INTEGRATION.md) for the packaged CLI bridge contract and [integrations/DR-FORGE-INTEGRATION-READINESS.md](integrations/DR-FORGE-INTEGRATION-READINESS.md) for the ForgerEMS-side readiness summary and enforced safety boundaries.
 
 Generated reports and archives stay under the local ForgerEMS Runtime reports folder. The user can review them before sharing. Support bundles include Dr. Forge report/archive files only when the user generated them from the app or explicitly chooses to include them.
 

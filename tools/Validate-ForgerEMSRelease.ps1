@@ -198,6 +198,20 @@ if ([string]::IsNullOrWhiteSpace($ReleaseRoot)) {
 
 if (-not [string]::IsNullOrWhiteSpace($ReleaseRoot) -and (Test-Path -LiteralPath $ReleaseRoot)) {
     Add-Row -Level "PASS" -Id "release-root" -Message "Validating $ReleaseRoot"
+
+    # ForgerEMS ships no kernel driver; Dr. Forge driver support is dev-foundation /
+    # contract-first only. Normal release output must never contain driver artifacts.
+    $driverArtifactExtensions = @(".sys", ".inf", ".cat")
+    $driverArtifacts = @(Get-ChildItem -LiteralPath $ReleaseRoot -Recurse -File -ErrorAction SilentlyContinue |
+        Where-Object { $driverArtifactExtensions -contains $_.Extension.ToLowerInvariant() })
+    if ($driverArtifacts.Count -gt 0) {
+        $driverList = ($driverArtifacts | Select-Object -First 5 | ForEach-Object { $_.FullName }) -join "; "
+        Add-Row -Level "FAIL" -Id "driver-artifacts" -Message "Driver artifacts (*.sys / *.inf / *.cat) found in release output: $driverList"
+    }
+    else {
+        Add-Row -Level "PASS" -Id "driver-artifacts" -Message "No *.sys / *.inf / *.cat driver artifacts in release output"
+    }
+
     $rj = Join-Path $ReleaseRoot "release.json"
     if (Test-Path -LiteralPath $rj) {
         try {
@@ -235,6 +249,14 @@ if (-not [string]::IsNullOrWhiteSpace($ReleaseRoot) -and (Test-Path -LiteralPath
                 foreach ($requiredDoc in @("TERMS_OF_USE.md","PRIVACY_AND_DATA_HANDLING.md","LEGAL_NOTICES.md","THIRD_PARTY_NOTICES.md","USER_CONSENT_FLOW.md")) {
                     if ($entries -match ('(^|/)docs/' + [regex]::Escape($requiredDoc) + '$')) { Add-Row -Level "PASS" -Id ("zip-doc-" + $requiredDoc) -Message "Portable ZIP contains docs/$requiredDoc" }
                     else { Add-Row -Level "FAIL" -Id ("zip-doc-" + $requiredDoc) -Message "Portable ZIP missing docs/$requiredDoc" }
+                }
+                $zipDriverEntries = @($entries | Where-Object { $_ -match '\.(sys|inf|cat)$' })
+                if ($zipDriverEntries.Count -gt 0) {
+                    $zipDriverList = ($zipDriverEntries | Select-Object -First 5) -join "; "
+                    Add-Row -Level "FAIL" -Id "zip-driver-artifacts" -Message "Portable ZIP contains driver artifacts (*.sys / *.inf / *.cat): $zipDriverList"
+                }
+                else {
+                    Add-Row -Level "PASS" -Id "zip-driver-artifacts" -Message "Portable ZIP contains no *.sys / *.inf / *.cat driver artifacts"
                 }
             }
             finally {

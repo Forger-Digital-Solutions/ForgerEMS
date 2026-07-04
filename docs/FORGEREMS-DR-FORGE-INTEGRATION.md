@@ -2,6 +2,8 @@
 
 Status: first safe bridge implemented for packaged Dr. Forge CLI artifacts.
 
+Readiness summary and enforced safety boundaries: [integrations/DR-FORGE-INTEGRATION-READINESS.md](integrations/DR-FORGE-INTEGRATION-READINESS.md).
+
 ForgerEMS integrates with Dr. Forge only through the packaged CLI/Core process boundary. ForgerEMS does not load Dr. Forge WPF or provider internals, does not vendor unsafe internals, and does not depend on private developer paths.
 
 ## Design principles
