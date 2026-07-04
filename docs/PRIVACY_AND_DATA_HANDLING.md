@@ -14,7 +14,7 @@ Local snapshots may include Windows version, device model, CPU/GPU/RAM/storage d
 
 ## Dr. Forge Intake
 
-When configured, ForgerEMS stores the selected `drforge.exe` path, last readiness state, and last local Dr. Forge report/archive paths under the local Runtime config folder. Generated Dr. Forge reports and archives stay under `%LOCALAPPDATA%\ForgerEMS\Runtime\reports\drforge`.
+When configured, ForgerEMS stores the selected `drforge.exe` path, last readiness state, and last local Dr. Forge report/archive paths under the local Runtime config folder. Generated Dr. Forge reports and archives stay under `%LOCALAPPDATA%\ForgerEMS\Runtime\reports\drforge`. The in-app recent report history reads that app-managed folder only; it does not crawl Documents or arbitrary user folders.
 
 Dr. Forge reports may include local device/context information, sensor availability, findings, notes, and unavailable telemetry reasons. Unavailable readings remain unavailable, not zero. Review reports before sharing.
 

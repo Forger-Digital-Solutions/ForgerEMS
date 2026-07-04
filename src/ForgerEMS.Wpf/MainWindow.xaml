@@ -2388,7 +2388,7 @@
                                                        FontSize="12"
                                                        Foreground="{DynamicResource PanelTextBrush}"
                                                        TextWrapping="Wrap"
-                                                       Text="Dr. Forge runs as a local user-mode hardware intake/report tool. ForgerEMS consumes the packaged CLI/Core contract through a process boundary. Unavailable readings are shown as unavailable, not zero. Deep telemetry such as fan RPM, voltage rails, EC/SuperIO/MSR readings requires future safe providers or signed privileged components. ForgerEMS does not claim full hardware-monitor parity." />
+                                                       Text="Dr. Forge runs as a local user-mode hardware intake/report tool. Reports stay local unless you explicitly export or include them in a support bundle. No production sensor driver is shipped or loaded. No driver install, start, load, or elevation action is performed. Driver-required readings are unavailable until a future signed-driver phase. Unavailable readings are shown as unavailable, not zero. ForgerEMS does not claim full hardware-monitor parity." />
                                             <Grid Margin="0,10,0,0">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*" />
@@ -2427,6 +2427,42 @@
                                                 <TextBlock Grid.Row="3" Grid.Column="1" Foreground="{DynamicResource PanelTextBrush}" Text="{Binding DrForgeVersionStatusText}" TextWrapping="Wrap" />
                                             </Grid>
                                             <TextBlock Margin="0,10,0,0"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource PanelLabelBrush}"
+                                                       Text="Version / commit" />
+                                            <TextBlock Margin="0,2,0,0"
+                                                       FontSize="11.5"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       Text="{Binding DrForgeVersionDetailText}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,10,0,0"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource PanelLabelBrush}"
+                                                       Text="Driver status" />
+                                            <TextBlock Margin="0,2,0,0"
+                                                       FontSize="11.5"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       Text="{Binding DrForgeStatusSummaryText}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,10,0,0"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource PanelLabelBrush}"
+                                                       Text="Last scan/report" />
+                                            <TextBlock Margin="0,2,0,0"
+                                                       FontSize="11.5"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       Text="{Binding DrForgeLastSuccessfulScanText}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,10,0,0"
+                                                       FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource PanelLabelBrush}"
+                                                       Text="Recent reports/history" />
+                                            <TextBlock Margin="0,2,0,0"
+                                                       FontSize="11.5"
+                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                       Text="{Binding DrForgeReportHistoryText}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,10,0,0"
                                                        FontSize="11"
                                                        Foreground="{DynamicResource PanelMutedTextBrush}"
                                                        Text="{Binding DrForgeLastReportPath}"
@@ -2454,6 +2490,11 @@
                                                 <Button Margin="0,0,8,6"
                                                         Padding="12,6"
                                                         Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Refresh Status"
+                                                        Command="{Binding RefreshDrForgeStatusCommand}" />
+                                                <Button Margin="0,0,8,6"
+                                                        Padding="12,6"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
                                                         Content="Generate Report"
                                                         Command="{Binding GenerateDrForgeReportCommand}" />
                                                 <Button Margin="0,0,8,6"
@@ -2471,6 +2512,11 @@
                                                         Style="{StaticResource SecondaryButtonStyle}"
                                                         Content="Copy Summary"
                                                         Command="{Binding CopyDrForgeSummaryCommand}" />
+                                                <Button Margin="0,0,8,6"
+                                                        Padding="12,6"
+                                                        Style="{StaticResource SecondaryButtonStyle}"
+                                                        Content="Copy Status Summary"
+                                                        Command="{Binding CopyDrForgeStatusSummaryCommand}" />
                                                 <Button x:Name="LearnAboutDrForgeButton"
                                                         Margin="0,0,8,6"
                                                         Padding="12,6"

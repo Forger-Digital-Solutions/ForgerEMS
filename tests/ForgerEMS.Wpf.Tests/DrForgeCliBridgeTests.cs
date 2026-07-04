@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -202,6 +204,25 @@ public sealed class DrForgeCliBridgeTests
     }
 
     [Fact]
+    public void DriverStatusDisplayBuilder_RendersCurrentNoDriverStatusAsNormal()
+    {
+        var view = new DrForgeDriverStatusReader().ReadJson(CurrentNoDriverStatusJson);
+
+        var summary = DrForgeDriverStatusDisplayBuilder.BuildSafeSummary(view);
+
+        Assert.Contains("Driver status schema: forger-sensor-driver-preflight/1.1.", summary, StringComparison.Ordinal);
+        Assert.Contains("Dr. Forge is running in safe user-mode fallback.", summary, StringComparison.Ordinal);
+        Assert.Contains("Production driver shipped: no.", summary, StringComparison.Ordinal);
+        Assert.Contains("No production sensor driver is shipped or loaded.", summary, StringComparison.Ordinal);
+        Assert.Contains("Driver absence normal/safe: yes.", summary, StringComparison.Ordinal);
+        Assert.Contains("No driver action taken: yes.", summary, StringComparison.Ordinal);
+        Assert.Contains("Driver-required readings unavailable: 2.", summary, StringComparison.Ordinal);
+        Assert.Contains("Driver-required readings are unavailable until a future signed-driver phase.", summary, StringComparison.Ordinal);
+        Assert.Contains("No driver install, start, load, or elevation action was taken.", summary, StringComparison.Ordinal);
+        Assert.DoesNotContain("error", summary, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void DriverStatusReader_ToleratesUnknownSchemaWithoutInventingDriverState()
     {
         const string json = """
@@ -219,6 +240,111 @@ public sealed class DrForgeCliBridgeTests
         Assert.Null(view.ProductionDriverShipped);
         Assert.Null(view.DriverInstalled);
         Assert.Contains("unsupported schema", view.SummaryText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void DriverStatusDisplayBuilder_TreatsMissingDriverStatusAsSafeUserModeUnavailable()
+    {
+        var summary = DrForgeDriverStatusDisplayBuilder.BuildSafeSummary(null);
+
+        Assert.Contains("Dr. Forge is not configured.", summary, StringComparison.Ordinal);
+        Assert.Contains("No production sensor driver is shipped or loaded.", summary, StringComparison.Ordinal);
+        Assert.Contains("No driver install, start, load, or elevation action was taken.", summary, StringComparison.Ordinal);
+        Assert.Contains("Driver-required readings are unavailable", summary, StringComparison.Ordinal);
+        Assert.DoesNotContain("error", summary, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void VersionReader_ExtractsVersionAndCommitWhenAvailable()
+    {
+        const string versionText = """
+        Dr. Forge 0.8.0
+        Version: 0.8.0
+        Commit: 91d1e1b
+        """;
+
+        var view = new DrForgeCliVersionReader().ReadText(versionText);
+
+        Assert.Equal("Dr. Forge 0.8.0", view.ProductLine);
+        Assert.Equal("0.8.0", view.Version);
+        Assert.Equal("91d1e1b", view.Commit);
+        Assert.Contains("Version: 0.8.0; commit: 91d1e1b.", view.SummaryText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReportHistoryReader_NoDrForgeConfiguredShowsSafeUnavailableState()
+    {
+        using var temp = new TempDir();
+
+        var view = new DrForgeReportHistoryReader().Read(temp.Path, isDrForgeConfigured: false);
+
+        Assert.False(view.IsDrForgeConfigured);
+        Assert.Empty(view.Items);
+        Assert.Contains("No Dr. Forge CLI is configured yet", view.SummaryText, StringComparison.Ordinal);
+        Assert.Contains("Reports stay local", view.SummaryText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReportHistoryReader_ConfiguredButNoReportsShowsEmptyState()
+    {
+        using var temp = new TempDir();
+
+        var view = new DrForgeReportHistoryReader().Read(temp.Path, isDrForgeConfigured: true);
+
+        Assert.True(view.IsDrForgeConfigured);
+        Assert.True(view.FolderReadable);
+        Assert.Empty(view.Items);
+        Assert.Contains("No reports found yet", view.SummaryText, StringComparison.Ordinal);
+        Assert.DoesNotContain("error", view.SummaryText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ReportHistoryReader_ConfiguredReportsShowsRecentHistory()
+    {
+        using var temp = new TempDir();
+        var olderReport = Path.Combine(temp.Path, "drforge-intake-report-20260704-100000.json");
+        var newerReport = Path.Combine(temp.Path, "drforge-intake-report-20260704-110000.json");
+        var archive = Path.Combine(temp.Path, "drforge-intake-archive-20260704-120000");
+        var ignoredSnapshot = Path.Combine(temp.Path, "drforge-sensor-core-snapshot-20260704-120000.json");
+        var timestamps = new Dictionary<string, DateTimeOffset>(StringComparer.OrdinalIgnoreCase)
+        {
+            [olderReport] = new DateTimeOffset(2026, 7, 4, 10, 0, 0, TimeSpan.Zero),
+            [newerReport] = new DateTimeOffset(2026, 7, 4, 11, 0, 0, TimeSpan.Zero),
+            [archive] = new DateTimeOffset(2026, 7, 4, 12, 0, 0, TimeSpan.Zero),
+            [ignoredSnapshot] = new DateTimeOffset(2026, 7, 4, 13, 0, 0, TimeSpan.Zero)
+        };
+        var reader = new DrForgeReportHistoryReader(
+            directoryExists: _ => true,
+            enumerateEntries: _ => timestamps.Keys,
+            getLastWriteTimeUtc: path => timestamps[path]);
+
+        var view = reader.Read(temp.Path, isDrForgeConfigured: true, maxItems: 5);
+
+        Assert.Equal(3, view.Items.Count);
+        Assert.Equal("Archive", view.Items[0].Kind);
+        Assert.Equal("Report", view.Items[1].Kind);
+        Assert.DoesNotContain(view.Items, item => item.Name.Contains("snapshot", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("Recent Dr. Forge reports/history:", view.SummaryText, StringComparison.Ordinal);
+        Assert.Contains("drforge-intake-archive-20260704-120000", view.SummaryText, StringComparison.Ordinal);
+        Assert.Contains("Reports stay local", view.SummaryText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReportHistoryReader_InaccessibleFolderFailsGracefully()
+    {
+        using var temp = new TempDir();
+        var reader = new DrForgeReportHistoryReader(
+            directoryExists: _ => true,
+            enumerateEntries: _ => throw new UnauthorizedAccessException("blocked"),
+            getLastWriteTimeUtc: _ => DateTimeOffset.UtcNow);
+
+        var view = reader.Read(temp.Path, isDrForgeConfigured: true);
+
+        Assert.True(view.IsDrForgeConfigured);
+        Assert.False(view.FolderReadable);
+        Assert.Empty(view.Items);
+        Assert.Contains("could not be read", view.SummaryText, StringComparison.Ordinal);
+        Assert.Contains("Reports stay local", view.SummaryText, StringComparison.Ordinal);
     }
 
     [Fact]

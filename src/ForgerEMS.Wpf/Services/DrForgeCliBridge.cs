@@ -552,7 +552,84 @@ public sealed record DrForgeCliOperationResult(
     string? OutputPath,
     DrForgeCliProcessResult? ProcessResult)
 {
+    public DrForgeCliVersionInfo? VersionInfo { get; init; }
+
     public DrForgeDriverStatusView? DriverStatus { get; init; }
+}
+
+public sealed record DrForgeCliVersionInfo(
+    string ProductLine,
+    string? Version,
+    string? Commit,
+    string SummaryText);
+
+public sealed class DrForgeCliVersionReader
+{
+    public DrForgeCliVersionInfo ReadText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return new DrForgeCliVersionInfo(
+                "Dr. Forge CLI",
+                null,
+                null,
+                "Version: unavailable from CLI output; commit: unavailable.");
+        }
+
+        var lines = text.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None)
+            .Select(line => line.Trim())
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .ToArray();
+        var productLine = lines.FirstOrDefault() ?? "Dr. Forge CLI";
+        string? version = null;
+        string? commit = null;
+
+        foreach (var line in lines)
+        {
+            version ??= ReadKeyValue(line, "Version");
+            commit ??= ReadKeyValue(line, "Commit");
+            version ??= TryReadVersionToken(line);
+        }
+
+        var summary = "Version: " + (version ?? "unavailable") + "; commit: " + (commit ?? "unavailable") + ".";
+        return new DrForgeCliVersionInfo(productLine, version, commit, summary);
+    }
+
+    private static string? ReadKeyValue(string line, string key)
+    {
+        if (!line.StartsWith(key, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var separator = line.IndexOf(':');
+        if (separator < 0)
+        {
+            separator = line.IndexOf('=');
+        }
+
+        if (separator < 0 || separator + 1 >= line.Length)
+        {
+            return null;
+        }
+
+        var value = line[(separator + 1)..].Trim();
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    private static string? TryReadVersionToken(string line)
+    {
+        foreach (var token in line.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var trimmed = token.Trim().TrimStart('v', 'V').TrimEnd(',', ';');
+            if (trimmed.Length > 0 && char.IsDigit(trimmed[0]) && trimmed.Contains('.', StringComparison.Ordinal))
+            {
+                return trimmed;
+            }
+        }
+
+        return null;
+    }
 }
 
 public sealed record DrForgeDriverStatusView(
@@ -568,6 +645,214 @@ public sealed record DrForgeDriverStatusView(
     bool? NoDriverActionTaken,
     int DriverRequiredUnavailableCount,
     string SummaryText);
+
+public static class DrForgeDriverStatusDisplayBuilder
+{
+    public static string BuildSafeSummary(DrForgeDriverStatusView? status)
+    {
+        var sb = new StringBuilder();
+
+        if (status is null)
+        {
+            sb.AppendLine("Dr. Forge is not configured. Select a packaged drforge.exe to check safe user-mode readiness.");
+            sb.AppendLine("No production sensor driver is shipped or loaded.");
+            sb.AppendLine("No driver install, start, load, or elevation action was taken.");
+            sb.AppendLine("Driver-required readings are unavailable until a future signed-driver phase.");
+            sb.Append("Reports stay local unless you explicitly export or include them in a support bundle.");
+            return sb.ToString();
+        }
+
+        if (!status.SupportedSchema)
+        {
+            sb.AppendLine(status.SummaryText);
+            sb.AppendLine("ForgerEMS treats missing or unsupported driver-status output as safe user-mode report mode, not as a driver error.");
+            sb.AppendLine("No production sensor driver is shipped or loaded.");
+            sb.AppendLine("No driver install, start, load, or elevation action was taken.");
+            sb.AppendLine("Driver-required readings are unavailable until a future signed-driver phase.");
+            sb.Append("Reports stay local unless you explicitly export or include them in a support bundle.");
+            return sb.ToString();
+        }
+
+        sb.AppendLine($"Driver status schema: {status.SchemaVersion}.");
+        sb.AppendLine(status.UserModeFallbackActive == true
+            ? "Dr. Forge is running in safe user-mode fallback."
+            : "Dr. Forge user-mode fallback status is unavailable from this CLI.");
+        sb.AppendLine("Production driver shipped: " + FormatBool(status.ProductionDriverShipped) + ".");
+        sb.AppendLine(status.ProductionDriverShipped == false
+            ? "No production sensor driver is shipped or loaded."
+            : "ForgerEMS still does not install, start, load, or activate driver support.");
+        sb.AppendLine("Driver absence normal/safe: " + FormatBool(status.AbsenceIsNormal) + ".");
+        sb.AppendLine("No driver action taken: " + FormatBool(status.NoDriverActionTaken) + ".");
+        sb.AppendLine("Driver-required readings unavailable: " + status.DriverRequiredUnavailableCount.ToString(CultureInfo.InvariantCulture) + ".");
+        sb.AppendLine("Driver-required readings are unavailable until a future signed-driver phase.");
+        sb.AppendLine("No driver install, start, load, or elevation action was taken.");
+        sb.Append("Reports stay local unless you explicitly export or include them in a support bundle.");
+        return sb.ToString();
+    }
+
+    private static string FormatBool(bool? value) => value switch
+    {
+        true => "yes",
+        false => "no",
+        null => "unavailable"
+    };
+}
+
+public sealed record DrForgeReportHistoryItem(
+    string Kind,
+    string Name,
+    string Path,
+    DateTimeOffset LastModifiedUtc);
+
+public sealed record DrForgeReportHistoryView(
+    bool IsDrForgeConfigured,
+    bool FolderReadable,
+    string StatusText,
+    IReadOnlyList<DrForgeReportHistoryItem> Items,
+    string SummaryText);
+
+public sealed class DrForgeReportHistoryReader
+{
+    private readonly Func<string, bool> _directoryExists;
+    private readonly Func<string, IEnumerable<string>> _enumerateEntries;
+    private readonly Func<string, DateTimeOffset> _getLastWriteTimeUtc;
+
+    public DrForgeReportHistoryReader(
+        Func<string, bool>? directoryExists = null,
+        Func<string, IEnumerable<string>>? enumerateEntries = null,
+        Func<string, DateTimeOffset>? getLastWriteTimeUtc = null)
+    {
+        _directoryExists = directoryExists ?? Directory.Exists;
+        _enumerateEntries = enumerateEntries ?? (path => Directory.EnumerateFileSystemEntries(path, "*", SearchOption.TopDirectoryOnly));
+        _getLastWriteTimeUtc = getLastWriteTimeUtc ?? (path => new DateTimeOffset(File.GetLastWriteTimeUtc(path), TimeSpan.Zero));
+    }
+
+    public DrForgeReportHistoryView Read(string? reportsRoot, bool isDrForgeConfigured, int maxItems = 5)
+    {
+        if (!isDrForgeConfigured)
+        {
+            const string summary =
+                "No Dr. Forge CLI is configured yet. Select a packaged drforge.exe to generate local reports. " +
+                "Reports stay local unless explicitly exported or included in a support bundle.";
+            return new DrForgeReportHistoryView(false, true, "Not configured", [], summary);
+        }
+
+        if (string.IsNullOrWhiteSpace(reportsRoot))
+        {
+            const string summary =
+                "Dr. Forge report folder is unavailable. Reports stay local unless explicitly exported or included in a support bundle.";
+            return new DrForgeReportHistoryView(true, false, "Report folder unavailable", [], summary);
+        }
+
+        string root;
+        try
+        {
+            root = Path.GetFullPath(reportsRoot);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            const string summary =
+                "Dr. Forge report folder is unavailable. Reports stay local unless explicitly exported or included in a support bundle.";
+            return new DrForgeReportHistoryView(true, false, "Report folder unavailable", [], summary);
+        }
+
+        if (!_directoryExists(root))
+        {
+            const string summary =
+                "No reports found yet. Generate a Dr. Forge report to populate local history. " +
+                "Reports stay local unless explicitly exported or included in a support bundle.";
+            return new DrForgeReportHistoryView(true, true, "No reports found yet", [], summary);
+        }
+
+        try
+        {
+            var items = _enumerateEntries(root)
+                .Select(entry => TryCreateItem(root, entry))
+                .Where(item => item is not null)
+                .Cast<DrForgeReportHistoryItem>()
+                .OrderByDescending(item => item.LastModifiedUtc)
+                .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+                .Take(Math.Max(1, maxItems))
+                .ToList();
+
+            if (items.Count == 0)
+            {
+                const string summary =
+                    "No reports found yet. Generate a Dr. Forge report to populate local history. " +
+                    "Reports stay local unless explicitly exported or included in a support bundle.";
+                return new DrForgeReportHistoryView(true, true, "No reports found yet", [], summary);
+            }
+
+            var sb = new StringBuilder();
+            sb.AppendLine("Recent Dr. Forge reports/history:");
+            foreach (var item in items)
+            {
+                sb.AppendLine("- " + item.Kind + ": " + item.Name + " (" + FormatUtc(item.LastModifiedUtc) + ")");
+            }
+
+            sb.Append("Reports stay local unless explicitly exported or included in a support bundle.");
+            return new DrForgeReportHistoryView(true, true, items.Count.ToString(CultureInfo.InvariantCulture) + " report item(s) found", items, sb.ToString());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            const string summary =
+                "Report history is unavailable because the app-managed Dr. Forge report folder could not be read. " +
+                "Reports stay local unless explicitly exported or included in a support bundle.";
+            return new DrForgeReportHistoryView(true, false, "Report folder unreadable", [], summary);
+        }
+    }
+
+    private DrForgeReportHistoryItem? TryCreateItem(string reportsRoot, string entry)
+    {
+        string fullPath;
+        try
+        {
+            fullPath = Path.GetFullPath(entry);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+
+        if (!DrForgeCliManifestReader.IsPathInside(fullPath, reportsRoot))
+        {
+            return null;
+        }
+
+        var name = Path.GetFileName(fullPath);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        var kind =
+            name.StartsWith("drforge-intake-report-", StringComparison.OrdinalIgnoreCase) &&
+            name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+                ? "Report"
+                : name.StartsWith("drforge-intake-archive-", StringComparison.OrdinalIgnoreCase)
+                    ? "Archive"
+                    : string.Empty;
+        if (string.IsNullOrWhiteSpace(kind))
+        {
+            return null;
+        }
+
+        DateTimeOffset lastWrite;
+        try
+        {
+            lastWrite = _getLastWriteTimeUtc(fullPath).ToUniversalTime();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            return null;
+        }
+
+        return new DrForgeReportHistoryItem(kind, name, fullPath, lastWrite);
+    }
+
+    private static string FormatUtc(DateTimeOffset value) =>
+        value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture);
+}
 
 public sealed class DrForgeDriverStatusReader
 {
@@ -786,6 +1071,7 @@ public sealed class DrForgeCliRunner
             return Failure(DrForgeCliBridgeState.Failed, "Dr. Forge --version failed.", null, version);
         }
 
+        var versionInfo = new DrForgeCliVersionReader().ReadText(version.StandardOutput);
         var help = await RunAsync(executablePath, BuildSensorCoreHelpArguments(), ReadinessTimeout, cancellationToken)
             .ConfigureAwait(false);
         if (!help.Succeeded)
@@ -809,6 +1095,7 @@ public sealed class DrForgeCliRunner
             null,
             help)
         {
+            VersionInfo = versionInfo,
             DriverStatus = driverStatus
         };
     }

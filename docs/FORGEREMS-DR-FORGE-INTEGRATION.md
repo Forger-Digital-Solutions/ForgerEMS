@@ -65,6 +65,8 @@ ForgerEMS accepts Dr. Forge driver status schema `forger-sensor-driver-preflight
 
 This state is normal, safe, and not an error. Unknown fields are ignored. Unsupported future schemas are summarized as unsupported instead of inventing driver state. ForgerEMS does not install, start, load, register, download, or activate any driver based on this output.
 
+The Toolkit Manager Dr. Forge card displays this as explicit local status: package/configured state, CLI version/commit when available, user-mode fallback, no production driver shipped/loaded, no driver action taken, and driver-required readings unavailable until a future signed-driver phase.
+
 ## Report and archive commands
 
 The first bridge uses the sensor-core CLI contract:
@@ -76,6 +78,8 @@ drforge.exe sensor-core archive <snapshot.json> --out <archive-folder>
 ```
 
 ForgerEMS writes the snapshot stdout to the local Runtime reports folder, then asks Dr. Forge to transform that snapshot into a report or archive. The bridge does not pass service/deep-provider flags in this phase.
+
+The card lists recent app-managed Dr. Forge reports and archives from the Runtime reports folder only. It does not crawl Documents, PATH, arbitrary user folders, or Dr. Forge install folders. Missing or unreadable report folders show friendly empty/unavailable states.
 
 ## Report JSON contract
 
@@ -110,10 +114,12 @@ Expected actions:
 
 - Select Dr. Forge CLI path
 - Check Dr. Forge package
+- Refresh status
 - Generate report
 - Generate archive
 - Open report folder
 - Copy summary
+- Copy status summary
 
 ## Persistence
 

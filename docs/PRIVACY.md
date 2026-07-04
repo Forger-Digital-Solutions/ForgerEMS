@@ -58,7 +58,7 @@ Default support reports should be redacted where supported, but you should still
 
 ForgerEMS can bridge to a packaged **Dr. Forge CLI** when you select `drforge.exe` or place the package in an app-local Dr. Forge tools folder. The bridge stores only the selected CLI path, last readiness state, and last local report/archive paths in Runtime config.
 
-Generated Dr. Forge reports and archives stay local under `%LOCALAPPDATA%\ForgerEMS\Runtime\reports\drforge`. They may include local device/context information, sensor availability, findings, notes, and unavailable telemetry reasons. Unavailable readings are displayed as **Unavailable**, not zero, and ForgerEMS does not claim full HWiNFO / CPU-Z / LibreHardwareMonitor parity.
+Generated Dr. Forge reports and archives stay local under `%LOCALAPPDATA%\ForgerEMS\Runtime\reports\drforge`. The in-app recent report history reads that app-managed folder only; it does not crawl Documents or arbitrary user folders. Reports may include local device/context information, sensor availability, findings, notes, and unavailable telemetry reasons. Unavailable readings are displayed as **Unavailable**, not zero, and ForgerEMS does not claim full HWiNFO / CPU-Z / LibreHardwareMonitor parity.
 
 Dr. Forge report/archive files are included in support bundles only when you generated them from the app or explicitly choose to include them. Review the report/archive before sharing.
 

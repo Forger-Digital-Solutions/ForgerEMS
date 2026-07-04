@@ -276,9 +276,11 @@ There is **no automatic upload** to Forger Digital Solutions when you run local 
 
 ## What is Dr. Forge Intake?
 
-Dr. Forge Intake is ForgerEMS' local bridge to a packaged **Dr. Forge CLI**. Select `drforge.exe` in Toolkit Manager or place the package under an app-local Dr. Forge tools folder, then use **Check Package**, **Generate Report**, or **Generate Archive**.
+Dr. Forge Intake is ForgerEMS' local bridge to a packaged **Dr. Forge CLI**. Select `drforge.exe` in Toolkit Manager or place the package under an app-local Dr. Forge tools folder, then use **Check Package**, **Refresh Status**, **Generate Report**, or **Generate Archive**.
 
-ForgerEMS consumes the packaged CLI/Core contract through a process boundary. It reads `drforge-cli-release-manifest.json` when available, verifies `SHA256SUMS.txt` when present, runs readiness checks with `drforge --version` and `drforge sensor-core --help`, and writes generated reports under the local Runtime reports folder.
+ForgerEMS consumes the packaged CLI/Core contract through a process boundary. It reads `drforge-cli-release-manifest.json` when available, verifies `SHA256SUMS.txt` when present, runs readiness checks with `drforge --version`, `drforge sensor-core --help`, and `drforge sensors driver-status --json`, then writes generated reports under the local Runtime reports folder.
+
+The card can show the package/configured state, CLI version/commit when available, safe driver-status summary, last successful scan/report time, and recent app-managed Dr. Forge report/archive history. **Open Report Folder** opens the local app-managed reports folder; **Copy Status Summary** copies the local status text.
 
 If the package is missing or not configured, ForgerEMS shows **Not configured** / setup-needed copy instead of crashing. ForgerEMS does not load Dr. Forge WPF/provider internals.
 
@@ -286,9 +288,9 @@ If the package is missing or not configured, ForgerEMS shows **Not configured** 
 
 ## Does Dr. Forge replace full hardware-monitor tools?
 
-No. Dr. Forge runs as a local user-mode hardware intake/report tool. Unavailable readings are shown as **Unavailable**, not zero. Deep telemetry such as fan RPM, voltage rails, EC/SuperIO/MSR readings remains unavailable until future safe providers or signed privileged components exist.
+No. Dr. Forge runs as a local user-mode hardware intake/report tool. ForgerEMS treats the current no-driver/user-mode fallback driver-status as normal and safe: no production sensor driver is shipped or loaded, no driver install/start/load/elevation action is taken, and driver-required readings stay **Unavailable** until a future signed-driver phase. Unavailable readings are shown as **Unavailable**, not zero.
 
-ForgerEMS does **not** claim full HWiNFO / CPU-Z / LibreHardwareMonitor parity. Reports may include local device/context information, so review them before sharing. Dr. Forge report/archive files are included in support bundles only when you generated them from the app or explicitly choose to include them.
+ForgerEMS does **not** claim full HWiNFO / CPU-Z / LibreHardwareMonitor parity. Reports may include local device/context information, so review them before sharing. Dr. Forge report/archive files are included in support bundles only when you generated them from the app or explicitly choose to include them. Report history is read from the app-managed Runtime reports folder only; ForgerEMS does not crawl arbitrary folders or upload reports automatically.
 
 ---
 

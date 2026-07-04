@@ -111,12 +111,21 @@ public sealed class DrForgeIntegrationSafetyTests
 
         // The Dr. Forge card must keep the user-mode-today / driver-future framing.
         Assert.Contains("local user-mode hardware intake/report tool", xaml, StringComparison.Ordinal);
-        Assert.Contains("requires future safe providers or signed privileged components", xaml, StringComparison.Ordinal);
+        Assert.Contains("Reports stay local unless you explicitly export or include them in a support bundle.", xaml, StringComparison.Ordinal);
+        Assert.Contains("No production sensor driver is shipped or loaded.", xaml, StringComparison.Ordinal);
+        Assert.Contains("No driver install, start, load, or elevation action is performed.", xaml, StringComparison.Ordinal);
+        Assert.Contains("Driver-required readings are unavailable until a future signed-driver phase.", xaml, StringComparison.Ordinal);
         Assert.Contains("does not claim full hardware-monitor parity", xaml, StringComparison.OrdinalIgnoreCase);
 
         // And must never present the future driver as shipped or active.
         Assert.DoesNotContain("driver installed", xaml, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("kernel driver active", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Install Driver", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Run as Admin", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("fan control", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("voltage control", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("overclock", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("firmware update", xaml, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

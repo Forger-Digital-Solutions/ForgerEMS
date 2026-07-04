@@ -99,6 +99,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly DrForgeCliManifestReader _drForgeCliManifestReader = new();
     private readonly DrForgeCliRunner _drForgeCliRunner = new();
     private readonly DrForgeIntakeResultReader _drForgeIntakeResultReader = new();
+    private readonly DrForgeReportHistoryReader _drForgeReportHistoryReader = new();
     private readonly GitHubReleaseUpdateCheckService _updateCheckService;
     private AppUpdateSettings _appUpdateSettings = new();
     private UsbBuilderProfileSettings _usbBuilderProfileSettings = new();
@@ -503,6 +504,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         "Select the packaged drforge.exe or place the package under the app-local tools folder, then check the package.";
     private string _drForgeManifestStatusText = "Manifest: not checked.";
     private string _drForgeVersionStatusText = "CLI: not checked.";
+    private string _drForgeVersionDetailText = "Version: unavailable until Check Package succeeds; commit: unavailable.";
+    private string _drForgeStatusSummaryText = DrForgeDriverStatusDisplayBuilder.BuildSafeSummary(null);
+    private string _drForgeLastSuccessfulScanText = "Last successful scan/report: not generated.";
+    private string _drForgeReportHistoryText =
+        "No Dr. Forge CLI is configured yet. Select a packaged drforge.exe to generate local reports. Reports stay local unless explicitly exported or included in a support bundle.";
     private string _drForgeReportSummaryText =
         "No Dr. Forge intake report has been generated in ForgerEMS yet.";
     private string _drForgeLastReportPath = string.Empty;
@@ -755,10 +761,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         OpenLogsFolderCommand = new RelayCommand(() => OpenFolder(_appRuntimeService.LogsRoot, "logs folder", createIfMissing: true));
         SelectDrForgeCliPathCommand = new RelayCommand(SelectDrForgeCliPath, CanRunDrForgeCliAction);
         CheckDrForgePackageCommand = new AsyncRelayCommand(CheckDrForgePackageAsync, CanRunDrForgeCliAction);
+        RefreshDrForgeStatusCommand = new AsyncRelayCommand(CheckDrForgePackageAsync, CanRunDrForgeCliAction);
         GenerateDrForgeReportCommand = new AsyncRelayCommand(GenerateDrForgeReportAsync, CanRunDrForgeCliAction);
         GenerateDrForgeArchiveCommand = new AsyncRelayCommand(GenerateDrForgeArchiveAsync, CanRunDrForgeCliAction);
         OpenDrForgeReportFolderCommand = new RelayCommand(OpenDrForgeReportFolder);
         CopyDrForgeSummaryCommand = new RelayCommand(CopyDrForgeSummary, () => !string.IsNullOrWhiteSpace(_drForgeReportSummaryText));
+        CopyDrForgeStatusSummaryCommand = new RelayCommand(CopyDrForgeStatusSummary, () => !string.IsNullOrWhiteSpace(_drForgeStatusSummaryText));
         CopySupportEmailCommand = new RelayCommand(CopySupportEmail);
         OpenSupportEmailCommand = new RelayCommand(OpenSupportEmail);
         CopyBetaReportTemplateCommand = new RelayCommand(CopyBetaReportTemplate);
@@ -1229,6 +1237,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public AsyncRelayCommand CheckDrForgePackageCommand { get; }
 
+    public AsyncRelayCommand RefreshDrForgeStatusCommand { get; }
+
     public AsyncRelayCommand GenerateDrForgeReportCommand { get; }
 
     public AsyncRelayCommand GenerateDrForgeArchiveCommand { get; }
@@ -1236,6 +1246,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public RelayCommand OpenDrForgeReportFolderCommand { get; }
 
     public RelayCommand CopyDrForgeSummaryCommand { get; }
+
+    public RelayCommand CopyDrForgeStatusSummaryCommand { get; }
 
     /// <summary>Assigned by MainWindow to open the Kyra Advanced Settings dialog.</summary>
     public Action? OpenKyraAdvancedSettingsAction { get; set; }
@@ -1414,6 +1426,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             {
                 _drForgeCliSettings.SelectedExecutablePath = value.Trim();
                 SaveDrForgeCliSettings();
+                RefreshDrForgeReportHistory();
             }
         }
     }
@@ -1440,6 +1453,36 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         get => _drForgeVersionStatusText;
         private set => SetProperty(ref _drForgeVersionStatusText, value);
+    }
+
+    public string DrForgeVersionDetailText
+    {
+        get => _drForgeVersionDetailText;
+        private set => SetProperty(ref _drForgeVersionDetailText, value);
+    }
+
+    public string DrForgeStatusSummaryText
+    {
+        get => _drForgeStatusSummaryText;
+        private set
+        {
+            if (SetProperty(ref _drForgeStatusSummaryText, value))
+            {
+                CopyDrForgeStatusSummaryCommand?.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public string DrForgeLastSuccessfulScanText
+    {
+        get => _drForgeLastSuccessfulScanText;
+        private set => SetProperty(ref _drForgeLastSuccessfulScanText, value);
+    }
+
+    public string DrForgeReportHistoryText
+    {
+        get => _drForgeReportHistoryText;
+        private set => SetProperty(ref _drForgeReportHistoryText, value);
     }
 
     public string DrForgeReportSummaryText
@@ -15129,6 +15172,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             DrForgeCliPathInput = dialog.FileName;
             SetDrForgeState(DrForgeCliBridgeState.PackageFound);
             DrForgePackageStatusText = "Dr. Forge CLI path selected. Use Check Package before generating intake output.";
+            DrForgeVersionDetailText = "Version: pending package check; commit: pending package check.";
+            SetDrForgeSafeStatusMessage("Dr. Forge CLI path selected. Use Check Package to read safe user-mode readiness and driver-status.");
+            RefreshDrForgeReportHistory(isDrForgeConfigured: true);
         }
         catch (Exception exception)
         {
@@ -15188,6 +15234,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             IncludeDrForgeArtifactsInSupportBundle = true;
             _drForgeCliSettings.LastReportPath = reportPath;
             SetDrForgeState(DrForgeCliBridgeState.ReportReady);
+            RefreshDrForgeReportHistory(isDrForgeConfigured: true);
             SaveDrForgeCliSettings();
             AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Dr. Forge intake report generated.", LogSeverity.Success, channel: LiveLogChannel.Diagnostics));
         }
@@ -15246,6 +15293,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             IncludeDrForgeArtifactsInSupportBundle = true;
             _drForgeCliSettings.LastArchivePath = archivePath;
             SetDrForgeState(DrForgeCliBridgeState.ArchiveReady);
+            RefreshDrForgeReportHistory(isDrForgeConfigured: true);
             SaveDrForgeCliSettings();
             AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Dr. Forge intake archive generated.", LogSeverity.Success, channel: LiveLogChannel.Diagnostics));
         }
@@ -15270,6 +15318,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             DrForgePackageStatusText = located.Message;
             DrForgeManifestStatusText = "Manifest: unavailable until a package is configured.";
             DrForgeVersionStatusText = "CLI: unavailable.";
+            DrForgeVersionDetailText = "Version: unavailable; commit: unavailable.";
+            DrForgeStatusSummaryText = DrForgeDriverStatusDisplayBuilder.BuildSafeSummary(null);
+            RefreshDrForgeReportHistory(isDrForgeConfigured: false);
             SaveDrForgeCliSettings();
             return null;
         }
@@ -15284,6 +15335,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             SetDrForgeState(DrForgeCliBridgeState.Failed);
             DrForgeVersionStatusText = "CLI: skipped because the Dr. Forge manifest schema was not accepted.";
+            DrForgeVersionDetailText = BuildDrForgeVersionDetail(null, inspection.Manifest);
+            SetDrForgeSafeStatusMessage("Package verification stopped before driver-status because the Dr. Forge manifest schema was not accepted.");
+            RefreshDrForgeReportHistory(isDrForgeConfigured: true);
             AppendLog(new LogLine(DateTimeOffset.Now, "[WARN] Dr. Forge manifest schema was not accepted.", LogSeverity.Warning, channel: LiveLogChannel.Diagnostics));
             SaveDrForgeCliSettings();
             return null;
@@ -15293,6 +15347,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             SetDrForgeState(DrForgeCliBridgeState.Failed);
             DrForgeVersionStatusText = "CLI: skipped because package checksum verification failed.";
+            DrForgeVersionDetailText = BuildDrForgeVersionDetail(null, inspection.Manifest);
+            SetDrForgeSafeStatusMessage("Package verification stopped before driver-status because checksum verification failed.");
+            RefreshDrForgeReportHistory(isDrForgeConfigured: true);
             AppendLog(new LogLine(DateTimeOffset.Now, "[WARN] Dr. Forge package checksum verification failed.", LogSeverity.Warning, channel: LiveLogChannel.Diagnostics));
             SaveDrForgeCliSettings();
             return null;
@@ -15307,6 +15364,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         SetDrForgeState(DrForgeCliBridgeState.Ready);
         DrForgeVersionStatusText = "CLI: " + readiness.Message;
+        DrForgeVersionDetailText = BuildDrForgeVersionDetail(readiness.VersionInfo, inspection.Manifest);
+        DrForgeStatusSummaryText = DrForgeDriverStatusDisplayBuilder.BuildSafeSummary(readiness.DriverStatus);
+        RefreshDrForgeReportHistory(isDrForgeConfigured: true);
         _drForgeCliSettings.SelectedExecutablePath = located.ExecutablePath;
         SaveDrForgeCliSettings();
         AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Dr. Forge CLI package is ready.", LogSeverity.Success, channel: LiveLogChannel.Diagnostics));
@@ -15317,6 +15377,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         SetDrForgeState(result.State == DrForgeCliBridgeState.Unavailable ? DrForgeCliBridgeState.Unavailable : DrForgeCliBridgeState.Failed);
         DrForgeVersionStatusText = "CLI: " + result.Message;
+        SetDrForgeSafeStatusMessage("Dr. Forge action did not complete. The bridge remains in safe user-mode report mode.");
+        RefreshDrForgeReportHistory();
         AppendLog(new LogLine(DateTimeOffset.Now, "[WARN] " + result.Message, LogSeverity.Warning, channel: LiveLogChannel.Diagnostics));
         SaveDrForgeCliSettings();
     }
@@ -15324,6 +15386,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private void OpenDrForgeReportFolder()
     {
         OpenFolder(GetDrForgeReportsDirectory(), "Dr. Forge reports folder", createIfMissing: true);
+        RefreshDrForgeReportHistory();
     }
 
     private void CopyDrForgeSummary()
@@ -15339,7 +15402,56 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    private void CopyDrForgeStatusSummary()
+    {
+        try
+        {
+            Clipboard.SetDataObject(DrForgeStatusSummaryText, copy: true);
+            AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Copied Dr. Forge status summary to clipboard.", LogSeverity.Success, channel: LiveLogChannel.Diagnostics));
+        }
+        catch (Exception exception)
+        {
+            AppendLog(new LogLine(DateTimeOffset.Now, "[WARN] Could not copy Dr. Forge status summary: " + exception.Message, LogSeverity.Warning, channel: LiveLogChannel.Diagnostics));
+        }
+    }
+
     private string GetDrForgeReportsDirectory() => Path.Combine(GetRuntimeReportsDirectory(), "drforge");
+
+    private void SetDrForgeSafeStatusMessage(string lead)
+    {
+        DrForgeStatusSummaryText =
+            lead + Environment.NewLine +
+            "No production sensor driver is shipped or loaded." + Environment.NewLine +
+            "No driver install, start, load, or elevation action was taken." + Environment.NewLine +
+            "Driver-required readings are unavailable until a future signed-driver phase." + Environment.NewLine +
+            "Reports stay local unless explicitly exported or included in a support bundle.";
+    }
+
+    private void RefreshDrForgeReportHistory(bool? isDrForgeConfigured = null)
+    {
+        var configured = isDrForgeConfigured ?? IsDrForgeConfiguredForHistory();
+        var history = _drForgeReportHistoryReader.Read(GetDrForgeReportsDirectory(), configured);
+        DrForgeReportHistoryText = history.SummaryText;
+        DrForgeLastSuccessfulScanText = history.Items.Count == 0
+            ? "Last successful scan/report: not generated."
+            : "Last successful scan/report: " + FormatDrForgeUtc(history.Items[0].LastModifiedUtc) + ".";
+    }
+
+    private bool IsDrForgeConfiguredForHistory() =>
+        !string.IsNullOrWhiteSpace(_drForgeCliPathInput) && File.Exists(_drForgeCliPathInput);
+
+    private static string BuildDrForgeVersionDetail(DrForgeCliVersionInfo? versionInfo, DrForgeCliManifestInfo manifest)
+    {
+        var version = versionInfo?.Version ?? manifest.Version ?? "unavailable";
+        var commit = versionInfo?.Commit ?? manifest.Commit ?? "unavailable";
+        var product = !string.IsNullOrWhiteSpace(versionInfo?.ProductLine)
+            ? versionInfo.ProductLine
+            : manifest.Product ?? "Dr. Forge CLI";
+        return product + "; version: " + version + "; commit: " + commit + ".";
+    }
+
+    private static string FormatDrForgeUtc(DateTimeOffset value) =>
+        value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture);
 
     private void LoadDrForgeCliSettings()
     {
@@ -15358,6 +15470,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             _drForgePackageStatusText = File.Exists(_drForgeCliPathInput)
                 ? "Saved Dr. Forge CLI path found. Use Check Package to verify readiness."
                 : "Saved Dr. Forge CLI path is missing. Select drforge.exe again.";
+        }
+
+        if (!string.IsNullOrWhiteSpace(_drForgeCliPathInput) && File.Exists(_drForgeCliPathInput))
+        {
+            SetDrForgeSafeStatusMessage("Saved Dr. Forge CLI path found. Use Check Package to refresh safe user-mode readiness and driver-status.");
+            RefreshDrForgeReportHistory(isDrForgeConfigured: true);
+        }
+        else
+        {
+            DrForgeStatusSummaryText = DrForgeDriverStatusDisplayBuilder.BuildSafeSummary(null);
+            RefreshDrForgeReportHistory(isDrForgeConfigured: false);
         }
     }
 
@@ -16259,9 +16382,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         SelectDrForgeCliPathCommand?.RaiseCanExecuteChanged();
         CheckDrForgePackageCommand?.RaiseCanExecuteChanged();
+        RefreshDrForgeStatusCommand?.RaiseCanExecuteChanged();
         GenerateDrForgeReportCommand?.RaiseCanExecuteChanged();
         GenerateDrForgeArchiveCommand?.RaiseCanExecuteChanged();
         CopyDrForgeSummaryCommand?.RaiseCanExecuteChanged();
+        CopyDrForgeStatusSummaryCommand?.RaiseCanExecuteChanged();
     }
 
     private void AppendLog(LogLine line)
