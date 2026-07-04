@@ -48,9 +48,22 @@ ForgerEMS runs:
 ```powershell
 drforge.exe --version
 drforge.exe sensor-core --help
+drforge.exe sensors driver-status --json
 ```
 
-Readiness commands are timeout-bounded. Non-zero exit codes, stderr failures, launch failures, and timeouts return structured failure states for the UI.
+Readiness commands are timeout-bounded. Non-zero exit codes, stderr failures, launch failures, and timeouts from `--version` or `sensor-core --help` return structured failure states for the UI. `sensors driver-status --json` is an optional compatibility probe: if an older CLI does not support it, ForgerEMS keeps the package usable through the user-mode report bridge.
+
+## Driver status JSON contract
+
+ForgerEMS accepts Dr. Forge driver status schema `forger-sensor-driver-preflight/1.1` conservatively. The current safe state is:
+
+- production driver shipped: `false`
+- no installed/running driver
+- user-mode fallback active: `true`
+- no driver action taken
+- driver-required readings remain unavailable
+
+This state is normal, safe, and not an error. Unknown fields are ignored. Unsupported future schemas are summarized as unsupported instead of inventing driver state. ForgerEMS does not install, start, load, register, download, or activate any driver based on this output.
 
 ## Report and archive commands
 

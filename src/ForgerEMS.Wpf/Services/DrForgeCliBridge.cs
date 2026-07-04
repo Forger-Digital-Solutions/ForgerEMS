@@ -550,7 +550,203 @@ public sealed record DrForgeCliOperationResult(
     DrForgeCliBridgeState State,
     string Message,
     string? OutputPath,
-    DrForgeCliProcessResult? ProcessResult);
+    DrForgeCliProcessResult? ProcessResult)
+{
+    public DrForgeDriverStatusView? DriverStatus { get; init; }
+}
+
+public sealed record DrForgeDriverStatusView(
+    string SchemaVersion,
+    string Readiness,
+    bool SupportedSchema,
+    bool? ProductionDriverShipped,
+    bool? DriverSupportCompiledIn,
+    bool? DriverInstalled,
+    bool? DriverRunning,
+    bool? UserModeFallbackActive,
+    bool? AbsenceIsNormal,
+    bool? NoDriverActionTaken,
+    int DriverRequiredUnavailableCount,
+    string SummaryText);
+
+public sealed class DrForgeDriverStatusReader
+{
+    private const string CurrentSchema = "forger-sensor-driver-preflight/1.1";
+
+    public DrForgeDriverStatusView ReadJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return Unavailable("Driver status: not reported by this Dr. Forge CLI.");
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            var schema = ReadString(root, "schemaVersion") ?? "Unavailable";
+            var readiness = ReadString(root, "readiness") ?? "Unavailable";
+            var supported = string.Equals(schema, CurrentSchema, StringComparison.Ordinal);
+            if (!supported)
+            {
+                return new DrForgeDriverStatusView(
+                    schema,
+                    readiness,
+                    false,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    0,
+                    $"Driver status: unsupported schema {schema}; detailed fields ignored.");
+            }
+
+            var productionDriverShipped = ReadBool(root, "productionDriverShipped");
+            var driverSupportCompiledIn = ReadBool(root, "driverSupportCompiledIn");
+            var userModeFallbackActive = ReadBool(root, "userModeFallbackActive");
+            var absenceIsNormal = ReadBool(root, "absenceIsNormal");
+            var installed = ReadDriverCheck(root, "driver installed");
+            var running = ReadDriverCheck(root, "driver running");
+            var noAction = ReadNoDriverActionTaken(root);
+            var unavailableCount = ReadWouldUnlockCount(root);
+
+            var summary = string.Join("; ",
+                "Driver status: " + schema,
+                "production driver shipped: " + FormatBool(productionDriverShipped),
+                "driver installed: " + FormatBool(installed),
+                "driver running: " + FormatBool(running),
+                "user-mode fallback active: " + FormatBool(userModeFallbackActive),
+                "no driver action taken: " + FormatBool(noAction),
+                "driver-required readings unavailable: " + unavailableCount.ToString(CultureInfo.InvariantCulture));
+
+            return new DrForgeDriverStatusView(
+                schema,
+                readiness,
+                true,
+                productionDriverShipped,
+                driverSupportCompiledIn,
+                installed,
+                running,
+                userModeFallbackActive,
+                absenceIsNormal,
+                noAction,
+                unavailableCount,
+                summary);
+        }
+        catch (JsonException)
+        {
+            return Unavailable("Driver status: JSON could not be parsed; treating driver status as unavailable.");
+        }
+    }
+
+    private static DrForgeDriverStatusView Unavailable(string summary) =>
+        new("Unavailable", "Unavailable", false, null, null, null, null, null, null, null, 0, summary);
+
+    private static bool? ReadDriverCheck(JsonElement root, string checkName)
+    {
+        if (!TryGetProperty(root, "checks", out var checks) || checks.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        foreach (var check in checks.EnumerateArray())
+        {
+            if (!string.Equals(ReadString(check, "name"), checkName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var outcome = ReadString(check, "outcome");
+            var detail = ReadString(check, "detail") ?? string.Empty;
+            if (string.Equals(outcome, "pass", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (detail.Contains("No driver is installed", StringComparison.OrdinalIgnoreCase) ||
+                detail.Contains("No driver is running", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(outcome, "not-applicable", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return null;
+        }
+
+        return null;
+    }
+
+    private static bool? ReadNoDriverActionTaken(JsonElement root)
+    {
+        var safetyNote = ReadString(root, "safetyNote") ?? string.Empty;
+        if (safetyNote.Contains("Nothing was installed", StringComparison.OrdinalIgnoreCase) &&
+            safetyNote.Contains("no elevation was requested", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (safetyNote.Contains("installed", StringComparison.OrdinalIgnoreCase) ||
+            safetyNote.Contains("started", StringComparison.OrdinalIgnoreCase) ||
+            safetyNote.Contains("loaded", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return null;
+    }
+
+    private static int ReadWouldUnlockCount(JsonElement root)
+    {
+        if (!TryGetProperty(root, "wouldUnlock", out var wouldUnlock) || wouldUnlock.ValueKind != JsonValueKind.Array)
+        {
+            return 0;
+        }
+
+        return wouldUnlock.GetArrayLength();
+    }
+
+    private static string FormatBool(bool? value) => value switch
+    {
+        true => "yes",
+        false => "no",
+        null => "unavailable"
+    };
+
+    private static bool? ReadBool(JsonElement element, string propertyName)
+    {
+        if (!TryGetProperty(element, propertyName, out var value))
+        {
+            return null;
+        }
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => null
+        };
+    }
+
+    private static string? ReadString(JsonElement element, string propertyName) =>
+        TryGetProperty(element, propertyName, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+    private static bool TryGetProperty(JsonElement element, string propertyName, out JsonElement value)
+    {
+        if (element.ValueKind == JsonValueKind.Object &&
+            element.TryGetProperty(propertyName, out value))
+        {
+            return true;
+        }
+
+        value = default;
+        return false;
+    }
+}
 
 public sealed class DrForgeCliRunner
 {
@@ -568,6 +764,8 @@ public sealed class DrForgeCliRunner
     public static IReadOnlyList<string> BuildVersionArguments() => ["--version"];
 
     public static IReadOnlyList<string> BuildSensorCoreHelpArguments() => ["sensor-core", "--help"];
+
+    public static IReadOnlyList<string> BuildDriverStatusArguments() => ["sensors", "driver-status", "--json"];
 
     public static IReadOnlyList<string> BuildSnapshotArguments() => ["sensor-core", "snapshot", "--json"];
 
@@ -595,12 +793,24 @@ public sealed class DrForgeCliRunner
             return Failure(DrForgeCliBridgeState.Failed, "Dr. Forge sensor-core help failed.", null, help);
         }
 
+        var driverStatusResult = await RunAsync(executablePath, BuildDriverStatusArguments(), ReadinessTimeout, cancellationToken)
+            .ConfigureAwait(false);
+        var driverStatus = driverStatusResult.Succeeded
+            ? new DrForgeDriverStatusReader().ReadJson(driverStatusResult.StandardOutput)
+            : new DrForgeDriverStatusReader().ReadJson(null);
+        var statusSuffix = driverStatusResult.Succeeded
+            ? " " + driverStatus.SummaryText
+            : " Driver status: not reported by this CLI; continuing with the user-mode bridge.";
+
         return new DrForgeCliOperationResult(
             true,
             DrForgeCliBridgeState.Ready,
-            FirstNonEmptyLine(version.StandardOutput) ?? "Dr. Forge CLI is ready.",
+            (FirstNonEmptyLine(version.StandardOutput) ?? "Dr. Forge CLI is ready.") + statusSuffix,
             null,
-            help);
+            help)
+        {
+            DriverStatus = driverStatus
+        };
     }
 
     public async Task<DrForgeCliOperationResult> CaptureSnapshotAsync(

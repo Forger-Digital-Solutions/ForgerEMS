@@ -48,12 +48,13 @@ public sealed class DrForgeCliBridgeTests
     }
 
     [Fact]
-    public async Task ReadinessCommandConstruction_UsesVersionAndSensorCoreHelp()
+    public async Task ReadinessCommandConstruction_UsesVersionSensorCoreHelpAndDriverStatusProbe()
     {
         using var temp = CreatePackage("exe");
         var fake = new FakeDrForgeProcessRunner(
             Success(temp.ExecutablePath, DrForgeCliRunner.BuildVersionArguments(), "Dr. Forge 0.8.0"),
-            Success(temp.ExecutablePath, DrForgeCliRunner.BuildSensorCoreHelpArguments(), "Usage: drforge sensor-core"));
+            Success(temp.ExecutablePath, DrForgeCliRunner.BuildSensorCoreHelpArguments(), "Usage: drforge sensor-core"),
+            Success(temp.ExecutablePath, DrForgeCliRunner.BuildDriverStatusArguments(), CurrentNoDriverStatusJson));
         var runner = new DrForgeCliRunner(fake);
 
         var result = await runner.CheckReadinessAsync(temp.ExecutablePath);
@@ -61,6 +62,35 @@ public sealed class DrForgeCliBridgeTests
         Assert.True(result.Succeeded);
         Assert.Equal(new[] { "--version" }, fake.Calls[0].Arguments);
         Assert.Equal(new[] { "sensor-core", "--help" }, fake.Calls[1].Arguments);
+        Assert.Equal(new[] { "sensors", "driver-status", "--json" }, fake.Calls[2].Arguments);
+        Assert.NotNull(result.DriverStatus);
+        Assert.True(result.DriverStatus.SupportedSchema);
+        Assert.False(result.DriverStatus.ProductionDriverShipped);
+        Assert.False(result.DriverStatus.DriverInstalled);
+        Assert.False(result.DriverStatus.DriverRunning);
+        Assert.True(result.DriverStatus.UserModeFallbackActive);
+        Assert.True(result.DriverStatus.NoDriverActionTaken);
+        Assert.Contains("production driver shipped: no", result.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("user-mode fallback active: yes", result.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ReadinessDriverStatusProbe_IsNonFatalForOlderCli()
+    {
+        using var temp = CreatePackage("exe");
+        var fake = new FakeDrForgeProcessRunner(
+            Success(temp.ExecutablePath, DrForgeCliRunner.BuildVersionArguments(), "Dr. Forge 0.8.0"),
+            Success(temp.ExecutablePath, DrForgeCliRunner.BuildSensorCoreHelpArguments(), "Usage: drforge sensor-core"),
+            new DrForgeCliProcessResult(temp.ExecutablePath, DrForgeCliRunner.BuildDriverStatusArguments(), 2, false, "", "unknown command"));
+        var runner = new DrForgeCliRunner(fake);
+
+        var result = await runner.CheckReadinessAsync(temp.ExecutablePath);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(3, fake.Calls.Count);
+        Assert.NotNull(result.DriverStatus);
+        Assert.False(result.DriverStatus.SupportedSchema);
+        Assert.Contains("not reported", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -152,6 +182,46 @@ public sealed class DrForgeCliBridgeTests
     }
 
     [Fact]
+    public void DriverStatusReader_AcceptsCurrentNoDriverSchemaAsSafeUserModeState()
+    {
+        var view = new DrForgeDriverStatusReader().ReadJson(CurrentNoDriverStatusJson);
+
+        Assert.Equal("forger-sensor-driver-preflight/1.1", view.SchemaVersion);
+        Assert.True(view.SupportedSchema);
+        Assert.Equal("NotImplementedInThisBuild", view.Readiness);
+        Assert.False(view.ProductionDriverShipped);
+        Assert.False(view.DriverSupportCompiledIn);
+        Assert.False(view.DriverInstalled);
+        Assert.False(view.DriverRunning);
+        Assert.True(view.UserModeFallbackActive);
+        Assert.True(view.AbsenceIsNormal);
+        Assert.True(view.NoDriverActionTaken);
+        Assert.Equal(2, view.DriverRequiredUnavailableCount);
+        Assert.Contains("driver installed: no", view.SummaryText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("error", view.SummaryText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void DriverStatusReader_ToleratesUnknownSchemaWithoutInventingDriverState()
+    {
+        const string json = """
+        {
+          "schemaVersion": "forger-sensor-driver-preflight/9.9",
+          "readiness": "Future",
+          "productionDriverShipped": true,
+          "unknown": { "newShape": true }
+        }
+        """;
+
+        var view = new DrForgeDriverStatusReader().ReadJson(json);
+
+        Assert.False(view.SupportedSchema);
+        Assert.Null(view.ProductionDriverShipped);
+        Assert.Null(view.DriverInstalled);
+        Assert.Contains("unsupported schema", view.SummaryText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void UiCopyIsHonestAboutParityAndUnavailableReadings()
     {
         var xaml = File.ReadAllText(RepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
@@ -217,6 +287,41 @@ public sealed class DrForgeCliBridgeTests
             """);
         return temp;
     }
+
+    private const string CurrentNoDriverStatusJson = """
+        {
+          "schemaVersion": "forger-sensor-driver-preflight/1.1",
+          "readiness": "NotImplementedInThisBuild",
+          "driverSupportCompiledIn": false,
+          "devContractPresent": true,
+          "productionDriverShipped": false,
+          "userModeFallbackActive": true,
+          "absenceIsNormal": true,
+          "futureUnknownBlock": { "ignored": true },
+          "checks": [
+            {
+              "name": "driver installed",
+              "outcome": "not-applicable",
+              "detail": "No driver is installed. Dr. Forge never installs one automatically."
+            },
+            {
+              "name": "driver running",
+              "outcome": "info",
+              "detail": "No driver is running. Dr. Forge never starts one."
+            },
+            {
+              "name": "user-mode fallback active",
+              "outcome": "pass",
+              "detail": "Safe user-mode providers keep collecting every reading they can; driver-required readings stay honestly unavailable with reasons."
+            }
+          ],
+          "wouldUnlock": [
+            { "gapReadingId": "fans.rpm", "displayName": "Fan RPM (SuperIO)", "safetyTier": "read-only" },
+            { "gapReadingId": "motherboard.voltages", "displayName": "Motherboard voltage rails", "safetyTier": "read-only" }
+          ],
+          "safetyNote": "This preflight is read-only status detection. Nothing was installed, started, stopped, loaded, registered, or modified, and no elevation was requested."
+        }
+        """;
 
     private static DrForgeCliProcessResult Success(string executablePath, IReadOnlyList<string> arguments, string stdout) =>
         new(executablePath, arguments, 0, false, stdout, "");
