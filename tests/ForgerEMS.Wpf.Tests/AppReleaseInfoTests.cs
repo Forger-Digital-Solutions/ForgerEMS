@@ -8,7 +8,7 @@ public sealed class AppReleaseInfoTests
     [Fact]
     public void Version_Is_PublicPreview()
     {
-        Assert.Equal("1.2.4-preview.2", AppReleaseInfo.Version);
+        Assert.Equal("1.2.4-preview.3", AppReleaseInfo.Version);
         Assert.Contains("1.2.4", AppReleaseInfo.DisplayVersion, System.StringComparison.Ordinal);
         Assert.Contains("Public Preview", AppReleaseInfo.DisplayVersion, System.StringComparison.Ordinal);
     }
@@ -20,6 +20,6 @@ public sealed class AppReleaseInfoTests
         Assert.Equal(1, v.Major);
         Assert.Equal(2, v.Minor);
         Assert.Equal(4, v.Patch);
-        Assert.Equal("preview.2", v.Prerelease);
+        Assert.Equal("preview.3", v.Prerelease);
     }
 }

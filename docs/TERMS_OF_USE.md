@@ -1,7 +1,7 @@
 # ForgerEMS Terms of Use
 
-Terms version: `2026-07-05.v1.2.4-preview.2`
-Applies to: ForgerEMS `v1.2.4-preview.2` public preview
+Terms version: `2026-07-05.v1.2.4-preview.3`
+Applies to: ForgerEMS `v1.2.4-preview.3` public preview
 
 These are project-provided software terms for this preview build. They are not legal advice and no attorney review is claimed.
 

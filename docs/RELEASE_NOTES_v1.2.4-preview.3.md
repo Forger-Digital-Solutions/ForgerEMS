@@ -1,6 +1,6 @@
-# ForgerEMS v1.2.4-preview.2 Release Notes
+# ForgerEMS v1.2.4-preview.3 Release Notes
 
-ForgerEMS `v1.2.4-preview.2` is a preview/pre-release build for Windows technicians.
+ForgerEMS `v1.2.4-preview.3` is a preview/pre-release build for Windows technicians.
 
 ForgerEMS is a local-device support workflow tool, USB toolkit/profile builder, Driver Hub/vendor guidance helper, port/USB mapping and drive-check workflow helper, and preview build by Forger Digital Solutions.
 
@@ -25,8 +25,8 @@ ForgerEMS is a local-device support workflow tool, USB toolkit/profile builder, 
 
 `release/current` is expected to include:
 
-- `ForgerEMS-Setup-v1.2.4-preview.2.exe`
-- `ForgerEMS-v1.2.4-preview.2.zip` portable app ZIP
+- `ForgerEMS-Setup-v1.2.4-preview.3.exe`
+- `ForgerEMS-v1.2.4-preview.3.zip` portable app ZIP
 - `CHECKSUMS.sha256`
 
 ## Known Preview Limits

@@ -1,0 +1,73 @@
+{
+  "schemaVersion": "forge-sensor-core/1.0",
+  "generatedUtc": "2026-01-01T00:00:00+00:00",
+  "application": "Dr. Forge",
+  "appVersion": "1.0.0-sample",
+  "sdkContract": "Forge Sensor Core",
+  "platform": "Windows",
+  "osDescription": "Windows 11 sample fixture",
+  "redacted": true,
+  "policy": {
+    "driverless": true,
+    "kernelDriverLoaded": false,
+    "depthTier": "DriverlessUserMode"
+  },
+  "readings": [
+    {
+      "id": "cpu.load.total",
+      "displayName": "CPU total load",
+      "category": "Cpu",
+      "value": 37,
+      "unit": "%",
+      "availability": "Available",
+      "kind": "Direct",
+      "requiresElevation": false,
+      "requiresRing0": false,
+      "requiresKernelDriver": false,
+      "isAvailable": true
+    },
+    {
+      "id": "memory.used.percent",
+      "displayName": "Memory used",
+      "category": "Memory",
+      "value": null,
+      "unit": "%",
+      "availability": "Unavailable",
+      "kind": "Unavailable",
+      "unavailableReason": "Synthetic fixture leaves this unavailable.",
+      "requiresElevation": false,
+      "requiresRing0": false,
+      "requiresKernelDriver": false,
+      "isAvailable": false
+    },
+    {
+      "id": "storage.capacity.bytes",
+      "displayName": "Storage capacity",
+      "category": "Storage",
+      "value": 512110190592,
+      "unit": "bytes",
+      "availability": "Available",
+      "kind": "Direct",
+      "requiresElevation": false,
+      "requiresRing0": false,
+      "requiresKernelDriver": false,
+      "isAvailable": true
+    },
+    {
+      "id": "fans.rpm",
+      "displayName": "Fan RPM (SuperIO)",
+      "category": "Fans",
+      "availability": "RequiresKernelDriver",
+      "kind": "Unavailable",
+      "unavailableReason": "Requires ring-0 sensor access; no kernel driver is loaded.",
+      "requiresElevation": false,
+      "requiresRing0": true,
+      "requiresKernelDriver": true,
+      "isAvailable": false
+    }
+  ],
+  "kernelDriverLoaded": false,
+  "availableReadingCount": 2,
+  "unavailableReadingCount": 2,
+  "satisfiesSafetyInvariants": true
+}

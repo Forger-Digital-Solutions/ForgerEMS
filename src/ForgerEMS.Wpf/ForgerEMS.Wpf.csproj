@@ -15,10 +15,10 @@
     <Description>ForgerEMS Public Preview - Windows technician utility suite for USB toolkit workflows, Driver Hub guidance, port/USB mapping, drive validation, battery/system summaries, and Kyra local-first help.</Description>
     <Authors>Forger Digital Solutions</Authors>
     <ApplicationIcon>Assets\ForgerEMS.ico</ApplicationIcon>
-    <Version>1.2.4-preview.2</Version>
+    <Version>1.2.4-preview.3</Version>
     <AssemblyVersion>1.2.4.0</AssemblyVersion>
     <FileVersion>1.2.4.0</FileVersion>
-    <InformationalVersion>1.2.4-preview.2</InformationalVersion>
+    <InformationalVersion>1.2.4-preview.3</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <DebugType>embedded</DebugType>
     <PublishTrimmed>false</PublishTrimmed>
@@ -105,8 +105,8 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>
     </Content>
-    <Content Include="..\..\docs\RELEASE_NOTES_v1.2.4-preview.2.md">
-      <Link>docs\RELEASE_NOTES_v1.2.4-preview.2.md</Link>
+    <Content Include="..\..\docs\RELEASE_NOTES_v1.2.4-preview.3.md">
+      <Link>docs\RELEASE_NOTES_v1.2.4-preview.3.md</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>
     </Content>

@@ -26,7 +26,7 @@ public sealed class UserAgentHeaderProbeTests
         });
         using var http = new HttpClient(handler);
         using var service = new GitHubReleaseUpdateCheckService(http);
-        _ = await service.CheckForNewerReleaseAsync("1.2.4-preview.2", null);
+        _ = await service.CheckForNewerReleaseAsync("1.2.4-preview.3", null);
         Assert.False(string.IsNullOrWhiteSpace(capturedUserAgent));
         Assert.Contains("ForgerEMS", capturedUserAgent!, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(AppReleaseInfo.Version, capturedUserAgent!, StringComparison.Ordinal);

@@ -4,7 +4,7 @@
 
 **Support:** [ForgerDigitalSolutions@outlook.com](mailto:ForgerDigitalSolutions@outlook.com) — never send secrets in email.
 
-**Current v1.2.4-preview.2 data-handling docs:** see [PRIVACY_AND_DATA_HANDLING.md](PRIVACY_AND_DATA_HANDLING.md), [TERMS_OF_USE.md](TERMS_OF_USE.md), [LEGAL_NOTICES.md](LEGAL_NOTICES.md), and [USER_CONSENT_FLOW.md](USER_CONSENT_FLOW.md). ForgerEMS keeps Terms acceptance local and requires a separate warning before support bundles, logs, Kyra context, or exported reports are packaged for sharing.
+**Current v1.2.4-preview.3 data-handling docs:** see [PRIVACY_AND_DATA_HANDLING.md](PRIVACY_AND_DATA_HANDLING.md), [TERMS_OF_USE.md](TERMS_OF_USE.md), [LEGAL_NOTICES.md](LEGAL_NOTICES.md), and [USER_CONSENT_FLOW.md](USER_CONSENT_FLOW.md). ForgerEMS keeps Terms acceptance local and requires a separate warning before support bundles, logs, Kyra context, or exported reports are packaged for sharing.
 
 ---
 
@@ -60,7 +60,7 @@ ForgerEMS can bridge to a packaged **Dr. Forge CLI** when you select `drforge.ex
 
 Generated Dr. Forge reports and archives stay local under `%LOCALAPPDATA%\ForgerEMS\Runtime\reports\drforge`. The in-app recent report history reads that app-managed folder only; it does not crawl Documents or arbitrary user folders. Reports may include local device/context information, sensor availability, findings, notes, and unavailable telemetry reasons. Unavailable readings are displayed as **Unavailable**, not zero, and ForgerEMS does not claim full HWiNFO / CPU-Z / LibreHardwareMonitor parity.
 
-Dr. Forge report/archive files are included in support bundles only when you generated them from the app or explicitly choose to include them. Review the report/archive before sharing.
+Dr. Forge report/archive files are included in support bundles only when you explicitly choose to include them and confirm the support-bundle export. Review the report/archive before sharing.
 
 ---
 

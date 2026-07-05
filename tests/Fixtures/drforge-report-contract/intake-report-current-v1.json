@@ -1,0 +1,41 @@
+{
+  "reportSchemaVersion": "forge-hardware-intake-report/1.0",
+  "sourceSchemaVersion": "forge-sensor-core/1.0",
+  "snapshotLabel": "snapshot-local-v1.json",
+  "platform": {
+    "osFamily": "Windows",
+    "architecture": "X64",
+    "elevatedServiceSupported": false,
+    "kernelDriverSupported": false
+  },
+  "safety": {
+    "satisfiesSafetyInvariants": true,
+    "kernelDriverLoaded": false
+  },
+  "summary": {
+    "cpuLoadPercent": 37,
+    "memoryUsedPercent": 58,
+    "storageCapacityBytes": 512110190592,
+    "storageSmartHealth": null
+  },
+  "service": {
+    "requested": false,
+    "available": false,
+    "contributedReadings": 0
+  },
+  "findings": [
+    {
+      "severity": "Unavailable",
+      "message": "Fan RPM: unavailable - Requires ring-0 sensor access; no kernel driver is loaded."
+    }
+  ],
+  "ring0Gaps": [
+    {
+      "reading": "Fan RPM",
+      "reason": "Requires ring-0 sensor access; no kernel driver is loaded."
+    }
+  ],
+  "notes": [
+    "Synthetic sanitized fixture. No real user, machine, token, or private path data."
+  ]
+}

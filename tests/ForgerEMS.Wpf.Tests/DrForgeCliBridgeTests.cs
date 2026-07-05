@@ -356,7 +356,7 @@ public sealed class DrForgeCliBridgeTests
             """
             {
               "reportSchemaVersion": "forge-hardware-intake-report/1.0",
-              "sourceSchemaVersion": "forge-sensor-core-snapshot/1.0",
+              "sourceSchemaVersion": "forge-sensor-core/1.0",
               "generatedAtUtc": "2026-07-04T12:34:56Z",
               "platform": { "osFamily": "Windows", "osVersion": "11", "architecture": "x64" },
               "safety": { "satisfiesSafetyInvariants": true, "kernelDriverLoaded": false },
@@ -380,7 +380,7 @@ public sealed class DrForgeCliBridgeTests
         Assert.True(view.PreviewAvailable);
         Assert.Equal("Report", view.Kind);
         Assert.Equal("forge-hardware-intake-report/1.0", view.ReportSchema);
-        Assert.Equal("forge-sensor-core-snapshot/1.0", view.SourceSchema);
+        Assert.Equal("forge-sensor-core/1.0", view.SourceSchema);
         Assert.Equal("2026-07-04 12:34:56 UTC", view.GeneratedAt);
         Assert.Equal("no", view.KernelDriverLoaded);
         Assert.Equal(3, view.AvailableReadingCount);
@@ -407,6 +407,81 @@ public sealed class DrForgeCliBridgeTests
         AssertParsedField(view, "Battery", "Charge", "Unavailable");
         AssertParsedField(view, "Driver / Safety Status", "Kernel driver loaded", "No");
         Assert.Contains("\"reportSchemaVersion\"", view.RawPreviewText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReportDetailReader_CurrentDrForgeIntakeFixtureParsesExpectedSections()
+    {
+        using var temp = new TempDir();
+        var report = Path.Combine(temp.Path, "drforge-intake-report-current-v1.json");
+        File.Copy(FixtureFile("intake-report-current-v1.json"), report);
+
+        var view = new DrForgeReportDetailReader(temp.Path).Read(report);
+
+        Assert.True(view.PreviewAvailable);
+        Assert.Equal("forge-hardware-intake-report/1.0", view.ReportSchema);
+        Assert.Equal("forge-sensor-core/1.0", view.SourceSchema);
+        Assert.Equal("no", view.KernelDriverLoaded);
+        Assert.Equal(3, view.AvailableReadingCount);
+        Assert.Equal(1, view.UnavailableReadingCount);
+        AssertParsedSection(view, "Report Summary");
+        AssertParsedSection(view, "Device / System");
+        AssertParsedSection(view, "CPU");
+        AssertParsedSection(view, "Memory");
+        AssertParsedSection(view, "Storage");
+        AssertParsedSection(view, "Driver / Safety Status");
+        AssertParsedField(view, "Storage", "Storage SMART health", "Unavailable");
+        Assert.DoesNotContain("Storage SMART health: 0", view.PreviewText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Daddy_FDS", view.RawPreviewText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("C:\\Users\\", view.RawPreviewText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ReportDetailReader_CurrentSensorCoreSnapshotFixtureParsesReadingsSafely()
+    {
+        using var temp = new TempDir();
+        var snapshot = Path.Combine(temp.Path, "drforge-sensor-core-snapshot-current-v1.json");
+        File.Copy(FixtureFile("sensor-core-snapshot-current-v1.json"), snapshot);
+
+        var view = new DrForgeReportDetailReader(temp.Path).Read(snapshot);
+
+        Assert.True(view.PreviewAvailable);
+        Assert.Equal("Snapshot", view.Kind);
+        Assert.Equal("forge-sensor-core/1.0", view.ReportSchema);
+        Assert.Equal("2026-01-01 00:00:00 UTC", view.GeneratedAt);
+        Assert.Equal("no", view.KernelDriverLoaded);
+        Assert.Equal(2, view.AvailableReadingCount);
+        Assert.Equal(2, view.UnavailableReadingCount);
+        Assert.Equal(1, view.DriverRequiredUnavailableCount);
+        AssertParsedSection(view, "Report Summary");
+        AssertParsedSection(view, "Device / System");
+        AssertParsedSection(view, "CPU");
+        AssertParsedSection(view, "Memory");
+        AssertParsedSection(view, "Storage");
+        AssertParsedSection(view, "Thermals / Sensors");
+        AssertParsedSection(view, "Driver / Safety Status");
+        AssertParsedField(view, "CPU", "CPU total load", "37 %");
+        AssertParsedField(view, "Memory", "Memory used", "Unavailable: Synthetic fixture leaves this unavailable.");
+        Assert.Contains("Fan RPM (SuperIO): Unavailable", view.PreviewText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Memory used: 0", view.PreviewText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Fan RPM (SuperIO): 0", view.PreviewText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ReportDetailReader_CurrentArchiveManifestFixtureRemainsMetadataFallback()
+    {
+        using var temp = new TempDir();
+        var manifest = Path.Combine(temp.Path, "manifest.json");
+        File.Copy(FixtureFile("archive-manifest-current-v1.json"), manifest);
+
+        var view = new DrForgeReportDetailReader(temp.Path).Read(manifest);
+
+        Assert.True(view.PreviewAvailable);
+        Assert.Equal("forge-hardware-intake-archive/1.0", view.ReportSchema);
+        Assert.DoesNotContain(view.ParsedSections, section => section.Title == "CPU");
+        Assert.Contains(view.ParsedSections, section => section.Title == "Report Metadata");
+        Assert.Contains("archiveSchemaVersion", view.RawPreviewText, StringComparison.Ordinal);
+        Assert.Contains("No previewable Dr. Forge report sections were found.", view.PreviewText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -726,6 +801,9 @@ public sealed class DrForgeCliBridgeTests
 
     private static string RepoFile(params string[] parts) =>
         Path.Combine(new[] { FindRepoRoot() }.Concat(parts).ToArray());
+
+    private static string FixtureFile(string name) =>
+        RepoFile("tests", "Fixtures", "drforge-report-contract", name);
 
     private static string FindRepoRoot()
     {

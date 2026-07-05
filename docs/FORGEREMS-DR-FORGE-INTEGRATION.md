@@ -83,7 +83,15 @@ The card lists recent app-managed Dr. Forge reports and archives from the Runtim
 
 ## Report JSON contract
 
-ForgerEMS parses enough of `forge-hardware-intake-report/1.0` to display:
+ForgerEMS recognizes current Dr. Forge local contract families:
+
+- `forge-sensor-core/1.0` saved snapshots
+- `forge-hardware-intake-report/1.0` intake reports
+- `forge-hardware-intake-archive/1.0` archive manifests/folders as metadata-only history entries
+- `drforge-cli-release-manifest/1.0` CLI release manifests
+- `forger-sensor-driver-preflight/1.1` current no-driver readiness
+
+ForgerEMS parses enough of `forge-hardware-intake-report/1.0` and `forge-sensor-core/1.0` to display:
 
 - report schema
 - source schema
@@ -135,7 +143,7 @@ No secrets, telemetry payloads, account state, activation state, or licensing st
 
 Generated Dr. Forge reports and archives may include local device/context information, findings, notes, and unavailable telemetry reasons. Users should review reports before sharing them.
 
-ForgerEMS support bundles include Dr. Forge report/archive files only when the user generated them from the app or explicitly chooses to include them. The exporter only accepts Dr. Forge artifacts under the local Runtime reports folder and only includes a small allowlist of archive files.
+ForgerEMS support bundles include Dr. Forge report/archive files only when the user explicitly chooses to include them and confirms the support-bundle export. The exporter only accepts Dr. Forge artifacts under the local Runtime reports folder and only includes a small allowlist of archive files.
 
 ## Remaining gaps
 

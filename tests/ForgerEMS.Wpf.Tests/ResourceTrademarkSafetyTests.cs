@@ -212,7 +212,7 @@ public sealed class ResourceTrademarkSafetyTests
             Assert.Contains("not affiliated with, sponsored by, or endorsed by", text, StringComparison.OrdinalIgnoreCase);
         }
 
-        Assert.Contains(IndependenceDisclaimer, InfoDocumentTexts.BuildAbout("1.2.4-preview.2", "ForgerEMS v1.2.4 Public Preview", "frontend", "backend"), StringComparison.Ordinal);
+        Assert.Contains(IndependenceDisclaimer, InfoDocumentTexts.BuildAbout("1.2.4-preview.3", "ForgerEMS v1.2.4 Public Preview", "frontend", "backend"), StringComparison.Ordinal);
         Assert.Contains(IndependenceDisclaimer, InfoDocumentTexts.BuildLegal(), StringComparison.Ordinal);
     }
 

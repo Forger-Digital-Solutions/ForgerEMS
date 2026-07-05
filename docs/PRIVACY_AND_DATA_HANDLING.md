@@ -1,6 +1,6 @@
 # ForgerEMS Privacy and Data Handling
 
-Applies to: ForgerEMS `v1.2.4-preview.2` public preview
+Applies to: ForgerEMS `v1.2.4-preview.3` public preview
 
 ForgerEMS is local-first. It does not upload logs, support bundles, reports, Kyra memory, sensor data, USB inventories, or local device snapshots automatically.
 

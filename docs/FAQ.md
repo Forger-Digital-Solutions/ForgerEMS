@@ -248,7 +248,7 @@ No beta program can promise “100% safe,” but ForgerEMS is designed for **tec
 Open PowerShell in the folder that contains the ZIP and `CHECKSUMS.sha256`. For example:
 
 ```powershell
-Get-FileHash .\ForgerEMS-v1.2.4-preview.2.zip -Algorithm SHA256
+Get-FileHash .\ForgerEMS-v1.2.4-preview.3.zip -Algorithm SHA256
 ```
 
 Compare the `Hash` line to the line in `CHECKSUMS.sha256` for that filename.

@@ -1016,12 +1016,16 @@ public sealed class DrForgeReportDetailReader
         var json = _readAllText(path);
         using var document = JsonDocument.Parse(json);
         var root = document.RootElement;
-        var reportSchema = ReadString(root, "reportSchemaVersion") ??
+        var reportSchema = ReadString(root, "archiveSchemaVersion") ??
+                           ReadString(root, "reportSchemaVersion") ??
                            ReadString(root, "schemaVersion") ??
                            "Unknown";
-        var sourceSchema = ReadString(root, "sourceSchemaVersion") ?? "Unknown";
+        var sourceSchema = ReadString(root, "sourceSchemaVersion") ??
+                           ReadString(root, "sourceSnapshotSchemaVersion") ??
+                           "Unknown";
         var generatedAt = FormatGeneratedAt(ReadString(root, "generatedAtUtc") ??
-                                            ReadString(root, "generatedAt"));
+                                            ReadString(root, "generatedAt") ??
+                                            ReadString(root, "generatedUtc"));
         var safety = TryReadSafety(root, out var invariants, out var kernelDriverLoaded);
         var counts = CountSummaryReadings(root);
         var driverRequiredUnavailable = CountDriverRequiredUnavailable(root);
@@ -1230,6 +1234,7 @@ public sealed class DrForgeReportDetailReader
             AddMemorySection(sections, root);
             AddStorageSection(sections, root);
             AddBatterySection(sections, root);
+            AddSensorCoreSnapshotSections(sections, root, reportSchema, sourceSchema);
             AddThermalsAndSensorsSection(sections, root, driverRequiredUnavailable);
             AddSection(sections, "Driver / Safety Status",
             [
@@ -1247,8 +1252,8 @@ public sealed class DrForgeReportDetailReader
 
     private static bool IsKnownReportSchema(string reportSchema, string sourceSchema) =>
         reportSchema.StartsWith("forge-hardware-intake-report/", StringComparison.OrdinalIgnoreCase) ||
-        reportSchema.StartsWith("forge-sensor-core-snapshot/", StringComparison.OrdinalIgnoreCase) ||
-        sourceSchema.StartsWith("forge-sensor-core-snapshot/", StringComparison.OrdinalIgnoreCase);
+        reportSchema.StartsWith("forge-sensor-core/", StringComparison.OrdinalIgnoreCase) ||
+        sourceSchema.StartsWith("forge-sensor-core/", StringComparison.OrdinalIgnoreCase);
 
     private static void AddDeviceSystemSection(List<DrForgeParsedReportSection> sections, JsonElement root)
     {
@@ -1401,6 +1406,97 @@ public sealed class DrForgeReportDetailReader
         AddSection(sections, "Thermals / Sensors", fields);
     }
 
+    private static void AddSensorCoreSnapshotSections(
+        List<DrForgeParsedReportSection> sections,
+        JsonElement root,
+        string reportSchema,
+        string sourceSchema)
+    {
+        if (!IsSensorCoreSchema(reportSchema, sourceSchema) ||
+            !TryGetProperty(root, "readings", out var readings) ||
+            readings.ValueKind != JsonValueKind.Array)
+        {
+            return;
+        }
+
+        AddSection(sections, "Device / System",
+        [
+            new("Platform", FormatNullableString(root, "platform")),
+            new("OS description", FormatNullableString(root, "osDescription")),
+            new("Application", FormatNullableString(root, "application")),
+            new("App version", FormatNullableString(root, "appVersion")),
+            new("Redacted fixture/report", FormatNullableBool(ReadBool(root, "redacted")))
+        ]);
+
+        var readingList = readings.EnumerateArray()
+            .Where(reading => reading.ValueKind == JsonValueKind.Object)
+            .ToList();
+
+        AddSensorCoreCategorySection(sections, "CPU", readingList, "Cpu");
+        AddSensorCoreCategorySection(sections, "Memory", readingList, "Memory");
+        AddSensorCoreCategorySection(sections, "Storage", readingList, "Storage");
+
+        var thermalFields = readingList
+            .Where(reading => IsSensorCoreDeepOrThermalCategory(ReadString(reading, "category")))
+            .Take(12)
+            .Select(reading => new DrForgeParsedReportField(
+                ReadString(reading, "displayName") ?? ReadString(reading, "id") ?? "Unavailable reading",
+                FormatSensorCoreReadingValue(reading)))
+            .ToList();
+        AddSection(sections, "Thermals / Sensors", thermalFields);
+    }
+
+    private static bool IsSensorCoreSchema(string reportSchema, string sourceSchema) =>
+        reportSchema.StartsWith("forge-sensor-core/", StringComparison.OrdinalIgnoreCase) ||
+        sourceSchema.StartsWith("forge-sensor-core/", StringComparison.OrdinalIgnoreCase);
+
+    private static void AddSensorCoreCategorySection(
+        List<DrForgeParsedReportSection> sections,
+        string sectionTitle,
+        IReadOnlyList<JsonElement> readings,
+        string category)
+    {
+        var fields = readings
+            .Where(reading => string.Equals(ReadString(reading, "category"), category, StringComparison.OrdinalIgnoreCase))
+            .Take(8)
+            .Select(reading => new DrForgeParsedReportField(
+                ReadString(reading, "displayName") ?? ReadString(reading, "id") ?? "Unavailable reading",
+                FormatSensorCoreReadingValue(reading)))
+            .ToList();
+
+        AddSection(sections, sectionTitle, fields);
+    }
+
+    private static bool IsSensorCoreDeepOrThermalCategory(string? category) =>
+        category is not null &&
+        (category.Equals("Fans", StringComparison.OrdinalIgnoreCase) ||
+         category.Equals("Voltages", StringComparison.OrdinalIgnoreCase) ||
+         category.Equals("Temperatures", StringComparison.OrdinalIgnoreCase) ||
+         category.Equals("Motherboard", StringComparison.OrdinalIgnoreCase) ||
+         category.Equals("Platform", StringComparison.OrdinalIgnoreCase) ||
+         category.Equals("Power", StringComparison.OrdinalIgnoreCase));
+
+    private static string FormatSensorCoreReadingValue(JsonElement reading)
+    {
+        var isAvailable = ReadBool(reading, "isAvailable");
+        if (isAvailable == false || string.Equals(ReadString(reading, "kind"), "Unavailable", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Unavailable: " + (ReadString(reading, "unavailableReason") ??
+                                      ReadString(reading, "availabilityDescription") ??
+                                      "Unavailable");
+        }
+
+        if (!TryGetProperty(reading, "value", out var value) ||
+            value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return "Unavailable";
+        }
+
+        var formatted = FormatJsonValue(value);
+        var unit = ReadString(reading, "unit");
+        return string.IsNullOrWhiteSpace(unit) ? formatted : formatted + " " + unit;
+    }
+
     private static DrForgeParsedReportSection BuildReportMetadataSection(
         string name,
         string kind,
@@ -1468,6 +1564,34 @@ public sealed class DrForgeReportDetailReader
     {
         if (!TryGetProperty(root, "summary", out var summary) || summary.ValueKind != JsonValueKind.Object)
         {
+            if (TryGetProperty(root, "readings", out var readings) && readings.ValueKind == JsonValueKind.Array)
+            {
+                var sensorCoreAvailable = 0;
+                var sensorCoreUnavailable = 0;
+                foreach (var reading in readings.EnumerateArray())
+                {
+                    if (reading.ValueKind != JsonValueKind.Object)
+                    {
+                        sensorCoreUnavailable++;
+                        continue;
+                    }
+
+                    var isAvailable = ReadBool(reading, "isAvailable");
+                    if (isAvailable == true &&
+                        TryGetProperty(reading, "value", out var value) &&
+                        value.ValueKind is not JsonValueKind.Null and not JsonValueKind.Undefined)
+                    {
+                        sensorCoreAvailable++;
+                    }
+                    else
+                    {
+                        sensorCoreUnavailable++;
+                    }
+                }
+
+                return (sensorCoreAvailable, sensorCoreUnavailable);
+            }
+
             return null;
         }
 
@@ -1503,6 +1627,14 @@ public sealed class DrForgeReportDetailReader
             count += wouldUnlock.GetArrayLength();
         }
 
+        if (TryGetProperty(root, "readings", out var readings) && readings.ValueKind == JsonValueKind.Array)
+        {
+            count += readings.EnumerateArray().Count(reading =>
+                reading.ValueKind == JsonValueKind.Object &&
+                ReadBool(reading, "requiresKernelDriver") == true &&
+                ReadBool(reading, "isAvailable") != true);
+        }
+
         return count;
     }
 
@@ -1512,6 +1644,13 @@ public sealed class DrForgeReportDetailReader
         kernelDriverLoaded = null;
         if (!TryGetProperty(root, "safety", out var safety) || safety.ValueKind != JsonValueKind.Object)
         {
+            invariants = ReadBool(root, "satisfiesSafetyInvariants");
+            kernelDriverLoaded = ReadBool(root, "kernelDriverLoaded");
+            if (invariants is not null || kernelDriverLoaded is not null)
+            {
+                return "safety invariants: " + FormatNullableBool(invariants) + "; kernel driver loaded: " + FormatNullableBool(kernelDriverLoaded);
+            }
+
             return "Unknown";
         }
 
@@ -1568,6 +1707,22 @@ public sealed class DrForgeReportDetailReader
                     ? ReadString(gap, "displayName") ?? ReadString(gap, "gapReadingId") ?? "Unavailable reading"
                     : "Unavailable reading";
                 sb.AppendLine("- " + reading + ": Unavailable");
+            }
+        }
+
+        if (TryGetProperty(root, "readings", out var readings) && readings.ValueKind == JsonValueKind.Array)
+        {
+            sb.AppendLine("Sensor Core readings:");
+            foreach (var reading in readings.EnumerateArray().Take(16))
+            {
+                if (reading.ValueKind != JsonValueKind.Object)
+                {
+                    sb.AppendLine("- Unavailable reading: Unavailable");
+                    continue;
+                }
+
+                var name = ReadString(reading, "displayName") ?? ReadString(reading, "id") ?? "Unavailable reading";
+                sb.AppendLine("- " + name + ": " + FormatSensorCoreReadingValue(reading));
             }
         }
 

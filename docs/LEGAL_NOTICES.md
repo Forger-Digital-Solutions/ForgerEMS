@@ -1,6 +1,6 @@
 # ForgerEMS Legal Notices
 
-Applies to: ForgerEMS `v1.2.4-preview.2` public preview
+Applies to: ForgerEMS `v1.2.4-preview.3` public preview
 
 This is practical project-provided notice text for preview software. It is not legal advice and no attorney review or compliance certification is claimed.
 

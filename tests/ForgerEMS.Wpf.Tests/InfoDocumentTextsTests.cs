@@ -9,7 +9,7 @@ public sealed class InfoDocumentTextsTests
     [Fact]
     public void BuildAbout_ContainsProductIdentityAndNoCopilotLabel()
     {
-        var text = InfoDocumentTexts.BuildAbout("1.2.4-preview.2", "ForgerEMS v1.2.4 Public Preview", "test-fe", "test-be");
+        var text = InfoDocumentTexts.BuildAbout("1.2.4-preview.3", "ForgerEMS v1.2.4 Public Preview", "test-fe", "test-be");
         Assert.Contains("Forger Engineering Maintenance Suite", text, StringComparison.Ordinal);
         Assert.Contains("Forger Digital Solutions", text, StringComparison.Ordinal);
         Assert.Contains("docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md", text, StringComparison.Ordinal);

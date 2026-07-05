@@ -11,14 +11,14 @@
   Repository root (folder containing ForgerEMS.sln).
 
 .PARAMETER Version
-  Expected semantic package version (e.g. 1.2.4-preview.2).
+  Expected semantic package version (e.g. 1.2.4-preview.3).
 
 .PARAMETER ReleaseRoot
   Optional. If set (e.g. ...\release\current), validates release.json + CHECKSUMS + installer/ZIP when present.
 #>
 param(
     [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot),
-    [string]$Version = "1.2.4-preview.2",
+    [string]$Version = "1.2.4-preview.3",
     [string]$ReleaseRoot = ""
 )
 
@@ -80,7 +80,7 @@ foreach ($legalDoc in @(
     "docs\LEGAL_NOTICES.md",
     "docs\THIRD_PARTY_NOTICES.md",
     "docs\USER_CONSENT_FLOW.md",
-    "docs\RELEASE_NOTES_v1.2.4-preview.2.md",
+    "docs\RELEASE_NOTES_v1.2.4-preview.3.md",
     "docs\reports\FORGEREMS_V1_2_3_FULL_PROJECT_AUDIT.md"
 )) {
     Test-FileExists $legalDoc ("doc-" + ([System.IO.Path]::GetFileNameWithoutExtension($legalDoc) -replace '[^A-Za-z0-9]+','-'))
@@ -137,7 +137,7 @@ Test-FileContains -Rel "README.md" -Pattern "TERMS_OF_USE\.md" -Id "readme-terms
 Test-FileContains -Rel "README.md" -Pattern "portable ZIP" -Id "readme-portable-zip"
 Test-FileContains -Rel "docs\ABOUT_FORGEREMS.md" -Pattern "Public Preview" -Id "about-preview"
 Test-FileContains -Rel "docs\FAQ.md" -Pattern ([regex]::Escape($Version)) -Id "faq-semver"
-Test-FileContains -Rel "docs\TERMS_OF_USE.md" -Pattern "2026-07-05\.v1\.2\.4-preview\.2" -Id "terms-version"
+Test-FileContains -Rel "docs\TERMS_OF_USE.md" -Pattern "2026-07-05\.v1\.2\.4-preview\.3" -Id "terms-version"
 Test-FileContains -Rel "docs\PRIVACY_AND_DATA_HANDLING.md" -Pattern "support bundles" -Id "privacy-support-bundles"
 Test-FileContains -Rel "docs\USER_CONSENT_FLOW.md" -Pattern "terms-consent\.json" -Id "consent-flow-storage"
 Test-FileContains -Rel "CHANGELOG.md" -Pattern ([regex]::Escape($Version)) -Id "changelog-version"

@@ -1,0 +1,25 @@
+{
+  "archiveSchemaVersion": "forge-hardware-intake-archive/1.0",
+  "sourceSnapshotSchemaVersion": "forge-sensor-core/1.0",
+  "reportSchemaVersion": "forge-hardware-intake-report/1.0",
+  "snapshotLabel": "snapshot-local-v1.json",
+  "runtime": {
+    "producer": "DrForge.Core",
+    "contract": "Forge Sensor Core intake archive",
+    "executionMode": "offline snapshot export",
+    "hardwareAccess": "none"
+  },
+  "files": [
+    "report.md",
+    "report.json",
+    "source-snapshot.json",
+    "manifest.json",
+    "SAFETY-NOTICE.txt",
+    "README.txt"
+  ],
+  "ring0OrDeepReadingsUnavailable": true,
+  "ring0GapCount": 1,
+  "unavailableReadingCount": 2,
+  "absolutePrivatePathsIncluded": false,
+  "secretsIncluded": false
+}

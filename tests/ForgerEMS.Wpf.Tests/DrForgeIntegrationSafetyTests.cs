@@ -146,7 +146,7 @@ public sealed class DrForgeIntegrationSafetyTests
         const string json = """
             {
               "reportSchemaVersion": "forge-hardware-intake-report/1.0",
-              "sourceSchemaVersion": "forge-sensor-core-snapshot/1.0",
+              "sourceSchemaVersion": "forge-sensor-core/1.0",
               "platform": { "osFamily": "Windows", "architecture": "x64" },
               "safety": { "satisfiesSafetyInvariants": true, "kernelDriverLoaded": false },
               "summary": {

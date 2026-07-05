@@ -315,7 +315,7 @@ public static class InfoDocumentTexts
             Default support reports should be redacted where supported, but you should review reports before sharing. Do not send product keys, serial numbers, service tags, API keys, tokens, passwords, private documents, or sensitive personal files to support.
 
             DR. FORGE INTAKE
-            The Dr. Forge CLI bridge stores only the selected drforge.exe path, the last readiness state, and last local report/archive paths under ForgerEMS Runtime config. Generated Dr. Forge reports and archives stay under the local Runtime reports folder. They may include local device/context information, sensor availability, findings, notes, and unavailable telemetry reasons. Review reports before sharing. ForgerEMS includes Dr. Forge report/archive files in support bundles only when you generated them from the app or explicitly choose to include them.
+            The Dr. Forge CLI bridge stores only the selected drforge.exe path, the last readiness state, and last local report/archive paths under ForgerEMS Runtime config. Generated Dr. Forge reports and archives stay under the local Runtime reports folder. They may include local device/context information, sensor availability, findings, notes, and unavailable telemetry reasons. Review reports before sharing. ForgerEMS includes Dr. Forge report/archive files in support bundles only when you explicitly choose to include them and confirm the support-bundle export.
 
             KYRA AND SANITIZED SUMMARIES
             Kyra uses sanitized summaries for external/provider paths where implemented. Do not paste API keys, passwords, serial numbers, product keys, private documents, or sensitive files into chat or support email.

@@ -1,10 +1,10 @@
-# ForgerEMS v1.2.4-preview.2 — Dev Beta Smoke Checklist
+# ForgerEMS v1.2.4-preview.3 — Dev Beta Smoke Checklist
 
 **Scope:** Confirm the v1.2.4 preview build behaves as expected, with focus on Driver Hub, Dr. Forge Intake, managed-download / Download Plan / freshness workflow, and release packaging consistency. Mark each line **OK** / **BLOCKED** / **N/A**. Stop on the first BLOCKED in section 3 or 4 — those are the new-surface gates.
 
 For broader regression coverage, see [FINAL_MANUAL_SMOKE_TEST.md](../FINAL_MANUAL_SMOKE_TEST.md). This checklist is additive, not a replacement.
 
-**Build under test:** `release/current/ForgerEMS-Setup-v1.2.4-preview.2.exe` or the matching portable ZIP `release/current/ForgerEMS-v1.2.4-preview.2.zip`. Published app staging remains at `release/current/app/ForgerEMS.exe`.
+**Build under test:** `release/current/ForgerEMS-Setup-v1.2.4-preview.3.exe` or the matching portable ZIP `release/current/ForgerEMS-v1.2.4-preview.3.zip`. Published app staging remains at `release/current/app/ForgerEMS.exe`.
 
 **Trademark / non-endorsement check:** ForgerEMS is independent and is not affiliated with, sponsored by, or endorsed by Microsoft, Linux distributions, hardware vendors, driver vendors, or third-party tools referenced in the app. Names are used only to identify compatibility, official resources, or supported technician workflows.
 
@@ -14,7 +14,7 @@ For broader regression coverage, see [FINAL_MANUAL_SMOKE_TEST.md](../FINAL_MANUA
 
 - [ ] Install (or unzip) the build. Launch ForgerEMS.
 - [ ] Title bar reads **ForgerEMS**. Main window opens centered, not off-screen.
-- [ ] About / status area shows **1.2.4-preview.2**.
+- [ ] About / status area shows **1.2.4-preview.3**.
 - [ ] On a clean consent state, the **Terms of Use** first-run gate appears before main tools are usable.
 - [ ] Terms, Privacy/Data Handling, Legal Notices, Third-party Notices, and About buttons open readable docs from the gate.
 - [ ] Accepting both checkboxes unlocks the app; declining does not unlock it.
@@ -163,7 +163,7 @@ Run from a PowerShell prompt against the installed (or unzipped) `release/curren
 ## 8. Release artifact integrity
 
 - [ ] `release/current/CHECKSUMS.sha256` verifies against the on-disk artifacts (use `Get-FileHash -Algorithm SHA256` and compare).
-- [ ] `release/current/release.json` reports `version: 1.2.4-preview.2`, `channel: preview`.
+- [ ] `release/current/release.json` reports `version: 1.2.4-preview.3`, `channel: preview`.
 
 ## 9. Hard "must not" gates
 
