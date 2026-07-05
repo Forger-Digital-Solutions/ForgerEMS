@@ -1,6 +1,6 @@
 # ForgerEMS User Consent Flow
 
-Applies to: ForgerEMS `v1.2.4-preview.1` public preview
+Applies to: ForgerEMS `v1.2.4-preview.2` public preview
 
 ## First-run Terms Gate
 
@@ -22,7 +22,7 @@ Kyra/support/export warning checkbox:
 
 `I understand that logs, support bundles, Kyra context, and exported reports may contain local device/context information. I will review exported files before sharing them.`
 
-Both checkbox notices render as wrapped multi-line text inside the gate so they stay fully readable at 1366x768. The gate header shows the document revision date and the ForgerEMS version it applies to (`Document revision: 2026-07-03 · Applies to ForgerEMS v1.2.4-preview.1`).
+Both checkbox notices render as wrapped multi-line text inside the gate so they stay fully readable at 1366x768. The gate header shows the document revision date and the ForgerEMS version it applies to (`Document revision: 2026-07-05 · Applies to ForgerEMS v1.2.4-preview.2`).
 
 ## Local Acceptance Record
 
@@ -34,7 +34,7 @@ The record includes terms version, accepted UTC timestamp, app version/build, an
 
 Current terms version:
 
-`2026-07-03.v1.2.4-preview.1`
+`2026-07-05.v1.2.4-preview.2`
 
 If the terms version or terms hash changes, ForgerEMS prompts again.
 

@@ -2,7 +2,7 @@
 
 **Forger Engineering Maintenance Suite** — a Windows desktop app for technicians who work with USB toolkits, repairs, and diagnostics.
 
-**Current release line:** **v1.2.4-preview.1** — **ForgerEMS v1.2.4 Public Preview** (first safe Dr. Forge CLI Intake bridge, USB Builder Profile picker fix, portable app USB profile, Driver Hub/vendor guidance, near-instant USB hotplug detection, Port / USB Intelligence results dashboard, port/USB mapping, persistent Live Logs cleanup, first-run Terms consent gate with wrapped notices, removed Network Pulse implementation, retired Deep Sensor Mode settings, and docs/legal pass).
+**Current release line:** **v1.2.4-preview.2** — **ForgerEMS v1.2.4 Public Preview** (safe Dr. Forge CLI Intake bridge with parsed local report sections, USB Builder Profile picker fix, portable app USB profile, Driver Hub/vendor guidance, near-instant USB hotplug detection, Port / USB Intelligence results dashboard, port/USB mapping, persistent Live Logs cleanup, first-run Terms consent gate with wrapped notices, removed Network Pulse implementation, retired Deep Sensor Mode settings, and docs/legal pass).
 
 **Kickstarter:** Coming soon.
 
@@ -25,7 +25,7 @@ This is **Public Preview / prerelease** software: behavior and packaging can cha
 | **USB Builder** | Guided flows to verify, prepare, and update Ventoy-oriented USB maintenance media, with managed downloads and careful drive selection. The **USB Builder Profile** lets technicians enable or skip packs per run (ForgerEMS Portable App, Windows, Legacy Windows, Linux Rescue, Diagnostic Tools for USB, OEM Tools, macOS, Android, iOS / iPadOS). Core USB structure is required and cannot be turned off. The portable app profile routes to `_apps\ForgerEMS`, docs to `_docs\ForgerEMS`, and support folders to `_logs\ForgerEMS`. macOS, Android, and iOS / iPadOS are off by default and treat all media as manual. Unchecking a pack only skips seeding/updating it — files already on the USB are never deleted. |
 | **Drive Validator** | Wizard-style non-destructive checks against a removable USB target's free space (Quick Safe Check, Sampled Capacity Check, Full Free-Space Validation) with a **live media-integrity tile map** to flag suspicious capacity, aliasing, short reads/writes, I/O errors, or failing regions before building a toolkit. The USB Builder tab keeps a compact summary card; **Open Drive Validator** launches the Drive Validator Wizard (Select target → Choose mode → Safety review → Running → Results). Safe modes write only into `.forgerems-drive-validator` on the chosen USB; never format, never delete user files, and never run against the Windows OS drive, system / boot / EFI / VTOYEFI partitions, or internal fixed disks by default. Results are advisory evidence for a technician, **not** a guarantee that the drive is genuine and **not** a direct inspection of NAND. Destructive full-media mode is **not available** in this build. |
 | **USB Intelligence** | Measure write/read on a **safe removable** target, flag likely cached read samples honestly, map **which physical USB port** you used, and get practical guidance from benchmarks and topology hints (best-effort; varies by PC). Cache-suspected reads are treated as unverified and do not upgrade recommendation quality on their own. |
-| **Dr. Forge (local hardware intake)** | ForgerEMS includes a first safe bridge to a packaged **Dr. Forge CLI**. Select `drforge.exe` or place the package under an app-local Dr. Forge tools folder, then ForgerEMS verifies the release manifest/checksums when present and runs local report/archive commands through the CLI process boundary. Missing packages show a setup-needed state. Unavailable readings stay **Unavailable**, not zero, and ForgerEMS does not claim full HWiNFO / CPU-Z / LibreHardwareMonitor parity. Deep telemetry such as fan RPM, voltage rails, EC/SuperIO/MSR readings remains unavailable until future safe providers or signed privileged components exist. See [docs/DR-FORGE-ADVANCED-SENSORS.md](docs/DR-FORGE-ADVANCED-SENSORS.md) and [docs/FORGEREMS-DR-FORGE-INTEGRATION.md](docs/FORGEREMS-DR-FORGE-INTEGRATION.md). |
+| **Dr. Forge (local hardware intake)** | ForgerEMS includes a safe bridge to a packaged **Dr. Forge CLI**. Select `drforge.exe` or place the package under an app-local Dr. Forge tools folder, then ForgerEMS verifies the release manifest/checksums when present and runs local report/archive commands through the CLI process boundary. Toolkit Manager can preview app-managed local reports with parsed read-only sections for known JSON schemas plus capped Raw Preview fallback. Missing packages show a setup-needed state. Unavailable readings stay **Unavailable**, not zero, and ForgerEMS does not claim full HWiNFO / CPU-Z / LibreHardwareMonitor parity. Deep telemetry such as fan RPM, voltage rails, EC/SuperIO/MSR readings remains unavailable until future safe providers or signed privileged components exist. See [docs/DR-FORGE-ADVANCED-SENSORS.md](docs/DR-FORGE-ADVANCED-SENSORS.md) and [docs/FORGEREMS-DR-FORGE-INTEGRATION.md](docs/FORGEREMS-DR-FORGE-INTEGRATION.md). |
 | **Toolkit Manager** | Manifest-driven health for what is on your USB, now with technician-focused categories and catalog metadata (purpose, official URL, license/redistribution note, download/checksum status, distribution model, beta safety rating). Health checks distinguish verified managed tools, present-but-not-verified tools, manual/info shortcuts, shortcuts covered/suppressed by installed managed tools, and missing required items. **Verify Links** runs optional **HTTP metadata-only** checks (HEAD / tiny ranged GET): reachability, redirects, and trust hints — **no full downloads and no execution** of third-party payloads. |
 | **Driver Hub** | Curated app-store-style hub for official GPU utilities, OEM support portals, chipset/network/audio driver pages, BIOS/firmware support links, and Linux driver guidance. Recommended cards use System Intelligence hints when available and show brand monograms, official-page/open-download actions, copy-link actions, and safe `.url` USB shortcuts. It does **not** auto-install drivers, auto-download OEM packages, upload service tags, or automate BIOS/firmware flashing. |
 | **Kyra** | In-app assistant: offline local answers first, with optional **Kyra Beta Gateway**, **Bring Your Own Key**, local AI, and live-tool paths shown in **Kyra AI Settings**. BYOK keys are optional, hidden, and never stored as plaintext appsettings. Kyra can use local device snapshots where enabled, but exported Kyra memory/context requires a separate review-and-share confirmation. |
@@ -113,7 +113,7 @@ The standalone **`ForgerEMS-Setup-v<version>.exe`** on the release is the instal
 - **Deep Sensor Mode:** sensor access is local to the device and runs only while ForgerEMS is open or System Intelligence / Hardware X-Ray scans execute. Reports are shared only if you copy/export/send them.
 - **Automated quality:** the solution ships with a large automated test suite (`dotnet test` on `ForgerEMS.sln`); the exact count grows with each release.
 
-**Pro / preview labels** during beta are for feedback; licensing is not final. See [docs/RELEASE_NOTES_v1.2.4-preview.1.md](docs/RELEASE_NOTES_v1.2.4-preview.1.md) for this build.
+**Pro / preview labels** during beta are for feedback; licensing is not final. See [docs/RELEASE_NOTES_v1.2.4-preview.2.md](docs/RELEASE_NOTES_v1.2.4-preview.2.md) for this build.
 
 ---
 
@@ -141,16 +141,16 @@ Staging without compiling the installer:
 .\tools\build-release.ps1 -DryRun
 ```
 
-Full local release (version follows `src/ForgerEMS.Wpf/ForgerEMS.Wpf.csproj`, currently **1.2.4-preview.1** / **ForgerEMS v1.2.4 Public Preview**):
+Full local release (version follows `src/ForgerEMS.Wpf/ForgerEMS.Wpf.csproj`, currently **1.2.4-preview.2** / **ForgerEMS v1.2.4 Public Preview**):
 
 ```powershell
-.\tools\build-release.ps1 -Version 1.2.4-preview.1
+.\tools\build-release.ps1 -Version 1.2.4-preview.2
 ```
 
 Without Inno Setup (skips installer; still stages `release\current\` app + backend + docs + `release.json` + checksums):
 
 ```powershell
-.\tools\build-release.ps1 -Version 1.2.4-preview.1 -SkipInstaller
+.\tools\build-release.ps1 -Version 1.2.4-preview.2 -SkipInstaller
 ```
 
 Release layout, CI, and operator checklists: [RELEASE_PROCESS.md](RELEASE_PROCESS.md), [BETA_RELEASE_CHECKLIST.md](BETA_RELEASE_CHECKLIST.md), [BETA_TESTING_GUIDE.md](BETA_TESTING_GUIDE.md).

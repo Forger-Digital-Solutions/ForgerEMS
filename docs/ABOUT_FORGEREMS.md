@@ -1,7 +1,7 @@
 # About ForgerEMS
 
 **ForgerEMS** = **Forger Engineering Maintenance Suite**  
-**Status:** ForgerEMS v1.2.4 Public Preview (`1.2.4-preview.1`)
+**Status:** ForgerEMS v1.2.4 Public Preview (`1.2.4-preview.2`)
 **Built by:** Forger Digital Solutions  
 **Support:** [ForgerDigitalSolutions@outlook.com](mailto:ForgerDigitalSolutions@outlook.com)
 

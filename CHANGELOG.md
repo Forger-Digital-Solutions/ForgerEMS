@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.2.4-preview.2 — Public Preview (2026-07-05)
+
+### Dr. Forge local report detail browsing
+
+- **Parsed report sections:** Toolkit Manager now groups known local Dr. Forge JSON reports into read-only Report Summary, Device / System, CPU, Memory, Storage, Battery, Thermals / Sensors, Driver / Safety Status, and Report Metadata sections when those fields exist.
+- **Raw Preview retained:** Unknown JSON schemas still fall back to a capped local Raw Preview. Markdown remains capped plain text, and ZIP/archive reports remain metadata-only with no extraction.
+- **Safety/privacy boundary:** Reports are read only from the app-managed Dr. Forge reports folder, never uploaded, never attached to support bundles automatically, and never used to install/start/load a driver or request elevation. Null/missing readings remain **Unavailable** or **Unknown**, never zero.
+- **Version bump:** app/project metadata, installer defaults, release tooling, validation defaults, docs, release notes, smoke checklist, and version-pinned tests moved from `1.2.4-preview.1` to `1.2.4-preview.2`. Windows assembly/file version remains `1.2.4.0`.
+
 ## v1.2.4-preview.1 — Public Preview (2026-07-03)
 
 ### Dr. Forge CLI Integration Bridge

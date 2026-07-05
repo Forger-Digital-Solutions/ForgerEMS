@@ -7,21 +7,21 @@ Use this for **Chrome**, **Edge**, or any browser. ForgerEMS does **not** bypass
 ## Golden path (do this)
 
 1. Open **GitHub Releases**: https://github.com/Forger-Digital-Solutions/ForgerEMS/releases  
-2. Find the version you were invited to test (current Public Preview example: **v1.2.4-preview.1**).
+2. Find the version you were invited to test (current Public Preview example: **v1.2.4-preview.2**).
 3. Under **Assets**, download:
-   - `ForgerEMS-v1.2.4-preview.1.zip`
+   - `ForgerEMS-v1.2.4-preview.2.zip`
    Older tags may still list `v1.1.12-rc.*` filenames — those are historical releases only.  
 4. Wait until the file name ends in **`.zip`**. If you see **`.crdownload`**, the download is **not done** — wait, or cancel and retry. **Do not rename** `.crdownload` to `.zip`.  
 5. Download **`CHECKSUMS.sha256`** from the same release page.  
 6. In PowerShell, in the folder that contains the ZIP:
 
    ```powershell
-   Get-FileHash .\ForgerEMS-v1.2.4-preview.1.zip -Algorithm SHA256
+   Get-FileHash .\ForgerEMS-v1.2.4-preview.2.zip -Algorithm SHA256
    ```
 
    Match the hash to the line in `CHECKSUMS.sha256` for that filename.  
 7. **Right-click the ZIP → Extract All…** Pick a **short** folder (e.g. `Desktop\ForgerEMS`).  
-8. Open the extracted folder **`ForgerEMS-v1.2.4-preview.1`** (name matches the ZIP root for that tag).
+8. Open the extracted folder **`ForgerEMS-v1.2.4-preview.2`** (name matches the ZIP root for that tag).
 9. Double-click **`START_HERE.bat`**.  
 10. If **SmartScreen** appears: only use **More info → Run anyway** if you verified the ZIP from the **official** GitHub release and the hash matched.  
 11. On first launch, read and accept the **ForgerEMS Terms of Use** before using the main tools. Use **About / Settings** later to reopen Terms, Privacy/Data Handling, Legal Notices, and Third-party Notices.
@@ -49,10 +49,10 @@ ForgerEMS beta — please use the portable ZIP first, not the raw EXE.
 
 1) Open our GitHub Releases page (official repo only).
 2) Under Assets, download:
-   - ForgerEMS-v1.2.4-preview.1.zip
+   - ForgerEMS-v1.2.4-preview.2.zip
 3) If Chrome shows a file ending in .crdownload, wait until it becomes .zip — do not rename it.
 4) Download CHECKSUMS.sha256 from the same release and verify the ZIP hash in PowerShell (Get-FileHash).
-5) Extract the ZIP, open folder ForgerEMS-v1.2.4-preview.1, double-click START_HERE.bat.
+5) Extract the ZIP, open folder ForgerEMS-v1.2.4-preview.2, double-click START_HERE.bat.
 6) If SmartScreen appears, only use "Run anyway" if you trust the official release and the hash matched.
 7) On first launch, read and accept the Terms of Use. Review Terms/Privacy/Legal docs before sharing support bundles, logs, Kyra context, or exported reports.
 

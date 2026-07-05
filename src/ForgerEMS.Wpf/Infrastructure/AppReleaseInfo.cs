@@ -3,7 +3,7 @@ namespace VentoyToolkitSetup.Wpf.Infrastructure;
 internal static class AppReleaseInfo
 {
     /// <summary>Semantic version for update checks and diagnostics (matches .csproj InformationalVersion).</summary>
-    public const string Version = "1.2.4-preview.1";
+    public const string Version = "1.2.4-preview.2";
 
     /// <summary>Primary user-facing version line in the shell.</summary>
     public const string DisplayVersion = "ForgerEMS v1.2.4 Public Preview";

@@ -874,6 +874,10 @@ public sealed class DrForgeReportHistoryReader
         value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture);
 }
 
+public sealed record DrForgeParsedReportField(string Name, string Value);
+
+public sealed record DrForgeParsedReportSection(string Title, IReadOnlyList<DrForgeParsedReportField> Fields);
+
 public sealed record DrForgeReportDetailView(
     bool PreviewAvailable,
     string Kind,
@@ -891,6 +895,8 @@ public sealed record DrForgeReportDetailView(
     int? DriverRequiredUnavailableCount,
     string StatusText,
     string PreviewText,
+    string RawPreviewText,
+    IReadOnlyList<DrForgeParsedReportSection> ParsedSections,
     string SummaryText);
 
 public sealed class DrForgeReportDetailReader
@@ -1020,11 +1026,26 @@ public sealed class DrForgeReportDetailReader
         var counts = CountSummaryReadings(root);
         var driverRequiredUnavailable = CountDriverRequiredUnavailable(root);
 
+        var parsedSections = BuildParsedSections(
+            root,
+            name,
+            kind,
+            size,
+            lastWrite,
+            reportSchema,
+            sourceSchema,
+            generatedAt,
+            invariants,
+            kernelDriverLoaded,
+            counts,
+            driverRequiredUnavailable);
+
         var statusLines = new List<string>
         {
             "Local Dr. Forge report preview",
             "Preview is read-only.",
             "Report: " + name,
+            "Local report path: app-managed Dr. Forge report root\\" + name,
             "Type: " + kind,
             "Preview status: Preview ready",
             "Modified: " + FormatUtc(lastWrite),
@@ -1041,8 +1062,10 @@ public sealed class DrForgeReportDetailReader
             "Reports stay local unless you explicitly export or include them in a support bundle.",
             "No driver install, start, load, or elevation action is performed."
         };
+        AddParsedSummaryLines(statusLines, parsedSections);
 
         var preview = BuildJsonPreview(root);
+        var rawPreview = BuildRawPreview(json);
         return new DrForgeReportDetailView(
             true,
             kind,
@@ -1060,6 +1083,8 @@ public sealed class DrForgeReportDetailReader
             driverRequiredUnavailable,
             "Preview ready",
             preview,
+            rawPreview,
+            parsedSections,
             string.Join(Environment.NewLine, statusLines));
     }
 
@@ -1091,7 +1116,9 @@ public sealed class DrForgeReportDetailReader
             "No driver install, start, load, or elevation action is performed.");
 
         return new DrForgeReportDetailView(true, kind, name, path, size, lastWrite, "Markdown", "Unknown", "Unknown",
-            "Unknown", "unknown", null, null, null, "Preview ready", preview, summary);
+            "Unknown", "unknown", null, null, null, "Preview ready", preview, preview,
+            [BuildReportMetadataSection(name, kind, size, lastWrite, "Preview ready", "Markdown is shown as capped plain text.")],
+            summary);
     }
 
     private DrForgeReportDetailView BuildArchiveFileDetail(
@@ -1145,7 +1172,9 @@ public sealed class DrForgeReportDetailReader
             "No driver install, start, load, or elevation action is performed.");
 
         return new DrForgeReportDetailView(false, kind, name, path, size, lastWrite, "Unknown", "Unknown", "Unknown",
-            "Unknown", "unknown", null, null, null, "Preview unavailable", reason, summary);
+            "Unknown", "unknown", null, null, null, "Preview unavailable", reason, reason,
+            [BuildReportMetadataSection(name, kind, size, lastWrite, "Preview unavailable", reason)],
+            summary);
     }
 
     private static DrForgeReportDetailView Unavailable(string name, string path, string kind, string reason)
@@ -1162,7 +1191,277 @@ public sealed class DrForgeReportDetailReader
 
         return new DrForgeReportDetailView(false, kind, string.IsNullOrWhiteSpace(name) ? "Unavailable" : name, path, 0,
             null, "Unknown", "Unknown", "Unknown", "Unknown", "unknown", null, null, null, "Preview unavailable",
-            reason, summary);
+            reason, reason,
+            [BuildReportMetadataSection(string.IsNullOrWhiteSpace(name) ? "Unavailable" : name, kind, 0, null, "Preview unavailable", reason)],
+            summary);
+    }
+
+    private static IReadOnlyList<DrForgeParsedReportSection> BuildParsedSections(
+        JsonElement root,
+        string name,
+        string kind,
+        long size,
+        DateTimeOffset lastWrite,
+        string reportSchema,
+        string sourceSchema,
+        string generatedAt,
+        bool? safetyInvariants,
+        bool? kernelDriverLoaded,
+        (int Available, int Unavailable)? summaryCounts,
+        int driverRequiredUnavailable)
+    {
+        var sections = new List<DrForgeParsedReportSection>();
+        if (IsKnownReportSchema(reportSchema, sourceSchema))
+        {
+            AddSection(sections, "Report Summary",
+            [
+                new("Report", name),
+                new("Type", kind),
+                new("Generated", generatedAt),
+                new("Report schema", reportSchema),
+                new("Source schema", sourceSchema),
+                new("Available readings", FormatNullableCount(summaryCounts?.Available)),
+                new("Unavailable readings", FormatNullableCount(summaryCounts?.Unavailable)),
+                new("Driver-required readings unavailable", driverRequiredUnavailable.ToString(CultureInfo.InvariantCulture))
+            ]);
+
+            AddDeviceSystemSection(sections, root);
+            AddCpuSection(sections, root);
+            AddMemorySection(sections, root);
+            AddStorageSection(sections, root);
+            AddBatterySection(sections, root);
+            AddThermalsAndSensorsSection(sections, root, driverRequiredUnavailable);
+            AddSection(sections, "Driver / Safety Status",
+            [
+                new("Safety invariant result", FormatReportBool(safetyInvariants)),
+                new("Kernel driver loaded", FormatReportBool(kernelDriverLoaded)),
+                new("Driver-required readings unavailable", driverRequiredUnavailable.ToString(CultureInfo.InvariantCulture)),
+                new("Driver-required reading handling", "Unavailable when not exposed by the saved report"),
+                new("Driver action", "No driver install, start, load, or elevation action is performed")
+            ]);
+        }
+
+        sections.Add(BuildReportMetadataSection(name, kind, size, lastWrite, "Preview ready", "Selected from the app-managed Dr. Forge report folder."));
+        return sections;
+    }
+
+    private static bool IsKnownReportSchema(string reportSchema, string sourceSchema) =>
+        reportSchema.StartsWith("forge-hardware-intake-report/", StringComparison.OrdinalIgnoreCase) ||
+        reportSchema.StartsWith("forge-sensor-core-snapshot/", StringComparison.OrdinalIgnoreCase) ||
+        sourceSchema.StartsWith("forge-sensor-core-snapshot/", StringComparison.OrdinalIgnoreCase);
+
+    private static void AddDeviceSystemSection(List<DrForgeParsedReportSection> sections, JsonElement root)
+    {
+        if (!TryGetProperty(root, "platform", out var platform) || platform.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        AddSection(sections, "Device / System",
+        [
+            new("OS family", FormatNullableString(platform, "osFamily")),
+            new("OS version", FormatNullableString(platform, "osVersion")),
+            new("Architecture", FormatNullableString(platform, "architecture")),
+            new("Manufacturer", FormatNullableString(platform, "manufacturer")),
+            new("Model", FormatNullableString(platform, "model"))
+        ]);
+    }
+
+    private static void AddCpuSection(List<DrForgeParsedReportSection> sections, JsonElement root)
+    {
+        var fields = new List<DrForgeParsedReportField>();
+        if (TryGetProperty(root, "summary", out var summary) && summary.ValueKind == JsonValueKind.Object &&
+            HasAnyProperty(summary, "cpuLoadPercent"))
+        {
+            fields.Add(new("CPU load", FormatNullableNumber(summary, "cpuLoadPercent", "%")));
+        }
+
+        if (TryGetProperty(root, "cpu", out var cpu) && cpu.ValueKind == JsonValueKind.Object)
+        {
+            AddFirstPresentString(fields, "CPU model", cpu, "name", "model", "brand");
+            AddFirstPresentNumber(fields, "Physical cores", cpu, null, "physicalCoreCount", "coreCount", "cores");
+            AddFirstPresentNumber(fields, "Logical processors", cpu, null, "logicalProcessorCount", "threadCount", "threads");
+            AddFirstPresentNumber(fields, "Reported temperature", cpu, "C", "temperatureCelsius", "packageTemperatureCelsius");
+        }
+
+        AddSection(sections, "CPU", fields);
+    }
+
+    private static void AddMemorySection(List<DrForgeParsedReportSection> sections, JsonElement root)
+    {
+        var fields = new List<DrForgeParsedReportField>();
+        if (TryGetProperty(root, "summary", out var summary) && summary.ValueKind == JsonValueKind.Object &&
+            HasAnyProperty(summary, "memoryUsedPercent"))
+        {
+            fields.Add(new("Memory used", FormatNullableNumber(summary, "memoryUsedPercent", "%")));
+        }
+
+        if (TryGetProperty(root, "memory", out var memory) && memory.ValueKind == JsonValueKind.Object)
+        {
+            AddFirstPresentBytes(fields, "Total memory", memory, "totalBytes", "installedBytes");
+            AddFirstPresentBytes(fields, "Used memory", memory, "usedBytes");
+            AddFirstPresentBytes(fields, "Available memory", memory, "availableBytes", "freeBytes");
+            AddFirstPresentNumber(fields, "Memory modules", memory, null, "moduleCount", "modules");
+        }
+
+        AddSection(sections, "Memory", fields);
+    }
+
+    private static void AddStorageSection(List<DrForgeParsedReportSection> sections, JsonElement root)
+    {
+        var fields = new List<DrForgeParsedReportField>();
+        if (TryGetProperty(root, "summary", out var summary) && summary.ValueKind == JsonValueKind.Object)
+        {
+            if (HasAnyProperty(summary, "storageCapacityBytes"))
+            {
+                fields.Add(new("Storage capacity", FormatNullableBytes(summary, "storageCapacityBytes")));
+            }
+
+            if (HasAnyProperty(summary, "storageSmartHealth"))
+            {
+                fields.Add(new("Storage SMART health", FormatNullableString(summary, "storageSmartHealth")));
+            }
+        }
+
+        if (TryGetProperty(root, "storage", out var storage))
+        {
+            if (storage.ValueKind == JsonValueKind.Object)
+            {
+                AddFirstPresentBytes(fields, "Reported capacity", storage, "capacityBytes", "totalBytes");
+                AddFirstPresentString(fields, "Reported health", storage, "smartHealth", "health");
+                AddFirstPresentNumber(fields, "Drive count", storage, null, "driveCount", "diskCount");
+            }
+            else if (storage.ValueKind == JsonValueKind.Array)
+            {
+                fields.Add(new("Storage devices listed", storage.GetArrayLength().ToString(CultureInfo.InvariantCulture)));
+                foreach (var (drive, index) in storage.EnumerateArray().Take(3).Select((item, index) => (item, index + 1)))
+                {
+                    if (drive.ValueKind != JsonValueKind.Object)
+                    {
+                        continue;
+                    }
+
+                    var model = ReadFirstString(drive, "model", "name") ?? "Unknown";
+                    var health = ReadFirstString(drive, "smartHealth", "health") ?? "Unknown";
+                    fields.Add(new("Storage device " + index.ToString(CultureInfo.InvariantCulture), model + "; health: " + health));
+                }
+            }
+        }
+
+        AddSection(sections, "Storage", fields);
+    }
+
+    private static void AddBatterySection(List<DrForgeParsedReportSection> sections, JsonElement root)
+    {
+        if (!TryGetProperty(root, "battery", out var battery) || battery.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        var fields = new List<DrForgeParsedReportField>();
+        AddFirstPresentNumber(fields, "Charge", battery, "%", "chargePercent", "remainingPercent");
+        AddFirstPresentNumber(fields, "Health", battery, "%", "healthPercent", "wearLevelPercent");
+        AddFirstPresentNumber(fields, "Cycle count", battery, null, "cycleCount");
+        AddFirstPresentString(fields, "Status", battery, "status", "state");
+        AddFirstPresentNumber(fields, "Design capacity", battery, "Wh", "designCapacityWh");
+        AddFirstPresentNumber(fields, "Full charge capacity", battery, "Wh", "fullChargeCapacityWh");
+        AddSection(sections, "Battery", fields);
+    }
+
+    private static void AddThermalsAndSensorsSection(
+        List<DrForgeParsedReportSection> sections,
+        JsonElement root,
+        int driverRequiredUnavailable)
+    {
+        var fields = new List<DrForgeParsedReportField>();
+        if (TryGetProperty(root, "summary", out var summary) && summary.ValueKind == JsonValueKind.Object)
+        {
+            AddFirstPresentNumber(fields, "CPU temperature", summary, "C", "cpuTemperatureCelsius", "cpuPackageTemperatureCelsius");
+            AddFirstPresentNumber(fields, "GPU temperature", summary, "C", "gpuTemperatureCelsius");
+        }
+
+        if (TryGetProperty(root, "thermals", out var thermals) && thermals.ValueKind == JsonValueKind.Object)
+        {
+            AddFirstPresentNumber(fields, "Thermal zones", thermals, null, "zoneCount");
+            AddFirstPresentString(fields, "Thermal status", thermals, "status", "state");
+        }
+
+        if (TryGetProperty(root, "readings", out var readings) && readings.ValueKind == JsonValueKind.Array)
+        {
+            fields.Add(new("Readings listed", readings.GetArrayLength().ToString(CultureInfo.InvariantCulture)));
+        }
+
+        if (driverRequiredUnavailable > 0)
+        {
+            fields.Add(new("Driver-required unavailable readings", driverRequiredUnavailable.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        AddGapFields(fields, root, "ring0Gaps", "Driver-required gap", "reading", "displayName", includeReason: true);
+        AddGapFields(fields, root, "wouldUnlock", "Driver-status gap", "displayName", "gapReadingId", includeReason: false);
+        AddSection(sections, "Thermals / Sensors", fields);
+    }
+
+    private static DrForgeParsedReportSection BuildReportMetadataSection(
+        string name,
+        string kind,
+        long size,
+        DateTimeOffset? lastWrite,
+        string previewStatus,
+        string note)
+    {
+        var fields = new List<DrForgeParsedReportField>
+        {
+            new("File name", string.IsNullOrWhiteSpace(name) ? "Unavailable" : name),
+            new("Type", string.IsNullOrWhiteSpace(kind) ? "Report" : kind),
+            new("Modified", lastWrite.HasValue ? FormatUtc(lastWrite.Value) : "Unknown"),
+            new("File size", FormatBytes(size)),
+            new("Preview status", previewStatus),
+            new("Local path scope", "App-managed Dr. Forge report folder only"),
+            new("Preview limits", "JSON 512 KiB parse cap; Markdown 64 KiB read cap; preview 4000 characters"),
+            new("Archive handling", kind.Equals("Archive", StringComparison.OrdinalIgnoreCase) ? "Metadata only; no extraction" : "No archive extraction performed"),
+            new("Note", note)
+        };
+
+        return new DrForgeParsedReportSection("Report Metadata", fields);
+    }
+
+    private static void AddSection(
+        List<DrForgeParsedReportSection> sections,
+        string title,
+        IEnumerable<DrForgeParsedReportField> fields)
+    {
+        var availableFields = fields
+            .Where(field => !string.IsNullOrWhiteSpace(field.Name) && !string.IsNullOrWhiteSpace(field.Value))
+            .ToList();
+        if (availableFields.Count > 0)
+        {
+            sections.Add(new DrForgeParsedReportSection(title, availableFields));
+        }
+    }
+
+    private static void AddParsedSummaryLines(
+        List<string> summaryLines,
+        IReadOnlyList<DrForgeParsedReportSection> sections)
+    {
+        var fieldLines = sections
+            .Where(section => !section.Title.Equals("Report Metadata", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(section => section.Fields.Take(6).Select(field => "- " + section.Title + " / " + field.Name + ": " + field.Value))
+            .Take(24)
+            .ToList();
+
+        if (fieldLines.Count == 0)
+        {
+            return;
+        }
+
+        summaryLines.Add("Parsed report fields:");
+        summaryLines.AddRange(fieldLines);
+    }
+
+    private static string BuildRawPreview(string text)
+    {
+        var preview = CapPreview(text, out var capped);
+        return capped ? preview + Environment.NewLine + "[Preview capped for safety.]" : preview;
     }
 
     private static (int Available, int Unavailable)? CountSummaryReadings(JsonElement root)
@@ -1288,6 +1587,174 @@ public sealed class DrForgeReportDetailReader
         var message = ReadString(finding, "message") ?? "Unavailable";
         return severity + ": " + message;
     }
+
+    private static void AddFirstPresentString(
+        List<DrForgeParsedReportField> fields,
+        string displayName,
+        JsonElement element,
+        params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            if (!TryGetProperty(element, propertyName, out _))
+            {
+                continue;
+            }
+
+            fields.Add(new DrForgeParsedReportField(displayName, FormatNullableString(element, propertyName)));
+            return;
+        }
+    }
+
+    private static void AddFirstPresentNumber(
+        List<DrForgeParsedReportField> fields,
+        string displayName,
+        JsonElement element,
+        string? unit,
+        params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            if (!TryGetProperty(element, propertyName, out _))
+            {
+                continue;
+            }
+
+            fields.Add(new DrForgeParsedReportField(displayName, FormatNullableNumber(element, propertyName, unit)));
+            return;
+        }
+    }
+
+    private static void AddFirstPresentBytes(
+        List<DrForgeParsedReportField> fields,
+        string displayName,
+        JsonElement element,
+        params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            if (!TryGetProperty(element, propertyName, out _))
+            {
+                continue;
+            }
+
+            fields.Add(new DrForgeParsedReportField(displayName, FormatNullableBytes(element, propertyName)));
+            return;
+        }
+    }
+
+    private static void AddGapFields(
+        List<DrForgeParsedReportField> fields,
+        JsonElement root,
+        string propertyName,
+        string displayPrefix,
+        string primaryNameProperty,
+        string fallbackNameProperty,
+        bool includeReason)
+    {
+        if (!TryGetProperty(root, propertyName, out var gaps) || gaps.ValueKind != JsonValueKind.Array)
+        {
+            return;
+        }
+
+        foreach (var (gap, index) in gaps.EnumerateArray().Take(6).Select((item, index) => (item, index + 1)))
+        {
+            if (gap.ValueKind != JsonValueKind.Object)
+            {
+                fields.Add(new DrForgeParsedReportField(
+                    displayPrefix + " " + index.ToString(CultureInfo.InvariantCulture),
+                    "Unavailable"));
+                continue;
+            }
+
+            var reading = ReadString(gap, primaryNameProperty) ??
+                          ReadString(gap, fallbackNameProperty) ??
+                          "Unavailable reading";
+            var value = includeReason
+                ? reading + ": " + (ReadString(gap, "reason") ?? "Unavailable")
+                : reading + ": Unavailable";
+            fields.Add(new DrForgeParsedReportField(
+                displayPrefix + " " + index.ToString(CultureInfo.InvariantCulture),
+                value));
+        }
+    }
+
+    private static bool HasAnyProperty(JsonElement element, params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            if (TryGetProperty(element, propertyName, out _))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string? ReadFirstString(JsonElement element, params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            var value = ReadString(element, propertyName);
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static string FormatNullableString(JsonElement element, string propertyName)
+    {
+        if (!TryGetProperty(element, propertyName, out var value) ||
+            value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined ||
+            value.ValueKind != JsonValueKind.String ||
+            string.IsNullOrWhiteSpace(value.GetString()))
+        {
+            return "Unavailable";
+        }
+
+        return value.GetString()!;
+    }
+
+    private static string FormatNullableNumber(JsonElement element, string propertyName, string? unit)
+    {
+        if (!TryGetProperty(element, propertyName, out var value) ||
+            value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return "Unavailable";
+        }
+
+        if (value.ValueKind != JsonValueKind.Number || !value.TryGetDouble(out var number))
+        {
+            return "Unavailable";
+        }
+
+        var formatted = number.ToString("0.###", CultureInfo.InvariantCulture);
+        return string.IsNullOrWhiteSpace(unit) ? formatted : formatted + " " + unit;
+    }
+
+    private static string FormatNullableBytes(JsonElement element, string propertyName)
+    {
+        if (!TryGetProperty(element, propertyName, out var value) ||
+            value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return "Unavailable";
+        }
+
+        return value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var bytes)
+            ? FormatBytes(Math.Max(0, bytes))
+            : "Unavailable";
+    }
+
+    private static string FormatReportBool(bool? value) => value switch
+    {
+        true => "Yes",
+        false => "No",
+        null => "Unknown"
+    };
 
     private static string FormatJsonValue(JsonElement value) => value.ValueKind switch
     {

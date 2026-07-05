@@ -59,7 +59,7 @@ public sealed class MainWindowXamlLoadTests
         var text = File.ReadAllText(xamlPath);
 
         var headers = System.Text.RegularExpressions.Regex
-            .Matches(text, "<TabItem Header=\"(?<h>[^\"]+)\">")
+            .Matches(text, "^                    <TabItem Header=\"(?<h>[^\"]+)\">", System.Text.RegularExpressions.RegexOptions.Multiline)
             .Select(m => m.Groups["h"].Value)
             .ToArray();
 
@@ -119,6 +119,10 @@ public sealed class MainWindowXamlLoadTests
         Assert.Contains("Preview is read-only.", toolkit, StringComparison.Ordinal);
         Assert.Contains("DrForgeReportHistoryItems", toolkit, StringComparison.Ordinal);
         Assert.Contains("SelectedDrForgeReportHistoryItem", toolkit, StringComparison.Ordinal);
+        Assert.Contains("Header=\"Parsed Sections\"", toolkit, StringComparison.Ordinal);
+        Assert.Contains("Header=\"Raw Preview\"", toolkit, StringComparison.Ordinal);
+        Assert.Contains("DrForgeReportParsedStatusText", toolkit, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding DrForgeReportSections}\"", toolkit, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding DrForgeReportDetailText, Mode=OneWay}\"", toolkit, StringComparison.Ordinal);
         Assert.Contains("Content=\"Select CLI\"", toolkit, StringComparison.Ordinal);
         Assert.Contains("Content=\"Check Package\"", toolkit, StringComparison.Ordinal);
@@ -338,10 +342,11 @@ public sealed class MainWindowXamlLoadTests
 
     private static string ExtractTab(string xaml, string header)
     {
-        var start = xaml.IndexOf($"<TabItem Header=\"{header}\">", StringComparison.Ordinal);
+        const string mainTabIndent = "                    ";
+        var start = xaml.IndexOf(mainTabIndent + $"<TabItem Header=\"{header}\">", StringComparison.Ordinal);
         Assert.True(start >= 0, $"Could not find tab '{header}'.");
 
-        var end = xaml.IndexOf("<TabItem Header=", start + 1, StringComparison.Ordinal);
+        var end = xaml.IndexOf("\n" + mainTabIndent + "<TabItem Header=", start + 1, StringComparison.Ordinal);
         return end > start ? xaml[start..end] : xaml[start..];
     }
 

@@ -1,6 +1,6 @@
 # ForgerEMS Legal Notices
 
-Applies to: ForgerEMS `v1.2.4-preview.1` public preview
+Applies to: ForgerEMS `v1.2.4-preview.2` public preview
 
 This is practical project-provided notice text for preview software. It is not legal advice and no attorney review or compliance certification is claimed.
 
@@ -30,4 +30,4 @@ ForgerEMS is independent and is not affiliated with, sponsored by, or endorsed b
 
 ## Support Bundles
 
-ForgerEMS attempts to redact sensitive values from support bundles, but redaction is best effort. Dr. Forge report/archive files are included only when the user generated them from the app or explicitly chooses to include them. Review every exported file before sharing it.
+ForgerEMS attempts to redact sensitive values from support bundles, but redaction is best effort. Dr. Forge report/archive files are included only when the user explicitly chooses to include them. Review every exported file before sharing it.

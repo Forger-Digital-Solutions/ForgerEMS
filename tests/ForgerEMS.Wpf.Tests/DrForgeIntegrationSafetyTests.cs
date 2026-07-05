@@ -117,6 +117,8 @@ public sealed class DrForgeIntegrationSafetyTests
         Assert.Contains("Driver-required readings are unavailable until a future signed-driver phase.", xaml, StringComparison.Ordinal);
         Assert.Contains("Local Dr. Forge report preview", xaml, StringComparison.Ordinal);
         Assert.Contains("Preview is read-only.", xaml, StringComparison.Ordinal);
+        Assert.Contains("Parsed Sections", xaml, StringComparison.Ordinal);
+        Assert.Contains("Raw Preview", xaml, StringComparison.Ordinal);
         Assert.Contains("Driver-required readings may appear as unavailable.", xaml, StringComparison.Ordinal);
         Assert.Contains("does not claim full hardware-monitor parity", xaml, StringComparison.OrdinalIgnoreCase);
 
@@ -282,5 +284,6 @@ public sealed class DrForgeIntegrationSafetyTests
         Assert.Contains("ConfirmExportOrSharingConsent(\"Create Support Bundle\")", viewModel, StringComparison.Ordinal);
         Assert.Contains("IncludeDrForgeArtifactsInSupportBundle", viewModel, StringComparison.Ordinal);
         Assert.Contains("Include latest Dr. Forge report/archive in the next support bundle", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("IncludeDrForgeArtifactsInSupportBundle = true", viewModel, StringComparison.Ordinal);
     }
 }

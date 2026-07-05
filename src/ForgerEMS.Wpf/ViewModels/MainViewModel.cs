@@ -511,8 +511,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         "No Dr. Forge CLI is configured yet. Select a packaged drforge.exe to generate local reports. Reports stay local unless explicitly exported or included in a support bundle.";
     private readonly ObservableCollection<DrForgeReportHistoryItem> _drForgeReportHistoryItems = [];
     private DrForgeReportHistoryItem? _selectedDrForgeReportHistoryItem;
+    private readonly ObservableCollection<DrForgeParsedReportSection> _drForgeReportSections = [];
+    private string _drForgeReportParsedStatusText =
+        "Parsed Dr. Forge report sections are report-derived and read-only. Select a local app-managed report to view them.";
     private string _drForgeReportDetailText =
-        "Local Dr. Forge report preview is read-only. Select a local app-managed report to preview safe details.";
+        "Raw Preview is read-only. Select a local app-managed report to preview capped local content.";
     private string _drForgeSelectedReportSummaryText =
         "No Dr. Forge report is selected. Reports stay local unless explicitly exported or included in a support bundle.";
     private string _drForgeReportSummaryText =
@@ -1509,6 +1512,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 LoadDrForgeReportDetail(value);
             }
         }
+    }
+
+    public ObservableCollection<DrForgeParsedReportSection> DrForgeReportSections => _drForgeReportSections;
+
+    public string DrForgeReportParsedStatusText
+    {
+        get => _drForgeReportParsedStatusText;
+        private set => SetProperty(ref _drForgeReportParsedStatusText, value);
     }
 
     public string DrForgeReportDetailText
@@ -15263,7 +15274,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             var view = _drForgeIntakeResultReader.ReadReport(reportPath);
             DrForgeReportSummaryText = view.SummaryText;
             DrForgeLastReportPath = reportPath;
-            IncludeDrForgeArtifactsInSupportBundle = true;
             _drForgeCliSettings.LastReportPath = reportPath;
             SetDrForgeState(DrForgeCliBridgeState.ReportReady);
             RefreshDrForgeReportHistory(isDrForgeConfigured: true);
@@ -15322,7 +15332,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             }
 
             DrForgeLastArchivePath = archivePath;
-            IncludeDrForgeArtifactsInSupportBundle = true;
             _drForgeCliSettings.LastArchivePath = archivePath;
             SetDrForgeState(DrForgeCliBridgeState.ArchiveReady);
             RefreshDrForgeReportHistory(isDrForgeConfigured: true);
@@ -15538,7 +15547,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         var detail = new DrForgeReportDetailReader(GetDrForgeReportsDirectory()).Read(item.Path);
         _drForgeSelectedReportSummaryText = detail.SummaryText;
-        DrForgeReportDetailText = detail.SummaryText + Environment.NewLine + Environment.NewLine + "Preview:" + Environment.NewLine + detail.PreviewText;
+        _drForgeReportSections.Clear();
+        foreach (var section in detail.ParsedSections)
+        {
+            _drForgeReportSections.Add(section);
+        }
+
+        DrForgeReportParsedStatusText = BuildDrForgeParsedStatusText(detail);
+        DrForgeReportDetailText = detail.RawPreviewText;
         OpenDrForgeSelectedReportFolderCommand?.RaiseCanExecuteChanged();
         CopyDrForgeReportSummaryCommand?.RaiseCanExecuteChanged();
     }
@@ -15549,9 +15565,25 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             message + Environment.NewLine +
             "Reports stay local unless you explicitly export or include them in a support bundle." + Environment.NewLine +
             "No driver install, start, load, or elevation action is performed.";
+        _drForgeReportSections.Clear();
+        DrForgeReportParsedStatusText = "Parsed Dr. Forge report sections are unavailable until a local app-managed report is selected.";
         DrForgeReportDetailText = _drForgeSelectedReportSummaryText;
         OpenDrForgeSelectedReportFolderCommand?.RaiseCanExecuteChanged();
         CopyDrForgeReportSummaryCommand?.RaiseCanExecuteChanged();
+    }
+
+    private static string BuildDrForgeParsedStatusText(DrForgeReportDetailView detail)
+    {
+        if (detail.Kind.Equals("Archive", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Archive previews are metadata-only. No archive contents are extracted or crawled.";
+        }
+
+        var hasSchemaSections = detail.ParsedSections.Any(section =>
+            !section.Title.Equals("Report Metadata", StringComparison.OrdinalIgnoreCase));
+        return hasSchemaSections
+            ? "Parsed sections are report-derived and read-only. This is a saved report view, not live telemetry."
+            : "Known parsed sections are unavailable for this report. Use Raw Preview for the capped local plain-text view.";
     }
 
     private bool IsDrForgeConfiguredForHistory() =>

@@ -358,13 +358,18 @@ public sealed class DrForgeCliBridgeTests
               "reportSchemaVersion": "forge-hardware-intake-report/1.0",
               "sourceSchemaVersion": "forge-sensor-core-snapshot/1.0",
               "generatedAtUtc": "2026-07-04T12:34:56Z",
+              "platform": { "osFamily": "Windows", "osVersion": "11", "architecture": "x64" },
               "safety": { "satisfiesSafetyInvariants": true, "kernelDriverLoaded": false },
               "summary": {
                 "cpuLoadPercent": 12.5,
                 "memoryUsedPercent": null,
                 "storageCapacityBytes": 1024,
-                "storageSmartHealth": "OK"
+                "storageSmartHealth": "OK",
+                "cpuTemperatureCelsius": 41
               },
+              "cpu": { "model": "Example CPU", "physicalCoreCount": 8, "logicalProcessorCount": 16 },
+              "memory": { "totalBytes": 17179869184, "usedBytes": null },
+              "battery": { "chargePercent": null, "healthPercent": 92, "cycleCount": 140, "status": "Discharging" },
               "findings": [{ "severity": "Info", "message": "User-mode report generated." }],
               "ring0Gaps": [{ "reading": "Fan RPM", "reason": "Requires a future driver-backed provider." }]
             }
@@ -383,9 +388,25 @@ public sealed class DrForgeCliBridgeTests
         Assert.Equal(1, view.DriverRequiredUnavailableCount);
         Assert.Contains("Preview status: Preview ready", view.SummaryText, StringComparison.Ordinal);
         Assert.Contains("Memory used: Unavailable", view.PreviewText, StringComparison.Ordinal);
+        Assert.Contains("Local report path: app-managed Dr. Forge report root\\drforge-intake-report-20260704-123456.json", view.SummaryText, StringComparison.Ordinal);
         Assert.DoesNotContain("Memory used: 0", view.PreviewText, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Reports stay local unless you explicitly export or include them in a support bundle.", view.SummaryText, StringComparison.Ordinal);
         Assert.Contains("No driver install, start, load, or elevation action is performed.", view.SummaryText, StringComparison.Ordinal);
+        AssertParsedSection(view, "Report Summary");
+        AssertParsedSection(view, "Device / System");
+        AssertParsedSection(view, "CPU");
+        AssertParsedSection(view, "Memory");
+        AssertParsedSection(view, "Storage");
+        AssertParsedSection(view, "Battery");
+        AssertParsedSection(view, "Thermals / Sensors");
+        AssertParsedSection(view, "Driver / Safety Status");
+        AssertParsedSection(view, "Report Metadata");
+        AssertParsedField(view, "CPU", "CPU load", "12.5 %");
+        AssertParsedField(view, "Memory", "Memory used", "Unavailable");
+        AssertParsedField(view, "Storage", "Storage capacity", "1 KiB");
+        AssertParsedField(view, "Battery", "Charge", "Unavailable");
+        AssertParsedField(view, "Driver / Safety Status", "Kernel driver loaded", "No");
+        Assert.Contains("\"reportSchemaVersion\"", view.RawPreviewText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -455,6 +476,9 @@ public sealed class DrForgeCliBridgeTests
         Assert.Null(view.UnavailableReadingCount);
         Assert.Contains("Available readings: Unknown", view.SummaryText, StringComparison.Ordinal);
         Assert.Contains("No previewable Dr. Forge report sections were found.", view.PreviewText, StringComparison.Ordinal);
+        Assert.Contains("futureUnknownBlock", view.RawPreviewText, StringComparison.Ordinal);
+        Assert.DoesNotContain(view.ParsedSections, section => section.Title == "CPU");
+        Assert.Contains(view.ParsedSections, section => section.Title == "Report Metadata");
     }
 
     [Fact]
@@ -482,6 +506,8 @@ public sealed class DrForgeCliBridgeTests
         Assert.True(view.PreviewAvailable);
         Assert.Contains("[Preview capped for safety.]", view.PreviewText, StringComparison.Ordinal);
         Assert.DoesNotContain("TAIL_MARKER", view.PreviewText, StringComparison.Ordinal);
+        Assert.Contains("[Preview capped for safety.]", view.RawPreviewText, StringComparison.Ordinal);
+        Assert.DoesNotContain("TAIL_MARKER", view.RawPreviewText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -517,6 +543,8 @@ public sealed class DrForgeCliBridgeTests
         Assert.Contains("Markdown is shown as plain text.", view.SummaryText, StringComparison.Ordinal);
         Assert.Contains("<script>alert('x')</script>", view.PreviewText, StringComparison.Ordinal);
         Assert.Contains("[Preview capped for safety.]", view.PreviewText, StringComparison.Ordinal);
+        Assert.Equal(view.PreviewText, view.RawPreviewText);
+        AssertParsedField(view, "Report Metadata", "Preview limits", "JSON 512 KiB parse cap; Markdown 64 KiB read cap; preview 4000 characters");
     }
 
     [Fact]
@@ -539,6 +567,7 @@ public sealed class DrForgeCliBridgeTests
         Assert.Equal("Archive", view.Kind);
         Assert.Contains("metadata only", view.PreviewText, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("No archive contents were extracted", view.PreviewText, StringComparison.Ordinal);
+        AssertParsedField(view, "Report Metadata", "Archive handling", "Metadata only; no extraction");
     }
 
     [Fact]
@@ -569,9 +598,13 @@ public sealed class DrForgeCliBridgeTests
 
         Assert.StartsWith("Local Dr. Forge report preview", view.SummaryText, StringComparison.Ordinal);
         Assert.Contains("Report: drforge-intake-report-copy.json", view.SummaryText, StringComparison.Ordinal);
+        Assert.Contains("Local report path: app-managed Dr. Forge report root\\drforge-intake-report-copy.json", view.SummaryText, StringComparison.Ordinal);
+        Assert.Contains("Parsed report fields:", view.SummaryText, StringComparison.Ordinal);
+        Assert.Contains("CPU / CPU load: Unavailable", view.SummaryText, StringComparison.Ordinal);
         Assert.Contains("Preview is read-only.", view.SummaryText, StringComparison.Ordinal);
         Assert.Contains("Reports stay local unless you explicitly export or include them in a support bundle.", view.SummaryText, StringComparison.Ordinal);
         Assert.Contains("No driver install, start, load, or elevation action is performed.", view.SummaryText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Raw Preview", view.SummaryText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -610,6 +643,18 @@ public sealed class DrForgeCliBridgeTests
         Assert.DoesNotContain("sudo", text, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("activation", text, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("account", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void AssertParsedSection(DrForgeReportDetailView view, string title)
+    {
+        Assert.Contains(view.ParsedSections, section => string.Equals(section.Title, title, StringComparison.Ordinal));
+    }
+
+    private static void AssertParsedField(DrForgeReportDetailView view, string sectionTitle, string fieldName, string expectedValue)
+    {
+        var section = Assert.Single(view.ParsedSections, item => string.Equals(item.Title, sectionTitle, StringComparison.Ordinal));
+        var field = Assert.Single(section.Fields, item => string.Equals(item.Name, fieldName, StringComparison.Ordinal));
+        Assert.Equal(expectedValue, field.Value);
     }
 
     private static DrForgePackageTempDir CreatePackage(string executableContent)

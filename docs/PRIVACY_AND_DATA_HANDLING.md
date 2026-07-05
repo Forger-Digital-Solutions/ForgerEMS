@@ -1,6 +1,6 @@
 # ForgerEMS Privacy and Data Handling
 
-Applies to: ForgerEMS `v1.2.4-preview.1` public preview
+Applies to: ForgerEMS `v1.2.4-preview.2` public preview
 
 ForgerEMS is local-first. It does not upload logs, support bundles, reports, Kyra memory, sensor data, USB inventories, or local device snapshots automatically.
 
@@ -16,9 +16,9 @@ Local snapshots may include Windows version, device model, CPU/GPU/RAM/storage d
 
 When configured, ForgerEMS stores the selected `drforge.exe` path, last readiness state, and last local Dr. Forge report/archive paths under the local Runtime config folder. Generated Dr. Forge reports and archives stay under `%LOCALAPPDATA%\ForgerEMS\Runtime\reports\drforge`. The in-app recent report history and local report preview read that app-managed folder only; they do not crawl Documents or arbitrary user folders.
 
-Dr. Forge reports may include local device/context information, sensor availability, findings, notes, and unavailable telemetry reasons. The in-app preview is read-only and bounded: JSON parsing is capped to known summary fields, Markdown is shown as capped plain text, and ZIP/archive previews are metadata-only. Unavailable readings remain unavailable, not zero. Review reports before sharing.
+Dr. Forge reports may include local device/context information, sensor availability, findings, notes, and unavailable telemetry reasons. The in-app preview is read-only and bounded: known JSON schemas can be grouped into report-derived sections, unknown JSON falls back to capped raw/metadata preview, Markdown is shown as capped plain text, and ZIP/archive previews are metadata-only with no extraction. Unavailable readings remain unavailable, not zero. Review reports before sharing.
 
-Dr. Forge report/archive files are included in ForgerEMS support bundles only when the user generated them from the app or explicitly chooses to include them and confirms the support-bundle export. Previewing a report does not upload it and does not attach it to a support bundle automatically.
+Dr. Forge report/archive files are included in ForgerEMS support bundles only when the user explicitly chooses to include them and confirms the support-bundle export. Previewing or generating a report does not upload it and does not attach it to a support bundle automatically.
 
 ## Kyra and Providers
 

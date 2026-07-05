@@ -4,7 +4,7 @@
 
 **Not legal advice.** This document is ordinary software disclaimer language for operators and beta testers; it is not legal counsel.
 
-**Current v1.2.4-preview.1 legal docs:** see [TERMS_OF_USE.md](TERMS_OF_USE.md), [PRIVACY_AND_DATA_HANDLING.md](PRIVACY_AND_DATA_HANDLING.md), [LEGAL_NOTICES.md](LEGAL_NOTICES.md), and [USER_CONSENT_FLOW.md](USER_CONSENT_FLOW.md). Those files are the current first-run consent and packaging references; this page remains as a practical preview notice.
+**Current v1.2.4-preview.2 legal docs:** see [TERMS_OF_USE.md](TERMS_OF_USE.md), [PRIVACY_AND_DATA_HANDLING.md](PRIVACY_AND_DATA_HANDLING.md), [LEGAL_NOTICES.md](LEGAL_NOTICES.md), and [USER_CONSENT_FLOW.md](USER_CONSENT_FLOW.md). Those files are the current first-run consent and packaging references; this page remains as a practical preview notice.
 
 ---
 

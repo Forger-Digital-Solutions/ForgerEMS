@@ -985,7 +985,7 @@
                     <!-- The always-visible Internet status widget was removed from the shell
                          header: it kept a background network monitor running for the whole
                          session, and the network-check feature was retired entirely in
-                         v1.2.4-preview.1. -->
+                         v1.2.4-preview.2. -->
                     <StackPanel Orientation="Horizontal"
                                 HorizontalAlignment="Right">
                         <Border Margin="0,0,12,0"
@@ -2477,17 +2477,72 @@
                                                       ItemsSource="{Binding DrForgeReportHistoryItems}"
                                                       SelectedItem="{Binding SelectedDrForgeReportHistoryItem}"
                                                       Style="{StaticResource ReadableComboBoxStyle}" />
-                                            <TextBox MinHeight="120"
-                                                     MaxHeight="220"
-                                                     FontFamily="Consolas"
-                                                     FontSize="11"
-                                                     IsReadOnly="True"
-                                                     IsUndoEnabled="False"
-                                                     Text="{Binding DrForgeReportDetailText, Mode=OneWay}"
-                                                     TextWrapping="Wrap"
-                                                     AcceptsReturn="True"
-                                                     VerticalScrollBarVisibility="Auto"
-                                                     HorizontalScrollBarVisibility="Disabled" />
+                                            <TabControl MinHeight="190"
+                                                        MaxHeight="280"
+                                                        Margin="0,0,0,4">
+                                                <TabItem Header="Parsed Sections">
+                                                    <ScrollViewer MaxHeight="240"
+                                                                  VerticalScrollBarVisibility="Auto"
+                                                                  HorizontalScrollBarVisibility="Disabled">
+                                                        <StackPanel Margin="6">
+                                                            <TextBlock FontSize="11.5"
+                                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                                       Text="{Binding DrForgeReportParsedStatusText}"
+                                                                       TextWrapping="Wrap" />
+                                                            <ItemsControl Margin="0,8,0,0"
+                                                                          ItemsSource="{Binding DrForgeReportSections}">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <StackPanel Margin="0,0,0,10">
+                                                                            <TextBlock FontWeight="SemiBold"
+                                                                                       Foreground="{DynamicResource PanelLabelBrush}"
+                                                                                       Text="{Binding Title}" />
+                                                                            <ItemsControl Margin="0,3,0,0"
+                                                                                          ItemsSource="{Binding Fields}">
+                                                                                <ItemsControl.ItemTemplate>
+                                                                                    <DataTemplate>
+                                                                                        <Grid Margin="0,1,0,1">
+                                                                                            <Grid.ColumnDefinitions>
+                                                                                                <ColumnDefinition Width="170" />
+                                                                                                <ColumnDefinition Width="*" />
+                                                                                            </Grid.ColumnDefinitions>
+                                                                                            <TextBlock Grid.Column="0"
+                                                                                                       Margin="0,0,8,0"
+                                                                                                       FontSize="11"
+                                                                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                                                                       Text="{Binding Name}"
+                                                                                                       TextWrapping="Wrap" />
+                                                                                            <TextBlock Grid.Column="1"
+                                                                                                       FontSize="11"
+                                                                                                       Foreground="{DynamicResource PanelTextBrush}"
+                                                                                                       Text="{Binding Value}"
+                                                                                                       TextWrapping="Wrap" />
+                                                                                        </Grid>
+                                                                                    </DataTemplate>
+                                                                                </ItemsControl.ItemTemplate>
+                                                                            </ItemsControl>
+                                                                        </StackPanel>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </StackPanel>
+                                                    </ScrollViewer>
+                                                </TabItem>
+                                                <TabItem Header="Raw Preview">
+                                                    <TextBox MinHeight="140"
+                                                             MaxHeight="240"
+                                                             Margin="6"
+                                                             FontFamily="Consolas"
+                                                             FontSize="11"
+                                                             IsReadOnly="True"
+                                                             IsUndoEnabled="False"
+                                                             Text="{Binding DrForgeReportDetailText, Mode=OneWay}"
+                                                             TextWrapping="Wrap"
+                                                             AcceptsReturn="True"
+                                                             VerticalScrollBarVisibility="Auto"
+                                                             HorizontalScrollBarVisibility="Disabled" />
+                                                </TabItem>
+                                            </TabControl>
                                             <TextBlock Margin="0,10,0,0"
                                                        FontSize="11"
                                                        Foreground="{DynamicResource PanelMutedTextBrush}"

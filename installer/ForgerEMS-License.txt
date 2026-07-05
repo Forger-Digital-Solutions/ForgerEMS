@@ -1,5 +1,5 @@
 ForgerEMS Terms of Use Summary
-Version: 2026-07-03.v1.2.4-preview.1
+Version: 2026-07-05.v1.2.4-preview.2
 
 ForgerEMS is a Windows technician utility suite and preview build from Forger
 Digital Solutions. It helps with local-device support workflows, USB toolkit
