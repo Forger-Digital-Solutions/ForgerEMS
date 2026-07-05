@@ -115,6 +115,11 @@ public sealed class MainWindowXamlLoadTests
         Assert.Contains("DrForgeStatusSummaryText", toolkit, StringComparison.Ordinal);
         Assert.Contains("DrForgeLastSuccessfulScanText", toolkit, StringComparison.Ordinal);
         Assert.Contains("DrForgeReportHistoryText", toolkit, StringComparison.Ordinal);
+        Assert.Contains("Local Dr. Forge report preview", toolkit, StringComparison.Ordinal);
+        Assert.Contains("Preview is read-only.", toolkit, StringComparison.Ordinal);
+        Assert.Contains("DrForgeReportHistoryItems", toolkit, StringComparison.Ordinal);
+        Assert.Contains("SelectedDrForgeReportHistoryItem", toolkit, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding DrForgeReportDetailText, Mode=OneWay}\"", toolkit, StringComparison.Ordinal);
         Assert.Contains("Content=\"Select CLI\"", toolkit, StringComparison.Ordinal);
         Assert.Contains("Content=\"Check Package\"", toolkit, StringComparison.Ordinal);
         Assert.Contains("Content=\"Refresh Status\"", toolkit, StringComparison.Ordinal);
@@ -122,6 +127,8 @@ public sealed class MainWindowXamlLoadTests
         Assert.Contains("Content=\"Generate Archive\"", toolkit, StringComparison.Ordinal);
         Assert.Contains("Content=\"Open Report Folder\"", toolkit, StringComparison.Ordinal);
         Assert.Contains("Content=\"Copy Status Summary\"", toolkit, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Copy Report Summary\"", toolkit, StringComparison.Ordinal);
+        Assert.Contains("Content=\"Open Containing Folder\"", toolkit, StringComparison.Ordinal);
         Assert.Contains("Include latest Dr. Forge report/archive", toolkit, StringComparison.Ordinal);
         Assert.DoesNotContain("Deep system scans", toolkit, StringComparison.Ordinal);
         Assert.DoesNotContain("hardware/sensor intelligence", toolkit, StringComparison.Ordinal);

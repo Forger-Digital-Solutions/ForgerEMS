@@ -280,7 +280,7 @@ Dr. Forge Intake is ForgerEMS' local bridge to a packaged **Dr. Forge CLI**. Sel
 
 ForgerEMS consumes the packaged CLI/Core contract through a process boundary. It reads `drforge-cli-release-manifest.json` when available, verifies `SHA256SUMS.txt` when present, runs readiness checks with `drforge --version`, `drforge sensor-core --help`, and `drforge sensors driver-status --json`, then writes generated reports under the local Runtime reports folder.
 
-The card can show the package/configured state, CLI version/commit when available, safe driver-status summary, last successful scan/report time, and recent app-managed Dr. Forge report/archive history. **Open Report Folder** opens the local app-managed reports folder; **Copy Status Summary** copies the local status text.
+The card can show the package/configured state, CLI version/commit when available, safe driver-status summary, last successful scan/report time, recent app-managed Dr. Forge report/archive history, and a local read-only report preview. **Open Report Folder** opens the local app-managed reports folder; **Copy Status Summary** copies the local status text; **Copy Report Summary** copies the selected local preview summary.
 
 If the package is missing or not configured, ForgerEMS shows **Not configured** / setup-needed copy instead of crashing. ForgerEMS does not load Dr. Forge WPF/provider internals.
 
@@ -291,6 +291,10 @@ If the package is missing or not configured, ForgerEMS shows **Not configured** 
 No. Dr. Forge runs as a local user-mode hardware intake/report tool. ForgerEMS treats the current no-driver/user-mode fallback driver-status as normal and safe: no production sensor driver is shipped or loaded, no driver install/start/load/elevation action is taken, and driver-required readings stay **Unavailable** until a future signed-driver phase. Unavailable readings are shown as **Unavailable**, not zero.
 
 ForgerEMS does **not** claim full HWiNFO / CPU-Z / LibreHardwareMonitor parity. Reports may include local device/context information, so review them before sharing. Dr. Forge report/archive files are included in support bundles only when you generated them from the app or explicitly choose to include them. Report history is read from the app-managed Runtime reports folder only; ForgerEMS does not crawl arbitrary folders or upload reports automatically.
+
+## Can I preview local Dr. Forge reports inside ForgerEMS?
+
+Yes. Toolkit Manager can select an app-managed Dr. Forge report/archive/snapshot and show a safe local preview. Preview is read-only: JSON reports parse only conservative known summary fields, Markdown is shown as capped plain text, and ZIP/archive previews are metadata-only. Reports stay in Dr. Forge app-managed storage unless you explicitly export or include them in a support bundle. No driver install, start, load, or elevation action is performed.
 
 ---
 

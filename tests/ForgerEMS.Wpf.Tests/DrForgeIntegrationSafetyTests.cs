@@ -115,9 +115,19 @@ public sealed class DrForgeIntegrationSafetyTests
         Assert.Contains("No production sensor driver is shipped or loaded.", xaml, StringComparison.Ordinal);
         Assert.Contains("No driver install, start, load, or elevation action is performed.", xaml, StringComparison.Ordinal);
         Assert.Contains("Driver-required readings are unavailable until a future signed-driver phase.", xaml, StringComparison.Ordinal);
+        Assert.Contains("Local Dr. Forge report preview", xaml, StringComparison.Ordinal);
+        Assert.Contains("Preview is read-only.", xaml, StringComparison.Ordinal);
+        Assert.Contains("Driver-required readings may appear as unavailable.", xaml, StringComparison.Ordinal);
         Assert.Contains("does not claim full hardware-monitor parity", xaml, StringComparison.OrdinalIgnoreCase);
 
         // And must never present the future driver as shipped or active.
+        Assert.DoesNotContain("Upload report", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Send diagnostics automatically", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Enable deep driver", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Unlock sensors", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Fix hardware", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Control fans", xaml, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Update firmware", xaml, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("driver installed", xaml, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("kernel driver active", xaml, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Install Driver", xaml, StringComparison.Ordinal);
@@ -264,8 +274,13 @@ public sealed class DrForgeIntegrationSafetyTests
     public void SupportBundleReadme_KeepsDrForgeInclusionExplicitAndReviewable()
     {
         var exporter = Read("src", "ForgerEMS.Wpf", "Services", "SupportBundleExporter.cs");
+        var viewModel = Read("src", "ForgerEMS.Wpf", "ViewModels", "MainViewModel.cs");
+        var xaml = Read("src", "ForgerEMS.Wpf", "MainWindow.xaml");
 
         Assert.Contains("only when explicitly included from the app", exporter, StringComparison.Ordinal);
         Assert.Contains("Review before sharing", exporter, StringComparison.Ordinal);
+        Assert.Contains("ConfirmExportOrSharingConsent(\"Create Support Bundle\")", viewModel, StringComparison.Ordinal);
+        Assert.Contains("IncludeDrForgeArtifactsInSupportBundle", viewModel, StringComparison.Ordinal);
+        Assert.Contains("Include latest Dr. Forge report/archive in the next support bundle", xaml, StringComparison.Ordinal);
     }
 }

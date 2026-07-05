@@ -14,11 +14,11 @@ Local snapshots may include Windows version, device model, CPU/GPU/RAM/storage d
 
 ## Dr. Forge Intake
 
-When configured, ForgerEMS stores the selected `drforge.exe` path, last readiness state, and last local Dr. Forge report/archive paths under the local Runtime config folder. Generated Dr. Forge reports and archives stay under `%LOCALAPPDATA%\ForgerEMS\Runtime\reports\drforge`. The in-app recent report history reads that app-managed folder only; it does not crawl Documents or arbitrary user folders.
+When configured, ForgerEMS stores the selected `drforge.exe` path, last readiness state, and last local Dr. Forge report/archive paths under the local Runtime config folder. Generated Dr. Forge reports and archives stay under `%LOCALAPPDATA%\ForgerEMS\Runtime\reports\drforge`. The in-app recent report history and local report preview read that app-managed folder only; they do not crawl Documents or arbitrary user folders.
 
-Dr. Forge reports may include local device/context information, sensor availability, findings, notes, and unavailable telemetry reasons. Unavailable readings remain unavailable, not zero. Review reports before sharing.
+Dr. Forge reports may include local device/context information, sensor availability, findings, notes, and unavailable telemetry reasons. The in-app preview is read-only and bounded: JSON parsing is capped to known summary fields, Markdown is shown as capped plain text, and ZIP/archive previews are metadata-only. Unavailable readings remain unavailable, not zero. Review reports before sharing.
 
-Dr. Forge report/archive files are included in ForgerEMS support bundles only when the user generated them from the app or explicitly chooses to include them. ForgerEMS does not upload them automatically.
+Dr. Forge report/archive files are included in ForgerEMS support bundles only when the user generated them from the app or explicitly chooses to include them and confirms the support-bundle export. Previewing a report does not upload it and does not attach it to a support bundle automatically.
 
 ## Kyra and Providers
 

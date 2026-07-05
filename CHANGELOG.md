@@ -7,6 +7,7 @@
 - **Dr. Forge Intake bridge:** added a local packaged-CLI bridge for `drforge.exe` with app-local discovery, explicit path selection, manifest/checksum inspection, timeout-bounded process execution, and structured readiness/report/archive states.
 - **Report rendering:** ForgerEMS parses `forge-hardware-intake-report/1.0` enough to show platform, safety mode, report schema, available readings, findings, notes, and deep telemetry gaps. Null and missing readings remain **Unavailable**, never zero.
 - **Toolkit Manager UI:** added Dr. Forge Intake actions for Select CLI, Check Package, Generate Report, Generate Archive, Open Report Folder, and Copy Summary, with copy that avoids full hardware-monitor parity claims.
+- **Local report preview:** Toolkit Manager can select recent app-managed Dr. Forge reports/archives/snapshots and show a bounded, read-only local preview: JSON summaries parse conservative known fields, Markdown is shown as capped plain text, ZIP archives stay metadata-only, and no upload or driver/elevation action is performed.
 - **Support bundle/privacy:** Dr. Forge report/archive files stay local and are included in support bundles only when generated from the app or explicitly selected. Docs warn users to review reports before sharing.
 - **Version bump:** app/project metadata, installer defaults, release tooling, validation defaults, docs, release notes, smoke checklist, and version-pinned tests moved from `1.2.3-preview.1` to `1.2.4-preview.1`. Windows assembly/file version is `1.2.4.0`.
 

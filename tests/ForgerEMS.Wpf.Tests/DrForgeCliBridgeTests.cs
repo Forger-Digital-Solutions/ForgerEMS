@@ -320,10 +320,10 @@ public sealed class DrForgeCliBridgeTests
 
         var view = reader.Read(temp.Path, isDrForgeConfigured: true, maxItems: 5);
 
-        Assert.Equal(3, view.Items.Count);
-        Assert.Equal("Archive", view.Items[0].Kind);
-        Assert.Equal("Report", view.Items[1].Kind);
-        Assert.DoesNotContain(view.Items, item => item.Name.Contains("snapshot", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(4, view.Items.Count);
+        Assert.Equal("Snapshot", view.Items[0].Kind);
+        Assert.Equal("Archive", view.Items[1].Kind);
+        Assert.Equal("Report", view.Items[2].Kind);
         Assert.Contains("Recent Dr. Forge reports/history:", view.SummaryText, StringComparison.Ordinal);
         Assert.Contains("drforge-intake-archive-20260704-120000", view.SummaryText, StringComparison.Ordinal);
         Assert.Contains("Reports stay local", view.SummaryText, StringComparison.Ordinal);
@@ -345,6 +345,233 @@ public sealed class DrForgeCliBridgeTests
         Assert.Empty(view.Items);
         Assert.Contains("could not be read", view.SummaryText, StringComparison.Ordinal);
         Assert.Contains("Reports stay local", view.SummaryText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReportDetailReader_ValidLocalJsonReportLoadsSafeSummary()
+    {
+        using var temp = new TempDir();
+        var report = Path.Combine(temp.Path, "drforge-intake-report-20260704-123456.json");
+        File.WriteAllText(report,
+            """
+            {
+              "reportSchemaVersion": "forge-hardware-intake-report/1.0",
+              "sourceSchemaVersion": "forge-sensor-core-snapshot/1.0",
+              "generatedAtUtc": "2026-07-04T12:34:56Z",
+              "safety": { "satisfiesSafetyInvariants": true, "kernelDriverLoaded": false },
+              "summary": {
+                "cpuLoadPercent": 12.5,
+                "memoryUsedPercent": null,
+                "storageCapacityBytes": 1024,
+                "storageSmartHealth": "OK"
+              },
+              "findings": [{ "severity": "Info", "message": "User-mode report generated." }],
+              "ring0Gaps": [{ "reading": "Fan RPM", "reason": "Requires a future driver-backed provider." }]
+            }
+            """);
+
+        var view = new DrForgeReportDetailReader(temp.Path).Read(report);
+
+        Assert.True(view.PreviewAvailable);
+        Assert.Equal("Report", view.Kind);
+        Assert.Equal("forge-hardware-intake-report/1.0", view.ReportSchema);
+        Assert.Equal("forge-sensor-core-snapshot/1.0", view.SourceSchema);
+        Assert.Equal("2026-07-04 12:34:56 UTC", view.GeneratedAt);
+        Assert.Equal("no", view.KernelDriverLoaded);
+        Assert.Equal(3, view.AvailableReadingCount);
+        Assert.Equal(1, view.UnavailableReadingCount);
+        Assert.Equal(1, view.DriverRequiredUnavailableCount);
+        Assert.Contains("Preview status: Preview ready", view.SummaryText, StringComparison.Ordinal);
+        Assert.Contains("Memory used: Unavailable", view.PreviewText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Memory used: 0", view.PreviewText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Reports stay local unless you explicitly export or include them in a support bundle.", view.SummaryText, StringComparison.Ordinal);
+        Assert.Contains("No driver install, start, load, or elevation action is performed.", view.SummaryText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReportDetailReader_MissingFileFailsGracefully()
+    {
+        using var temp = new TempDir();
+        var report = Path.Combine(temp.Path, "drforge-intake-report-missing.json");
+
+        var view = new DrForgeReportDetailReader(temp.Path).Read(report);
+
+        Assert.False(view.PreviewAvailable);
+        Assert.Equal("Preview unavailable", view.StatusText);
+        Assert.Contains("file was not found", view.PreviewText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ReportDetailReader_InaccessibleFileFailsGracefully()
+    {
+        using var temp = new TempDir();
+        var report = Path.Combine(temp.Path, "drforge-intake-report-blocked.json");
+        var reader = new DrForgeReportDetailReader(
+            temp.Path,
+            fileExists: _ => true,
+            directoryExists: _ => false,
+            getLength: _ => throw new UnauthorizedAccessException("blocked"),
+            getLastWriteTimeUtc: _ => DateTimeOffset.UtcNow,
+            readAllText: _ => throw new UnauthorizedAccessException("blocked"));
+
+        var view = reader.Read(report);
+
+        Assert.False(view.PreviewAvailable);
+        Assert.Contains("could not be read or parsed", view.PreviewText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Preview status: Preview unavailable", view.SummaryText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReportDetailReader_CorruptJsonFailsGracefully()
+    {
+        using var temp = new TempDir();
+        var report = Path.Combine(temp.Path, "drforge-intake-report-corrupt.json");
+        File.WriteAllText(report, "{ not json");
+
+        var view = new DrForgeReportDetailReader(temp.Path).Read(report);
+
+        Assert.False(view.PreviewAvailable);
+        Assert.Contains("could not be read or parsed", view.PreviewText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ReportDetailReader_UnknownJsonSchemaDoesNotInventReadings()
+    {
+        using var temp = new TempDir();
+        var report = Path.Combine(temp.Path, "drforge-intake-report-future.json");
+        File.WriteAllText(report,
+            """
+            {
+              "schemaVersion": "future-drforge-report/9.9",
+              "futureUnknownBlock": { "nested": [1, 2, 3] }
+            }
+            """);
+
+        var view = new DrForgeReportDetailReader(temp.Path).Read(report);
+
+        Assert.True(view.PreviewAvailable);
+        Assert.Equal("future-drforge-report/9.9", view.ReportSchema);
+        Assert.Null(view.AvailableReadingCount);
+        Assert.Null(view.UnavailableReadingCount);
+        Assert.Contains("Available readings: Unknown", view.SummaryText, StringComparison.Ordinal);
+        Assert.Contains("No previewable Dr. Forge report sections were found.", view.PreviewText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReportDetailReader_LargeJsonPreviewIsCapped()
+    {
+        using var temp = new TempDir();
+        var report = Path.Combine(temp.Path, "drforge-intake-report-large-preview.json");
+        var longFinding = new string('x', DrForgeReportDetailReader.MaxPreviewCharacters + 500) + "TAIL_MARKER";
+        File.WriteAllText(report,
+            $$"""
+            {
+              "reportSchemaVersion": "forge-hardware-intake-report/1.0",
+              "summary": {
+                "cpuLoadPercent": 1,
+                "memoryUsedPercent": 2,
+                "storageCapacityBytes": 3,
+                "storageSmartHealth": "OK"
+              },
+              "findings": [{ "severity": "Info", "message": "{{longFinding}}" }]
+            }
+            """);
+
+        var view = new DrForgeReportDetailReader(temp.Path).Read(report);
+
+        Assert.True(view.PreviewAvailable);
+        Assert.Contains("[Preview capped for safety.]", view.PreviewText, StringComparison.Ordinal);
+        Assert.DoesNotContain("TAIL_MARKER", view.PreviewText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReportDetailReader_LargeJsonFileUsesMetadataOnly()
+    {
+        using var temp = new TempDir();
+        var report = Path.Combine(temp.Path, "drforge-intake-report-huge.json");
+        var reader = new DrForgeReportDetailReader(
+            temp.Path,
+            fileExists: _ => true,
+            directoryExists: _ => false,
+            getLength: _ => DrForgeReportDetailReader.MaxJsonParseBytes + 1,
+            getLastWriteTimeUtc: _ => DateTimeOffset.UtcNow,
+            readAllText: _ => throw new InvalidOperationException("JSON body should not be read past the safe parse limit."));
+
+        var view = reader.Read(report);
+
+        Assert.False(view.PreviewAvailable);
+        Assert.Contains("larger than the safe preview parse limit", view.PreviewText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ReportDetailReader_MarkdownPreviewIsPlainTextAndCapped()
+    {
+        using var temp = new TempDir();
+        var report = Path.Combine(temp.Path, "drforge-intake-report-20260704-123456.md");
+        File.WriteAllText(report, "# Local report" + Environment.NewLine + "<script>alert('x')</script>" + new string('m', DrForgeReportDetailReader.MaxPreviewCharacters + 500));
+
+        var view = new DrForgeReportDetailReader(temp.Path).Read(report);
+
+        Assert.True(view.PreviewAvailable);
+        Assert.Equal("Markdown", view.ReportSchema);
+        Assert.Contains("Markdown is shown as plain text.", view.SummaryText, StringComparison.Ordinal);
+        Assert.Contains("<script>alert('x')</script>", view.PreviewText, StringComparison.Ordinal);
+        Assert.Contains("[Preview capped for safety.]", view.PreviewText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReportDetailReader_ArchivePreviewDoesNotReadOrExtractContents()
+    {
+        using var temp = new TempDir();
+        var archive = Path.Combine(temp.Path, "drforge-intake-archive-20260704-123456.zip");
+        var reader = new DrForgeReportDetailReader(
+            temp.Path,
+            fileExists: _ => true,
+            directoryExists: _ => false,
+            getLength: _ => 128,
+            getLastWriteTimeUtc: _ => DateTimeOffset.UtcNow,
+            readAllText: _ => throw new InvalidOperationException("Archive contents should not be read."),
+            readTextPrefix: (_, _) => throw new InvalidOperationException("Archive contents should not be read."));
+
+        var view = reader.Read(archive);
+
+        Assert.False(view.PreviewAvailable);
+        Assert.Equal("Archive", view.Kind);
+        Assert.Contains("metadata only", view.PreviewText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("No archive contents were extracted", view.PreviewText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReportDetailReader_RejectsPathsOutsideManagedReportRootBeforeReading()
+    {
+        using var temp = new TempDir();
+        var outside = Path.GetFullPath(Path.Combine(temp.Path, "..", "drforge-intake-report-outside.json"));
+        var reader = new DrForgeReportDetailReader(
+            temp.Path,
+            fileExists: _ => throw new InvalidOperationException("Outside path should not be probed."),
+            directoryExists: _ => throw new InvalidOperationException("Outside path should not be probed."),
+            readAllText: _ => throw new InvalidOperationException("Outside path should not be read."));
+
+        var view = reader.Read(outside);
+
+        Assert.False(view.PreviewAvailable);
+        Assert.Contains("outside the app-managed Dr. Forge report folder", view.PreviewText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReportDetailReader_FormatsSelectedReportSummaryForCopy()
+    {
+        using var temp = new TempDir();
+        var report = Path.Combine(temp.Path, "drforge-intake-report-copy.json");
+        File.WriteAllText(report, """{"reportSchemaVersion":"forge-hardware-intake-report/1.0","summary":{"cpuLoadPercent":null}}""");
+
+        var view = new DrForgeReportDetailReader(temp.Path).Read(report);
+
+        Assert.StartsWith("Local Dr. Forge report preview", view.SummaryText, StringComparison.Ordinal);
+        Assert.Contains("Report: drforge-intake-report-copy.json", view.SummaryText, StringComparison.Ordinal);
+        Assert.Contains("Preview is read-only.", view.SummaryText, StringComparison.Ordinal);
+        Assert.Contains("Reports stay local unless you explicitly export or include them in a support bundle.", view.SummaryText, StringComparison.Ordinal);
+        Assert.Contains("No driver install, start, load, or elevation action is performed.", view.SummaryText, StringComparison.Ordinal);
     }
 
     [Fact]

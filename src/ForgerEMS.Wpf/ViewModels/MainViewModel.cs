@@ -509,6 +509,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private string _drForgeLastSuccessfulScanText = "Last successful scan/report: not generated.";
     private string _drForgeReportHistoryText =
         "No Dr. Forge CLI is configured yet. Select a packaged drforge.exe to generate local reports. Reports stay local unless explicitly exported or included in a support bundle.";
+    private readonly ObservableCollection<DrForgeReportHistoryItem> _drForgeReportHistoryItems = [];
+    private DrForgeReportHistoryItem? _selectedDrForgeReportHistoryItem;
+    private string _drForgeReportDetailText =
+        "Local Dr. Forge report preview is read-only. Select a local app-managed report to preview safe details.";
+    private string _drForgeSelectedReportSummaryText =
+        "No Dr. Forge report is selected. Reports stay local unless explicitly exported or included in a support bundle.";
     private string _drForgeReportSummaryText =
         "No Dr. Forge intake report has been generated in ForgerEMS yet.";
     private string _drForgeLastReportPath = string.Empty;
@@ -767,6 +773,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         OpenDrForgeReportFolderCommand = new RelayCommand(OpenDrForgeReportFolder);
         CopyDrForgeSummaryCommand = new RelayCommand(CopyDrForgeSummary, () => !string.IsNullOrWhiteSpace(_drForgeReportSummaryText));
         CopyDrForgeStatusSummaryCommand = new RelayCommand(CopyDrForgeStatusSummary, () => !string.IsNullOrWhiteSpace(_drForgeStatusSummaryText));
+        OpenDrForgeSelectedReportFolderCommand = new RelayCommand(OpenDrForgeSelectedReportFolder, () => _selectedDrForgeReportHistoryItem is not null);
+        CopyDrForgeReportSummaryCommand = new RelayCommand(CopyDrForgeReportSummary, () => _selectedDrForgeReportHistoryItem is not null && !string.IsNullOrWhiteSpace(_drForgeSelectedReportSummaryText));
         CopySupportEmailCommand = new RelayCommand(CopySupportEmail);
         OpenSupportEmailCommand = new RelayCommand(OpenSupportEmail);
         CopyBetaReportTemplateCommand = new RelayCommand(CopyBetaReportTemplate);
@@ -1249,6 +1257,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public RelayCommand CopyDrForgeStatusSummaryCommand { get; }
 
+    public RelayCommand OpenDrForgeSelectedReportFolderCommand { get; }
+
+    public RelayCommand CopyDrForgeReportSummaryCommand { get; }
+
     /// <summary>Assigned by MainWindow to open the Kyra Advanced Settings dialog.</summary>
     public Action? OpenKyraAdvancedSettingsAction { get; set; }
 
@@ -1483,6 +1495,26 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         get => _drForgeReportHistoryText;
         private set => SetProperty(ref _drForgeReportHistoryText, value);
+    }
+
+    public ObservableCollection<DrForgeReportHistoryItem> DrForgeReportHistoryItems => _drForgeReportHistoryItems;
+
+    public DrForgeReportHistoryItem? SelectedDrForgeReportHistoryItem
+    {
+        get => _selectedDrForgeReportHistoryItem;
+        set
+        {
+            if (SetProperty(ref _selectedDrForgeReportHistoryItem, value))
+            {
+                LoadDrForgeReportDetail(value);
+            }
+        }
+    }
+
+    public string DrForgeReportDetailText
+    {
+        get => _drForgeReportDetailText;
+        private set => SetProperty(ref _drForgeReportDetailText, value);
     }
 
     public string DrForgeReportSummaryText
@@ -15415,6 +15447,48 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
+    private void OpenDrForgeSelectedReportFolder()
+    {
+        var selected = SelectedDrForgeReportHistoryItem;
+        if (selected is null)
+        {
+            OpenDrForgeReportFolder();
+            return;
+        }
+
+        try
+        {
+            var root = GetDrForgeReportsDirectory();
+            var selectedPath = Path.GetFullPath(selected.Path);
+            var folder = Path.GetDirectoryName(selectedPath) ?? root;
+
+            if (!DrForgeCliManifestReader.IsPathInside(folder, root))
+            {
+                AppendLog(new LogLine(DateTimeOffset.Now, "[WARN] Selected Dr. Forge report folder is outside the app-managed report root.", LogSeverity.Warning, channel: LiveLogChannel.Diagnostics));
+                return;
+            }
+
+            OpenFolder(folder, "selected Dr. Forge report containing folder", createIfMissing: false);
+        }
+        catch (Exception exception)
+        {
+            AppendLog(new LogLine(DateTimeOffset.Now, "[WARN] Could not open selected Dr. Forge report folder: " + exception.Message, LogSeverity.Warning, channel: LiveLogChannel.Diagnostics));
+        }
+    }
+
+    private void CopyDrForgeReportSummary()
+    {
+        try
+        {
+            Clipboard.SetDataObject(_drForgeSelectedReportSummaryText, copy: true);
+            AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Copied Dr. Forge report summary to clipboard.", LogSeverity.Success, channel: LiveLogChannel.Diagnostics));
+        }
+        catch (Exception exception)
+        {
+            AppendLog(new LogLine(DateTimeOffset.Now, "[WARN] Could not copy Dr. Forge report summary: " + exception.Message, LogSeverity.Warning, channel: LiveLogChannel.Diagnostics));
+        }
+    }
+
     private string GetDrForgeReportsDirectory() => Path.Combine(GetRuntimeReportsDirectory(), "drforge");
 
     private void SetDrForgeSafeStatusMessage(string lead)
@@ -15430,11 +15504,54 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private void RefreshDrForgeReportHistory(bool? isDrForgeConfigured = null)
     {
         var configured = isDrForgeConfigured ?? IsDrForgeConfiguredForHistory();
+        var previousPath = _selectedDrForgeReportHistoryItem?.Path;
         var history = _drForgeReportHistoryReader.Read(GetDrForgeReportsDirectory(), configured);
         DrForgeReportHistoryText = history.SummaryText;
         DrForgeLastSuccessfulScanText = history.Items.Count == 0
             ? "Last successful scan/report: not generated."
             : "Last successful scan/report: " + FormatDrForgeUtc(history.Items[0].LastModifiedUtc) + ".";
+
+        _drForgeReportHistoryItems.Clear();
+        foreach (var item in history.Items)
+        {
+            _drForgeReportHistoryItems.Add(item);
+        }
+
+        var selected = history.Items.FirstOrDefault(item => string.Equals(item.Path, previousPath, StringComparison.OrdinalIgnoreCase)) ??
+                       (history.Items.Count > 0 ? history.Items[0] : null);
+        SelectedDrForgeReportHistoryItem = selected;
+        if (selected is null)
+        {
+            SetDrForgeReportDetailUnavailable(configured
+                ? "Local Dr. Forge report preview is read-only. No app-managed reports are available to preview yet."
+                : "Local Dr. Forge report preview is read-only. Configure Dr. Forge before reports can be previewed.");
+        }
+    }
+
+    private void LoadDrForgeReportDetail(DrForgeReportHistoryItem? item)
+    {
+        if (item is null)
+        {
+            SetDrForgeReportDetailUnavailable("Local Dr. Forge report preview is read-only. Select a local app-managed report to preview safe details.");
+            return;
+        }
+
+        var detail = new DrForgeReportDetailReader(GetDrForgeReportsDirectory()).Read(item.Path);
+        _drForgeSelectedReportSummaryText = detail.SummaryText;
+        DrForgeReportDetailText = detail.SummaryText + Environment.NewLine + Environment.NewLine + "Preview:" + Environment.NewLine + detail.PreviewText;
+        OpenDrForgeSelectedReportFolderCommand?.RaiseCanExecuteChanged();
+        CopyDrForgeReportSummaryCommand?.RaiseCanExecuteChanged();
+    }
+
+    private void SetDrForgeReportDetailUnavailable(string message)
+    {
+        _drForgeSelectedReportSummaryText =
+            message + Environment.NewLine +
+            "Reports stay local unless you explicitly export or include them in a support bundle." + Environment.NewLine +
+            "No driver install, start, load, or elevation action is performed.";
+        DrForgeReportDetailText = _drForgeSelectedReportSummaryText;
+        OpenDrForgeSelectedReportFolderCommand?.RaiseCanExecuteChanged();
+        CopyDrForgeReportSummaryCommand?.RaiseCanExecuteChanged();
     }
 
     private bool IsDrForgeConfiguredForHistory() =>
@@ -16387,6 +16504,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         GenerateDrForgeArchiveCommand?.RaiseCanExecuteChanged();
         CopyDrForgeSummaryCommand?.RaiseCanExecuteChanged();
         CopyDrForgeStatusSummaryCommand?.RaiseCanExecuteChanged();
+        OpenDrForgeSelectedReportFolderCommand?.RaiseCanExecuteChanged();
+        CopyDrForgeReportSummaryCommand?.RaiseCanExecuteChanged();
     }
 
     private void AppendLog(LogLine line)

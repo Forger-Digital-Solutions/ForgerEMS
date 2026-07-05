@@ -702,6 +702,7 @@ public sealed record DrForgeReportHistoryItem(
     string Kind,
     string Name,
     string Path,
+    long SizeBytes,
     DateTimeOffset LastModifiedUtc);
 
 public sealed record DrForgeReportHistoryView(
@@ -714,16 +715,22 @@ public sealed record DrForgeReportHistoryView(
 public sealed class DrForgeReportHistoryReader
 {
     private readonly Func<string, bool> _directoryExists;
+    private readonly Func<string, bool> _fileExists;
     private readonly Func<string, IEnumerable<string>> _enumerateEntries;
+    private readonly Func<string, long> _getLength;
     private readonly Func<string, DateTimeOffset> _getLastWriteTimeUtc;
 
     public DrForgeReportHistoryReader(
         Func<string, bool>? directoryExists = null,
+        Func<string, bool>? fileExists = null,
         Func<string, IEnumerable<string>>? enumerateEntries = null,
+        Func<string, long>? getLength = null,
         Func<string, DateTimeOffset>? getLastWriteTimeUtc = null)
     {
         _directoryExists = directoryExists ?? Directory.Exists;
+        _fileExists = fileExists ?? File.Exists;
         _enumerateEntries = enumerateEntries ?? (path => Directory.EnumerateFileSystemEntries(path, "*", SearchOption.TopDirectoryOnly));
+        _getLength = getLength ?? (path => new FileInfo(path).Length);
         _getLastWriteTimeUtc = getLastWriteTimeUtc ?? (path => new DateTimeOffset(File.GetLastWriteTimeUtc(path), TimeSpan.Zero));
     }
 
@@ -827,19 +834,32 @@ public sealed class DrForgeReportHistoryReader
 
         var kind =
             name.StartsWith("drforge-intake-report-", StringComparison.OrdinalIgnoreCase) &&
-            name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+            (name.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ||
+             name.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
                 ? "Report"
+                : name.StartsWith("drforge-sensor-core-snapshot-", StringComparison.OrdinalIgnoreCase) &&
+                  name.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+                    ? "Snapshot"
                 : name.StartsWith("drforge-intake-archive-", StringComparison.OrdinalIgnoreCase)
                     ? "Archive"
+                    : name.StartsWith("drforge-intake-", StringComparison.OrdinalIgnoreCase) &&
+                      name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+                        ? "Archive"
                     : string.Empty;
         if (string.IsNullOrWhiteSpace(kind))
         {
             return null;
         }
 
+        long sizeBytes = 0;
         DateTimeOffset lastWrite;
         try
         {
+            if (_fileExists(fullPath))
+            {
+                sizeBytes = Math.Max(0, _getLength(fullPath));
+            }
+
             lastWrite = _getLastWriteTimeUtc(fullPath).ToUniversalTime();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
@@ -847,11 +867,578 @@ public sealed class DrForgeReportHistoryReader
             return null;
         }
 
-        return new DrForgeReportHistoryItem(kind, name, fullPath, lastWrite);
+        return new DrForgeReportHistoryItem(kind, name, fullPath, sizeBytes, lastWrite);
     }
 
     private static string FormatUtc(DateTimeOffset value) =>
         value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture);
+}
+
+public sealed record DrForgeReportDetailView(
+    bool PreviewAvailable,
+    string Kind,
+    string Name,
+    string Path,
+    long SizeBytes,
+    DateTimeOffset? LastModifiedUtc,
+    string ReportSchema,
+    string SourceSchema,
+    string GeneratedAt,
+    string SafetyStatus,
+    string KernelDriverLoaded,
+    int? AvailableReadingCount,
+    int? UnavailableReadingCount,
+    int? DriverRequiredUnavailableCount,
+    string StatusText,
+    string PreviewText,
+    string SummaryText);
+
+public sealed class DrForgeReportDetailReader
+{
+    public const long MaxJsonParseBytes = 512 * 1024;
+    public const long MaxMarkdownPreviewBytes = 64 * 1024;
+    public const int MaxPreviewCharacters = 4000;
+
+    private static readonly (string PropertyName, string DisplayName)[] KnownSummaryReadings =
+    [
+        ("cpuLoadPercent", "CPU load"),
+        ("memoryUsedPercent", "Memory used"),
+        ("storageCapacityBytes", "Storage capacity"),
+        ("storageSmartHealth", "Storage SMART health")
+    ];
+
+    private readonly string _reportsRoot;
+    private readonly Func<string, bool> _fileExists;
+    private readonly Func<string, bool> _directoryExists;
+    private readonly Func<string, long> _getLength;
+    private readonly Func<string, DateTimeOffset> _getLastWriteTimeUtc;
+    private readonly Func<string, string> _readAllText;
+    private readonly Func<string, int, string> _readTextPrefix;
+
+    public DrForgeReportDetailReader(
+        string reportsRoot,
+        Func<string, bool>? fileExists = null,
+        Func<string, bool>? directoryExists = null,
+        Func<string, long>? getLength = null,
+        Func<string, DateTimeOffset>? getLastWriteTimeUtc = null,
+        Func<string, string>? readAllText = null,
+        Func<string, int, string>? readTextPrefix = null)
+    {
+        _reportsRoot = TryGetFullPath(reportsRoot) ?? string.Empty;
+        _fileExists = fileExists ?? File.Exists;
+        _directoryExists = directoryExists ?? Directory.Exists;
+        _getLength = getLength ?? (path => new FileInfo(path).Length);
+        _getLastWriteTimeUtc = getLastWriteTimeUtc ?? (path => new DateTimeOffset(File.GetLastWriteTimeUtc(path), TimeSpan.Zero));
+        _readAllText = readAllText ?? File.ReadAllText;
+        _readTextPrefix = readTextPrefix ?? ReadTextPrefixFromFile;
+    }
+
+    public DrForgeReportDetailView Read(string? reportPath)
+    {
+        if (string.IsNullOrWhiteSpace(reportPath))
+        {
+            return Unavailable("(none)", string.Empty, "Report", "Preview unavailable: no local Dr. Forge report is selected.");
+        }
+
+        string fullPath;
+        try
+        {
+            fullPath = Path.GetFullPath(reportPath);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return Unavailable(SafeFileName(reportPath), reportPath, "Report", "Preview unavailable: the selected report path is not valid.");
+        }
+
+        var name = Path.GetFileName(fullPath);
+        var kind = InferKind(name, isDirectory: false);
+        if (string.IsNullOrWhiteSpace(_reportsRoot) || !DrForgeCliManifestReader.IsPathInside(fullPath, _reportsRoot))
+        {
+            return Unavailable(name, fullPath, kind, "Preview unavailable: selected report is outside the app-managed Dr. Forge report folder.");
+        }
+
+        try
+        {
+            if (_directoryExists(fullPath))
+            {
+                kind = InferKind(name, isDirectory: true);
+                return BuildArchiveDirectoryDetail(fullPath, name, kind);
+            }
+
+            if (!_fileExists(fullPath))
+            {
+                return Unavailable(name, fullPath, kind, "Preview unavailable: the selected report file was not found.");
+            }
+
+            var size = Math.Max(0, _getLength(fullPath));
+            var lastWrite = _getLastWriteTimeUtc(fullPath).ToUniversalTime();
+            var extension = Path.GetExtension(fullPath);
+            if (extension.Equals(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                return size > MaxJsonParseBytes
+                    ? BuildLargeFileDetail(fullPath, name, kind, size, lastWrite, "JSON report is larger than the safe preview parse limit.")
+                    : BuildJsonDetail(fullPath, name, kind, size, lastWrite);
+            }
+
+            if (extension.Equals(".md", StringComparison.OrdinalIgnoreCase) ||
+                extension.Equals(".txt", StringComparison.OrdinalIgnoreCase))
+            {
+                return BuildMarkdownDetail(fullPath, name, kind, size, lastWrite);
+            }
+
+            if (extension.Equals(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                return BuildArchiveFileDetail(fullPath, name, kind, size, lastWrite);
+            }
+
+            return MetadataOnly(fullPath, name, kind, size, lastWrite,
+                "Preview unavailable: this Dr. Forge artifact type is not previewed in-app.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or System.Security.SecurityException)
+        {
+            return Unavailable(name, fullPath, kind, "Preview unavailable: the selected report could not be read or parsed.");
+        }
+    }
+
+    private DrForgeReportDetailView BuildJsonDetail(
+        string path,
+        string name,
+        string kind,
+        long size,
+        DateTimeOffset lastWrite)
+    {
+        var json = _readAllText(path);
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        var reportSchema = ReadString(root, "reportSchemaVersion") ??
+                           ReadString(root, "schemaVersion") ??
+                           "Unknown";
+        var sourceSchema = ReadString(root, "sourceSchemaVersion") ?? "Unknown";
+        var generatedAt = FormatGeneratedAt(ReadString(root, "generatedAtUtc") ??
+                                            ReadString(root, "generatedAt"));
+        var safety = TryReadSafety(root, out var invariants, out var kernelDriverLoaded);
+        var counts = CountSummaryReadings(root);
+        var driverRequiredUnavailable = CountDriverRequiredUnavailable(root);
+
+        var statusLines = new List<string>
+        {
+            "Local Dr. Forge report preview",
+            "Preview is read-only.",
+            "Report: " + name,
+            "Type: " + kind,
+            "Preview status: Preview ready",
+            "Modified: " + FormatUtc(lastWrite),
+            "Size: " + FormatBytes(size),
+            "Report schema: " + reportSchema,
+            "Source schema: " + sourceSchema,
+            "Generated: " + generatedAt,
+            "Safety/invariant result: " + FormatNullableBool(invariants),
+            "Kernel driver loaded: " + FormatNullableBool(kernelDriverLoaded),
+            "Available readings: " + FormatNullableCount(counts?.Available),
+            "Unavailable readings: " + FormatNullableCount(counts?.Unavailable),
+            "Driver-required readings unavailable: " + driverRequiredUnavailable.ToString(CultureInfo.InvariantCulture),
+            "Driver-required readings may appear as unavailable.",
+            "Reports stay local unless you explicitly export or include them in a support bundle.",
+            "No driver install, start, load, or elevation action is performed."
+        };
+
+        var preview = BuildJsonPreview(root);
+        return new DrForgeReportDetailView(
+            true,
+            kind,
+            name,
+            path,
+            size,
+            lastWrite,
+            reportSchema,
+            sourceSchema,
+            generatedAt,
+            safety,
+            FormatNullableBool(kernelDriverLoaded),
+            counts?.Available,
+            counts?.Unavailable,
+            driverRequiredUnavailable,
+            "Preview ready",
+            preview,
+            string.Join(Environment.NewLine, statusLines));
+    }
+
+    private DrForgeReportDetailView BuildMarkdownDetail(
+        string path,
+        string name,
+        string kind,
+        long size,
+        DateTimeOffset lastWrite)
+    {
+        var bytesToRead = (int)Math.Min(size, MaxMarkdownPreviewBytes);
+        var preview = CapPreview(_readTextPrefix(path, bytesToRead), out var cappedByCharacters);
+        if (size > MaxMarkdownPreviewBytes || cappedByCharacters)
+        {
+            preview += Environment.NewLine + "[Preview capped for safety.]";
+        }
+
+        var summary = string.Join(Environment.NewLine,
+            "Local Dr. Forge report preview",
+            "Preview is read-only.",
+            "Report: " + name,
+            "Type: " + kind,
+            "Preview status: Preview ready",
+            "Modified: " + FormatUtc(lastWrite),
+            "Size: " + FormatBytes(size),
+            "Markdown is shown as plain text.",
+            "Driver-required readings may appear as unavailable.",
+            "Reports stay local unless you explicitly export or include them in a support bundle.",
+            "No driver install, start, load, or elevation action is performed.");
+
+        return new DrForgeReportDetailView(true, kind, name, path, size, lastWrite, "Markdown", "Unknown", "Unknown",
+            "Unknown", "unknown", null, null, null, "Preview ready", preview, summary);
+    }
+
+    private DrForgeReportDetailView BuildArchiveFileDetail(
+        string path,
+        string name,
+        string kind,
+        long size,
+        DateTimeOffset lastWrite)
+    {
+        return MetadataOnly(path, name, kind, size, lastWrite,
+            "Archive preview is metadata only. No archive contents were extracted.");
+    }
+
+    private DrForgeReportDetailView BuildArchiveDirectoryDetail(string path, string name, string kind)
+    {
+        var lastWrite = _getLastWriteTimeUtc(path).ToUniversalTime();
+        return MetadataOnly(path, name, kind, 0, lastWrite,
+            "Archive folder preview is metadata only. No archive contents were crawled or extracted.");
+    }
+
+    private DrForgeReportDetailView BuildLargeFileDetail(
+        string path,
+        string name,
+        string kind,
+        long size,
+        DateTimeOffset lastWrite,
+        string reason)
+    {
+        return MetadataOnly(path, name, kind, size, lastWrite,
+            reason + " Open the containing folder to inspect it manually.");
+    }
+
+    private static DrForgeReportDetailView MetadataOnly(
+        string path,
+        string name,
+        string kind,
+        long size,
+        DateTimeOffset lastWrite,
+        string reason)
+    {
+        var summary = string.Join(Environment.NewLine,
+            "Local Dr. Forge report preview",
+            "Preview is read-only.",
+            "Report: " + name,
+            "Type: " + kind,
+            "Preview status: Preview unavailable",
+            "Modified: " + FormatUtc(lastWrite),
+            "Size: " + FormatBytes(size),
+            reason,
+            "Reports stay local unless you explicitly export or include them in a support bundle.",
+            "No driver install, start, load, or elevation action is performed.");
+
+        return new DrForgeReportDetailView(false, kind, name, path, size, lastWrite, "Unknown", "Unknown", "Unknown",
+            "Unknown", "unknown", null, null, null, "Preview unavailable", reason, summary);
+    }
+
+    private static DrForgeReportDetailView Unavailable(string name, string path, string kind, string reason)
+    {
+        var summary = string.Join(Environment.NewLine,
+            "Local Dr. Forge report preview",
+            "Preview is read-only.",
+            "Report: " + (string.IsNullOrWhiteSpace(name) ? "Unavailable" : name),
+            "Type: " + kind,
+            "Preview status: Preview unavailable",
+            reason,
+            "Reports stay local unless you explicitly export or include them in a support bundle.",
+            "No driver install, start, load, or elevation action is performed.");
+
+        return new DrForgeReportDetailView(false, kind, string.IsNullOrWhiteSpace(name) ? "Unavailable" : name, path, 0,
+            null, "Unknown", "Unknown", "Unknown", "Unknown", "unknown", null, null, null, "Preview unavailable",
+            reason, summary);
+    }
+
+    private static (int Available, int Unavailable)? CountSummaryReadings(JsonElement root)
+    {
+        if (!TryGetProperty(root, "summary", out var summary) || summary.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var available = 0;
+        var unavailable = 0;
+        foreach (var (propertyName, _) in KnownSummaryReadings)
+        {
+            if (!TryGetProperty(summary, propertyName, out var value) ||
+                value.ValueKind == JsonValueKind.Null ||
+                value.ValueKind == JsonValueKind.Undefined ||
+                (value.ValueKind == JsonValueKind.String && string.IsNullOrWhiteSpace(value.GetString())))
+            {
+                unavailable++;
+                continue;
+            }
+
+            available++;
+        }
+
+        return (available, unavailable);
+    }
+
+    private static int CountDriverRequiredUnavailable(JsonElement root)
+    {
+        var count = 0;
+        if (TryGetProperty(root, "ring0Gaps", out var gaps) && gaps.ValueKind == JsonValueKind.Array)
+        {
+            count += gaps.GetArrayLength();
+        }
+
+        if (TryGetProperty(root, "wouldUnlock", out var wouldUnlock) && wouldUnlock.ValueKind == JsonValueKind.Array)
+        {
+            count += wouldUnlock.GetArrayLength();
+        }
+
+        return count;
+    }
+
+    private static string TryReadSafety(JsonElement root, out bool? invariants, out bool? kernelDriverLoaded)
+    {
+        invariants = null;
+        kernelDriverLoaded = null;
+        if (!TryGetProperty(root, "safety", out var safety) || safety.ValueKind != JsonValueKind.Object)
+        {
+            return "Unknown";
+        }
+
+        invariants = ReadBool(safety, "satisfiesSafetyInvariants");
+        kernelDriverLoaded = ReadBool(safety, "kernelDriverLoaded");
+        return "safety invariants: " + FormatNullableBool(invariants) + "; kernel driver loaded: " + FormatNullableBool(kernelDriverLoaded);
+    }
+
+    private static string BuildJsonPreview(JsonElement root)
+    {
+        var sb = new StringBuilder();
+        if (TryGetProperty(root, "summary", out var summary) && summary.ValueKind == JsonValueKind.Object)
+        {
+            sb.AppendLine("Summary readings:");
+            foreach (var (propertyName, displayName) in KnownSummaryReadings)
+            {
+                var value = TryGetProperty(summary, propertyName, out var reading)
+                    ? FormatJsonValue(reading)
+                    : "Unavailable";
+                sb.AppendLine("- " + displayName + ": " + value);
+            }
+        }
+
+        if (TryGetProperty(root, "findings", out var findings) && findings.ValueKind == JsonValueKind.Array)
+        {
+            sb.AppendLine("Findings:");
+            foreach (var finding in findings.EnumerateArray().Take(12))
+            {
+                sb.AppendLine("- " + FormatFinding(finding));
+            }
+        }
+
+        if (TryGetProperty(root, "ring0Gaps", out var gaps) && gaps.ValueKind == JsonValueKind.Array)
+        {
+            sb.AppendLine("Driver-required unavailable readings:");
+            foreach (var gap in gaps.EnumerateArray().Take(12))
+            {
+                var reading = gap.ValueKind == JsonValueKind.Object
+                    ? ReadString(gap, "reading") ?? ReadString(gap, "displayName") ?? "Unavailable reading"
+                    : "Unavailable reading";
+                var reason = gap.ValueKind == JsonValueKind.Object
+                    ? ReadString(gap, "reason") ?? "Unavailable"
+                    : "Unavailable";
+                sb.AppendLine("- " + reading + ": " + reason);
+            }
+        }
+
+        if (TryGetProperty(root, "wouldUnlock", out var wouldUnlock) && wouldUnlock.ValueKind == JsonValueKind.Array)
+        {
+            sb.AppendLine("Driver-status unavailable readings:");
+            foreach (var gap in wouldUnlock.EnumerateArray().Take(12))
+            {
+                var reading = gap.ValueKind == JsonValueKind.Object
+                    ? ReadString(gap, "displayName") ?? ReadString(gap, "gapReadingId") ?? "Unavailable reading"
+                    : "Unavailable reading";
+                sb.AppendLine("- " + reading + ": Unavailable");
+            }
+        }
+
+        var text = sb.Length == 0 ? "No previewable Dr. Forge report sections were found." : sb.ToString().TrimEnd();
+        var preview = CapPreview(text, out var capped);
+        return capped ? preview + Environment.NewLine + "[Preview capped for safety.]" : preview;
+    }
+
+    private static string FormatFinding(JsonElement finding)
+    {
+        if (finding.ValueKind != JsonValueKind.Object)
+        {
+            return FormatJsonValue(finding);
+        }
+
+        var severity = ReadString(finding, "severity") ?? "Info";
+        var message = ReadString(finding, "message") ?? "Unavailable";
+        return severity + ": " + message;
+    }
+
+    private static string FormatJsonValue(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.Null => "Unavailable",
+        JsonValueKind.Undefined => "Unavailable",
+        JsonValueKind.String => string.IsNullOrWhiteSpace(value.GetString()) ? "Unavailable" : value.GetString()!,
+        JsonValueKind.Number => value.GetRawText(),
+        JsonValueKind.True => "yes",
+        JsonValueKind.False => "no",
+        _ => "Unavailable"
+    };
+
+    private static string FormatNullableBool(bool? value) => value switch
+    {
+        true => "yes",
+        false => "no",
+        null => "unknown"
+    };
+
+    private static string FormatNullableCount(int? value) =>
+        value.HasValue ? value.Value.ToString(CultureInfo.InvariantCulture) : "Unknown";
+
+    private static string FormatGeneratedAt(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "Unknown";
+        }
+
+        return DateTimeOffset.TryParse(
+            value,
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+            out var generatedAt)
+            ? FormatUtc(generatedAt)
+            : value;
+    }
+
+    private static bool? ReadBool(JsonElement element, string propertyName)
+    {
+        if (!TryGetProperty(element, propertyName, out var value))
+        {
+            return null;
+        }
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => null
+        };
+    }
+
+    private static string InferKind(string name, bool isDirectory)
+    {
+        if (isDirectory || name.StartsWith("drforge-intake-archive-", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Archive";
+        }
+
+        if (name.StartsWith("drforge-sensor-core-snapshot-", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Snapshot";
+        }
+
+        return "Report";
+    }
+
+    private static string FormatUtc(DateTimeOffset value) =>
+        value.ToUniversalTime().ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture);
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes < 1024)
+        {
+            return bytes.ToString(CultureInfo.InvariantCulture) + " bytes";
+        }
+
+        var kib = bytes / 1024d;
+        if (kib < 1024)
+        {
+            return kib.ToString("0.#", CultureInfo.InvariantCulture) + " KiB";
+        }
+
+        return (kib / 1024d).ToString("0.##", CultureInfo.InvariantCulture) + " MiB";
+    }
+
+    private static string CapPreview(string text, out bool capped)
+    {
+        capped = text.Length > MaxPreviewCharacters;
+        return capped ? text[..MaxPreviewCharacters] : text;
+    }
+
+    private static string ReadTextPrefixFromFile(string path, int byteCount)
+    {
+        if (byteCount <= 0)
+        {
+            return string.Empty;
+        }
+
+        using var stream = File.OpenRead(path);
+        var buffer = new byte[byteCount];
+        var read = stream.Read(buffer, 0, buffer.Length);
+        return Encoding.UTF8.GetString(buffer, 0, read);
+    }
+
+    private static string? ReadString(JsonElement element, string propertyName) =>
+        TryGetProperty(element, propertyName, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+    private static string? TryGetFullPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            return Path.GetFullPath(path);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+    }
+
+    private static string SafeFileName(string? path)
+    {
+        try
+        {
+            return string.IsNullOrWhiteSpace(path) ? "Unavailable" : Path.GetFileName(path);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return "Unavailable";
+        }
+    }
+
+    private static bool TryGetProperty(JsonElement element, string propertyName, out JsonElement value)
+    {
+        if (element.ValueKind == JsonValueKind.Object &&
+            element.TryGetProperty(propertyName, out value))
+        {
+            return true;
+        }
+
+        value = default;
+        return false;
+    }
 }
 
 public sealed class DrForgeDriverStatusReader

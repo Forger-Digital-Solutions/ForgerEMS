@@ -46,6 +46,7 @@ For broader regression coverage, see [FINAL_MANUAL_SMOKE_TEST.md](../FINAL_MANUA
 - [ ] Catalog status chips visible per row (e.g. **Official source**, **Community source**, **Manual ISO Required**, **Paid - vendor licence**, **Legacy / Lab Only**).
 - [ ] **Update Toolkit** action remains the only download trigger — confirm tooltip wording does not imply auto-update.
 - [ ] **Verify Links** runs HTTP HEAD-only probes. No downloads start from this action.
+- [ ] In the **Dr. Forge Intake** card, confirm **Local Dr. Forge report preview** is read-only/local-only copy, the recent report selector appears, **Copy Report Summary** and **Open Containing Folder** are present, and no upload, driver install, elevation, fan/voltage/OC, or firmware-control action appears.
 
 ## 4. Download Plan and selected managed downloads
 

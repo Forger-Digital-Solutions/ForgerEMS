@@ -13,6 +13,7 @@ This document is the ForgerEMS-side readiness summary. The packaged CLI contract
 - Display the parsed driver-status summary as normal safe status: production driver shipped `false`, user-mode fallback active, driver absence normal/safe, no driver action taken, and driver-required readings unavailable until a future signed-driver phase.
 - Run user-initiated safe scans through the CLI process boundary (`sensor-core snapshot / report / archive`) and render the `forge-hardware-intake-report/1.0` result honestly: null/missing readings show as **Unavailable**, never zero; ring-0/deep telemetry gaps are listed as gaps.
 - Store generated reports and archives under the local Runtime reports folder (`%LOCALAPPDATA%\ForgerEMS\Runtime\reports\drforge`), show recent app-managed report/archive history, and open that folder on request.
+- Preview an individual app-managed Dr. Forge report/archive/snapshot from that same local Runtime reports folder. Preview is read-only: JSON parsing is size-capped and limited to known summary/safety/gap fields, Markdown is shown as capped plain text, and ZIP/archive previews are metadata-only with no broad extraction or crawling.
 - Include Dr. Forge report/archive files in a support bundle only when the user selects them (visible checkbox) **and** confirms the export consent dialog. The exporter accepts only allowlisted files under the app-managed Dr. Forge reports root, and redacts content.
 
 ## What remains unavailable
@@ -27,6 +28,7 @@ This document is the ForgerEMS-side readiness summary. The packaged CLI contract
 - Dr. Forge is **not bundled** in ForgerEMS installer or portable ZIP packages today. The bridge shows a friendly "Not configured" state until the user provides a trusted packaged CLI (or a future release pipeline stages one app-locally).
 - Dr. Forge is **not part of any USB Builder profile**. USB Builder copy references Dr. Forge only as the separate companion where deep diagnostics live.
 - No auto-download, no auto-update, and no background scanning of any kind. Every Dr. Forge action in ForgerEMS is user-initiated.
+- No upload occurs when a report is previewed. Reports stay local unless the user explicitly exports them or includes them in a support bundle.
 
 ## Safety boundaries (enforced)
 
@@ -51,6 +53,7 @@ Enforcement points:
 
 - Dr. Forge reports/archives are local files under the app-managed Runtime reports folder. ForgerEMS does not scrape other folders (including Documents) and does not assume any Dr. Forge install location for reports.
 - Recent report history is read only from that app-managed folder. Missing, empty, or inaccessible folders show "No reports found yet" or an unavailable history message, not an error.
+- Local report preview reads only the selected app-managed item. Missing, corrupt, unknown-schema, too-large, or inaccessible reports show a friendly preview-unavailable state. Unknown/missing readings render as **Unavailable** or **Unknown**, never zero.
 - Support bundle inclusion is opt-in per bundle, path-contained, allowlisted, capped, and redacted. The consent dialog warns that exported files may contain local device/context information and that nothing is uploaded automatically.
 - The bridge persists only the selected CLI path, last readiness state, and last local report/archive paths. Stale or out-of-root persisted paths are ignored on load.
 
@@ -65,7 +68,7 @@ Enforcement points:
 The next phases, in order, each gated on the Dr. Forge side maturing first:
 
 1. **Optional app-local packaging** — release pipeline stages a signed, checksummed Dr. Forge CLI package under the app-local tools folder (still user-mode, still no driver artifacts; packaging guards stay mandatory).
-2. **Report detail browsing** — optional richer drill-in for individual app-managed Dr. Forge reports (still local, still explicit export only).
+2. **Richer parsed report tabs** — optional refinements to the local read-only preview, still limited to app-managed reports and still explicit export only.
 3. **Driver-backed sensors** — only after the Dr. Forge driver foundation ships for real: threat model, legal review, signing/revocation plan, crash containment, rollback strategy, and beta hardware validation. Until then, ForgerEMS keeps presenting driver-required readings as unavailable.
 
 No ForgerEMS release may move to driver-backed sensors by bundling, installing, starting, or registering a driver itself; driver lifecycle stays owned by Dr. Forge's own signed installer flow, subject to its own review.
