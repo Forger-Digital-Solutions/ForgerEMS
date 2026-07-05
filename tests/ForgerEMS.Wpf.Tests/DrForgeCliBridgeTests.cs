@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using VentoyToolkitSetup.Wpf.Services;
 
 namespace ForgerEMS.Wpf.Tests;
@@ -482,6 +483,67 @@ public sealed class DrForgeCliBridgeTests
         Assert.Contains(view.ParsedSections, section => section.Title == "Report Metadata");
         Assert.Contains("archiveSchemaVersion", view.RawPreviewText, StringComparison.Ordinal);
         Assert.Contains("No previewable Dr. Forge report sections were found.", view.PreviewText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DrForgeContractFixtures_RecordSourceCommitAndContractIndex()
+    {
+        using var source = JsonDocument.Parse(File.ReadAllText(FixtureFile("source-contracts.json")));
+        var sourceRoot = source.RootElement;
+        Assert.Equal("forgerems-drforge-contract-source/1.0", sourceRoot.GetProperty("schemaVersion").GetString());
+        Assert.Equal("433001c", sourceRoot.GetProperty("drForgeSourceCommit").GetString());
+        Assert.Equal("contracts/reports", sourceRoot.GetProperty("drForgeSourcePath").GetString());
+        Assert.Equal("2026-07-05.report-contracts.1", sourceRoot.GetProperty("contractPackageVersion").GetString());
+        Assert.True(sourceRoot.GetProperty("localOnly").GetBoolean());
+        Assert.True(sourceRoot.GetProperty("readOnly").GetBoolean());
+        Assert.Equal("metadata-only", sourceRoot.GetProperty("archivePreviewMode").GetString());
+
+        using var index = JsonDocument.Parse(File.ReadAllText(FixtureFile("report-contracts.json")));
+        var schemas = index.RootElement.GetProperty("contractFamilies")
+            .EnumerateArray()
+            .Select(f => f.GetProperty("schema").GetString())
+            .ToArray();
+        Assert.Contains("forge-sensor-core/1.0", schemas);
+        Assert.Contains("forge-hardware-intake-report/1.0", schemas);
+        Assert.Contains("forge-hardware-intake-archive/1.0", schemas);
+        Assert.Contains("forger-sensor-driver-preflight/1.1", schemas);
+        Assert.Contains("drforge-cli-release-manifest/1.0", schemas);
+        Assert.Contains("forge-hardware-intake-report/99.0", schemas);
+    }
+
+    [Fact]
+    public void DriverStatusReader_DrForgeOwnedPreflightFixtureIsSafeNoDriverState()
+    {
+        var json = File.ReadAllText(FixtureFile("driver-preflight-current-v1.1.json"));
+
+        var view = new DrForgeDriverStatusReader().ReadJson(json);
+
+        Assert.True(view.SupportedSchema);
+        Assert.Equal("forger-sensor-driver-preflight/1.1", view.SchemaVersion);
+        Assert.False(view.ProductionDriverShipped);
+        Assert.True(view.UserModeFallbackActive);
+        Assert.True(view.AbsenceIsNormal);
+        Assert.Contains("production driver shipped: no", view.SummaryText, StringComparison.Ordinal);
+        Assert.Contains("no driver action taken: yes", view.SummaryText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReportDetailReader_DrForgeOwnedFutureFixtureFallsBackSafely()
+    {
+        using var temp = new TempDir();
+        var report = Path.Combine(temp.Path, "drforge-intake-report-future-v99.json");
+        File.Copy(FixtureFile("unknown-future-report-v99.json"), report);
+
+        var view = new DrForgeReportDetailReader(temp.Path).Read(report);
+
+        Assert.True(view.PreviewAvailable);
+        Assert.Equal("forge-hardware-intake-report/99.0", view.ReportSchema);
+        Assert.DoesNotContain(view.ParsedSections, section => section.Title == "CPU");
+        Assert.DoesNotContain(view.ParsedSections, section => section.Title == "Memory");
+        Assert.Contains(view.ParsedSections, section => section.Title == "Report Metadata");
+        Assert.Contains("CPU load: Unavailable", view.PreviewText, StringComparison.Ordinal);
+        Assert.Contains("futureMetric", view.RawPreviewText, StringComparison.Ordinal);
+        Assert.DoesNotContain("CPU load: 0", view.PreviewText, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

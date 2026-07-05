@@ -1,6 +1,6 @@
 #requires -Version 5.1
 param(
-  [string]$Version = "1.2.4-preview.3",
+  [string]$Version = "1.2.4-preview.4",
   [switch]$DryRun
 )
 $ErrorActionPreference = "Stop"

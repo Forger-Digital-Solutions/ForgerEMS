@@ -91,6 +91,13 @@ ForgerEMS recognizes current Dr. Forge local contract families:
 - `drforge-cli-release-manifest/1.0` CLI release manifests
 - `forger-sensor-driver-preflight/1.1` current no-driver readiness
 
+Fixture source tracking: ForgerEMS compatibility tests keep copied, sanitized fixtures under
+`tests/Fixtures/drforge-report-contract/`. The current copies are sourced from Dr. Forge commit
+`433001c` (`Add report schema contract fixtures`), upstream path `contracts/reports/`. Refresh by
+copying Dr. Forge `contracts/reports/report-contracts.json` and fixture JSON files after an
+intentional Dr. Forge schema change, then update `source-contracts.json` with the new Dr. Forge
+commit.
+
 ForgerEMS parses enough of `forge-hardware-intake-report/1.0` and `forge-sensor-core/1.0` to display:
 
 - report schema

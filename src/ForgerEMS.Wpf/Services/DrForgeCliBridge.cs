@@ -1251,9 +1251,9 @@ public sealed class DrForgeReportDetailReader
     }
 
     private static bool IsKnownReportSchema(string reportSchema, string sourceSchema) =>
-        reportSchema.StartsWith("forge-hardware-intake-report/", StringComparison.OrdinalIgnoreCase) ||
-        reportSchema.StartsWith("forge-sensor-core/", StringComparison.OrdinalIgnoreCase) ||
-        sourceSchema.StartsWith("forge-sensor-core/", StringComparison.OrdinalIgnoreCase);
+        IsKnownMajorVersion(reportSchema, "forge-hardware-intake-report/", "1.") ||
+        IsKnownMajorVersion(reportSchema, "forge-sensor-core/", "1.") ||
+        IsKnownMajorVersion(sourceSchema, "forge-sensor-core/", "1.");
 
     private static void AddDeviceSystemSection(List<DrForgeParsedReportSection> sections, JsonElement root)
     {
@@ -1447,8 +1447,19 @@ public sealed class DrForgeReportDetailReader
     }
 
     private static bool IsSensorCoreSchema(string reportSchema, string sourceSchema) =>
-        reportSchema.StartsWith("forge-sensor-core/", StringComparison.OrdinalIgnoreCase) ||
-        sourceSchema.StartsWith("forge-sensor-core/", StringComparison.OrdinalIgnoreCase);
+        IsKnownMajorVersion(reportSchema, "forge-sensor-core/", "1.") ||
+        IsKnownMajorVersion(sourceSchema, "forge-sensor-core/", "1.");
+
+    private static bool IsKnownMajorVersion(string schema, string prefix, string majorPrefix)
+    {
+        if (!schema.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var version = schema[prefix.Length..];
+        return version.StartsWith(majorPrefix, StringComparison.OrdinalIgnoreCase);
+    }
 
     private static void AddSensorCoreCategorySection(
         List<DrForgeParsedReportSection> sections,

@@ -21,7 +21,7 @@ public sealed class TermsConsentRecord
 
 public sealed class TermsConsentStore
 {
-    public const string CurrentTermsVersion = "2026-07-05.v1.2.4-preview.3";
+    public const string CurrentTermsVersion = "2026-07-05.v1.2.4-preview.4";
 
     /// <summary>Date-only revision of the consent documents, shown separately from the app version.</summary>
     public const string CurrentTermsRevisionDate = "2026-07-05";

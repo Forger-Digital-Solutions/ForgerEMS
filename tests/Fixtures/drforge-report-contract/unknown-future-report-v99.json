@@ -1,0 +1,16 @@
+{
+  "reportSchemaVersion": "forge-hardware-intake-report/99.0",
+  "generatedUtc": "2026-01-01T00:00:00+00:00",
+  "purpose": "Synthetic future-schema fixture for consumer fallback tests.",
+  "summary": {
+    "cpuLoadPercent": null,
+    "futureMetric": {
+      "value": null,
+      "reason": "Unknown schema; consumer should use safe raw/metadata fallback."
+    }
+  },
+  "safety": {
+    "kernelDriverLoaded": false,
+    "satisfiesSafetyInvariants": true
+  }
+}

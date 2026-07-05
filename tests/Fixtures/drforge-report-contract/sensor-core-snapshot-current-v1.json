@@ -2,10 +2,10 @@
   "schemaVersion": "forge-sensor-core/1.0",
   "generatedUtc": "2026-01-01T00:00:00+00:00",
   "application": "Dr. Forge",
-  "appVersion": "1.0.0-sample",
+  "appVersion": "1.0.0-contract-fixture",
   "sdkContract": "Forge Sensor Core",
   "platform": "Windows",
-  "osDescription": "Windows 11 sample fixture",
+  "osDescription": "Windows sample fixture",
   "redacted": true,
   "policy": {
     "driverless": true,

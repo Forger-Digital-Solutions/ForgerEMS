@@ -1,7 +1,7 @@
 {
   "reportSchemaVersion": "forge-hardware-intake-report/1.0",
   "sourceSchemaVersion": "forge-sensor-core/1.0",
-  "snapshotLabel": "snapshot-local-v1.json",
+  "snapshotLabel": "forge-sensor-core-current-v1.json",
   "platform": {
     "osFamily": "Windows",
     "architecture": "X64",
@@ -16,7 +16,8 @@
     "cpuLoadPercent": 37,
     "memoryUsedPercent": 58,
     "storageCapacityBytes": 512110190592,
-    "storageSmartHealth": null
+    "storageSmartHealth": null,
+    "batteryChargePercent": null
   },
   "service": {
     "requested": false,
@@ -36,6 +37,6 @@
     }
   ],
   "notes": [
-    "Synthetic sanitized fixture. No real user, machine, token, or private path data."
+    "Synthetic sanitized fixture. No real user, machine, token, serial, MAC, email, phone, IP, or private path data."
   ]
 }

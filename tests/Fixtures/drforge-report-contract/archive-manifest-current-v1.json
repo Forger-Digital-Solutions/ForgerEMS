@@ -2,7 +2,7 @@
   "archiveSchemaVersion": "forge-hardware-intake-archive/1.0",
   "sourceSnapshotSchemaVersion": "forge-sensor-core/1.0",
   "reportSchemaVersion": "forge-hardware-intake-report/1.0",
-  "snapshotLabel": "snapshot-local-v1.json",
+  "snapshotLabel": "forge-sensor-core-current-v1.json",
   "runtime": {
     "producer": "DrForge.Core",
     "contract": "Forge Sensor Core intake archive",
@@ -21,5 +21,6 @@
   "ring0GapCount": 1,
   "unavailableReadingCount": 2,
   "absolutePrivatePathsIncluded": false,
-  "secretsIncluded": false
+  "secretsIncluded": false,
+  "previewPolicy": "metadata-only"
 }

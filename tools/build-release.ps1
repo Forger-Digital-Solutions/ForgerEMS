@@ -160,7 +160,7 @@ function Copy-ReleaseDocs {
         "LEGAL_NOTICES.md",
         "THIRD_PARTY_NOTICES.md",
         "USER_CONSENT_FLOW.md",
-        "RELEASE_NOTES_v1.2.4-preview.3.md"
+        "RELEASE_NOTES_v1.2.4-preview.4.md"
     )
 
     foreach ($doc in $docs) {

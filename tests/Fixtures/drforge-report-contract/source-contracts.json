@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "forgerems-drforge-contract-source/1.0",
+  "drForgeSourceCommit": "433001c",
+  "drForgeSourceCommitMessage": "Add report schema contract fixtures",
+  "drForgeSourcePath": "contracts/reports",
+  "drForgeContractIndex": "contracts/reports/report-contracts.json",
+  "contractPackageVersion": "2026-07-05.report-contracts.1",
+  "copiedFixturePolicy": "ForgerEMS keeps repo-local copied fixtures to avoid brittle absolute cross-repo test paths. Refresh from Dr. Forge contracts/reports after intentional schema changes.",
+  "localOnly": true,
+  "readOnly": true,
+  "archivePreviewMode": "metadata-only"
+}

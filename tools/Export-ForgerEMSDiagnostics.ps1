@@ -6,7 +6,7 @@
 #>
 param(
     [string]$OutputZip = "",
-    [string]$Version = "1.2.4-preview.3"
+    [string]$Version = "1.2.4-preview.4"
 )
 
 $ErrorActionPreference = "Stop"

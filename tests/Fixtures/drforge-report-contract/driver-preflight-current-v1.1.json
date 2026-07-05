@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "forger-sensor-driver-preflight/1.1",
+  "generatedUtc": "2026-01-01T00:00:00+00:00",
+  "readiness": "NotImplementedInThisBuild",
+  "driverName": "ForgerSensor",
+  "contractVersion": "forger-sensor-driver/0.1",
+  "minimumCompatibleDriverVersion": "0.1.0",
+  "detectedDriverVersion": null,
+  "driverSupportCompiledIn": false,
+  "devContractPresent": true,
+  "protocolRevision": 1,
+  "productionDriverShipped": false,
+  "userModeFallbackActive": true,
+  "detail": "No production sensor driver is implemented, built, packaged, or shipped in this build. Safe user-mode readings remain available.",
+  "checks": [
+    {
+      "name": "Production driver shipped",
+      "outcome": "NotApplicable",
+      "detail": "No production sensor driver is shipped in this build."
+    },
+    {
+      "name": "Driver installed/running",
+      "outcome": "Unavailable",
+      "detail": "No driver is installed or running; this is the normal safe state."
+    },
+    {
+      "name": "User-mode fallback",
+      "outcome": "Pass",
+      "detail": "Safe user-mode providers remain active."
+    }
+  ],
+  "wouldUnlock": [
+    {
+      "gapReadingId": "fans.rpm",
+      "displayName": "Fan RPM (SuperIO)",
+      "category": "Fans",
+      "expectedUnit": "RPM",
+      "safetyTier": "ReadOnlyKernelRequired"
+    },
+    {
+      "gapReadingId": "board.voltage.rails",
+      "displayName": "Motherboard voltage rails",
+      "category": "Motherboard",
+      "expectedUnit": "V",
+      "safetyTier": "ReadOnlyKernelRequired"
+    }
+  ],
+  "safetyNote": "This preflight is read-only status detection. Nothing was installed, started, stopped, loaded, registered, or modified, and no elevation was requested. Driver absence is a normal, safe state; Dr. Forge keeps using safe user-mode readings.",
+  "absenceIsNormal": true
+}
