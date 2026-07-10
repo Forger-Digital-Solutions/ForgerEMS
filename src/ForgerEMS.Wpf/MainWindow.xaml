@@ -4012,6 +4012,12 @@
                                                 Style="{StaticResource FooterButtonStyle}"
                                                 Content="About"
                                                 Command="{Binding ShowAboutCommand}" />
+                                        <Button MinWidth="175"
+                                                Margin="0,0,8,8"
+                                                Style="{StaticResource FooterButtonStyle}"
+                                                Content="Support Development"
+                                                ToolTip="Optional; available only when the owner configures a public HTTPS support link. ForgerEMS remains usable without donating."
+                                                Command="{Binding OpenSupportDevelopmentCommand}" />
                                         <Button MinWidth="90"
                                                 Margin="0,0,8,8"
                                                 Style="{StaticResource FooterButtonStyle}"

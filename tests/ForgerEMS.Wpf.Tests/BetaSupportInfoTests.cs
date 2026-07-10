@@ -6,6 +6,15 @@ namespace ForgerEMS.Wpf.Tests;
 public sealed class BetaSupportInfoTests
 {
     [Fact]
+    public void SupportDevelopmentLink_AcceptsOnlyHttpsUrls()
+    {
+        Assert.True(BetaSupportInfo.IsSafeSupportDevelopmentUrl("https://support.example.test/forgerems"));
+        Assert.False(BetaSupportInfo.IsSafeSupportDevelopmentUrl("http://support.example.test/forgerems"));
+        Assert.False(BetaSupportInfo.IsSafeSupportDevelopmentUrl("DONATION_LINK_TODO"));
+        Assert.False(BetaSupportInfo.IsSafeSupportDevelopmentUrl(null));
+    }
+
+    [Fact]
     public void SupportEmailIsOutlookContact()
     {
         Assert.Equal("ForgerDigitalSolutions@outlook.com", BetaSupportInfo.SupportEmail);

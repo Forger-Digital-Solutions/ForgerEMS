@@ -8,6 +8,8 @@
 
 **Support:** [ForgerDigitalSolutions@outlook.com](mailto:ForgerDigitalSolutions@outlook.com) — send **sanitized** screenshots and short log excerpts only; never passwords, keys, or private files.
 
+**Support development (optional):** ForgerEMS remains usable without donating. Public platform links are intentionally pending owner configuration: [Ko-fi](DONATION_LINK_TODO) · [Sponsor](SPONSOR_LINK_TODO) · [PayPal](PAYPAL_LINK_TODO). Donations do not purchase ownership, guaranteed features, priority support, investment returns, or equity. See [donation transparency](docs/marketing/DONATION_TRANSPARENCY.md).
+
 ---
 
 ## What is ForgerEMS?

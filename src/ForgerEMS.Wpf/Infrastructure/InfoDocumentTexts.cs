@@ -54,6 +54,9 @@ public static class InfoDocumentTexts
             Support: {BetaSupportInfo.SupportEmail}
             {BetaSupportInfo.BetaIssueSupportLine}
 
+            SUPPORT DEVELOPMENT (OPTIONAL)
+            ForgerEMS remains usable without donating. If Forger Digital Solutions configures a public support link, Settings / Help can open it; the application never collects payment information. Donations are voluntary and do not purchase ownership, guaranteed features, priority support, investment returns, or equity.
+
             WHAT THIS BUILD IS
             ForgerEMS v1.2.4 Public Preview is a Windows technician utility suite for local-device support workflows, safer Ventoy-oriented USB maintenance media, Dr. Forge Intake, Driver Hub/vendor guidance, USB/port mapping, drive validation, battery health and system specs summaries, safe removable-target benchmarks, and Kyra — a local-first assistant that prefers facts from your own scans.
 

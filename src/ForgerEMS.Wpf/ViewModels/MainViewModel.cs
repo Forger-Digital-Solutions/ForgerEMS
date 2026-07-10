@@ -658,6 +658,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         CopyLogsCommand = new RelayCommand(CopyLogs, () => Logs.Count > 0);
         ClearLogsCommand = new RelayCommand(ClearLogs, () => Logs.Count > 0);
         ShowAboutCommand = new RelayCommand(ShowAbout);
+        OpenSupportDevelopmentCommand = new RelayCommand(OpenSupportDevelopment, () => BetaSupportInfo.HasConfiguredSupportDevelopmentUrl);
         ShowFaqCommand = new RelayCommand(ShowFaq);
         ShowLegalCommand = new RelayCommand(ShowLegal);
         ShowPrivacyCommand = new RelayCommand(ShowPrivacy);
@@ -1027,6 +1028,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public RelayCommand ClearLogsCommand { get; }
 
     public RelayCommand ShowAboutCommand { get; }
+
+    public RelayCommand OpenSupportDevelopmentCommand { get; }
 
     public RelayCommand ShowFaqCommand { get; }
 
@@ -16525,6 +16528,23 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         CopyUpdateChecksumInstructionsCommand.RaiseCanExecuteChanged();
         ExportSupportBundleCommand.RaiseCanExecuteChanged();
         RaiseDrForgeCommandStates();
+    }
+
+    private void OpenSupportDevelopment()
+    {
+        if (!BetaSupportInfo.HasConfiguredSupportDevelopmentUrl)
+        {
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(BetaSupportInfo.SupportDevelopmentUrl) { UseShellExecute = true });
+        }
+        catch (Exception exception)
+        {
+            AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Could not open support-development link: {exception.Message}", LogSeverity.Warning));
+        }
     }
 
     private void RaiseDrForgeCommandStates()
