@@ -121,6 +121,26 @@ public sealed class MainWindowLogsKyraLayoutTests
     }
 
     [Fact]
+    public void MainWindowXaml_KyraComposer_IsBoundedAndButtonsStayCompact()
+    {
+        var root = FindRepoRootWithMainWindow();
+        var xaml = File.ReadAllText(Path.Combine(root, "src", "ForgerEMS.Wpf", "MainWindow.xaml"));
+        var styleStart = xaml.IndexOf("x:Key=\"KyraChatInputTextBoxStyle\"", StringComparison.Ordinal);
+        var styleEnd = xaml.IndexOf("</Style>", styleStart, StringComparison.Ordinal);
+        var style = xaml[styleStart..styleEnd];
+        Assert.Contains("MaxHeight\" Value=\"150\"", style, StringComparison.Ordinal);
+        Assert.Contains("VerticalScrollBarVisibility\" Value=\"Auto\"", style, StringComparison.Ordinal);
+        Assert.Contains("HorizontalScrollBarVisibility\" Value=\"Disabled\"", style, StringComparison.Ordinal);
+
+        var composerStart = xaml.IndexOf("x:Name=\"KyraChatInputBox\"", StringComparison.Ordinal);
+        var composer = xaml[composerStart..Math.Min(xaml.Length, composerStart + 8000)];
+        Assert.Contains("AcceptsReturn=\"True\"", composer, StringComparison.Ordinal);
+        Assert.Contains("Command=\"{Binding SendCopilotMessageCommand}\"", composer, StringComparison.Ordinal);
+        Assert.Equal(3, CountOccurrences(composer, "Height=\"42\""));
+        Assert.Equal(3, CountOccurrences(composer, "VerticalAlignment=\"Bottom\""));
+    }
+
+    [Fact]
     public void MainWindowCodeBehind_KyraAutoScroll_UsesBeginInvokeScrollToEnd()
     {
         var root = FindRepoRootWithMainWindow();

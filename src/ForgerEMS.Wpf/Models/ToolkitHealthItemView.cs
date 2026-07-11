@@ -434,6 +434,11 @@ public sealed class ToolkitHealthItemView : INotifyPropertyChanged
                 parts.Add(freshness);
             }
 
+            if (!string.IsNullOrWhiteSpace(PromotionBlockerDisplay))
+            {
+                parts.Add("Promotion blocked");
+            }
+
             if (!string.IsNullOrWhiteSpace(LegacyWarning))
             {
                 parts.Add("Legacy/lab only");
@@ -466,6 +471,13 @@ public sealed class ToolkitHealthItemView : INotifyPropertyChanged
             };
         }
     }
+
+    /// <summary>Explains why an available update is not eligible for automatic promotion.</summary>
+    public string PromotionBlockerDisplay =>
+        FreshnessStatus is "PatchUpdateAvailable" or "MinorUpdateAvailable" or "MajorUpdateAvailable" &&
+        UpdateRecommendation.Contains("machine-readable checksum", StringComparison.OrdinalIgnoreCase)
+            ? "Automatic promotion blocked: the vendor does not publish a verifiable checksum for the exact available artifact. The existing verified package remains safe and usable."
+            : string.Empty;
 
     public string ChecksumBadgeDisplay
     {
@@ -515,7 +527,10 @@ public sealed class ToolkitHealthItemView : INotifyPropertyChanged
             var audit = string.IsNullOrWhiteSpace(LastFreshnessAuditUtc) ? "audit unknown" : LastFreshnessAuditUtc;
             var mode = string.IsNullOrWhiteSpace(ChecksumVerificationMode) ? "checksum mode unknown" : ChecksumVerificationMode;
             var recommendation = string.IsNullOrWhiteSpace(UpdateRecommendation) ? "Review upstream before changing pinned version." : UpdateRecommendation;
-            return $"Pinned {current} | latest stable {latest} | {FreshnessBadgeDisplay} | audited {audit} | {mode} | {recommendation}";
+            var blocker = PromotionBlockerDisplay;
+            return $"Pinned {current} | latest stable {latest} | {FreshnessBadgeDisplay} | audited {audit} | {mode}" +
+                   (string.IsNullOrWhiteSpace(blocker) ? string.Empty : $" | {blocker}") +
+                   $" | {recommendation}";
         }
     }
 

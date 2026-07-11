@@ -408,6 +408,11 @@
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="12,10" />
             <Setter Property="CaretBrush" Value="#FFFFDAB8" />
+            <Setter Property="MinHeight" Value="42" />
+            <Setter Property="MaxHeight" Value="150" />
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+            <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
+            <Setter Property="VerticalContentAlignment" Value="Top" />
             <Style.Triggers>
                 <Trigger Property="IsKeyboardFocused" Value="True">
                     <Setter Property="BorderBrush" Value="#FFFFB86B" />
@@ -3718,7 +3723,6 @@
                                         </Grid.ColumnDefinitions>
                                         <Grid Grid.Column="0">
                                             <TextBox x:Name="KyraChatInputBox"
-                                                     MinHeight="42"
                                                      Style="{StaticResource KyraChatInputTextBoxStyle}"
                                                      Text="{Binding CopilotInput, UpdateSourceTrigger=PropertyChanged}"
                                                      TextWrapping="Wrap"
@@ -3768,17 +3772,23 @@
                                         </Grid>
                                         <Button Grid.Column="1"
                                                 Width="110"
+                                                Height="42"
+                                                VerticalAlignment="Bottom"
                                                 Margin="8,0,0,0"
                                                 Content="Send"
                                                 Command="{Binding SendCopilotMessageCommand}" />
                                         <Button Grid.Column="2"
                                                 Width="104"
+                                                Height="42"
+                                                VerticalAlignment="Bottom"
                                                 Margin="6,0,0,0"
                                                 Style="{StaticResource SecondaryButtonStyle}"
                                                 Content="Clear Chat"
                                                 Command="{Binding ClearCopilotHistoryCommand}" />
                                         <Button Grid.Column="3"
                                                 Width="126"
+                                                Height="42"
+                                                VerticalAlignment="Bottom"
                                                 Margin="6,0,0,0"
                                                 Visibility="{Binding StopCopilotGenerationVisibility}"
                                                 Style="{StaticResource SecondaryButtonStyle}"

@@ -379,6 +379,24 @@ public sealed class ToolkitHealthItemViewTests
         Assert.Contains("Review checksum before promoting.", v.FreshnessDetailDisplay, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ChecksumBlockedUpdate_ExplainsThatTheExistingVerifiedPackageRemainsUsable()
+    {
+        var v = new ToolkitHealthItemView
+        {
+            FreshnessStatus = "MinorUpdateAvailable",
+            CurrentPinnedVersion = "9.8.0",
+            LatestKnownStableVersion = "9.9.1",
+            ChecksumVerificationMode = "sha256-pinned",
+            UpdateRecommendation = "Keep pinned until a vendor-published machine-readable checksum binds CrystalDiskInfo9_9_1.zip."
+        };
+
+        Assert.Contains("Automatic promotion blocked", v.PromotionBlockerDisplay, StringComparison.Ordinal);
+        Assert.Contains("existing verified package remains safe", v.PromotionBlockerDisplay, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Automatic promotion blocked", v.FreshnessDetailDisplay, StringComparison.Ordinal);
+        Assert.DoesNotContain("Failed", v.FreshnessDetailDisplay, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Theory]
     [InlineData("Unsupported by vendor.", null, false, null, null, "Legacy / Lab Only")]
     [InlineData(null, "Paid - vendor licence required.", false, null, null, "Paid - vendor licence")]

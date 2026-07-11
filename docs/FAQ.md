@@ -170,6 +170,10 @@ The managed CrystalDiskInfo ZIP remains pinned at **9.8.0**. The official Crysta
 
 For every managed package, **downloaded** means the temporary payload was retrieved; **verified/staged** means its required checksum passed and it was atomically promoted to the local package destination; **applied** means a separate, explicit, target-confirmed USB Builder action copied content to a toolkit. Startup and USB insertion do not begin checks, downloads, installer execution, or removable-target writes.
 
+## Why does Kyra's message box stop growing?
+
+Kyra’s composer grows only to a bounded height; longer messages scroll inside the text area. Send, Clear Chat, and Stop remain compact so the conversation stays visible while you compose a longer message.
+
 ---
 
 ## What is Driver Hub?
