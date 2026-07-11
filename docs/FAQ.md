@@ -150,6 +150,20 @@ Licensing, vendor rules, or verification limits mean ForgerEMS **cannot legally 
 If a managed file is present but checksum source resolution is currently unavailable, ForgerEMS reports it as present with pending verification rather than missing.
 If a related managed download is already installed and checksum-verified, a missing info shortcut can show as **covered by managed download** / **shortcut suppressed** with **no action needed**. That is not a Manual Required blocker.
 
+## When does Toolkit Manager inspect a USB?
+
+ForgerEMS does **not** run Toolkit Manager health inspection at app startup, when you select a USB, or when a USB is plugged in. The Toolkit Manager shows its idle or cached state until you explicitly select **Refresh Health** or **Full Verify**. This keeps startup responsive and avoids background directory enumeration, hashing, PowerShell health checks, and removable-drive inspection.
+
+USB insertion and removal still refresh the lightweight USB Builder and Port / USB Intelligence device lists through Windows device notifications after a short debounce. This does not start Toolkit Manager, USB Builder setup, package downloads, or any write operation.
+
+## Why is Setup USB red?
+
+The red **Setup USB** action is deliberately prominent because it starts the confirmed USB preparation workflow. Selecting a drive does not start it. The existing target validation, warning, and confirmation steps still apply before any preparation action can run.
+
+## Which package updates are automatic?
+
+Only manifest-approved managed downloads with checksum coverage participate in managed update and download workflows. ForgerEMS verifies downloads before accepting them and does not silently execute installers. BIOS/firmware, OEM drivers, vendor utilities, license-restricted packages, and browser-gated vendor items remain manual/vendor-directed links. Automatic checks or downloads remain controlled by the existing explicit settings and update workflows; they do not run during application startup or target selection.
+
 ---
 
 ## What is Driver Hub?

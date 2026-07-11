@@ -704,6 +704,31 @@
             <Setter Property="Foreground" Value="#FF111111" />
         </Style>
 
+        <Style x:Key="DestructiveActionTileButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionTileButtonStyle}">
+            <Setter Property="Background" Value="#FFC62828" />
+            <Setter Property="BorderBrush" Value="#FF7F0000" />
+            <Setter Property="Foreground" Value="#FFFFFFFF" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#FFD32F2F" />
+                    <Setter Property="BorderBrush" Value="#FFFF8A80" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#FF8E0000" />
+                    <Setter Property="BorderBrush" Value="#FF5A0000" />
+                </Trigger>
+                <Trigger Property="IsKeyboardFocused" Value="True">
+                    <Setter Property="BorderBrush" Value="#FFFFFFFF" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="#FF7A5555" />
+                    <Setter Property="BorderBrush" Value="#FF5C3B3B" />
+                    <Setter Property="Foreground" Value="#FFE6E6E6" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
         <Style TargetType="TabItem">
             <Setter Property="Foreground" Value="#FFD7DEE8" />
             <Setter Property="Background" Value="#B80A101A" />
@@ -1693,7 +1718,7 @@
                                         <TextBlock Margin="0,5,0,0" FontSize="11.5" Text="Check managed downloads" />
                                     </StackPanel>
                                 </Button>
-                                <Button Style="{StaticResource ActionTileButtonStyle}" Command="{Binding SetupUsbCommand}">
+                                <Button Style="{StaticResource DestructiveActionTileButtonStyle}" Command="{Binding SetupUsbCommand}">
                                     <StackPanel>
                                         <TextBlock FontSize="16" FontWeight="Bold" Text="▣ Setup USB" />
                                         <TextBlock Margin="0,5,0,0" FontSize="11.5" Text="Create toolkit layout" />

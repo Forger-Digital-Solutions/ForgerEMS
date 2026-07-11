@@ -101,6 +101,45 @@ public sealed class ToolkitManagerLayoutTests
         Assert.Contains("Click Refresh Health for ", source, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void StartupAndUsbSelection_DoNotInvokeToolkitHealthInspection()
+    {
+        var source = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "ViewModels", "MainViewModel.cs"));
+
+        Assert.DoesNotContain("MaybeAutoRefreshToolkitHealthAsync", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Toolkit health auto-refresh", source, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Toolkit Manager inspection is intentionally user initiated", source, StringComparison.Ordinal);
+        Assert.Contains("private Task RunToolkitHealthScanAsync()", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SetupUsb_IsTheOnlyDestructiveActionTile()
+    {
+        var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
+
+        Assert.Contains("x:Key=\"DestructiveActionTileButtonStyle\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Command=\"{Binding SetupUsbCommand}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Style=\"{StaticResource DestructiveActionTileButtonStyle}\" Command=\"{Binding SetupUsbCommand}\"", xaml, StringComparison.Ordinal);
+        Assert.Equal(1, CountOccurrences(xaml, "DestructiveActionTileButtonStyle}\" Command"));
+        Assert.Contains("IsMouseOver", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsPressed", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsKeyboardFocused", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsEnabled", xaml, StringComparison.Ordinal);
+    }
+
+    private static int CountOccurrences(string value, string needle)
+    {
+        var count = 0;
+        var offset = 0;
+        while ((offset = value.IndexOf(needle, offset, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            offset += needle.Length;
+        }
+
+        return count;
+    }
+
     private static string ReadToolkitManagerSection()
     {
         var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));

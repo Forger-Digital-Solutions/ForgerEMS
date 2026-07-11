@@ -318,8 +318,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private CancellationTokenSource? _toolkitLinkVerifyCts;
     private ToolkitLinkVerificationSummaryForReadiness? _cachedLinkVerificationSummary;
     private bool _toolkitHealthAlignedWithSelection;
-    private readonly ToolkitHealthAutoRefreshOrchestrator _toolkitHealthAutoRefresh = new();
-    private bool _toolkitHealthAutoRefreshInFlight;
     private bool _isToolkitLinkVerificationBusy;
     private string _toolkitLinkVerificationCountsText =
         "Links: not verified yet (expand Advanced link diagnostics ► Verify Links).";
@@ -1378,11 +1376,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 ScheduleAutomaticUsbBenchmark();
                 ScheduleDebouncedUsbIntelligenceRefresh();
 
-                // USB swap → auto-refresh the toolkit health view for the new
-                // target. The orchestrator de-duplicates so a tab switch that
-                // happens to set SelectedUsbTarget to the same root does not
-                // re-fire. Fire-and-forget so the setter stays synchronous.
-                _ = MaybeAutoRefreshToolkitHealthAsync();
+                // A target change only updates the lightweight USB/port state.
+                // Toolkit Manager inspection is intentionally user initiated
+                // through Refresh Health or Full Verify.
             }
 
             RefreshUsbIntelligenceFromDisk();
@@ -4117,13 +4113,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         RefreshUsbIntelligenceFromDisk();
         await RefreshPortPowerTelemetryAsync().ConfigureAwait(true);
 
-        // Launch-readiness toolkit health auto-refresh. Fires once when the
-        // initial USB target is in hand so Toolkit Manager does not open with
-        // "pending refresh" / Unknown / Limited Data placeholders. Read-only:
-        // no downloads, no updates, no benchmarks, no write-tests. Subsequent
-        // USB swaps are handled by the SelectedUsbTarget setter.
-        await MaybeAutoRefreshToolkitHealthAsync().ConfigureAwait(true);
-
         if (_backendContext.IsAvailable)
         {
             SetStatus(
@@ -5090,15 +5079,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             return;
         }
 
-        await RunToolkitHealthScanCoreAsync(fullVerify, isAuto: false).ConfigureAwait(true);
+        await RunToolkitHealthScanCoreAsync(fullVerify).ConfigureAwait(true);
     }
 
-    // Shared core for manual Refresh Health, Full Verify, and the launch-readiness
-    // auto refresh. Read-only: invokes Get-ForgerEMSToolkitHealth.ps1, which only
+    // Shared core for the explicit Refresh Health and Full Verify actions.
+    // Read-only: invokes Get-ForgerEMSToolkitHealth.ps1, which only
     // inspects the USB manifest, existing files, shortcuts, docs, and cached
     // verification metadata. It never downloads, updates, benchmarks, or writes
     // to the USB beyond the report JSON under the runtime reports directory.
-    private async Task<bool> RunToolkitHealthScanCoreAsync(bool fullVerify, bool isAuto)
+    private async Task<bool> RunToolkitHealthScanCoreAsync(bool fullVerify)
     {
         if (SelectedUsbTarget is null)
         {
@@ -5108,15 +5097,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         var scriptPath = ResolveBackendScriptPath(Path.Combine("ToolkitManager", "Get-ForgerEMSToolkitHealth.ps1"));
         if (!File.Exists(scriptPath))
         {
-            if (isAuto)
-            {
-                AppendLog(new LogLine(
-                    DateTimeOffset.Now,
-                    $"[WARN] Toolkit health auto-refresh skipped: scanner script missing ({scriptPath}).",
-                    LogSeverity.Warning));
-                return false;
-            }
-
             SetStatus(
                 "Toolkit scan unavailable",
                 $"Toolkit Manager script was not found: {scriptPath}",
@@ -5143,9 +5123,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             arguments.Add("-FullVerify");
         }
 
-        var displayName = isAuto
-            ? "Toolkit health auto-refresh"
-            : (fullVerify ? "Toolkit health scan (Full Verify)" : "Toolkit health scan");
+        var displayName = fullVerify ? "Toolkit health scan (Full Verify)" : "Toolkit health scan";
 
         var result = await RunScriptAsync(
             ScriptActionType.ToolkitHealth,
@@ -5161,66 +5139,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         LoadToolkitHealthReport();
         return result?.Succeeded == true;
-    }
-
-    // Launch-readiness auto refresh entry point. Re-uses the same safe script as
-    // the manual Refresh Health button, but only when the orchestrator says we
-    // have not yet evaluated this USB target this session.
-    private async Task MaybeAutoRefreshToolkitHealthAsync()
-    {
-        if (_toolkitHealthAutoRefreshInFlight)
-        {
-            return;
-        }
-
-        var evaluation = _toolkitHealthAutoRefresh.Evaluate(
-            SelectedUsbTarget?.RootPath,
-            isBackendBusy: IsBusy);
-
-        if (!evaluation.ShouldRefresh)
-        {
-            // Friendly status only — never blocks the UI. Per spec we always log
-            // the skip reason so the user can see why Toolkit Manager did not
-            // self-refresh ("no USB target", "backend busy", or "already
-            // refreshed for this target").
-            AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] {evaluation.LiveStatus}", LogSeverity.Info));
-            return;
-        }
-
-        _toolkitHealthAutoRefreshInFlight = true;
-        try
-        {
-            AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] {evaluation.LiveStatus}", LogSeverity.Info));
-            var ok = await RunToolkitHealthScanCoreAsync(fullVerify: false, isAuto: true).ConfigureAwait(true);
-            if (ok)
-            {
-                _toolkitHealthAutoRefresh.MarkRefreshed(evaluation.NormalizedUsbRoot);
-                AppendLog(new LogLine(
-                    DateTimeOffset.Now,
-                    $"[OK] Toolkit health refreshed for {evaluation.NormalizedUsbRoot}.",
-                    LogSeverity.Success));
-            }
-            else
-            {
-                AppendLog(new LogLine(
-                    DateTimeOffset.Now,
-                    $"[WARN] Toolkit health auto-refresh did not complete for {evaluation.NormalizedUsbRoot}. Manual Refresh Health is still available.",
-                    LogSeverity.Warning));
-            }
-        }
-        catch (Exception ex)
-        {
-            // Keep the app usable — never let an auto-refresh failure surface a
-            // dialog. Friendly warning into the log only.
-            AppendLog(new LogLine(
-                DateTimeOffset.Now,
-                $"[WARN] Toolkit health auto-refresh failed: {ex.Message}",
-                LogSeverity.Warning));
-        }
-        finally
-        {
-            _toolkitHealthAutoRefreshInFlight = false;
-        }
     }
 
     private async Task RunVerifyToolkitLinksAsync()
