@@ -162,6 +162,17 @@ $rows | Group-Object Status | ForEach-Object {
     Write-Host ("  {0,-32} {1}" -f $_.Name, $_.Count)
 }
 
+$managedRows = @($rows | Where-Object { $_.ChecksumMode -notin @("manual", "unverified") })
+$updates = @($managedRows | Where-Object { $_.Status -in @("PatchUpdateAvailable", "MinorUpdateAvailable", "MajorUpdateAvailable") })
+Write-Host ""
+Write-Host ("Managed entries: {0}; manual/vendor entries: {1}; update-available managed entries: {2}" -f $managedRows.Count, ($manifest.items.Count - $managedRows.Count), $updates.Count) -ForegroundColor Cyan
+if ($updates.Count -gt 0) {
+    Write-Host "Outstanding managed updates (metadata only; no download is started):" -ForegroundColor Yellow
+    foreach ($update in $updates) {
+        Write-Host ("  - {0}: pinned {1}; latest stable {2}; status {3}; checksum {4}; {5}" -f $update.Name, $update.Pinned, $update.LatestStable, $update.Status, $update.ChecksumMode, $update.Recommendation)
+    }
+}
+
 if ($Online.IsPresent) {
     Write-Host ""
     Write-Host "Online reachability (checksum URL HEAD):" -ForegroundColor Cyan

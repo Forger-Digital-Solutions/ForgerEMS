@@ -365,7 +365,7 @@ public sealed class ToolkitHealthItemViewTests
         var v = new ToolkitHealthItemView
         {
             CurrentPinnedVersion = "9.8.0",
-            LatestKnownStableVersion = "9.9.0",
+            LatestKnownStableVersion = "9.9.1",
             FreshnessStatus = "MinorUpdateAvailable",
             LastFreshnessAuditUtc = "2026-05-21T00:00:00Z",
             ChecksumVerificationMode = "sha256-pinned",
@@ -373,7 +373,7 @@ public sealed class ToolkitHealthItemViewTests
         };
 
         Assert.Contains("Pinned 9.8.0", v.FreshnessDetailDisplay, StringComparison.Ordinal);
-        Assert.Contains("latest stable 9.9.0", v.FreshnessDetailDisplay, StringComparison.Ordinal);
+        Assert.Contains("latest stable 9.9.1", v.FreshnessDetailDisplay, StringComparison.Ordinal);
         Assert.Contains("Update available", v.FreshnessDetailDisplay, StringComparison.Ordinal);
         Assert.Contains("sha256-pinned", v.FreshnessDetailDisplay, StringComparison.Ordinal);
         Assert.Contains("Review checksum before promoting.", v.FreshnessDetailDisplay, StringComparison.Ordinal);

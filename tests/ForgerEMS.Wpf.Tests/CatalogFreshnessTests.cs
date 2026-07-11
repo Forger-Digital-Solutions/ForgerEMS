@@ -234,6 +234,22 @@ public sealed class CatalogFreshnessTests
     }
 
     [Fact]
+    public void CrystalDiskInfo_RemainsPinnedUntilTheOfficialUpdateHasChecksumProof()
+    {
+        var item = FileEntries().Single(i =>
+            string.Equals(GetString(i, "name"), "CrystalDiskInfo 9.8.0 (standard zip)", StringComparison.Ordinal));
+        var freshness = item.GetProperty("freshness");
+
+        Assert.Equal("9.8.0", GetString(freshness, "currentPinnedVersion"));
+        Assert.Equal("9.9.1", GetString(freshness, "latestKnownStableVersion"));
+        Assert.Equal("MinorUpdateAvailable", GetString(freshness, "freshnessStatus"));
+        Assert.Equal("sha256-pinned", GetString(freshness, "checksumVerificationMode"));
+        Assert.Contains("machine-readable checksum", GetString(freshness, "updateRecommendation"), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("ManagedDownload", GetString(item, "downloadMode"));
+        Assert.False(item.TryGetProperty("sha256Url", out _), "Do not invent a vendor checksum URL for this pinned-only entry.");
+    }
+
+    [Fact]
     public void Freshness_PinnedVersionAppearsSomewhereInUrlOrName()
     {
         // Defensive: when we declare a currentPinnedVersion, that string must

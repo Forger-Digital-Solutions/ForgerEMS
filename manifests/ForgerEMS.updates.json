@@ -2586,8 +2586,8 @@
       "notes": "Active managed autodownload: official CrystalDiskInfo standard ZIP from the vendor SourceForge project. The vendor does not publish a machine-readable checksum here, so the manifest pins a verified SHA256 from the official artifact.",
       "freshness": {
         "currentPinnedVersion": "9.8.0",
-        "latestKnownStableVersion": "9.9.0",
-        "lastFreshnessAuditUtc": "2026-05-21T00:00:00Z",
+        "latestKnownStableVersion": "9.9.1",
+        "lastFreshnessAuditUtc": "2026-07-11T00:00:00Z",
         "freshnessStatus": "MinorUpdateAvailable",
         "updateChannel": "stable",
         "requiresManualReview": false,
@@ -2595,7 +2595,7 @@
         "checksumVerificationMode": "sha256-pinned",
         "upstreamReleaseType": "vendor-version-page",
         "lastKnownChecksumSource": "crystalmark.info download list (operator-paste)",
-        "updateRecommendation": "Minor bump 9.8.0 -> 9.9.0 available; re-verify checksum before promoting."
+        "updateRecommendation": "Minor bump 9.8.0 -> 9.9.1 is available from the official Crystal Dew World / SourceForge project. Keep the managed payload pinned until a vendor-published machine-readable checksum binds CrystalDiskInfo9_9_1.zip."
       },
       "downloadMode": "ManagedDownload",
       "actionLabel": "Managed Download",
@@ -2650,7 +2650,7 @@
       "family": "Disk",
       "architecture": "amd64",
       "recommendedUse": "SMART drive health reporting on Windows.",
-      "technicianNotes": "Manual review page for CrystalDiskInfo 9.9.0. Rechecked 2026-05-21: the official page/SourceForge project shows the newer version, but no clean machine-readable vendor SHA-256 or SHA-512 checksum was proven, so ForgerEMS keeps the managed payload pinned at 9.8.0.",
+      "technicianNotes": "Manual review page for CrystalDiskInfo 9.9.1. Rechecked 2026-07-11: the official page/SourceForge project shows CrystalDiskInfo9_9_1.zip, but no clean machine-readable vendor SHA-256 or SHA-512 checksum was proven, so ForgerEMS keeps the managed payload pinned at 9.8.0.",
       "licenseNote": "Free / open source (modified MIT).",
       "manualOnly": true,
       "secureBootNote": "Not boot media.",

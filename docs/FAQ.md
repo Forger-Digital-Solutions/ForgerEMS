@@ -164,6 +164,12 @@ The red **Setup USB** action is deliberately prominent because it starts the con
 
 Only manifest-approved managed downloads with checksum coverage participate in managed update and download workflows. ForgerEMS verifies downloads before accepting them and does not silently execute installers. BIOS/firmware, OEM drivers, vendor utilities, license-restricted packages, and browser-gated vendor items remain manual/vendor-directed links. Automatic checks or downloads remain controlled by the existing explicit settings and update workflows; they do not run during application startup or target selection.
 
+## Why does CrystalDiskInfo still show an update available?
+
+The managed CrystalDiskInfo ZIP remains pinned at **9.8.0**. The official Crystal Dew World / SourceForge project currently lists **9.9.1** (`CrystalDiskInfo9_9_1.zip`), but does not provide a machine-readable SHA-256 or SHA-512 value that ForgerEMS can bind to that exact artifact. ForgerEMS therefore reports the update truthfully without downloading or replacing the known-good 9.8.0 file. The official download-page shortcut remains available for technician review.
+
+For every managed package, **downloaded** means the temporary payload was retrieved; **verified/staged** means its required checksum passed and it was atomically promoted to the local package destination; **applied** means a separate, explicit, target-confirmed USB Builder action copied content to a toolkit. Startup and USB insertion do not begin checks, downloads, installer execution, or removable-target writes.
+
 ---
 
 ## What is Driver Hub?
