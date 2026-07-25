@@ -1,0 +1,197 @@
+================================================================================
+ForgerEMS Release-Readiness Audit Baseline
+Date: 2026-07-25 (Session initiated)
+Repository: Forger-Digital-Solutions/ForgerEMS
+================================================================================
+
+REPOSITORY STATE
+----------------
+Branch: main
+HEAD Commit: f4c08568716090c1f656612da9dec00ed4ac2eec
+HEAD Message: Verify Dr Forge source report contracts
+HEAD Timestamp: 2026-07-05 17:13:56 UTC (20 days old as of audit date)
+Previous Push: 2026-07-07 20:17:45 UTC
+Default Branch: main
+Visibility: public
+
+APPLICATION VERSION
+--------------------
+WPF Project Version Tag: 1.2.4-preview.4
+Assembly Version: 1.2.4.0
+File Version: 1.2.4.0
+Informational Version: 1.2.4-preview.4
+Product Title: ForgerEMS v1.2.4 Public Preview
+
+PREVIOUS RELEASE
+-----------------
+Tag: v1.2.3-preview.1
+Published: 2026-07-02 22:48:18 UTC
+Days Since Previous Release: 23 days (CORRECTION: previous report stated 52+ days, which was incorrect)
+Channel: Public Preview (Pre-release)
+Assets Included:
+  - ForgerEMS-Setup-v1.2.3-preview.1.exe
+  - ForgerEMS-v1.2.3-preview.1.zip
+  - CHECKSUMS.sha256
+  - DOWNLOAD_BETA.txt
+  - release.json
+
+BACKEND CORE VERSION
+---------------------
+Manifest File: manifests/ForgerEMS.updates.json
+Core Name: ForgerEMS Ventoy Core
+Core Version: 2026.04.20.2
+Build Timestamp UTC: 2026-04-20T21:27:43Z
+Release Type: stable
+Managed Checksum Policy: require-for-release
+Manifest Version: 1
+
+SOLUTION STRUCTURE
+-------------------
+Main Projects:
+  - ForgerEMS.Wpf (WPF application)
+    * Target Framework: net8.0-windows10.0.19041.0
+    * Runtime Identifier: win-x64
+    * Self-Contained: true
+    * Output: WinExe
+    * Nullable: enabled
+    * ImplicitUsings: enabled
+    
+  - Kyra.Core (Dependency)
+  
+  - ForgerEMS.Wpf.Tests (Test project)
+    * Target Framework: net8.0-windows10.0.19041.0
+    * Test Framework: xunit
+    * Test SDK: 17.14.1
+    * Code Coverage: coverlet.collector 6.0.4
+
+LANGUAGE COMPOSITION
+---------------------
+C#: 86%
+PowerShell: 12.8%
+Other: 1.2%
+
+BUILD AND RELEASE TOOLS
+------------------------
+Release Build Script: tools/build-release.ps1
+  - Dry-run capability: yes
+  - Installer compilation: yes (requires Inno Setup 6)
+  - PowerShell requirement: 5.1+
+  
+Backend Release Builder: tools/build-backend-release.ps1
+  - Manifest validation: yes
+  - Vendor inventory validation: yes
+  - Signature generation: yes
+  
+Bundled Backend Staging: tools/stage-bundled-backend.ps1
+  - Output: dist/backend-stage/backend
+  - Frontend/backend version matching: yes
+
+Backend Verification: backend/Verify-VentoyCore.ps1
+  - Manifest safety checks: yes
+  - Path escape rejection: yes
+  - Dry-run behavior: yes
+  - Online upstream checks: optional
+  - Managed-download revalidation: optional
+
+DOCUMENTATION INVENTORY
+------------------------
+Governance:
+  - CONTRIBUTING.md ✓
+  - SECURITY.md ✓
+  - RELEASE_PROCESS.md ✓
+  
+Public Documentation:
+  - README.md ✓
+  - docs/ABOUT_FORGEREMS.md ✓
+  - docs/FAQ.md ✓
+  - docs/TERMS_OF_USE.md ✓
+  - docs/PRIVACY_AND_DATA_HANDLING.md ✓
+  - docs/LEGAL_NOTICES.md ✓
+  - docs/THIRD_PARTY_NOTICES.md ✓
+  - docs/USER_CONSENT_FLOW.md ✓
+  - docs/RELEASE_NOTES_v1.2.4-preview.4.md ✓
+
+CI/CD WORKFLOWS
+----------------
+.github/workflows/build.yml
+  - Trigger: push (main branch), pull_request, workflow_dispatch
+  - Runner: windows-latest
+  - Steps: restore, build, test, manifest-validate, backend-verify, release-dry-run
+  
+.github/workflows/kyra-sdk-package-mode.yml
+  - Kyra SDK specific workflow
+
+.github/workflows/release.yml
+  - Release publication workflow
+
+KNOWN CONSTRAINTS (Pre-Audit)
+-------------------------------
+- Previous audit used stale HEAD/version (not re-verified at that time)
+- Lexical code search tool had access issues on private/protected repos
+- Build environment must have .NET 8 SDK
+- Release build requires Inno Setup 6 (optional for dry-run)
+- Backend verification uses PowerShell 5.1+
+
+AUDIT EXECUTION PLAN
+---------------------
+Phase 2: Clean Build and Automated Validation
+  - dotnet restore
+  - dotnet build (Release, --no-incremental)
+  - dotnet test (Release, --no-build, with TRX output)
+  - Backend verification
+  - Manifest validation
+  - CI workflow validation
+  
+Phase 3: Architecture and Safety-Critical Audit
+  - Device enumeration and binding verification
+  - Destructive operation confirmation flows
+  - Process execution and elevation security
+  - Storage-cmdlet and DiskPart usage review
+  - System-disk protection verification
+  - Command injection and injection-like defects
+  
+Phase 4: Security, Privacy, and Networking
+  - Privilege boundary audit
+  - Network endpoint and TLS verification
+  - Update and download verification
+  - Credential and secret handling
+  - Kyra provider integration
+  
+Phase 5: Release Packaging
+  - Release dry-run validation
+  - Artifact generation and inspection
+  - Version consistency verification
+  - Portable ZIP smoke test
+  - Installer metadata validation
+  
+Phase 6: CI and Documentation Validation
+  - Workflow syntax and path validation
+  - Documentation truth-checking
+  - Release process completeness
+  
+Phase 7: Final Regression Run
+  - Full solution validation
+  - All validators re-execution
+  - Final git status capture
+
+EVIDENCE DIRECTORY
+-------------------
+artifacts/release-readiness/20260725-audit/
+  - baseline.txt (this file)
+  - dotnet-info.log (in progress)
+  - restore.log (in progress)
+  - build-release.log (in progress)
+  - test-release.log (in progress)
+  - test-results/ (in progress)
+  - verify-ventoy-core.log (in progress)
+  - release-dry-run.log (in progress)
+  - release-build.log (optional)
+  - architecture-findings.md (in progress)
+  - security-audit.md (in progress)
+  - findings-summary.md (final)
+  - final-verdict.md (final)
+
+================================================================================
+Audit initiation timestamp: 2026-07-25T17:30:00Z
+Status: PHASE 2 BEGINNING
+================================================================================
