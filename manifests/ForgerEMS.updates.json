@@ -82,6 +82,11 @@
       "dest": "ISO\\Linux\\systemrescue-13.02-amd64.iso",
       "url": "https://sourceforge.net/projects/systemrescuecd/files/sysresccd-x86/13.02/systemrescue-13.02-amd64.iso/download",
       "sha256Url": "https://www.system-rescue.org/releases/13.02/systemrescue-13.02-amd64.iso.sha256",
+      "resolveStrategy": "sourceforge-project",
+      "resolveHints": {
+        "project": "systemrescuecd",
+        "filePattern": "systemrescue-.*-amd64\\.iso/download"
+      },
       "sourceType": "sourceforge",
       "fragilityLevel": "high",
       "fallbackRule": "Re-derive the same versioned ISO from the official SystemRescue download page and keep the official checksum source. Demote if only mirror-style paths or no official checksum remain.",
@@ -128,6 +133,11 @@
       "dest": "ISO\\Tools\\gparted-live-1.8.1-3-amd64.iso",
       "url": "https://sourceforge.net/projects/gparted/files/gparted-live-stable/1.8.1-3/gparted-live-1.8.1-3-amd64.iso/download",
       "sha256": "3f66b2e10b8bb2c573ed6cdd3a9b54fd0a8e7690634ab6b15c3c8f517992d1a1",
+      "resolveStrategy": "sourceforge-project",
+      "resolveHints": {
+        "project": "gparted",
+        "filePattern": "gparted-live-.*-amd64\\.iso/download"
+      },
       "sourceType": "sourceforge",
       "fragilityLevel": "high",
       "fallbackRule": "Re-derive the same versioned ISO from gparted.org and refresh the pinned checksum from an official project checksum or source. Demote if only page flows or unverified mirrors remain.",
@@ -174,6 +184,11 @@
       "dest": "ISO\\Tools\\clonezilla-live-3.3.3-15-amd64.iso",
       "url": "https://sourceforge.net/projects/clonezilla/files/clonezilla_live_stable/3.3.3-15/clonezilla-live-3.3.3-15-amd64.iso/download",
       "sha256": "482518ea32af3b82ed15d09e2e7714806775deb62aeed81491e534f6cc6bbc47",
+      "resolveStrategy": "sourceforge-project",
+      "resolveHints": {
+        "project": "clonezilla",
+        "filePattern": "clonezilla-live-.*-amd64\\.iso/download"
+      },
       "sourceType": "sourceforge",
       "fragilityLevel": "high",
       "fallbackRule": "Re-derive the same versioned ISO from the official Clonezilla download page and refresh the pinned checksum from an official project checksum or source. Demote if only mirrors or page-only flows remain.",
@@ -268,6 +283,11 @@
       "url": "https://github.com/ventoy/Ventoy/releases/download/v1.1.17/ventoy-1.1.17-windows.zip",
       "sha256": "d250e97a7595fdac4f97debc630d7a8da942319274a76cb32384596b659dbaeb",
       "sha256Url": "https://api.github.com/repos/ventoy/Ventoy/releases/assets/403313750",
+      "resolveStrategy": "github-latest",
+      "resolveHints": {
+        "repo": "ventoy/Ventoy",
+        "assetPattern": "windows\\.zip$"
+      },
       "sourceType": "github-release",
       "fragilityLevel": "medium",
       "fallbackRule": "Use ventoy.net and the matching official GitHub release asset/digest for the same version. Demote if the asset disappears or digest coverage stops agreeing.",
@@ -3665,6 +3685,11 @@
       "url": "https://github.com/rustdesk/rustdesk/releases/download/1.4.9/rustdesk-1.4.9-x86_64.exe",
       "sha256": "eaedeb0088e687bf46f7c46a9c6ea5493ce51f3134dfd6acbedb47b5b9136274",
       "sha256Url": "https://api.github.com/repos/rustdesk/rustdesk/releases/assets/467992040",
+      "resolveStrategy": "github-latest",
+      "resolveHints": {
+        "repo": "rustdesk/rustdesk",
+        "assetPattern": "rustdesk-.*-x86_64\\.exe$"
+      },
       "sourceType": "github-release",
       "fragilityLevel": "medium",
       "fallbackRule": "Use the matching official GitHub release asset and asset digest, then refresh the pinned checksum. Demote if the release asset or digest becomes inconsistent.",
@@ -3758,6 +3783,11 @@
       "url": "https://github.com/pbatard/rufus/releases/download/v4.15/rufus-4.15p.exe",
       "sha256": "84c8a437f8af89257524478489e5c85f1edf25f761d299e2bcde46ac0afbe106",
       "sha256Url": "https://api.github.com/repos/pbatard/rufus/releases/assets/462099295",
+      "resolveStrategy": "github-latest",
+      "resolveHints": {
+        "repo": "pbatard/rufus",
+        "assetPattern": "rufus-.*p\\.exe$"
+      },
       "sourceType": "github-release",
       "fragilityLevel": "medium",
       "fallbackRule": "Use rufus.ie to confirm the matching official GitHub release asset and refresh the GitHub asset digest. Demote if the official site stops pointing to the direct official asset.",
@@ -3800,6 +3830,11 @@
       "url": "https://github.com/balena-io/etcher/releases/download/v2.1.6/balenaEtcher-2.1.6.Setup.exe",
       "sha256": "78d1c45a55428e65ab2ac96e462ad6d77adbf7d1c0aa4b704b214bc00e1fcdfc",
       "sha256Url": "https://api.github.com/repos/balena-io/etcher/releases/assets/419426564",
+      "resolveStrategy": "github-latest",
+      "resolveHints": {
+        "repo": "balena-io/etcher",
+        "assetPattern": "balenaEtcher-.*\\.Setup\\.exe$"
+      },
       "sourceType": "github-release",
       "fragilityLevel": "medium",
       "fallbackRule": "Use the matching official GitHub release asset and asset digest for the same version. Demote if the release asset disappears or the digest endpoint stops agreeing.",
@@ -3893,6 +3928,11 @@
       "url": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.9.7/npp.8.9.7.portable.x64.zip",
       "sha256": "ff394c496ecb5c8b231feca05387edbfb704e85db3ba956b994bbadbe7520806",
       "sha256Url": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/download/v8.9.7/npp.8.9.7.checksums.sha256",
+      "resolveStrategy": "github-latest",
+      "resolveHints": {
+        "repo": "notepad-plus-plus/notepad-plus-plus",
+        "assetPattern": "npp\\..*\\.portable\\.x64\\.zip$"
+      },
       "sourceType": "github-release",
       "fragilityLevel": "medium",
       "fallbackRule": "Use the matching official Notepad++ GitHub release asset and the version-matched checksums.sha256 file. Demote if checksum coverage disappears or the portable x64 asset is renamed.",
@@ -3935,6 +3975,11 @@
       "dest": "Tools\\Portable\\System\\systeminformer-3.2.25011-release-bin.zip",
       "url": "https://github.com/winsiderss/systeminformer/releases/download/v3.2.25011.2103/systeminformer-3.2.25011-release-bin.zip",
       "sha256": "7e72019361eec58479604597dbfcd911c6d23c45da22c0bedc2bc319ab5b331a",
+      "resolveStrategy": "github-latest",
+      "resolveHints": {
+        "repo": "winsiderss/systeminformer",
+        "assetPattern": "systeminformer-.*-release-bin\\.zip$"
+      },
       "sourceType": "github-release",
       "fragilityLevel": "medium",
       "fallbackRule": "Use the official System Informer downloads page for the same version and the pinned GitHub release asset. Demote if the downloads page stops publishing SHA-256 hashes or the release asset changes.",
@@ -3978,6 +4023,11 @@
       "url": "https://github.com/veracrypt/VeraCrypt/releases/download/VeraCrypt_1.26.24/VeraCrypt.Setup.1.26.24.exe",
       "sha256": "08b80ab6a6c4eca08e18096c9468fe0bd2e33fc23142730e59177e6fcd7c902d",
       "sha256Url": "https://api.github.com/repos/veracrypt/VeraCrypt/releases/assets/259713771",
+      "resolveStrategy": "github-latest",
+      "resolveHints": {
+        "repo": "veracrypt/VeraCrypt",
+        "assetPattern": "VeraCrypt\\.Setup.*\\.exe$"
+      },
       "sourceType": "github-release",
       "fragilityLevel": "medium",
       "fallbackRule": "Use the matching official VeraCrypt GitHub release asset and asset digest for the same version. Demote if the release asset disappears or the digest endpoint stops agreeing.",
@@ -4257,6 +4307,13 @@
       "url": "https://cdimage.debian.org/debian-cd/13.6.0/amd64/iso-cd/debian-13.6.0-amd64-netinst.iso",
       "sha256": "65273beed27b2df543b68b65630ba525cfbad8df2b12035732b2dff87d6664e7",
       "sha256Url": "https://cdimage.debian.org/debian-cd/13.6.0/amd64/iso-cd/SHA256SUMS",
+      "resolveStrategy": "directory-scan",
+      "resolveHints": {
+        "indexUrl": "https://cdimage.debian.org/debian-cd/",
+        "versionPattern": "(\\d+\\.\\d+\\.\\d+)",
+        "filePattern": "debian-$version-amd64-netinst\\.iso",
+        "checksumUrlTemplate": "https://cdimage.debian.org/debian-cd/$version/amd64/iso-cd/SHA256SUMS"
+      },
       "sourceType": "official-version-path",
       "fragilityLevel": "low",
       "fallbackRule": "Use the Debian versioned cdimage directory and matching SHA256SUMS. Do not switch to current/ without repinning the version and hash.",
@@ -5358,6 +5415,11 @@
       "url": "https://github.com/keepassxreboot/keepassxc/releases/download/2.7.12/KeePassXC-2.7.12-Win64.zip",
       "sha256": "958234b0669d757b53eacf42bdd5de0fa1cc1ab7527709ddf4f7e29c06a8305f",
       "sha256Url": "https://api.github.com/repos/keepassxreboot/keepassxc/releases/assets/370578851",
+      "resolveStrategy": "github-latest",
+      "resolveHints": {
+        "repo": "keepassxreboot/keepassxc",
+        "assetPattern": "KeePassXC-.*-Win64\\.zip$"
+      },
       "sourceType": "github-release",
       "fragilityLevel": "medium",
       "fallbackRule": "Use the matching official GitHub release asset and asset digest, then refresh the pinned checksum. Demote if the release asset or digest becomes inconsistent.",
@@ -5444,6 +5506,11 @@
       "url": "https://github.com/microsoft/PowerToys/releases/download/v0.99.1/PowerToysUserSetup-0.99.1-x64.exe",
       "sha256": "cad34aa632251cfb9bda1d6fe70e0bd5c150ac6fec7afb0ba179df90413430cd",
       "sha256Url": "https://api.github.com/repos/microsoft/PowerToys/releases/assets/408194211",
+      "resolveStrategy": "github-latest",
+      "resolveHints": {
+        "repo": "microsoft/PowerToys",
+        "assetPattern": "PowerToysUserSetup-.*-x64\\.exe$"
+      },
       "sourceType": "github-release",
       "fragilityLevel": "medium",
       "fallbackRule": "Use the matching official GitHub release asset and asset digest, then refresh the pinned checksum. Demote if the release asset or digest becomes inconsistent.",

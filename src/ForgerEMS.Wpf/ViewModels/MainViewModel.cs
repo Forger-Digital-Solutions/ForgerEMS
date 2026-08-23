@@ -24,6 +24,7 @@ using Microsoft.Win32;
 using VentoyToolkitSetup.Wpf;
 using VentoyToolkitSetup.Wpf.Configuration;
 using VentoyToolkitSetup.Wpf.Infrastructure;
+using ForgerEMS.Wpf.Services;
 using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services;
 using VentoyToolkitSetup.Wpf.Services.Intelligence;
@@ -65,6 +66,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly IScriptStatusParser _scriptStatusParser;
     private readonly IUserPromptService _userPromptService;
     private readonly IVentoyIntegrationService _ventoyIntegrationService;
+    private readonly IManagedDownloadResolverService _managedDownloadResolverService;
     private readonly IAppRuntimeService _appRuntimeService;
     private readonly TermsConsentStore _termsConsentStore;
     private readonly IUsbBenchmarkService _usbBenchmarkService;
@@ -529,6 +531,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IScriptStatusParser scriptStatusParser,
         IUserPromptService userPromptService,
         IVentoyIntegrationService ventoyIntegrationService,
+        IManagedDownloadResolverService managedDownloadResolverService,
         IAppRuntimeService appRuntimeService,
         IUsbBenchmarkService usbBenchmarkService,
         ICopilotService copilotService,
@@ -541,6 +544,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IElevatedScanTelemetryCache? elevatedScanTelemetryCache = null)
     {
         _backendDiscoveryService = backendDiscoveryService;
+        _managedDownloadResolverService = managedDownloadResolverService;
         _powerShellRunnerService = powerShellRunnerService;
         _usbDetectionService = usbDetectionService;
         _managedDownloadSummaryService = managedDownloadSummaryService;
@@ -4372,6 +4376,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         };
         AddIncludedUsbBuilderProfileItemArguments(arguments, includedProfileItems);
 
+        await AppendResolvedOverlayArgumentAsync(arguments);
+
         try
         {
             var result = await RunScriptAsync(
@@ -4424,6 +4430,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             string.Join(",", GetIncludedUsbBuilderCategoryArguments())
         };
         AddIncludedUsbBuilderProfileItemArguments(arguments);
+
+        await AppendResolvedOverlayArgumentAsync(arguments);
 
         await RunScriptAsync(
             ScriptActionType.UpdateUsb,
@@ -4696,6 +4704,38 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 Arguments = arguments,
                 ProgressItemName = "managed download retry"
             });
+    }
+
+    private async Task AppendResolvedOverlayArgumentAsync(System.Collections.Generic.List<string> arguments)
+    {
+        if (_managedDownloadResolverService is null || _backendContext is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var overlayDir = Path.Combine(_backendContext.RootPath, "_forgerems", "resolved-manifest");
+            Directory.CreateDirectory(overlayDir);
+            var overlayPath = Path.Combine(overlayDir, $"resolved-overlay-{DateTime.UtcNow:yyyyMMdd-HHmmss}.json");
+
+            var resolvedPath = await _managedDownloadResolverService.ResolveAndSaveAsync(
+                _backendContext,
+                overlayPath,
+                line => Logs.Add(line));
+
+            if (File.Exists(resolvedPath))
+            {
+                arguments.Add("-ResolvedOverlayPath");
+                arguments.Add(resolvedPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logs.Add(new LogLine(DateTimeOffset.UtcNow,
+                $"Auto-resolve skipped: {ex.Message}",
+                LogSeverity.Warning, false, LiveLogChannel.Update));
+        }
     }
 
     private void RefreshManagedDownloadRunArtifactFromSelectedUsb()

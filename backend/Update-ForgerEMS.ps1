@@ -68,7 +68,10 @@ param(
     # Comma-separated or repeated USB Builder profile category IDs to include for this run.
     [string[]]$IncludedCategories = @(),
     # Comma-separated or repeated item selectors in name:<manifest name> or dest:<relative path> form.
-    [string[]]$IncludedProfileItems = @()
+    [string[]]$IncludedProfileItems = @(),
+    # Path to a resolved manifest overlay JSON produced by ManagedDownloadResolverService.
+    # When present, items with a matching entry use the overlay's url/sha256 instead of the manifest's.
+    [string]$ResolvedOverlayPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -2311,6 +2314,28 @@ Write-Log ("Ventoy core: {0} {1} ({2})" -f $(if ($manifest.coreName) { [string]$
 Write-Log ("Release: " + $(if ($manifest.releaseType) { ([string]$manifest.releaseType).Trim().ToLowerInvariant() } else { "dev" })) "INFO"
 Write-Log "Root: $root" "INFO"
 Write-Log "Manifest: $manifestPath" "INFO"
+$script:ResolvedOverlay = $null
+if (-not [string]::IsNullOrWhiteSpace($ResolvedOverlayPath) -and (Test-Path -LiteralPath $ResolvedOverlayPath)) {
+    try {
+        $overlayRaw = Get-Content -LiteralPath $ResolvedOverlayPath -Raw | ConvertFrom-Json
+        $overlayMap = [ordered]@{}
+        foreach ($oItem in @($overlayRaw.Items)) {
+            $oName = [string]$oItem.Name
+            if (-not [string]::IsNullOrWhiteSpace($oName)) {
+                $overlayMap[$oName] = $oItem
+            }
+        }
+        $script:ResolvedOverlay = $overlayMap
+        Write-Log ("Resolved overlay loaded: {0} entries from {1}" -f $overlayMap.Count, $ResolvedOverlayPath) "OK"
+    }
+    catch {
+        Write-Log ("Failed to load resolved overlay from {0}: {1}" -f $ResolvedOverlayPath, $_.Exception.Message) "WARN"
+        $script:ResolvedOverlay = $null
+    }
+}
+elseif (-not [string]::IsNullOrWhiteSpace($ResolvedOverlayPath)) {
+    Write-Log "Resolved overlay path specified but file not found: $ResolvedOverlayPath" "WARN"
+}
 try {
     $manifestHash = Get-ForgerSha256 -LiteralPath $manifestPath
     $manifestTotalItems = @($manifest.items).Count
@@ -2628,6 +2653,20 @@ foreach ($item in $orderedItems) {
     $name = ([string]$item.name).Trim()
     $type = ([string]$(if ($item.type) { $item.type } else { "file" })).Trim().ToLowerInvariant()
     $url  = ([string]$item.url).Trim()
+    $resolvedFromOverlay = $null
+    if ($script:ResolvedOverlay -and $script:ResolvedOverlay.Contains($name)) {
+        $overlayEntry = $script:ResolvedOverlay[$name]
+        $overlayUrl = [string]$overlayEntry.Url
+        $overlaySha = [string]$overlayEntry.Sha256
+        if (-not [string]::IsNullOrWhiteSpace($overlayUrl)) {
+            $url = $overlayUrl
+            $resolvedFromOverlay = [string]$overlayEntry.ResolvedVersion
+            if (-not [string]::IsNullOrWhiteSpace($overlaySha)) {
+                $item | Add-Member -NotePropertyName "sha256" -NotePropertyValue $overlaySha -Force
+            }
+            Write-Log "Resolved overlay applied for '$name': version=$resolvedFromOverlay" "OK"
+        }
+    }
     $destRel = ([string]$item.dest).Trim()
     Write-ProgressLog ("Managed item loop item {0}/{1}: type={2} name='{3}' dest='{4}'" -f `
         $managedItemLoopIndex, @($orderedItems).Count, $type, $name, $destRel)

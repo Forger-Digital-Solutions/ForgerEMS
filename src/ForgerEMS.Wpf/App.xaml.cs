@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Markup;
@@ -13,6 +14,7 @@ using VentoyToolkitSetup.Wpf.Configuration;
 using VentoyToolkitSetup.Wpf.Infrastructure;
 using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services;
+using ForgerEMS.Wpf.Services;
 using VentoyToolkitSetup.Wpf.Services.Intelligence;
 using VentoyToolkitSetup.Wpf.ViewModels;
 
@@ -54,6 +56,8 @@ public partial class App : Application
             var scriptStatusParser = new ScriptStatusParser();
             var userPromptService = new UserPromptService();
             var ventoyIntegrationService = new VentoyIntegrationService(powerShellRunnerService, runtimeService);
+            var managedDownloadResolverService = new ManagedDownloadResolverService(
+                new HttpClient { Timeout = TimeSpan.FromSeconds(30) });
             var usbBenchmarkService = new UsbBenchmarkService(powerShellRunnerService);
             var copilotProviderRegistry = new CopilotProviderRegistry();
             var copilotService = new CopilotService(copilotProviderRegistry);
@@ -83,6 +87,7 @@ public partial class App : Application
                 scriptStatusParser,
                 userPromptService,
                 ventoyIntegrationService,
+                managedDownloadResolverService,
                 runtimeService,
                 usbBenchmarkService,
                 copilotService,
