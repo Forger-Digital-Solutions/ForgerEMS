@@ -5,12 +5,14 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using VentoyToolkitSetup.Wpf;
 using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services;
+using ForgerEMS.Wpf.Services;
 using VentoyToolkitSetup.Wpf.ViewModels;
 using Xunit;
 
@@ -34,6 +36,7 @@ public sealed class UsbBuilderProfilePickerTests
             new ScriptStatusParser(),
             new SilentPromptService(),
             new VentoyIntegrationService(new PowerShellRunnerService(), new AppRuntimeService()),
+            new ManagedDownloadResolverService(new HttpClient()),
             new AppRuntimeService(),
             new UsbBenchmarkService(new PowerShellRunnerService()),
             new CopilotService(new CopilotProviderRegistry()),

@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Net.Http;
 using System.Windows;
 using VentoyToolkitSetup.Wpf.Infrastructure;
 using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services;
+using ForgerEMS.Wpf.Services;
 using VentoyToolkitSetup.Wpf.Services.Intelligence;
 using VentoyToolkitSetup.Wpf.ViewModels;
 
@@ -113,6 +115,7 @@ public sealed class UsbHotplugRefreshTests
             new ScriptStatusParser(),
             new AcceptingPromptService(),
             new VentoyIntegrationService(powerShell, runtime),
+            new ManagedDownloadResolverService(new HttpClient()),
             runtime,
             new StubBenchmarkService(),
             new CopilotService(registry),

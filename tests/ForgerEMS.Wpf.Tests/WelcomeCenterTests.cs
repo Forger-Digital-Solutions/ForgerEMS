@@ -4,8 +4,10 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Net.Http;
 using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services;
+using ForgerEMS.Wpf.Services;
 using VentoyToolkitSetup.Wpf.Services.Intelligence;
 using VentoyToolkitSetup.Wpf.ViewModels;
 using Xunit;
@@ -288,6 +290,7 @@ public sealed class WelcomeCenterTests
             new ScriptStatusParser(),
             new AcceptingPromptService(),
             new VentoyIntegrationService(powerShell, runtime),
+            new ManagedDownloadResolverService(new HttpClient()),
             runtime,
             new UsbBenchmarkService(powerShell),
             new CopilotService(registry),

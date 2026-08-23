@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using VentoyToolkitSetup.Wpf;
 using VentoyToolkitSetup.Wpf.Services;
+using ForgerEMS.Wpf.Services;
 using VentoyToolkitSetup.Wpf.Services.Intelligence;
 using VentoyToolkitSetup.Wpf.ViewModels;
 
@@ -282,6 +283,7 @@ public sealed class MainWindowXamlLoadTests
                     scriptStatusParser,
                     userPromptService,
                     ventoyIntegrationService,
+                    new ManagedDownloadResolverService(new HttpClient()),
                     runtimeService,
                     usbBenchmarkService,
                     copilotService,

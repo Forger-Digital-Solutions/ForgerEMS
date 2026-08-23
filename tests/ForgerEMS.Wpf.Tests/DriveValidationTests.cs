@@ -1,10 +1,12 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services;
+using ForgerEMS.Wpf.Services;
 using VentoyToolkitSetup.Wpf.Services.DriveValidation;
 using VentoyToolkitSetup.Wpf.ViewModels;
 using Xunit;
@@ -266,6 +268,7 @@ public sealed class DriveValidationTests
             new ScriptStatusParser(),
             new AcceptingPromptService(),
             new VentoyIntegrationService(new PowerShellRunnerService(), new AppRuntimeService()),
+            new ManagedDownloadResolverService(new HttpClient()),
             new AppRuntimeService(),
             new UsbBenchmarkService(new PowerShellRunnerService()),
             new CopilotService(new CopilotProviderRegistry()),
@@ -296,6 +299,7 @@ public sealed class DriveValidationTests
             new ScriptStatusParser(),
             new AcceptingPromptService(),
             new VentoyIntegrationService(new PowerShellRunnerService(), new AppRuntimeService()),
+            new ManagedDownloadResolverService(new HttpClient()),
             new AppRuntimeService(),
             new UsbBenchmarkService(new PowerShellRunnerService()),
             new CopilotService(new CopilotProviderRegistry()),
