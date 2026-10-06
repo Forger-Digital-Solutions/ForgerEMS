@@ -1,0 +1,462 @@
+{
+  "schemaVersion": 1,
+  "defaultChannel": "stable",
+  "metadataTimeoutSeconds": 20,
+  "maximumAttempts": 2,
+  "cacheTtlMinutes": 60,
+  "policy": {
+    "downloadRequiresExpectedSha256": true,
+    "executeAutomatically": false,
+    "staleMetadataPermitsInstallation": false,
+    "missingProviderPermitsPinnedFallback": false,
+    "officialPageFallbackStatus": "RequiresUserAction",
+    "architectureAliases": {
+      "amd64": "x64",
+      "x86_64": "x64",
+      "64bit": "x64"
+    }
+  },
+  "resources": [
+    {
+      "id": "systemrescue",
+      "name": "SystemRescue",
+      "provider": "official-page",
+      "source": "https://www.system-rescue.org/Download/",
+      "architecture": "x64",
+      "exception": "SourceForge best-release metadata is not sufficient to bind a current vendor SHA-256 and channel. Use the current official download page pending a verified adapter."
+    },
+    {
+      "id": "gparted",
+      "name": "GParted Live",
+      "provider": "official-page",
+      "source": "https://gparted.org/download.php",
+      "architecture": "x64",
+      "exception": "SourceForge best-release metadata does not establish the exact stable architecture-specific ISO and vendor checksum together. Manual vendor verification required."
+    },
+    {
+      "id": "clonezilla",
+      "name": "Clonezilla Live",
+      "provider": "official-page",
+      "source": "https://clonezilla.org/downloads.php",
+      "architecture": "x64",
+      "exception": "Stable/alternative/testing images have different compatibility policies; current vendor selection and checksum verification remain user-controlled."
+    },
+    {
+      "id": "rescuezilla",
+      "name": "Rescuezilla",
+      "provider": "github-stable",
+      "repository": "rescuezilla/rescuezilla",
+      "source": "https://github.com/rescuezilla/rescuezilla/releases/latest",
+      "assetPattern": "^rescuezilla-[0-9.]+-64bit\\.[a-z]+\\.iso$",
+      "architecture": "x64",
+      "platform": "BootMedia"
+    },
+    {
+      "id": "ventoy",
+      "name": "Ventoy Windows Package",
+      "provider": "github-stable",
+      "repository": "ventoy/Ventoy",
+      "source": "https://github.com/ventoy/Ventoy/releases/latest",
+      "assetPattern": "^ventoy-[0-9.]+-windows\\.zip$",
+      "architecture": "x64",
+      "platform": "Windows"
+    },
+    {
+      "id": "memtest86plus",
+      "name": "MemTest86+",
+      "provider": "official-page",
+      "source": "https://www.memtest.org/",
+      "architecture": "x64",
+      "exception": "Vendor download-page adapter and signed/checksum release policy are not implemented; do not silently use a frozen archive."
+    },
+    {
+      "id": "ubuntu-desktop",
+      "name": "Ubuntu LTS Desktop",
+      "provider": "ubuntu-lts",
+      "source": "https://changelogs.ubuntu.com/meta-release-lts",
+      "assetPattern": "^ubuntu-[0-9.]+-desktop-amd64\\.iso$",
+      "architecture": "x64",
+      "channel": "lts",
+      "platform": "BootMedia"
+    },
+    {
+      "id": "linux-mint",
+      "name": "Linux Mint Cinnamon",
+      "provider": "official-page",
+      "source": "https://linuxmint.com/download.php",
+      "architecture": "x64",
+      "exception": "Edition and release-family compatibility selection plus vendor checksum adapter remain unimplemented."
+    },
+    {
+      "id": "kali",
+      "name": "Kali Linux Installer",
+      "provider": "checksum-index",
+      "source": "https://cdimage.kali.org/current/SHA256SUMS",
+      "baseUrl": "https://cdimage.kali.org/current/",
+      "allowedHosts": [ "cdimage.kali.org", "kali.download" ],
+      "assetPattern": "^kali-linux-[0-9.]+-installer-amd64\\.iso$",
+      "architecture": "x64",
+      "platform": "BootMedia"
+    },
+    {
+      "id": "crystaldiskinfo",
+      "name": "CrystalDiskInfo",
+      "provider": "official-page",
+      "source": "https://crystalmark.info/en/software/crystaldiskinfo/",
+      "architecture": "x64",
+      "exception": "Vendor uses multiple editions and delivery sources; authentic current artifact/hash selection is not implemented."
+    },
+    {
+      "id": "angryip",
+      "name": "Angry IP Scanner",
+      "provider": "github-stable",
+      "repository": "angryip/ipscan",
+      "source": "https://github.com/angryip/ipscan/releases/latest",
+      "assetPattern": "^ipscan-[0-9.]+-setup\\.exe$",
+      "architecture": "x64",
+      "platform": "Windows"
+    },
+    {
+      "id": "bluescreenview",
+      "name": "BlueScreenView",
+      "provider": "official-page",
+      "source": "https://www.nirsoft.net/utils/blue_screen_view.html",
+      "architecture": "x64",
+      "exception": "Canonical artifact URL is version-independent but no authenticated expected checksum is configured. Do not mark a self-computed hash as validation."
+    },
+    {
+      "id": "driverstoreexplorer",
+      "name": "Driver Store Explorer",
+      "provider": "github-stable",
+      "repository": "lostindark/DriverStoreExplorer",
+      "source": "https://github.com/lostindark/DriverStoreExplorer/releases/latest",
+      "assetPattern": "^DriverStoreExplorer-v[0-9.]+\\.zip$",
+      "architecture": "x64",
+      "platform": "Windows"
+    },
+    {
+      "id": "rustdesk",
+      "name": "RustDesk",
+      "provider": "github-stable",
+      "repository": "rustdesk/rustdesk",
+      "source": "https://github.com/rustdesk/rustdesk/releases/latest",
+      "assetPattern": "^rustdesk-[0-9.]+-x86_64\\.exe$",
+      "architecture": "x64",
+      "platform": "Windows"
+    },
+    {
+      "id": "rufus",
+      "name": "Rufus Portable",
+      "provider": "github-stable",
+      "repository": "pbatard/rufus",
+      "source": "https://github.com/pbatard/rufus/releases/latest",
+      "assetPattern": "^rufus-[0-9.]+p\\.exe$",
+      "architecture": "x64",
+      "platform": "Windows"
+    },
+    {
+      "id": "etcher",
+      "name": "balenaEtcher",
+      "provider": "github-stable",
+      "repository": "balena-io/etcher",
+      "source": "https://github.com/balena-io/etcher/releases/latest",
+      "assetPattern": "^balenaEtcher-[0-9.]+\\.Setup\\.exe$",
+      "architecture": "x64",
+      "platform": "Windows"
+    },
+    {
+      "id": "alpine",
+      "name": "Alpine Linux Standard",
+      "provider": "official-page",
+      "source": "https://alpinelinux.org/downloads/",
+      "architecture": "x64",
+      "exception": "Latest supported release-family and YAML/checksum adapter not implemented; source remains the current vendor landing page."
+    },
+    {
+      "id": "notepadplusplus",
+      "name": "Notepad++ Portable",
+      "provider": "github-stable",
+      "repository": "notepad-plus-plus/notepad-plus-plus",
+      "source": "https://github.com/notepad-plus-plus/notepad-plus-plus/releases/latest",
+      "assetPattern": "^npp\\.[0-9.]+\\.portable\\.x64\\.zip$",
+      "architecture": "x64",
+      "platform": "Windows"
+    },
+    {
+      "id": "systeminformer",
+      "name": "System Informer",
+      "provider": "github-stable",
+      "repository": "winsiderss/systeminformer",
+      "source": "https://github.com/winsiderss/systeminformer/releases/latest",
+      "assetPattern": "^systeminformer-[0-9.]+-release-bin\\.zip$",
+      "architecture": "x64",
+      "platform": "Windows"
+    },
+    {
+      "id": "veracrypt",
+      "name": "VeraCrypt",
+      "provider": "official-page",
+      "source": "https://veracrypt.io/en/Downloads.html",
+      "architecture": "x64",
+      "exception": "Installer family, vendor-specific release naming and cryptographic publisher verification need an audited adapter; official manual distribution only."
+    },
+    {
+      "id": "putty",
+      "name": "PuTTY 64-bit Installer",
+      "provider": "checksum-index",
+      "source": "https://the.earth.li/~sgtatham/putty/latest/sha256sums",
+      "baseUrl": "https://the.earth.li/~sgtatham/putty/latest/",
+      "assetPattern": "^w64/putty-64bit-[0-9.]+-installer\\.msi$",
+      "architecture": "x64",
+      "platform": "Windows"
+    },
+    {
+      "id": "wireshark",
+      "name": "Wireshark",
+      "provider": "official-page",
+      "source": "https://www.wireshark.org/download.html",
+      "architecture": "x64",
+      "exception": "Current version manifest/signature and mirror redirect policy remain unimplemented; no frozen installer fallback."
+    },
+    {
+      "id": "proxmox-ve",
+      "name": "Proxmox VE",
+      "provider": "official-page",
+      "source": "https://www.proxmox.com/en/downloads/proxmox-virtual-environment",
+      "architecture": "x64",
+      "exception": "Vendor enterprise/community licensing and artifact-integrity adapter require manual review."
+    },
+    {
+      "id": "proxmox-backup",
+      "name": "Proxmox Backup Server",
+      "provider": "official-page",
+      "source": "https://www.proxmox.com/en/downloads/proxmox-backup-server",
+      "architecture": "x64",
+      "exception": "Vendor licensing and artifact-integrity adapter require manual review."
+    },
+    {
+      "id": "ubuntu-server",
+      "name": "Ubuntu LTS Server",
+      "provider": "ubuntu-lts",
+      "source": "https://changelogs.ubuntu.com/meta-release-lts",
+      "assetPattern": "^ubuntu-[0-9.]+-live-server-amd64\\.iso$",
+      "architecture": "x64",
+      "channel": "lts",
+      "platform": "BootMedia"
+    },
+    {
+      "id": "debian-netinst",
+      "name": "Debian Stable Netinst",
+      "provider": "checksum-index",
+      "source": "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/SHA256SUMS",
+      "baseUrl": "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/",
+      "assetPattern": "^debian-[0-9.]+-amd64-netinst\\.iso$",
+      "architecture": "x64",
+      "platform": "BootMedia"
+    },
+    {
+      "id": "fedora-server",
+      "name": "Fedora Server",
+      "provider": "official-page",
+      "source": "https://fedoraproject.org/server/download",
+      "architecture": "x64",
+      "exception": "Vendor release JSON/CHECKSUM and rotating mirror trust policy require an audited adapter."
+    },
+    {
+      "id": "freebsd",
+      "name": "FreeBSD",
+      "provider": "official-page",
+      "source": "https://www.freebsd.org/where/",
+      "architecture": "x64",
+      "exception": "Supported RELEASE vs CURRENT and image/checksum selection remain manual."
+    },
+    {
+      "id": "openbsd",
+      "name": "OpenBSD",
+      "provider": "official-page",
+      "source": "https://www.openbsd.org/faq/faq4.html",
+      "architecture": "x64",
+      "exception": "Release selection and signify verification are not implemented; require vendor installation and authenticity guidance."
+    },
+    {
+      "id": "rocky-minimal",
+      "name": "Rocky Linux Minimal",
+      "provider": "official-page",
+      "source": "https://rockylinux.org/download",
+      "architecture": "x64",
+      "exception": "Major-family compatibility, minimal/DVD role and checksum adapter remain manual."
+    },
+    {
+      "id": "rocky-dvd",
+      "name": "Rocky Linux DVD",
+      "provider": "official-page",
+      "source": "https://rockylinux.org/download",
+      "architecture": "x64",
+      "exception": "Major-family compatibility, minimal/DVD role and checksum adapter remain manual."
+    },
+    {
+      "id": "alma-minimal",
+      "name": "AlmaLinux Minimal",
+      "provider": "official-page",
+      "source": "https://almalinux.org/get-almalinux/",
+      "architecture": "x64",
+      "exception": "Major-family compatibility, minimal/DVD role and checksum adapter remain manual."
+    },
+    {
+      "id": "alma-dvd",
+      "name": "AlmaLinux DVD",
+      "provider": "official-page",
+      "source": "https://almalinux.org/get-almalinux/",
+      "architecture": "x64",
+      "exception": "Major-family compatibility, minimal/DVD role and checksum adapter remain manual."
+    },
+    {
+      "id": "netbsd",
+      "name": "NetBSD",
+      "provider": "official-page",
+      "source": "https://www.netbsd.org/releases/",
+      "architecture": "x64",
+      "exception": "Vendor release/support policy and SHA-512 adapter remain unimplemented; require manual vendor verification."
+    },
+    {
+      "id": "opensuse",
+      "name": "openSUSE Leap",
+      "provider": "official-page",
+      "source": "https://get.opensuse.org/leap/",
+      "architecture": "x64",
+      "exception": "Leap vs rolling release and image role policy need explicit vendor applicability; manual vendor verification."
+    },
+    {
+      "id": "fedora-workstation",
+      "name": "Fedora Workstation",
+      "provider": "official-page",
+      "source": "https://fedoraproject.org/workstation/download",
+      "architecture": "x64",
+      "exception": "Vendor release JSON/CHECKSUM and rotating mirror trust policy require an audited adapter."
+    },
+    {
+      "id": "arch",
+      "name": "Arch Linux",
+      "provider": "official-page",
+      "source": "https://archlinux.org/download/",
+      "architecture": "x64",
+      "exception": "Rotating mirrors and vendor PGP verification require an audited adapter; archived snapshots are not latest-release evidence."
+    },
+    {
+      "id": "xubuntu",
+      "name": "Xubuntu",
+      "provider": "official-page",
+      "source": "https://xubuntu.org/download/",
+      "architecture": "x64",
+      "exception": "Flavor support windows differ from Ubuntu core LTS; supported release selection remains manual."
+    },
+    {
+      "id": "lubuntu",
+      "name": "Lubuntu",
+      "provider": "official-page",
+      "source": "https://lubuntu.me/downloads/",
+      "architecture": "x64",
+      "exception": "Flavor support windows differ from Ubuntu core LTS; supported release selection remains manual."
+    },
+    {
+      "id": "kubuntu",
+      "name": "Kubuntu",
+      "provider": "official-page",
+      "source": "https://kubuntu.org/getkubuntu/",
+      "architecture": "x64",
+      "exception": "Flavor support windows differ from Ubuntu core LTS; supported release selection remains manual."
+    },
+    {
+      "id": "debian-gnome",
+      "name": "Debian Stable Live GNOME",
+      "provider": "checksum-index",
+      "source": "https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/SHA256SUMS",
+      "baseUrl": "https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/",
+      "assetPattern": "^debian-live-[0-9.]+-amd64-gnome\\.iso$",
+      "architecture": "x64",
+      "platform": "BootMedia"
+    },
+    {
+      "id": "debian-kde",
+      "name": "Debian Stable Live KDE",
+      "provider": "checksum-index",
+      "source": "https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/SHA256SUMS",
+      "baseUrl": "https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/",
+      "assetPattern": "^debian-live-[0-9.]+-amd64-kde\\.iso$",
+      "architecture": "x64",
+      "platform": "BootMedia"
+    },
+    {
+      "id": "debian-xfce",
+      "name": "Debian Stable Live Xfce",
+      "provider": "checksum-index",
+      "source": "https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/SHA256SUMS",
+      "baseUrl": "https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/",
+      "assetPattern": "^debian-live-[0-9.]+-amd64-xfce\\.iso$",
+      "architecture": "x64",
+      "platform": "BootMedia"
+    },
+    {
+      "id": "freedos-live",
+      "name": "FreeDOS LiveCD",
+      "provider": "official-page",
+      "source": "https://www.freedos.org/download/",
+      "architecture": "x86",
+      "exception": "Vendor fixed release-role naming and checksum publication adapter not implemented; legacy boot compatibility needs user selection."
+    },
+    {
+      "id": "freedos-usb",
+      "name": "FreeDOS FullUSB",
+      "provider": "official-page",
+      "source": "https://www.freedos.org/download/",
+      "architecture": "x86",
+      "exception": "Vendor fixed release-role naming and checksum publication adapter not implemented; legacy boot compatibility needs user selection."
+    },
+    {
+      "id": "truenas",
+      "name": "TrueNAS Community Edition",
+      "provider": "official-page",
+      "source": "https://www.truenas.com/download-truenas-community-edition/",
+      "architecture": "x64",
+      "exception": "Vendor recommended vs early-adopter channel and storage compatibility must not be inferred from the largest release number."
+    },
+    {
+      "id": "parrot",
+      "name": "Parrot Security",
+      "provider": "official-page",
+      "source": "https://parrotsec.org/download/",
+      "architecture": "x64",
+      "exception": "Current release-role metadata and signed-hashes verification require an audited adapter."
+    },
+    {
+      "id": "keepassxc",
+      "name": "KeePassXC Portable",
+      "provider": "github-stable",
+      "repository": "keepassxreboot/keepassxc",
+      "source": "https://github.com/keepassxreboot/keepassxc/releases/latest",
+      "assetPattern": "^KeePassXC-[0-9.]+-Win64\\.zip$",
+      "architecture": "x64",
+      "platform": "Windows"
+    },
+    {
+      "id": "testdisk",
+      "name": "TestDisk Win64",
+      "provider": "checksum-index",
+      "source": "https://www.cgsecurity.org/testdisk_sha256.txt",
+      "baseUrl": "https://www.cgsecurity.org/",
+      "assetPattern": "^testdisk-[0-9.]+\\.win64\\.zip$",
+      "architecture": "x64",
+      "platform": "Windows"
+    },
+    {
+      "id": "powertoys",
+      "name": "Microsoft PowerToys",
+      "provider": "github-stable",
+      "repository": "microsoft/PowerToys",
+      "source": "https://github.com/microsoft/PowerToys/releases/latest",
+      "assetPattern": "^PowerToysUserSetup-[0-9.]+-x64\\.exe$",
+      "architecture": "x64",
+      "platform": "Windows"
+    }
+  ]
+}

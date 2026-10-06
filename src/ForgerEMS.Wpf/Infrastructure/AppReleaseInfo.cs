@@ -1,19 +1,23 @@
+using System.Reflection;
+
 namespace VentoyToolkitSetup.Wpf.Infrastructure;
 
 internal static class AppReleaseInfo
 {
-    /// <summary>Semantic version for update checks and diagnostics (matches .csproj InformationalVersion).</summary>
-    public const string Version = "1.2.4-preview.4";
+    /// <summary>Semantic version for update checks and diagnostics (assembly informational version sourced from VERSION).</summary>
+    public static string Version { get; } =
+        Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+        ?? "0.0.0";
 
     /// <summary>Primary user-facing version line in the shell.</summary>
-    public const string DisplayVersion = "ForgerEMS v1.2.4 Public Preview";
+    public static string DisplayVersion => $"ForgerEMS v{Version}";
 
     /// <summary>Short footer / welcome subtitle (single line preferred).</summary>
-    public const string ReleaseIdentifier =
-        "ForgerEMS v1.2.4 Public Preview \u2014 technician USB toolkit, Dr. Forge Intake, Toolkit Manager, Kyra";
+    public static string ReleaseIdentifier =>
+        $"ForgerEMS v{Version} — technician USB toolkit, Dr. Forge Intake, Toolkit Manager";
 
-    public const string PublicPreviewBannerLine =
-        "ForgerEMS Public Preview \u2014 built for technicians, rebuilders, and power users.";
+    public const string ProductBannerLine =
+        "ForgerEMS — built for technicians, rebuilders, and power users.";
 }
 
 internal static class FeatureFlags

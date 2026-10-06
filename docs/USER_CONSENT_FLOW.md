@@ -1,6 +1,6 @@
 # ForgerEMS User Consent Flow
 
-Applies to: ForgerEMS `v1.2.4-preview.4` public preview
+Applies to: ForgerEMS `v1.2.4`
 
 ## First-run Terms Gate
 
@@ -18,11 +18,11 @@ Required checkbox:
 
 `I have read and agree to the ForgerEMS Terms of Use and understand the Privacy/Data Handling notes.`
 
-Kyra/support/export warning checkbox:
+Export warning checkbox:
 
-`I understand that logs, support bundles, Kyra context, and exported reports may contain local device/context information. I will review exported files before sharing them.`
+`I understand that logs, support bundles, and exported reports may contain local device/context information. I will review exported files before sharing them.`
 
-Both checkbox notices render as wrapped multi-line text inside the gate so they stay fully readable at 1366x768. The gate header shows the document revision date and the ForgerEMS version it applies to (`Document revision: 2026-07-05 · Applies to ForgerEMS v1.2.4-preview.4`).
+Both checkbox notices render as wrapped multi-line text inside the gate so they stay fully readable at 1366x768. The gate header shows the document revision date and the ForgerEMS version it applies to (`Document revision: 2026-10-06 · Applies to ForgerEMS v1.2.4`).
 
 ## Local Acceptance Record
 
@@ -34,10 +34,10 @@ The record includes terms version, accepted UTC timestamp, app version/build, an
 
 Current terms version:
 
-`2026-07-05.v1.2.4-preview.4`
+`2026-10-06.v1.2.4`
 
 If the terms version or terms hash changes, ForgerEMS prompts again.
 
 ## Separate Export Consent
 
-Terms acceptance does not authorize sharing local context. Kyra memory export, Kyra Intelligence memory export, and support bundle creation show a separate confirmation before packaging logs or local context.
+Terms acceptance does not authorize sharing local context. Support bundle creation shows a separate confirmation before packaging logs or local context.

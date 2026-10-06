@@ -208,9 +208,10 @@ public sealed class ToolkitCatalogVendorShortcutsTests
     [Fact]
     public void EligibilityAudit_ManualVendorEntriesDoNotIncreaseManagedFileCount()
     {
-        // The packaged manifest tracks 30 active managed file downloads. Vendor
-        // shortcuts must not change that count — if a future change accidentally
-        // promotes one to type="file", this test makes it visible immediately.
+        // The packaged manifest tracks 20 active managed file downloads (all
+        // requiresResolution resource-policy entries). Vendor shortcuts must not
+        // change that count — if a future change accidentally promotes one to
+        // type="file", this test makes it visible immediately.
         var document = LoadManifest();
         var activeManagedFileCount = 0;
         foreach (var item in document.RootElement.GetProperty("items").EnumerateArray())
@@ -228,9 +229,9 @@ public sealed class ToolkitCatalogVendorShortcutsTests
             }
         }
 
-        // 2026-05-27 Batch 6 catalog-expansion pass added 18 managed file entries
-        // (15 OS / ISO + 3 technician tool), bringing the active count from 32 to 50.
-        Assert.Equal(50, activeManagedFileCount);
+        // Post resource-policy migration the active managed file set is the 20
+        // overlay-resolved entries; vendor shortcuts stay type="page".
+        Assert.Equal(20, activeManagedFileCount);
     }
 
     private static bool IsApprovedVendorHost(string url)

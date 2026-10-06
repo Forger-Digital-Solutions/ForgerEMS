@@ -6,10 +6,18 @@
 #>
 param(
     [string]$OutputZip = "",
-    [string]$Version = "1.2.4-preview.4"
+    [string]$Version = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    $versionFile = Join-Path (Split-Path -Parent $PSScriptRoot) "VERSION"
+    if (Test-Path -LiteralPath $versionFile) {
+        $Version = (Get-Content -LiteralPath $versionFile -Raw).Trim()
+    }
+    if ([string]::IsNullOrWhiteSpace($Version)) { $Version = "unknown" }
+}
 function Redact-Text([string]$s) {
     if ([string]::IsNullOrEmpty($s)) { return "" }
     $t = $s -replace '(?i)[A-Za-z]:\\Users\\[^\\\s]+', '[REDACTED_PRIVATE_PATH]'
@@ -31,7 +39,7 @@ $meta = @"
 ForgerEMS diagnostics export (operator script)
 GeneratedUtc: $((Get-Date).ToUniversalTime().ToString("o"))
 AppSemanticVersion: $Version
-DisplayVersion: ForgerEMS v1.2.4 Public Preview
+DisplayVersion: ForgerEMS v$Version
 FORGEREMS_RELEASE_CHANNEL: $env:FORGEREMS_RELEASE_CHANNEL
 Update owner/repo: $env:FORGEREMS_GITHUB_OWNER / $env:FORGEREMS_GITHUB_REPO
 

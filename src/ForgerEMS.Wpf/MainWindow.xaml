@@ -401,78 +401,6 @@
             </Style.Resources>
         </Style>
 
-        <Style x:Key="KyraChatInputTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
-            <Setter Property="Background" Value="#E6081018" />
-            <Setter Property="Foreground" Value="#FFF4F8FF" />
-            <Setter Property="BorderBrush" Value="#8867B7E8" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="12,10" />
-            <Setter Property="CaretBrush" Value="#FFFFDAB8" />
-            <Setter Property="MinHeight" Value="42" />
-            <Setter Property="MaxHeight" Value="150" />
-            <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
-            <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
-            <Setter Property="VerticalContentAlignment" Value="Top" />
-            <Style.Triggers>
-                <Trigger Property="IsKeyboardFocused" Value="True">
-                    <Setter Property="BorderBrush" Value="#FFFFB86B" />
-                    <Setter Property="Background" Value="#F0101824" />
-                </Trigger>
-                <Trigger Property="IsEnabled" Value="False">
-                    <Setter Property="Opacity" Value="0.65" />
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style x:Key="CopilotChatScrollViewerStyle" TargetType="ScrollViewer">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="Padding" Value="0,0,4,0" />
-            <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
-        </Style>
-
-        <Style x:Key="KyraQuickActionChipButtonStyle" TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
-            <Setter Property="MinHeight" Value="30" />
-            <Setter Property="MinWidth" Value="116" />
-            <Setter Property="Padding" Value="11,5" />
-            <Setter Property="Margin" Value="0,0,7,7" />
-            <Setter Property="FontSize" Value="11.5" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Background" Value="#CC111A26" />
-            <Setter Property="BorderBrush" Value="#665A7AA0" />
-            <Setter Property="Foreground" Value="#FFE7EDF8" />
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#D9182434" />
-                    <Setter Property="BorderBrush" Value="#88A1C8F0" />
-                </Trigger>
-                <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="#CC1B2A3E" />
-                    <Setter Property="BorderBrush" Value="#99A1C8F0" />
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style x:Key="KyraMessageCopyButtonStyle" TargetType="Button" BasedOn="{StaticResource FooterButtonStyle}">
-            <Setter Property="MinHeight" Value="24" />
-            <Setter Property="Height" Value="24" />
-            <Setter Property="MinWidth" Value="48" />
-            <Setter Property="Width" Value="48" />
-            <Setter Property="Padding" Value="4,1" />
-            <Setter Property="Margin" Value="0" />
-            <Setter Property="FontSize" Value="10.5" />
-            <Setter Property="Background" Value="#AA111A26" />
-            <Setter Property="BorderBrush" Value="#555A7AA0" />
-            <Setter Property="Foreground" Value="#FFD5DFEE" />
-            <Setter Property="VerticalAlignment" Value="Top" />
-            <Setter Property="HorizontalAlignment" Value="Right" />
-        </Style>
-
-        <Style x:Key="KyraMessageDetailsExpanderStyle" TargetType="Expander">
-            <Setter Property="Foreground" Value="{DynamicResource PanelMutedTextBrush}" />
-            <Setter Property="FontSize" Value="10.5" />
-            <Setter Property="Padding" Value="0" />
-        </Style>
-
         <Style x:Key="DiagnosticsStatusChipTextStyle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="12" />
             <Setter Property="FontWeight" Value="SemiBold" />
@@ -1003,7 +931,7 @@
                                    LineHeight="12"
                                    TextTrimming="CharacterEllipsis"
                                    TextWrapping="NoWrap"
-                                   Text="{Binding PublicPreviewBannerText, Mode=OneWay}" />
+                                   Text="{Binding ProductBannerText, Mode=OneWay}" />
                     </StackPanel>
                 </StackPanel>
 
@@ -1014,8 +942,8 @@
                       MaxWidth="430">
                     <!-- The always-visible Internet status widget was removed from the shell
                          header: it kept a background network monitor running for the whole
-                         session, and the network-check feature was retired entirely in
-                         v1.2.4-preview.4. -->
+                         session, and the network-check feature was retired in an earlier
+                         preview release. -->
                     <StackPanel Orientation="Horizontal"
                                 HorizontalAlignment="Right">
                         <Border Margin="0,0,12,0"
@@ -1159,8 +1087,7 @@
                     <Button x:Name="NavPortUsbIntelligenceButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="1" Click="OnSidebarNavigateClick" Content="Port / USB Intelligence" />
                     <Button x:Name="NavToolkitButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="2" Click="OnSidebarNavigateClick" Content="▤  Toolkit Manager" />
                     <Button x:Name="NavDriverHubButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="3" Click="OnSidebarNavigateClick" Content="▥  Driver Hub" />
-                    <Button x:Name="NavCopilotButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="4" Click="OnSidebarNavigateClick" Content="◇  Kyra (Beta)" />
-                    <Button x:Name="NavSettingsButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="5" Click="OnSidebarNavigateClick" Content="☰  Settings" />
+                    <Button x:Name="NavSettingsButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="4" Click="OnSidebarNavigateClick" Content="☰  Settings" />
                 </StackPanel>
 
                 <Border Grid.Row="1"
@@ -3016,6 +2943,39 @@
                                                TextWrapping="Wrap" />
                                 </StackPanel>
                             </GroupBox>
+
+                            <GroupBox Header="Managed resource check">
+                                <StackPanel>
+                                    <TextBlock FontSize="12"
+                                               Foreground="{DynamicResource PanelMutedTextBrush}"
+                                               Text="Check Everything resolves official metadata for manifest resources marked as managed — resolved download URL, version, and expected SHA-256 where upstream publishes one. Nothing is downloaded, installed, or written to the USB target."
+                                               TextWrapping="Wrap" />
+                                    <WrapPanel Margin="0,10,0,0">
+                                        <Button Width="170"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Content="Check Everything"
+                                                Command="{Binding CheckEverythingResourcesCommand}" />
+                                    </WrapPanel>
+                                    <TextBlock Margin="0,10,0,0"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource PanelTextBrush}"
+                                               Text="{Binding ResourceCheckStatusText}"
+                                               TextWrapping="Wrap" />
+                                    <ScrollViewer Margin="0,8,0,0" MaxHeight="160" VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl ItemsSource="{Binding ResourceCheckResults}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Margin="0,0,0,3"
+                                                               FontSize="12"
+                                                               Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                               Text="{Binding}"
+                                                               TextWrapping="Wrap" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </StackPanel>
+                            </GroupBox>
                         </StackPanel>
                     </TabItem>
 
@@ -3440,365 +3400,79 @@
                                     </ItemsControl>
                                 </StackPanel>
                             </GroupBox>
-                        </StackPanel>
-                    </TabItem>
 
-                    <TabItem Header="◇  Kyra (Beta)">
-                        <Grid Margin="24,8,24,16" MaxWidth="1040" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                            <Image Panel.ZIndex="0"
-                                   Width="260"
-                                   Height="260"
-                                   Margin="0,0,-16,0"
-                                   HorizontalAlignment="Right"
-                                   VerticalAlignment="Bottom"
-                                   Opacity="0.12"
-                                   Source="Assets/Kyra.png"
-                                   Stretch="Uniform"
-                                   IsHitTestVisible="False"
-                                   RenderOptions.BitmapScalingMode="Fant" />
-                            <GroupBox Panel.ZIndex="1" VerticalAlignment="Stretch">
-                                <GroupBox.Header>
-                                    <StackPanel Orientation="Horizontal">
-                                        <Image Width="40"
-                                               Height="40"
-                                               Margin="0,0,8,0"
-                                               Source="Assets/Kyra.png"
-                                               Stretch="Uniform"
-                                               RenderOptions.BitmapScalingMode="Fant" />
-                                        <TextBlock VerticalAlignment="Center"
-                                                   Foreground="{DynamicResource PanelTextBrush}"
-                                                   FontWeight="SemiBold"
-                                                   Text="Kyra (Beta)" />
-                                    </StackPanel>
-                                </GroupBox.Header>
-                                <Grid>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="*" MinHeight="260" />
-                                        <RowDefinition Height="Auto" />
-                                    </Grid.RowDefinitions>
-
-                                    <Border Grid.Row="0"
-                                            Margin="0,0,0,10"
-                                            Padding="12"
-                                            Background="#CC0C1522"
-                                            BorderBrush="{DynamicResource PanelBorderBrush}"
-                                            BorderThickness="1"
-                                            CornerRadius="10">
-                                        <DockPanel LastChildFill="True">
-                                            <Image DockPanel.Dock="Right"
-                                                   Width="56"
-                                                   Height="56"
-                                                   Margin="8,0,0,0"
-                                                   VerticalAlignment="Center"
-                                                   Opacity="0.92"
-                                                   Source="Assets/Kyra.png"
-                                                   Stretch="Uniform"
-                                                   IsHitTestVisible="False"
-                                                   RenderOptions.BitmapScalingMode="Fant" />
-                                            <StackPanel>
-                                            <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0"
-                                                       Margin="0,0,10,0"
-                                                       VerticalAlignment="Center"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource PanelLabelBrush}"
-                                                       Text="Kyra mode" />
-                                            <ComboBox Grid.Column="1"
-                                                      Width="188"
-                                                      ItemsSource="{Binding CopilotModeOptions}"
-                                                      SelectedItem="{Binding SelectedCopilotMode}"
-                                                      Style="{StaticResource ReadableComboBoxStyle}"
-                                                      ItemContainerStyle="{StaticResource ReadableComboBoxItemStyle}" />
-                                            <Border Grid.Column="2"
-                                                    Margin="12,0,0,0"
-                                                    Padding="9,4"
-                                                    Background="#55223A2A"
-                                                    BorderBrush="#667AAE8F"
-                                                    BorderThickness="1"
-                                                    CornerRadius="999">
-                                                <TextBlock FontSize="12"
-                                                           FontWeight="SemiBold"
-                                                           Foreground="#FFD0E8D8"
-                                                           Text="{Binding CopilotProviderBadgeText}"
-                                                           TextAlignment="Center"
-                                                           VerticalAlignment="Center"
-                                                           HorizontalAlignment="Center"
-                                                           TextWrapping="Wrap"
-                                                           MaxWidth="320" />
-                                            </Border>
-                                            <Border Grid.Column="3"
-                                                    Margin="8,0,0,0"
-                                                    Padding="9,4"
-                                                    Background="#5536281C"
-                                                    BorderBrush="#669B7A5A"
-                                                    BorderThickness="1"
-                                                    CornerRadius="999">
-                                                <TextBlock FontSize="12"
-                                                           FontWeight="SemiBold"
-                                                           Foreground="#FFE8D9C6"
-                                                           Text="{Binding CopilotPrivacyBadgeText}"
-                                                           TextAlignment="Center"
-                                                           VerticalAlignment="Center"
-                                                           HorizontalAlignment="Center"
-                                                           TextWrapping="Wrap"
-                                                           MaxWidth="280" />
-                                            </Border>
-                                            <TextBlock Grid.Column="4"
-                                                       Margin="12,0,12,0"
-                                                       VerticalAlignment="Center"
-                                                       FontSize="11.5"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
-                                                       Text="{Binding CopilotActiveProviderText, Mode=OneWay}"
-                                                       TextWrapping="Wrap" />
-                                            <Button Grid.Column="5"
-                                                    MinWidth="104"
-                                                    Style="{StaticResource SecondaryButtonStyle}"
-                                                    Content="Advanced…"
-                                                    Command="{Binding OpenKyraAdvancedSettingsCommand}" />
-                                            </Grid>
-                                            <TextBlock Margin="0,8,0,0"
-                                                       FontSize="11"
-                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
-                                                       Text="{Binding CopilotRoutingPolicyText, Mode=OneWay}"
-                                                       TextWrapping="Wrap"
-                                                       Visibility="{Binding CopilotRoutingPolicyVisibility}" />
-                                            <WrapPanel Margin="0,10,0,0">
-                                                <Button Style="{StaticResource KyraQuickActionChipButtonStyle}" Content="Diagnose this PC" Command="{Binding AskCopilotLagCommand}" />
-                                                <Button Style="{StaticResource KyraQuickActionChipButtonStyle}" Content="Upgrade before selling?" Command="{Binding AskCopilotUpgradeCommand}" />
-                                                <Button Style="{StaticResource KyraQuickActionChipButtonStyle}" Content="Laptop value" Command="{Binding AskCopilotValueCommand}" />
-                                                <Button Style="{StaticResource KyraQuickActionChipButtonStyle}" Content="Best OS fit" Command="{Binding AskCopilotOsCommand}" />
-                                                <Button Style="{StaticResource KyraQuickActionChipButtonStyle}" Content="Build repair USB" Command="{Binding AskCopilotUsbCommand}" />
-                                                <Button Style="{StaticResource KyraQuickActionChipButtonStyle}" Content="Explain this warning" Command="{Binding AskCopilotWarningCommand}" Visibility="{Binding KyraWarningQuickButtonVisibility}" />
-                                                <Button Style="{StaticResource KyraQuickActionChipButtonStyle}" Content="Make resale listing" Command="{Binding AskCopilotListingCommand}" Visibility="{Binding KyraListingQuickButtonVisibility}" />
-                                                <Button Style="{StaticResource KyraQuickActionChipButtonStyle}" Content="Fix code snippet" Command="{Binding AskCopilotFixCodeCommand}" />
-                                                <Button Style="{StaticResource KyraQuickActionChipButtonStyle}" Content="Check live tools" Command="{Binding AskCopilotLiveToolsCommand}" Visibility="{Binding KyraLiveToolsQuickButtonVisibility}" />
-                                            </WrapPanel>
-                                            </StackPanel>
-                                        </DockPanel>
-                                    </Border>
-
-                                    <Border Grid.Row="1"
-                                            MinHeight="260"
-                                            Padding="10,9"
-                                            Background="#D40A121D"
-                                            BorderBrush="#44587996"
-                                            BorderThickness="1"
-                                            CornerRadius="10">
-                                            <ScrollViewer x:Name="KyraChatScrollViewer"
-                                                          VerticalScrollBarVisibility="Auto"
-                                                          Style="{StaticResource CopilotChatScrollViewerStyle}">
-                                                <ItemsControl ItemsSource="{Binding CopilotMessages}"
-                                                              Width="{Binding ActualWidth, ElementName=KyraChatScrollViewer}"
-                                                              MaxWidth="900"
-                                                              HorizontalAlignment="Center">
-                                                    <ItemsControl.ItemTemplate>
-                                                        <DataTemplate>
-                                                            <Border Margin="0,0,0,6"
-                                                                    Padding="10,8"
-                                                                    Background="#BA101A29"
-                                                                    BorderBrush="{DynamicResource PanelBorderBrush}"
-                                                                    BorderThickness="1"
-                                                                    CornerRadius="12"
-                                                                    MaxWidth="760">
-                                                                <Border.Style>
-                                                                    <Style TargetType="Border">
-                                                                        <Setter Property="HorizontalAlignment" Value="Left" />
-                                                                        <Setter Property="Background" Value="#BA101A29" />
-                                                                        <Style.Triggers>
-                                                                            <DataTrigger Binding="{Binding Role}" Value="You">
-                                                                                <Setter Property="HorizontalAlignment" Value="Right" />
-                                                                                <Setter Property="Background" Value="#C0192434" />
-                                                                            </DataTrigger>
-                                                                        </Style.Triggers>
-                                                                    </Style>
-                                                                </Border.Style>
-                                                                <StackPanel MaxWidth="740">
-                                                                    <Grid>
-                                                                        <Grid.ColumnDefinitions>
-                                                                            <ColumnDefinition Width="*" />
-                                                                            <ColumnDefinition Width="Auto" />
-                                                                        </Grid.ColumnDefinitions>
-                                                                        <TextBlock FontWeight="SemiBold"
-                                                                                   FontSize="12"
-                                                                                   Foreground="{DynamicResource PanelLabelBrush}"
-                                                                                   Text="{Binding Role}" />
-                                                                        <Button Grid.Column="1"
-                                                                                Style="{StaticResource KyraMessageCopyButtonStyle}"
-                                                                                Visibility="{Binding CopyVisibility}"
-                                                                                Content="Copy"
-                                                                                Click="OnCopyCopilotResponseClick" />
-                                                                    </Grid>
-                                                                    <TextBlock Margin="0,5,0,0"
-                                                                               FontSize="13.5"
-                                                                               LineHeight="20"
-                                                                               LineStackingStrategy="BlockLineHeight"
-                                                                               Foreground="{DynamicResource PanelTextBrush}"
-                                                                               Text="{Binding Text}"
-                                                                               TextWrapping="Wrap" />
-                                                                    <Border Margin="0,6,0,0"
-                                                                            Padding="6,2.5"
-                                                                            Background="#3A2A3A52"
-                                                                            CornerRadius="999"
-                                                                            Visibility="{Binding HasMetadataSummary, Converter={StaticResource BoolToVis}}">
-                                                                        <TextBlock FontSize="10.5"
-                                                                                   Foreground="{DynamicResource PanelMutedTextBrush}"
-                                                                                   Text="{Binding MetadataSummary}" />
-                                                                    </Border>
-                                                                    <StackPanel Margin="0,8,0,0"
-                                                                                Orientation="Vertical"
-                                                                                Visibility="{Binding KyraFeedbackPanelVisibility}">
-                                                                        <TextBlock Margin="0,0,0,4"
-                                                                                   FontSize="10.5"
-                                                                                   Foreground="{DynamicResource PanelMutedTextBrush}"
-                                                                                   Text="Did this help?"
-                                                                                   TextWrapping="Wrap" />
-                                                                        <WrapPanel>
-                                                                            <Button MinWidth="92"
-                                                                                    Margin="0,0,6,6"
-                                                                                    Style="{StaticResource SecondaryButtonStyle}"
-                                                                                    Content="This fixed it"
-                                                                                    Command="{Binding DataContext.KyraFeedbackThisFixedItCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                                    CommandParameter="{Binding}" />
-                                                                            <Button MinWidth="92"
-                                                                                    Margin="0,0,6,6"
-                                                                                    Style="{StaticResource SecondaryButtonStyle}"
-                                                                                    Content="Still broken"
-                                                                                    Command="{Binding DataContext.KyraFeedbackStillBrokenCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                                    CommandParameter="{Binding}" />
-                                                                            <Button MinWidth="72"
-                                                                                    Margin="0,0,6,6"
-                                                                                    Style="{StaticResource SecondaryButtonStyle}"
-                                                                                    Content="Not sure"
-                                                                                    Command="{Binding DataContext.KyraFeedbackNotSureCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                                    CommandParameter="{Binding}" />
-                                                                            <Button MinWidth="124"
-                                                                                    Margin="0,0,6,6"
-                                                                                    Style="{StaticResource SecondaryButtonStyle}"
-                                                                                    Content="Save as repair note"
-                                                                                    Command="{Binding DataContext.KyraFeedbackSaveRepairNoteCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                                    CommandParameter="{Binding}" />
-                                                                        </WrapPanel>
-                                                                    </StackPanel>
-                                                                </StackPanel>
-                                                            </Border>
-                                                        </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
-                                                </ItemsControl>
-                                            </ScrollViewer>
-                                    </Border>
-
-                                    <Grid Grid.Row="2" Margin="0,10,0,0">
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto" />
-                                            <RowDefinition Height="Auto" />
-                                        </Grid.RowDefinitions>
-                                        <StackPanel Grid.Row="0"
-                                                    Margin="0,0,0,6"
-                                                    Visibility="{Binding CopilotThinkingVisibility}">
-                                            <TextBlock FontSize="12"
-                                                       FontWeight="SemiBold"
-                                                       Foreground="#FFFFDAB8"
-                                                       Text="Kyra is working…" />
-                                            <TextBlock Margin="0,2,0,0"
-                                                       FontSize="11"
-                                                       Foreground="#CCFFDAB8"
-                                                       Text="{Binding KyraActivityStatusText}" />
-                                        </StackPanel>
-                                        <Grid Grid.Row="1">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <Grid Grid.Column="0">
-                                            <TextBox x:Name="KyraChatInputBox"
-                                                     Style="{StaticResource KyraChatInputTextBoxStyle}"
-                                                     Text="{Binding CopilotInput, UpdateSourceTrigger=PropertyChanged}"
-                                                     TextWrapping="Wrap"
-                                                     AcceptsReturn="True"
-                                                     ToolTip="Type a message or a slash command (/help, /diagnose, /usb, /resale…). Tab completes the first suggestion."
-                                                     PreviewKeyDown="OnCopilotInputPreviewKeyDown" />
-                                            <Popup PlacementTarget="{Binding ElementName=KyraChatInputBox}"
-                                                   Placement="Top"
-                                                   StaysOpen="True"
-                                                   AllowsTransparency="True"
-                                                   IsOpen="{Binding KyraSlashPopupOpen, Mode=TwoWay}">
-                                                <Border Padding="4"
-                                                        Background="#F20A101A"
-                                                        BorderBrush="{DynamicResource PanelBorderBrush}"
-                                                        BorderThickness="1"
-                                                        CornerRadius="6"
-                                                        MaxWidth="420">
-                                                    <ListBox x:Name="KyraSlashSuggestionList"
-                                                             ItemsSource="{Binding KyraSlashSuggestions}"
-                                                             SelectedIndex="{Binding KyraSlashSelectedIndex, Mode=TwoWay}"
-                                                             MaxHeight="220"
-                                                             MinWidth="260"
-                                                             FontSize="13"
-                                                             Background="Transparent"
-                                                             BorderThickness="0"
-                                                             Focusable="False"
-                                                             IsTabStop="False"
-                                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                                                             PreviewMouseLeftButtonUp="OnKyraSlashSuggestionClick"
-                                                             MouseMove="OnKyraSlashListMouseMove">
-                                                        <ListBox.ItemContainerStyle>
-                                                            <Style TargetType="ListBoxItem">
-                                                                <Setter Property="Padding" Value="10,7" />
-                                                                <Setter Property="MinHeight" Value="32" />
-                                                            </Style>
-                                                        </ListBox.ItemContainerStyle>
-                                                    </ListBox>
-                                                </Border>
-                                            </Popup>
-                                            <TextBlock Margin="14,0,14,0"
-                                                       VerticalAlignment="Center"
-                                                       IsHitTestVisible="False"
-                                                       Foreground="#99E0E8F5"
-                                                       Text="Ask Kyra or type /help for slash commands (e.g. /diagnose, /usb, /resale)…"
-                                                       TextWrapping="Wrap"
-                                                       Visibility="{Binding CopilotInputPlaceholderVisibility}" />
-                                        </Grid>
-                                        <Button Grid.Column="1"
-                                                Width="110"
-                                                Height="42"
-                                                VerticalAlignment="Bottom"
-                                                Margin="8,0,0,0"
-                                                Content="Send"
-                                                Command="{Binding SendCopilotMessageCommand}" />
-                                        <Button Grid.Column="2"
-                                                Width="104"
-                                                Height="42"
-                                                VerticalAlignment="Bottom"
-                                                Margin="6,0,0,0"
+                            <GroupBox Header="Windows maintenance (read-only)">
+                                <StackPanel>
+                                    <TextBlock FontSize="12"
+                                               Foreground="{DynamicResource PanelMutedTextBrush}"
+                                               Text="Read-only snapshot of Windows update services, pending-reboot indicators, update policy sources, Windows Update offers, and Driver Store package assessments. Diagnostic only — ForgerEMS never installs, removes, rolls back, or repairs drivers; changing drivers stays manual via vendor tools or Windows Update."
+                                               TextWrapping="Wrap" />
+                                    <WrapPanel Margin="0,10,0,0">
+                                        <Button Width="230"
+                                                Margin="0,0,8,0"
                                                 Style="{StaticResource SecondaryButtonStyle}"
-                                                Content="Clear Chat"
-                                                Command="{Binding ClearCopilotHistoryCommand}" />
-                                        <Button Grid.Column="3"
-                                                Width="126"
-                                                Height="42"
-                                                VerticalAlignment="Bottom"
-                                                Margin="6,0,0,0"
-                                                Visibility="{Binding StopCopilotGenerationVisibility}"
+                                                Content="Scan Windows maintenance"
+                                                Command="{Binding ScanWindowsMaintenanceCommand}" />
+                                        <Button Width="90"
+                                                Margin="0,0,8,0"
                                                 Style="{StaticResource SecondaryButtonStyle}"
-                                                Content="Stop"
-                                                Command="{Binding StopCopilotGenerationCommand}" />
-                                        </Grid>
-                                    </Grid>
-                                </Grid>
+                                                Content="Cancel"
+                                                Command="{Binding CancelWindowsMaintenanceScanCommand}" />
+                                        <Button Width="230"
+                                                Style="{StaticResource SecondaryButtonStyle}"
+                                                Content="Open Windows Update settings"
+                                                Command="{Binding OpenWindowsUpdateSettingsCommand}" />
+                                    </WrapPanel>
+                                    <TextBlock Margin="0,10,0,0"
+                                               FontSize="12"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource PanelTextBrush}"
+                                               Text="{Binding WindowsMaintenanceStatusText}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,4,0,0"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource PanelMutedTextBrush}"
+                                               Text="{Binding WindowsMaintenanceDetailText}"
+                                               TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,10,0,0"
+                                               FontSize="12"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource PanelLabelBrush}"
+                                               Text="Findings" />
+                                    <ScrollViewer Margin="0,4,0,0" MaxHeight="180" VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl ItemsSource="{Binding WindowsMaintenanceFindings}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Margin="0,0,0,3"
+                                                               FontSize="12"
+                                                               Foreground="{DynamicResource PanelTextBrush}"
+                                                               Text="{Binding}"
+                                                               TextWrapping="Wrap" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                    <TextBlock Margin="0,10,0,0"
+                                               FontSize="12"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource PanelLabelBrush}"
+                                               Text="Driver Store assessments (diagnostic only)" />
+                                    <ScrollViewer Margin="0,4,0,0" MaxHeight="180" VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl ItemsSource="{Binding WindowsMaintenanceDriverAssessments}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Margin="0,0,0,3"
+                                                               FontSize="12"
+                                                               Foreground="{DynamicResource PanelMutedTextBrush}"
+                                                               Text="{Binding}"
+                                                               TextWrapping="Wrap" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </StackPanel>
                             </GroupBox>
-                        </Grid>
+                        </StackPanel>
                     </TabItem>
 
                     <TabItem Header="☰  Settings">
@@ -3806,7 +3480,7 @@
                             <GroupBox Header="Settings">
                                 <StackPanel>
                                     <WrapPanel Margin="0,0,0,12">
-                                        <Border Style="{StaticResource DiagnosticsStatusChipReadyStyle}"><TextBlock Text="Public Preview" Style="{StaticResource DiagnosticsStatusChipTextStyle}" /></Border>
+                                        <Border Style="{StaticResource DiagnosticsStatusChipReadyStyle}"><TextBlock Text="Stable" Style="{StaticResource DiagnosticsStatusChipTextStyle}" /></Border>
                                         <Border Style="{StaticResource DiagnosticsStatusChipReadyStyle}"><TextBlock Text="Local-first" Style="{StaticResource DiagnosticsStatusChipTextStyle}" /></Border>
                                     </WrapPanel>
                                     <GroupBox Margin="0,0,0,14" Header="What's included">
@@ -3817,114 +3491,6 @@
                                                        TextWrapping="Wrap" />
                                         </ScrollViewer>
                                     </GroupBox>
-                                    <GroupBox Margin="0,0,0,14" Header="Kyra Assistant (Beta)">
-                                        <StackPanel>
-                                            <WrapPanel Margin="0,0,0,8">
-                                                <Border Style="{StaticResource DiagnosticsStatusChipReadyStyle}"><TextBlock Text="Local-first" Style="{StaticResource DiagnosticsStatusChipTextStyle}" /></Border>
-                                                <Border Style="{StaticResource DiagnosticsStatusChipNeutralStyle}"><TextBlock Text="Sharing off by default" Style="{StaticResource DiagnosticsStatusChipTextStyle}" /></Border>
-                                            </WrapPanel>
-                                            <TextBlock Margin="0,0,0,10"
-                                                       FontSize="11.5"
-                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
-                                                       Text="• Local-first — answers prefer facts from your own scans.&#10;• Cloud providers are optional and only used when you configure them.&#10;• Nothing is uploaded automatically.&#10;• Review exported reports before sharing."
-                                                       TextWrapping="Wrap" />
-
-                                            <CheckBox IsChecked="{Binding KyraLocalRepairMemoryEnabled, Mode=TwoWay}"
-                                                      Content="Local Kyra Memory: store sanitized repair notes on this PC" />
-                                            <TextBlock Margin="24,2,0,8"
-                                                       FontSize="11"
-                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
-                                                       Text="Stores sanitized repair notes and categories on this machine only. You can export or delete anytime."
-                                                       TextWrapping="Wrap" />
-
-                                            <CheckBox IsChecked="{Binding KyraRealtimeGatewayEnabled, Mode=TwoWay}"
-                                                      Content="ForgerEMS Kyra Gateway (server-side providers)" />
-                                            <TextBlock Margin="24,2,0,8"
-                                                       FontSize="11"
-                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
-                                                       Text="Uses the configured gateway when available. Provider API keys stay on the server, not in this app."
-                                                       TextWrapping="Wrap" />
-
-                                            <CheckBox IsChecked="{Binding KyraRealtimeGatewayResearchEnabled, Mode=TwoWay}"
-                                                      Content="Gateway Research: fetch realtime public info when needed" />
-                                            <TextBlock Margin="24,2,0,8"
-                                                       FontSize="11"
-                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
-                                                       Text="Sends only sanitized request context needed for live answers. If the gateway is unavailable, Kyra says so honestly."
-                                                       TextWrapping="Wrap" />
-
-                                            <CheckBox IsChecked="{Binding KyraUseSanitizedSystemIntelligenceContext, Mode=TwoWay}"
-                                                      Content="Use Local Device Context: compact local hardware summaries for Kyra" />
-                                            <TextBlock Margin="24,2,0,8"
-                                                       FontSize="11"
-                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
-                                                       Text="Includes compact, redacted device headlines from local snapshots in prompts and gateway research when enabled."
-                                                       TextWrapping="Wrap" />
-
-                                            <CheckBox IsChecked="{Binding KyraCommunitySharingEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                      Content="Community Intelligence Sharing (off by default)" />
-                                            <TextBlock Margin="24,2,0,8"
-                                                       FontSize="11"
-                                                       Foreground="{DynamicResource PanelMutedTextBrush}"
-                                                       Text="Optionally share anonymous diagnostic patterns to improve Kyra for everyone. Community upload is not active in this release."
-                                                       TextWrapping="Wrap" />
-
-                                            <CheckBox Margin="0,0,0,4"
-                                                      IsEnabled="{Binding KyraCommunitySharingEnabled}"
-                                                      IsChecked="{Binding KyraShareResolvedIssueFixPatterns, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                      Content="Share resolved issue/fix categories" />
-                                            <CheckBox Margin="0,0,0,4"
-                                                      IsEnabled="{Binding KyraCommunitySharingEnabled}"
-                                                      IsChecked="{Binding KyraShareHardwareCompatibilityPerformancePatterns, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                      Content="Share anonymous hardware compatibility/performance patterns" />
-                                            <CheckBox Margin="0,0,0,10"
-                                                      IsEnabled="{Binding KyraCommunitySharingEnabled}"
-                                                      IsChecked="{Binding KyraShareCrashErrorDiagnostics, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                      Content="Share crash/error diagnostics" />
-
-                                            <WrapPanel>
-                                                <Button MinWidth="134"
-                                                        Margin="0,0,8,8"
-                                                        Style="{StaticResource SecondaryButtonStyle}"
-                                                        Content="Keep Local Only"
-                                                        Command="{Binding KeepKyraLocalOnlyCommand}" />
-                                                <Button MinWidth="144"
-                                                        Margin="0,0,8,8"
-                                                        Style="{StaticResource SecondaryButtonStyle}"
-                                                        Content="Help Improve Kyra"
-                                                        Command="{Binding EnableKyraCommunityLearningCommand}" />
-                                                <Button MinWidth="96"
-                                                        Margin="0,0,8,8"
-                                                        Style="{StaticResource SecondaryButtonStyle}"
-                                                        Content="Learn More"
-                                                        Command="{Binding LearnMoreKyraIntelligenceCommand}" />
-                                            </WrapPanel>
-
-                                            <WrapPanel Margin="0,4,0,0">
-                                                <Button MinWidth="160"
-                                                        Margin="0,0,8,8"
-                                                        Style="{StaticResource SecondaryButtonStyle}"
-                                                        Content="View Shared Preview"
-                                                        Command="{Binding ViewKyraCommunityPayloadPreviewCommand}" />
-                                                <Button MinWidth="138"
-                                                        Margin="0,0,8,8"
-                                                        Style="{StaticResource SecondaryButtonStyle}"
-                                                        Content="Export Memory"
-                                                        Command="{Binding ExportKyraIntelligenceMemoryCommand}" />
-                                                <Button MinWidth="138"
-                                                        Margin="0,0,8,8"
-                                                        Style="{StaticResource SecondaryButtonStyle}"
-                                                        Content="Delete Memory"
-                                                        Command="{Binding DeleteKyraIntelligenceMemoryCommand}" />
-                                                <Button MinWidth="138"
-                                                        Margin="0,0,8,8"
-                                                        Style="{StaticResource SecondaryButtonStyle}"
-                                                        Content="Reset Learning"
-                                                        Command="{Binding ResetKyraMachineLearningCommand}" />
-                                            </WrapPanel>
-                                        </StackPanel>
-                                    </GroupBox>
-
                                     <Border Margin="0,0,0,14"
                                             Padding="12"
                                             Visibility="{Binding BetaTesterEntitlementVisibility}"
@@ -4167,7 +3733,7 @@
                                 <TextBlock FontSize="12"
                                            Foreground="#FFE0E8F4"
                                            TextWrapping="Wrap"
-                                           Text="Nothing is uploaded automatically. Some features rely on internet access, vendor sites, permissions, user-supplied files, and manual validation. Logs, support bundles, Kyra context, and exported reports may include local device/context information if you choose to export or share them." />
+                                           Text="Nothing is uploaded automatically. Some features rely on internet access, vendor sites, permissions, user-supplied files, and manual validation. Logs, support bundles and exported reports may include local device/context information if you choose to export or share them." />
                                 <TextBlock Margin="0,8,0,0"
                                            FontSize="11"
                                            Foreground="#FFB8C5D9"
@@ -4231,6 +3797,7 @@
             </Border>
         </Grid>
 
+
         <Grid x:Name="BetaWelcomeOverlay"
               Panel.ZIndex="45"
               Visibility="{Binding BetaWelcomeVisibility}"
@@ -4255,101 +3822,13 @@
                                    Text="ForgerEMS Welcome Center" />
                         <TextBlock Margin="0,10,0,14"
                                    Foreground="#FFE0E8F4"
-                                   Text="Welcome to ForgerEMS. Use this technician launch hub to open USB Builder, benchmark a selected removable USB, review Kyra privacy choices, or open safe logs. Expanded repair analysis now lives in Dr. Forge, the dedicated companion app."
+                                   Text="Welcome to ForgerEMS. Use this technician launch hub to open USB Builder, benchmark a selected removable USB, or open safe logs. Expanded repair analysis now lives in Dr. Forge, the dedicated companion app."
                                    TextWrapping="Wrap" />
                         <TextBlock Margin="0,0,0,14"
                                    Foreground="#FFB8C5D9"
                                    FontSize="12"
                                    Text="You can reopen this anytime from Settings / Help. Close for now only hides it for this session; it opens again by default on the next app launch."
                                    TextWrapping="Wrap" />
-
-                        <Border Margin="0,0,0,14"
-                                Padding="12"
-                                Background="#B30A111C"
-                                BorderBrush="#6657C7E8"
-                                BorderThickness="1"
-                                CornerRadius="8">
-                            <StackPanel>
-                                <TextBlock FontFamily="Bahnschrift SemiCondensed"
-                                           FontSize="16"
-                                           FontWeight="SemiBold"
-                                           Foreground="#FFFFDAB8"
-                                           Text="Kyra privacy and learning"
-                                           TextWrapping="Wrap" />
-                                <TextBlock Margin="0,6,0,8"
-                                           Foreground="#FFE0E8F4"
-                                           TextWrapping="Wrap"
-                                           Text="Kyra works offline by default. Optional community intelligence uses sanitized categories and examples only after you enable selected categories." />
-                                <TextBlock Margin="0,0,0,10"
-                                           Foreground="#FFB8C5D9"
-                                           FontSize="12"
-                                           TextWrapping="Wrap"
-                                           Text="We never share API keys, passwords, product keys, serial numbers, private files, full file paths, emails, IP addresses, exact location, or raw logs." />
-                                <CheckBox Margin="0,0,0,4"
-                                          Foreground="#FFE0E8F4"
-                                          Content="Help improve Kyra with anonymous repair intelligence"
-                                          IsChecked="{Binding BetaWelcomeKyraShareRepairIntelligence, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                <CheckBox Margin="0,0,0,4"
-                                          Foreground="#FFE0E8F4"
-                                          Content="Share anonymous hardware compatibility/performance patterns"
-                                          IsChecked="{Binding BetaWelcomeKyraShareHardwarePatterns, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                <CheckBox Margin="0,0,0,4"
-                                          Foreground="#FFE0E8F4"
-                                          Content="Share resolved issue/fix categories"
-                                          IsChecked="{Binding BetaWelcomeKyraShareResolvedCategories, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                <CheckBox Margin="0,0,0,10"
-                                          Foreground="#FFE0E8F4"
-                                          Content="Share crash/error diagnostics"
-                                          IsChecked="{Binding BetaWelcomeKyraShareCrashDiagnostics, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                <WrapPanel Margin="0,0,0,2">
-                                    <Button MinWidth="190"
-                                            MinHeight="36"
-                                            Margin="0,0,8,8"
-                                            Style="{StaticResource SecondaryButtonStyle}"
-                                            Content="Keep Local Only"
-                                            Command="{Binding BetaWelcomeKyraKeepLocalOnlyCommand}" />
-                                    <Button MinWidth="190"
-                                            MinHeight="36"
-                                            Margin="0,0,8,8"
-                                            Content="Help Improve Kyra"
-                                            Command="{Binding BetaWelcomeKyraHelpImproveCommand}" />
-                                    <Button MinWidth="190"
-                                            MinHeight="36"
-                                            Margin="0,0,8,8"
-                                            Style="{StaticResource SecondaryButtonStyle}"
-                                            Content="View What Would Be Shared"
-                                            Command="{Binding BetaWelcomeKyraViewSharingPreviewCommand}" />
-                                </WrapPanel>
-
-                                <Border Margin="0,8,0,0"
-                                        Padding="10"
-                                        Visibility="{Binding BetaWelcomeKyraConfirmVisibility}"
-                                        Background="#CC0F1724"
-                                        BorderBrush="#FFFFB86B"
-                                        BorderThickness="1"
-                                        CornerRadius="6">
-                                    <StackPanel>
-                                        <TextBlock Foreground="#FFE0E8F4"
-                                                   FontSize="12"
-                                                   TextWrapping="Wrap"
-                                                   Text="{Binding BetaWelcomeKyraConfirmSummary}" />
-                                        <WrapPanel Margin="0,10,0,0">
-                                            <Button MinWidth="190"
-                                                    MinHeight="34"
-                                                    Margin="0,0,8,0"
-                                                    Visibility="{Binding BetaWelcomeKyraConfirmHasSelection, Converter={StaticResource BoolToVis}}"
-                                                    Content="Confirm and enable selected categories"
-                                                    Command="{Binding BetaWelcomeKyraConfirmEnableCommand}" />
-                                            <Button MinWidth="120"
-                                                    MinHeight="34"
-                                                    Style="{StaticResource SecondaryButtonStyle}"
-                                                    Content="Cancel"
-                                                    Command="{Binding BetaWelcomeKyraCancelConfirmCommand}" />
-                                        </WrapPanel>
-                                    </StackPanel>
-                                </Border>
-                            </StackPanel>
-                        </Border>
 
                         <TextBlock FontFamily="Bahnschrift SemiCondensed"
                                    FontSize="16"

@@ -19,14 +19,90 @@ ForgerEMS uses LibreHardwareMonitorLib as a separate bundled dependency. ForgerE
 does not copy LibreHardwareMonitor source into proprietary ForgerEMS source files.
 No MPL-covered source files are modified by ForgerEMS in this repository.
 
-ForgerEMS Deep Sensor Mode is read-only. It does not control fans, voltages,
-clocks, overclocking, undervolting, BIOS settings, firmware, or hardware state.
+ForgerEMS Deep Sensor Mode is read-only in the ForgerEMS UI: it does not expose
+hardware-control actions such as fan, voltage, clock, overclocking,
+undervolting, BIOS, or firmware changes. No categorical guarantee is made that
+upstream provider internals perform no low-level I/O; see the bundled license
+notes for scope.
+
+Embedded PawnIO modules (inside LibreHardwareMonitorLib 0.9.6):
+
+LibreHardwareMonitorLib 0.9.6 embeds PawnIO modules release 0.1.6 (upstream
+annotated tag ceb5e5b9fcbda1d3bb33705d0036fba1c3214532 -> commit
+4aa792beb020a14c8261072e9786d2dfb38489d9), licensed LGPL-2.1-or-later.
+
+- Corresponding source, unmodified upstream zip (SHA-256
+  647BF55985837302B00AD2C05FC3FB700F140AF2E34693F390FF2DB47B608867):
+  providers/sensors/SOURCE/PawnIO-Modules-0.1.6-source.zip
+- License text: providers/sensors/LICENSES/PawnIO-Modules-LGPL-2.1.txt
+- Upstream: https://github.com/namazso/PawnIO.Modules
+- No PawnIO kernel driver or installer is bundled. The modules may use an
+  already-installed PawnIO driver if the user installed one separately;
+  ForgerEMS exposes no PawnIO controls. The compiler RPM inside the source
+  zip is data only and is never executed by ForgerEMS.
+
+NuGet runtime dependency packages resolved with the bundled provider:
+
+- BlackSharp 1.0.7 — MPL-2.0 —
+  https://github.com/Blacktempel/BlackSharp tree c70b735c6cec123ee8a046ac4a0bc6c606f52cf0
+- DiskInfoToolkit 1.1.2 — MPL-2.0 —
+  https://github.com/Blacktempel/DiskInfoToolkit tree 25319eae5781e75bcf141e844ceab2afe94d40ea
+- RAMSPDToolkit(-NDD) 1.4.2 — MPL-2.0 —
+  https://github.com/Blacktempel/RAMSPDToolkit tree 3b47b960e0830fef344624ad5e389675d5f0a1ce
+- HidSharp 2.6.4 — Apache-2.0 —
+  license text: providers/sensors/LICENSES/HidSharp-Apache-2.0.txt
+- Mono.Posix.NETStandard 1.0.0 — package metadata declares a license URL
+  (https://go.microsoft.com/fwlink/?linkid=869050) pointing at the Mono project
+  license, not an SPDX identifier. Current upstream Mono text states the
+  runtime and class libraries are generally MIT-licensed with some third-party
+  (e.g. 3-clause BSD) code; captured upstream text ships unmodified at
+  providers/sensors/LICENSES/Mono-project-license.txt. Exact redistribution
+  scope for Mono.Posix 1.0.0 requires counsel review — no clearance asserted.
+
+Only the PawnIO modules source zip is shipped as corresponding source in this
+package. Source for the MPL-covered packages above is available from the pinned
+upstream repositories listed here and in docs/THIRD-PARTY-SENSOR-NOTICES.md.
+
+Microsoft packages actually resolved in this build (pinned above the NuGet
+dependency minimums of System.Management 10.0.2 / System.IO.Ports 10.0.3 /
+System.Threading.AccessControl 10.0.3 declared by LibreHardwareMonitorLib):
+
+- System.Management 10.0.12
+- System.IO.Ports 10.0.12
+- System.Threading.AccessControl 10.0.12
+
+.NET runtime:
+
+Self-contained builds include Microsoft .NET 8 runtime components (captured
+runtime 8.0.31 / SDK 8.0.425, LTS maintenance, EOL 2026-11-10). License files:
+
+- providers/sensors/LICENSES/dotnet-runtime-LICENSE.txt (Microsoft.NETCore.App runtime pack)
+- providers/sensors/LICENSES/dotnet-runtime-THIRD-PARTY-NOTICES.txt (NETCore third-party notices)
+- providers/sensors/LICENSES/dotnet-windowsdesktop-runtime-LICENSE.txt (Microsoft.WindowsDesktop.App runtime pack; that pack ships no separate third-party notices file)
+
+.NET 8 remains supported today; the upcoming migration deadline is tracked and
+is not presented as indefinite platform support.
+
+Windows SDK / WinRT:
+
+Windows SDK .NET reference (Windows.SDK.NET.Ref) and WinRT metadata assemblies
+may also be present as runtime payloads in self-contained output. Their license
+is reached via https://aka.ms/WinSDKLicenseURL and the captured text ships as
+providers/sensors/LICENSES/Microsoft-Windows-SDK-license.rtf. The package
+metadata carries no SPDX identifier — counsel redistribution review is flagged;
+no universal license clearance is claimed.
 
 License files:
+
 - LICENSES/LibreHardwareMonitor-MPL-2.0.txt
 - LICENSES/LibreHardwareMonitor-THIRD-PARTY-LICENSES.txt
+- LICENSES/PawnIO-Modules-LGPL-2.1.txt
+- LICENSES/HidSharp-Apache-2.0.txt
+- LICENSES/dotnet-runtime-LICENSE.txt
+- LICENSES/dotnet-runtime-THIRD-PARTY-NOTICES.txt
+- LICENSES/dotnet-windowsdesktop-runtime-LICENSE.txt
+- LICENSES/Microsoft-Windows-SDK-license.rtf
 
 Tools not redistributed by default:
 HWiNFO, AIDA64, CPU-Z, GPU-Z, vendor tuning utilities, and proprietary sensor
 tools are not bundled unless redistribution is explicitly licensed and reviewed.
-

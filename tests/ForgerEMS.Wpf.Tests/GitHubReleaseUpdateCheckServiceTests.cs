@@ -32,7 +32,7 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
 
     private static HttpClient Client(HttpMessageHandler handler) => new(handler) { Timeout = TimeSpan.FromSeconds(5) };
 
-    /// <summary>One-element GitHub <c>/releases</c> API array with sortable <c>published_at</c>.</summary>
+    /// <summary>One-element GitHub <c>/releases</c> API array.</summary>
     private static string ReleasesArraySingle(
         string tag,
         string publishedAt = "2024-06-15T12:00:00Z",
@@ -118,20 +118,18 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
     }
 
     [Fact]
-    public async Task InvalidVersionTag_DoesNotCrash_OffersReleasePage_AndUncertainCompare()
+    public async Task InvalidVersionTag_OnlyMalformedRows_FailsAsMetadataInvalid()
     {
         const string url = "https://github.com/Forger-Digital-Solutions/ForgerEMS/releases/tag/not-a-version";
         var handler = new StubHandler(_ => OkReleases(ReleasesArraySingle("not-a-version", htmlUrl: url)));
         using var http = Client(handler);
         using var service = new GitHubReleaseUpdateCheckService(http);
         var result = await service.CheckForNewerReleaseAsync("1.1.4", null);
-        Assert.True(result.Succeeded);
-        Assert.True(result.UpdateAvailable);
-        Assert.Equal(UpdateCheckOutcome.UpdateAvailable, result.Outcome);
-        Assert.True(result.VersionComparisonUncertain);
-        Assert.Equal(url, result.ReleaseNotesUrl);
-        Assert.NotNull(result.ErrorMessage);
-        Assert.Contains("newer release may be available", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.False(result.Succeeded);
+        Assert.False(result.UpdateAvailable);
+        Assert.Equal(UpdateCheckOutcome.Failed, result.Outcome);
+        Assert.Equal(UpdateCheckFailureKind.ReleaseMetadataInvalid, result.FailureKind);
+        Assert.False(result.VersionComparisonUncertain);
     }
 
     [Fact]
@@ -182,15 +180,15 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
     }
 
     [Fact]
-    public async Task ReleasesList_PicksNewestByPublishedAt_AndPrefersBetaZip()
+    public async Task ReleasesList_SelectedRelease_PrefersBetaZipAndSetupExe()
     {
         const string listJson = """
             [{"tag_name":"v1.0.0","html_url":"https://github.com/Forger-Digital-Solutions/ForgerEMS/releases/tag/v1.0.0",
             "draft":false,"prerelease":false,"published_at":"2024-03-01T00:00:00Z",
             "assets":[
-              {"name":"ForgerEMS-v1.0.0.zip","browser_download_url":"https://cdn/gh/ForgerEMS-v1.0.0.zip"},
-              {"name":"ForgerEMS-Beta-v1.0.0.zip","browser_download_url":"https://cdn/gh/ForgerEMS-Beta-v1.0.0.zip"},
-              {"name":"ForgerEMS-Setup-v1.0.0.exe","browser_download_url":"https://cdn/gh/ForgerEMS-Setup-v1.0.0.exe"}
+              {"name":"ForgerEMS-v1.0.0.zip","browser_download_url":"https://github.com/Forger-Digital-Solutions/ForgerEMS/releases/download/v1.0.0/ForgerEMS-v1.0.0.zip"},
+              {"name":"ForgerEMS-Beta-v1.0.0.zip","browser_download_url":"https://github.com/Forger-Digital-Solutions/ForgerEMS/releases/download/v1.0.0/ForgerEMS-Beta-v1.0.0.zip"},
+              {"name":"ForgerEMS-Setup-v1.0.0.exe","browser_download_url":"https://github.com/Forger-Digital-Solutions/ForgerEMS/releases/download/v1.0.0/ForgerEMS-Setup-v1.0.0.exe"}
             ]}]
             """;
         var handler = new StubHandler(req =>
@@ -208,8 +206,8 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
         var result = await service.CheckForNewerReleaseAsync("1.1.4", null);
         Assert.True(result.Succeeded);
         Assert.Equal(UpdateCheckOutcome.InstalledNewerThanLatestPublic, result.Outcome);
-        Assert.Equal("https://cdn/gh/ForgerEMS-Beta-v1.0.0.zip", result.RecommendedZipDownloadUrl);
-        Assert.Equal("https://cdn/gh/ForgerEMS-Setup-v1.0.0.exe", result.InstallerDownloadUrl);
+        Assert.Equal("https://github.com/Forger-Digital-Solutions/ForgerEMS/releases/download/v1.0.0/ForgerEMS-Beta-v1.0.0.zip", result.RecommendedZipDownloadUrl);
+        Assert.Equal("https://github.com/Forger-Digital-Solutions/ForgerEMS/releases/download/v1.0.0/ForgerEMS-Setup-v1.0.0.exe", result.InstallerDownloadUrl);
     }
 
     [Fact]
@@ -347,12 +345,13 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
     }
 
     [Fact]
-    public async Task NewestPublishedRelease_WinsOverHigherSemanticVersion()
+    public async Task HigherSemanticVersion_WinsOverNewestPublishDate()
     {
         const string listJson = """
             [
               {"tag_name":"v9.9.9","html_url":"https://github.com/x/y/releases/tag/v9.9.9","draft":false,"prerelease":false,
-               "published_at":"2024-01-01T00:00:00Z","assets":[]},
+               "published_at":"2024-01-01T00:00:00Z",
+               "assets":[{"name":"ForgerEMS-Beta-v9.9.9.zip","browser_download_url":"https://cdn.example.test/ForgerEMS-Beta-v9.9.9.zip"}]},
               {"tag_name":"v1.2.0","html_url":"https://github.com/x/y/releases/tag/v1.2.0","draft":false,"prerelease":false,
                "published_at":"2025-06-01T00:00:00Z",
                "assets":[{"name":"ForgerEMS-Beta-v1.2.0.zip","browser_download_url":"https://cdn.example.test/ForgerEMS-Beta-v1.2.0.zip"}]}
@@ -367,11 +366,12 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
         var result = await service.CheckForNewerReleaseAsync("1.0.0", null);
         Assert.True(result.Succeeded);
         Assert.True(result.UpdateAvailable);
-        Assert.Equal(new Version(1, 2, 0), result.LatestVersion);
+        Assert.Equal(new Version(9, 9, 9), result.LatestVersion);
+        Assert.Equal("9.9.9", result.LatestVersionLabel);
     }
 
     [Fact]
-    public async Task StableChannel_SkipsNewerPrerelease_PicksLatestStableByPublishDate()
+    public async Task StableChannel_SkipsNewerPrerelease_PicksHighestStableSemanticVersion()
     {
         const string listJson = """
             [
@@ -401,7 +401,7 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
             [{"tag_name":"v1.2.3","html_url":"https://github.com/x/y/releases/tag/v1.2.3","draft":false,"prerelease":false,
               "published_at":"2025-01-01T00:00:00Z",
               "assets":[
-                {"name":"ForgerEMS-misleading-9.9.9-Setup.exe","browser_download_url":"https://cdn/gh/misleading.exe"}
+                {"name":"ForgerEMS-misleading-9.9.9-Setup.exe","browser_download_url":"https://github.com/Forger-Digital-Solutions/ForgerEMS/releases/download/v1.2.3/ForgerEMS-misleading-9.9.9-Setup.exe"}
               ]}]
             """;
         var handler = new StubHandler(req =>
@@ -424,7 +424,7 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
             [{"tag_name":"v1.2.0","html_url":"https://github.com/x/y/releases/tag/v1.2.0","draft":false,"prerelease":false,
               "published_at":"2025-01-01T00:00:00Z",
               "assets":[
-                {"name":"odd-bundle-name.zip","browser_download_url":"https://cdn/gh/odd-bundle-name.zip"}
+                {"name":"odd-bundle-x64.zip","browser_download_url":"https://github.com/Forger-Digital-Solutions/ForgerEMS/releases/download/v1.2.0/odd-bundle-x64.zip"}
               ]}]
             """;
         var handler = new StubHandler(req =>
@@ -439,20 +439,21 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
         Assert.True(result.RecommendedZipAssetMissing);
         Assert.False(result.RecommendedZipPatternMatched);
         Assert.Contains("github.com", result.ReleaseNotesUrl, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("https://cdn/gh/odd-bundle-name.zip", result.RecommendedZipDownloadUrl);
+        Assert.Equal("https://github.com/Forger-Digital-Solutions/ForgerEMS/releases/download/v1.2.0/odd-bundle-x64.zip", result.RecommendedZipDownloadUrl);
     }
 
     [Fact]
-    public async Task InvalidVersionTag_IgnoredVersion_Suppresses()
+    public async Task InvalidVersionTag_IgnoredVersion_StillFailsAsMetadataInvalid()
     {
         const string url = "https://github.com/x/y/releases/tag/not-a-version";
         var handler = new StubHandler(_ => OkReleases(ReleasesArraySingle("not-a-version", htmlUrl: url)));
         using var http = Client(handler);
         using var service = new GitHubReleaseUpdateCheckService(http);
         var result = await service.CheckForNewerReleaseAsync("1.1.4", "not-a-version");
-        Assert.True(result.Succeeded);
+        Assert.False(result.Succeeded);
         Assert.False(result.UpdateAvailable);
-        Assert.Equal(UpdateCheckOutcome.IgnoredVersion, result.Outcome);
+        Assert.Equal(UpdateCheckOutcome.Failed, result.Outcome);
+        Assert.Equal(UpdateCheckFailureKind.ReleaseMetadataInvalid, result.FailureKind);
     }
 
     [Fact]
@@ -518,5 +519,395 @@ public sealed class GitHubReleaseUpdateCheckServiceTests
     public void UpdateCheckUserAgent_IsForgerEMS()
     {
         Assert.Equal("ForgerEMS", GitHubReleaseUpdateCheckService.UpdateCheckUserAgent);
+    }
+
+    [Fact]
+    public async Task MalformedRow_SkippedWhenValidReleaseExists()
+    {
+        const string listJson = """
+            [
+              {"tag_name":"not-a-version","html_url":"https://github.com/x/y/releases/tag/x","draft":false,"prerelease":false,
+               "published_at":"2026-01-01T00:00:00Z","assets":[]},
+              {"tag_name":"v1.5.0","html_url":"https://github.com/x/y/releases/tag/v1.5.0","draft":false,"prerelease":false,
+               "published_at":"2024-01-01T00:00:00Z",
+               "assets":[{"name":"ForgerEMS-Beta-v1.5.0.zip","browser_download_url":"https://cdn.example.test/ForgerEMS-Beta-v1.5.0.zip"}]}
+            ]
+            """;
+        var handler = new StubHandler(req =>
+            (req.RequestUri?.AbsolutePath ?? "").Contains("/releases", StringComparison.Ordinal)
+                ? OkReleases(listJson)
+                : new HttpResponseMessage(HttpStatusCode.NotFound));
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync("1.0.0", null);
+        Assert.True(result.Succeeded);
+        Assert.True(result.UpdateAvailable);
+        Assert.Equal(new Version(1, 5, 0), result.LatestVersion);
+        Assert.False(result.VersionComparisonUncertain);
+    }
+
+    [Fact]
+    public async Task RepublishedOlderStable_DoesNotBeatHigherSemanticVersion()
+    {
+        const string listJson = """
+            [
+              {"tag_name":"v1.2.9","html_url":"https://github.com/x/y/releases/tag/v1.2.9","draft":false,"prerelease":false,
+               "published_at":"2026-06-01T00:00:00Z","assets":[]},
+              {"tag_name":"v1.3.0","html_url":"https://github.com/x/y/releases/tag/v1.3.0","draft":false,"prerelease":false,
+               "published_at":"2024-01-01T00:00:00Z",
+               "assets":[{"name":"ForgerEMS-Beta-v1.3.0.zip","browser_download_url":"https://cdn.example.test/ForgerEMS-Beta-v1.3.0.zip"}]}
+            ]
+            """;
+        var handler = new StubHandler(req =>
+            (req.RequestUri?.AbsolutePath ?? "").Contains("/releases", StringComparison.Ordinal)
+                ? OkReleases(listJson)
+                : new HttpResponseMessage(HttpStatusCode.NotFound));
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync("1.0.0", null);
+        Assert.True(result.Succeeded);
+        Assert.True(result.UpdateAvailable);
+        Assert.Equal(new Version(1, 3, 0), result.LatestVersion);
+        Assert.Equal("1.3.0", result.LatestVersionLabel);
+    }
+
+    [Fact]
+    public async Task FutureStableRelease_OfferedFromInstalledPreviewLine()
+    {
+        var handler = new StubHandler(_ => OkReleases(ReleasesArraySingle("v1.2.5")));
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync("1.2.4", null);
+        Assert.True(result.Succeeded);
+        Assert.True(result.UpdateAvailable);
+        Assert.Equal(UpdateCheckOutcome.UpdateAvailable, result.Outcome);
+        Assert.Equal(new Version(1, 2, 5), result.LatestVersion);
+    }
+
+    [Fact]
+    public async Task StableOnly_SkipsSemanticPrerelease_EvenWhenGitHubFlagIsFalse()
+    {
+        const string listJson = """
+            [{"tag_name":"v1.3.0-beta.1","html_url":"https://github.com/x/y/releases/tag/v1.3.0-beta.1",
+            "draft":false,"prerelease":false,"published_at":"2026-01-01T00:00:00Z","assets":[]}]
+            """;
+        var handler = new StubHandler(req =>
+            (req.RequestUri?.AbsolutePath ?? "").Contains("/releases", StringComparison.Ordinal)
+                ? OkReleases(listJson)
+                : new HttpResponseMessage(HttpStatusCode.NotFound));
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync("1.1.4", null, UpdateReleaseChannel.StableOnly);
+        Assert.True(result.Succeeded);
+        Assert.False(result.UpdateAvailable);
+        Assert.Equal(UpdateCheckOutcome.NoPublishedRelease, result.Outcome);
+    }
+
+    [Fact]
+    public async Task DefaultChannel_IsStableOnly()
+    {
+        var handler = new StubHandler(_ => OkReleases(ReleasesArraySingle("v1.3.0-beta.1")));
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync("1.1.4", null);
+        Assert.True(result.Succeeded);
+        Assert.False(result.UpdateAvailable);
+        Assert.Equal(UpdateCheckOutcome.NoPublishedRelease, result.Outcome);
+    }
+
+    [Fact]
+    public async Task BetaChannel_IncludesSemanticPrerelease_EvenWhenGitHubFlagIsFalse()
+    {
+        const string listJson = """
+            [{"tag_name":"v1.3.0-beta.1","html_url":"https://github.com/x/y/releases/tag/v1.3.0-beta.1",
+            "draft":false,"prerelease":false,"published_at":"2026-01-01T00:00:00Z",
+            "assets":[{"name":"ForgerEMS-Beta-v1.3.0-beta.1.zip","browser_download_url":"https://cdn.example.test/ForgerEMS-Beta-v1.3.0-beta.1.zip"}]}]
+            """;
+        var handler = new StubHandler(req =>
+            (req.RequestUri?.AbsolutePath ?? "").Contains("/releases", StringComparison.Ordinal)
+                ? OkReleases(listJson)
+                : new HttpResponseMessage(HttpStatusCode.NotFound));
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync("1.1.4", null, UpdateReleaseChannel.BetaRcAllowed);
+        Assert.True(result.Succeeded);
+        Assert.True(result.UpdateAvailable);
+        Assert.Equal("1.3.0-beta.1", result.LatestVersionLabel);
+    }
+
+    [Fact]
+    public async Task DraftRelease_NewerVersion_ExcludedFromSelection()
+    {
+        const string listJson = """
+            [
+              {"tag_name":"v9.9.9","html_url":"https://github.com/x/y/releases/tag/v9.9.9","draft":true,"prerelease":false,
+               "published_at":"2026-06-01T00:00:00Z","assets":[]},
+              {"tag_name":"v1.5.0","html_url":"https://github.com/x/y/releases/tag/v1.5.0","draft":false,"prerelease":false,
+               "published_at":"2024-01-01T00:00:00Z",
+               "assets":[{"name":"ForgerEMS-Beta-v1.5.0.zip","browser_download_url":"https://cdn.example.test/ForgerEMS-Beta-v1.5.0.zip"}]}
+            ]
+            """;
+        var handler = new StubHandler(req =>
+            (req.RequestUri?.AbsolutePath ?? "").Contains("/releases", StringComparison.Ordinal)
+                ? OkReleases(listJson)
+                : new HttpResponseMessage(HttpStatusCode.NotFound));
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync("1.0.0", null);
+        Assert.True(result.Succeeded);
+        Assert.True(result.UpdateAvailable);
+        Assert.Equal(new Version(1, 5, 0), result.LatestVersion);
+    }
+
+    [Fact]
+    public async Task MalformedTag_FallsBackToReleaseName()
+    {
+        const string listJson = """
+            [{"tag_name":"not-a-version","name":"ForgerEMS v1.2.5",
+            "html_url":"https://github.com/x/y/releases/tag/not-a-version","draft":false,"prerelease":false,
+            "published_at":"2025-01-01T00:00:00Z",
+            "assets":[{"name":"ForgerEMS-Beta-v1.2.5.zip","browser_download_url":"https://cdn.example.test/ForgerEMS-Beta-v1.2.5.zip"}]}]
+            """;
+        var handler = new StubHandler(req =>
+            (req.RequestUri?.AbsolutePath ?? "").Contains("/releases", StringComparison.Ordinal)
+                ? OkReleases(listJson)
+                : new HttpResponseMessage(HttpStatusCode.NotFound));
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync("1.2.4", null);
+        Assert.True(result.Succeeded);
+        Assert.True(result.UpdateAvailable);
+        Assert.Equal("1.2.5", result.LatestVersionLabel);
+    }
+
+    [Fact]
+    public async Task NonObjectOnlyReleaseList_FailsAsMetadataInvalid()
+    {
+        const string listJson = """[42,"nope",null,true]""";
+        var handler = new StubHandler(req =>
+            (req.RequestUri?.AbsolutePath ?? "").Contains("/releases", StringComparison.Ordinal)
+                ? OkReleases(listJson)
+                : new HttpResponseMessage(HttpStatusCode.NotFound));
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync("1.1.4", null);
+        Assert.False(result.Succeeded);
+        Assert.Equal(UpdateCheckOutcome.Failed, result.Outcome);
+        Assert.Equal(UpdateCheckFailureKind.ReleaseMetadataInvalid, result.FailureKind);
+    }
+
+    [Fact]
+    public async Task StableOnly_MalformedRowPlusEligiblePrerelease_NoPublishedRelease()
+    {
+        const string listJson = """
+            [
+              {"tag_name":"not-a-version","html_url":"https://github.com/x/y/releases/tag/x","draft":false,"prerelease":false,
+               "published_at":"2026-01-01T00:00:00Z","assets":[]},
+              {"tag_name":"v1.3.0-beta.1","html_url":"https://github.com/x/y/releases/tag/v1.3.0-beta.1","draft":false,"prerelease":false,
+               "published_at":"2025-01-01T00:00:00Z","assets":[]}
+            ]
+            """;
+        var handler = new StubHandler(req =>
+            (req.RequestUri?.AbsolutePath ?? "").Contains("/releases", StringComparison.Ordinal)
+                ? OkReleases(listJson)
+                : new HttpResponseMessage(HttpStatusCode.NotFound));
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync("1.1.4", null, UpdateReleaseChannel.StableOnly);
+        Assert.True(result.Succeeded);
+        Assert.False(result.UpdateAvailable);
+        Assert.Equal(UpdateCheckOutcome.NoPublishedRelease, result.Outcome);
+    }
+
+    [Fact]
+    public async Task DraftsOnlyList_NoPublishedRelease()
+    {
+        const string listJson = """
+            [{"tag_name":"v9.9.9","html_url":"https://github.com/x/y/releases/tag/v9.9.9","draft":true,"prerelease":false,
+            "published_at":"2026-06-01T00:00:00Z","assets":[]}]
+            """;
+        var handler = new StubHandler(req =>
+            (req.RequestUri?.AbsolutePath ?? "").Contains("/releases", StringComparison.Ordinal)
+                ? OkReleases(listJson)
+                : new HttpResponseMessage(HttpStatusCode.NotFound));
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync("1.0.0", null);
+        Assert.True(result.Succeeded);
+        Assert.False(result.UpdateAvailable);
+        Assert.Equal(UpdateCheckOutcome.NoPublishedRelease, result.Outcome);
+    }
+
+    // ---- security hardening tests ----
+
+    private const string OfficialTag = "v1.2.5";
+    private const string RepoBase = "https://github.com/Forger-Digital-Solutions/ForgerEMS/releases/download/v1.2.5";
+
+    private static string ReleaseWithZipAndChecksums(
+        string zipDigest = "",
+        string checksumsDigest = "")
+    {
+        var zip = $$"""
+            {"name":"ForgerEMS-v1.2.5-win-x64.zip",
+             "browser_download_url":"{{RepoBase}}/ForgerEMS-v1.2.5-win-x64.zip"{{zipDigest}}}
+            """;
+        var sums = $$"""
+            {"name":"CHECKSUMS.sha256",
+             "browser_download_url":"{{RepoBase}}/CHECKSUMS.sha256"{{checksumsDigest}}}
+            """;
+        return $$"""
+            [{"tag_name":"{{OfficialTag}}",
+              "html_url":"https://github.com/Forger-Digital-Solutions/ForgerEMS/releases/tag/{{OfficialTag}}",
+              "draft":false,"prerelease":false,"published_at":"2026-10-01T00:00:00Z",
+              "assets":[{{zip}},{{sums}}]}]
+            """;
+    }
+
+    private sealed class RecordingHandler : HttpMessageHandler
+    {
+        public List<(string Url, string? Authorization)> Requests = new();
+        private readonly Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> _respond;
+
+        public RecordingHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> respond) => _respond = respond;
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Requests.Add((request.RequestUri?.AbsoluteUri ?? "", request.Headers.Authorization?.ToString()));
+            return await _respond(request, cancellationToken);
+        }
+    }
+
+    [Fact]
+    public async Task Token_OnlySentToApiGithubCom_NeverToArtifactHosts()
+    {
+        Environment.SetEnvironmentVariable("FORGEREMS_GITHUB_TOKEN", "test-secret-token");
+        try
+        {
+            var handler = new RecordingHandler((req, _) =>
+            {
+                var path = req.RequestUri?.AbsolutePath ?? "";
+                if (path.Contains("/releases", StringComparison.Ordinal)
+                    && req.RequestUri!.Host == "api.github.com")
+                {
+                    return Task.FromResult(OkReleases(ReleaseWithZipAndChecksums()));
+                }
+
+                // CHECKSUMS.sha256 artifact fetch
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        new string('e', 64) + "  ForgerEMS-v1.2.5-win-x64.zip\n",
+                        Encoding.UTF8, "text/plain")
+                });
+            });
+            using var http = Client(handler);
+            using var service = new GitHubReleaseUpdateCheckService(http);
+            var result = await service.CheckForNewerReleaseAsync("1.2.4", null);
+            Assert.True(result.Succeeded);
+
+            Assert.All(handler.Requests, r =>
+            {
+                var host = new Uri(r.Url).Host;
+                if (host == "api.github.com")
+                {
+                    Assert.Equal("Bearer test-secret-token", r.Authorization);
+                }
+                else
+                {
+                    Assert.Null(r.Authorization); // never forwarded to artifact/manifest hosts
+                }
+            });
+            Assert.Contains(handler.Requests, r => r.Url.Contains("CHECKSUMS.sha256"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FORGEREMS_GITHUB_TOKEN", null);
+        }
+    }
+
+    [Fact]
+    public async Task OversizedApiResponse_RejectedAsInvalidMetadata()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("[" + new string(' ', 8 * 1024 * 1024), Encoding.UTF8, "application/json")
+        });
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync("1.2.4", null);
+        Assert.False(result.Succeeded);
+        Assert.Equal(UpdateCheckFailureKind.ReleaseMetadataInvalid, result.FailureKind);
+    }
+
+    [Fact]
+    public async Task CorruptChecksumsDigest_EntriesNotTrusted()
+    {
+        // CHECKSUMS asset carries a digest that will NOT match the served bytes.
+        var list = ReleaseWithZipAndChecksums(
+            checksumsDigest: ",\"digest\":\"sha256:" + new string('f', 64) + "\"");
+        var handler = new RecordingHandler((req, _) =>
+        {
+            var url = req.RequestUri?.AbsoluteUri ?? "";
+            if (url.Contains("api.github.com"))
+            {
+                return Task.FromResult(OkReleases(list));
+            }
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    new string('e', 64) + "  ForgerEMS-v1.2.5-win-x64.zip\n",
+                    Encoding.UTF8, "text/plain")
+            });
+        });
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync("1.2.4", null);
+        Assert.True(result.Succeeded);
+        // The corrupt CHECKSUMS body must never be trusted for zip digests.
+        Assert.Null(result.ExpectedZipSha256);
+    }
+
+    [Fact]
+    public async Task Cancellation_DuringSecondaryFetch_Propagates()
+    {
+        var list = ReleaseWithZipAndChecksums();
+        using var cts = new CancellationTokenSource();
+        var handler = new RecordingHandler(async (req, ct) =>
+        {
+            var url = req.RequestUri?.AbsoluteUri ?? "";
+            if (url.Contains("api.github.com"))
+            {
+                return OkReleases(list);
+            }
+            // Secondary fetch blocks until the caller cancels; the request token is the
+            // service's linked deadline token, so delay observes real cancellation.
+            cts.Cancel();
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        });
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync("1.2.4", null, cancellationToken: cts.Token);
+        Assert.False(result.Succeeded);
+        Assert.Equal(UpdateCheckOutcome.Cancelled, result.Outcome);
+    }
+
+    [Theory]
+    [InlineData("\"draft\":\"yes\",\"prerelease\":false")]
+    [InlineData("\"prerelease\":\"no\",\"draft\":false")]
+    [InlineData("\"draft\":null,\"prerelease\":false")]
+    public async Task WrongKindDraftPrerelease_FlagsInvalidMetadata(string flags)
+    {
+        var listJson = $$"""
+            [{"tag_name":"v9.9.9","html_url":"https://github.com/x/y/releases/tag/v9.9.9",
+              {{flags}},"published_at":"2026-06-01T00:00:00Z","assets":[]}]
+            """;
+        var handler = new StubHandler(_ => OkReleases(listJson));
+        using var http = Client(handler);
+        using var service = new GitHubReleaseUpdateCheckService(http);
+        var result = await service.CheckForNewerReleaseAsync("1.0.0", null);
+        Assert.False(result.Succeeded);
+        Assert.Equal(UpdateCheckFailureKind.ReleaseMetadataInvalid, result.FailureKind);
     }
 }

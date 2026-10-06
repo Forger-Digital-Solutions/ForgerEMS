@@ -155,7 +155,6 @@ public sealed class InternetWidgetRemovalTests
     {
         var powerShell = new PowerShellRunnerService();
         var runtime = new AppRuntimeService();
-        var registry = new CopilotProviderRegistry();
         var target = BenchmarkTarget();
         return new MainViewModel(
             new BackendDiscoveryService(),
@@ -168,8 +167,6 @@ public sealed class InternetWidgetRemovalTests
             new ManagedDownloadResolverService(new HttpClient()),
             runtime,
             new StubBenchmarkService(),
-            new CopilotService(registry),
-            registry,
             usbIntelligenceService: new UsbIntelligenceService(),
             autoIntelligenceOrchestrator: new NoOpAutoIntelligenceOrchestrator());
     }

@@ -75,6 +75,21 @@ public sealed class UpdateCheckMachineStateResolverTests
     }
 
     [Fact]
+    public void ReleaseMetadataInvalid_WithoutInstalled_GitHubBucket()
+    {
+        var s = UpdateCheckMachineStateResolver.Resolve(
+            false,
+            new UpdateCheckResult
+            {
+                Succeeded = false,
+                Outcome = UpdateCheckOutcome.Failed,
+                FailureKind = UpdateCheckFailureKind.ReleaseMetadataInvalid,
+                ErrorMessage = "Published release metadata could not be read (no parseable version tags)."
+            });
+        Assert.Equal(UpdateCheckMachineState.FailedGitHub, s);
+    }
+
+    [Fact]
     public void InstalledParse_ConfigError()
     {
         var s = UpdateCheckMachineStateResolver.Resolve(

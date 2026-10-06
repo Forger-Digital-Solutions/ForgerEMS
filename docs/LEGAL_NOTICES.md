@@ -1,12 +1,12 @@
 # ForgerEMS Legal Notices
 
-Applies to: ForgerEMS `v1.2.4-preview.4` public preview
+Applies to: ForgerEMS `v1.2.4`
 
-This is practical project-provided notice text for preview software. It is not legal advice and no attorney review or compliance certification is claimed.
+This is practical project-provided notice text for ForgerEMS software. It is not legal advice and no attorney review or compliance certification is claimed.
 
-## Preview / As-is
+## As-is
 
-ForgerEMS is prerelease software provided as-is. It may change, break, miss data, or produce incomplete guidance. Use at your own risk.
+ForgerEMS is provided as-is. It may change, break, miss data, or produce incomplete guidance. Use at your own risk.
 
 ## Technician-assist Scope
 

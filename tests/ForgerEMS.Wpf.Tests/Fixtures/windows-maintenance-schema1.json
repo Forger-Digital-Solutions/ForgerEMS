@@ -1,0 +1,260 @@
+{
+  "SchemaVersion": 1,
+  "CapturedAtUtc": "2026-10-05T19:34:20.0182864+00:00",
+  "Source": "Windows CIM, registry, PnPUtil/DISM and Windows Update Agent",
+  "OperatingSystem": {
+    "Revision": 9457,
+    "SupportStatus": "UnableToVerify",
+    "ServicingStatus": "UnableToVerify",
+    "FeatureRelease": "26H2",
+    "Architecture": "X64",
+    "Version": "10.0.26300",
+    "Build": "26300",
+    "Name": "Microsoft Windows 11 Pro",
+    "Edition": "Professional"
+  },
+  "Services": [
+    {
+      "StartType": "Manual",
+      "Status": "Stopped",
+      "Name": "wuauserv"
+    },
+    {
+      "StartType": "Manual",
+      "Status": "Stopped",
+      "Name": "BITS"
+    },
+    {
+      "StartType": "Automatic",
+      "Status": "Running",
+      "Name": "cryptsvc"
+    },
+    {
+      "StartType": "Automatic",
+      "Status": "Running",
+      "Name": "DoSvc"
+    }
+  ],
+  "Reboot": {
+    "Indicators": [],
+    "State": "NoKnownPendingReboot"
+  },
+  "Policy": {
+    "State": "NoListedPolicyDetected",
+    "Values": [],
+    "Completeness": "Selected visible policies only; MDM, enterprise policy and safeguard holds may not be visible"
+  },
+  "Updates": {
+    "Source": "Windows Update Agent default policy-selected service",
+    "Items": [
+      {
+        "Revision": 200,
+        "Id": "12f0c610-8381-43f0-8353-111bf2725827",
+        "Optional": false,
+        "Provider": "",
+        "Title": "Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.459.565.0) - Current Channel (Broad)",
+        "HardwareId": "",
+        "RebootRequired": false,
+        "ApplicabilitySource": "Windows Update Agent policy-selected search",
+        "Kind": "Software",
+        "Model": "",
+        "SizeBytes": 1616735560,
+        "Categories": [
+          {
+            "Type": "UpdateClassification",
+            "Name": "Definition Updates",
+            "Id": "e0789628-ce08-4437-be74-2495b842f43b"
+          },
+          {
+            "Type": "Product",
+            "Name": "Microsoft Defender Antivirus",
+            "Id": "8c3fcc84-7410-4a95-8b89-a166a0190486"
+          }
+        ],
+        "IsDownloaded": false,
+        "UserActionRequired": true,
+        "DriverClass": ""
+      },
+      {
+        "Revision": 2,
+        "Id": "4eb20612-8be0-4751-8e16-8f0f79f115ac",
+        "Optional": false,
+        "Provider": "Android",
+        "Title": "Android - Net - 3/30/2016 12:00:00 AM - 1.0.0.1",
+        "HardwareId": "usb\\vid_0e8d&pid_2004",
+        "RebootRequired": false,
+        "ApplicabilitySource": "Windows Update Agent policy-selected search",
+        "Kind": "Driver",
+        "Model": "4G MIFI USB Ethernet/RNDIS",
+        "SizeBytes": 12701462,
+        "Categories": [
+          {
+            "Type": "UpdateClassification",
+            "Name": "Drivers",
+            "Id": "ebfc1fc5-71a4-4f7b-9aca-3b9a503104a0"
+          }
+        ],
+        "IsDownloaded": false,
+        "UserActionRequired": true,
+        "DriverClass": "Networking"
+      },
+      {
+        "Revision": 1,
+        "Id": "58c3a62d-1986-40f1-8716-f5329031d6c0",
+        "Optional": false,
+        "Provider": "MediaTek Inc.",
+        "Title": "MediaTek Inc. - Ports - 3.0.1511.0",
+        "HardwareId": "usb\\vid_0e8d&pid_2000",
+        "RebootRequired": false,
+        "ApplicabilitySource": "Windows Update Agent policy-selected search",
+        "Kind": "Driver",
+        "Model": "MediaTek PreLoader USB VCOM (Android)",
+        "SizeBytes": 131820,
+        "Categories": [
+          {
+            "Type": "UpdateClassification",
+            "Name": "Drivers",
+            "Id": "ebfc1fc5-71a4-4f7b-9aca-3b9a503104a0"
+          }
+        ],
+        "IsDownloaded": false,
+        "UserActionRequired": true,
+        "DriverClass": "OtherHardware"
+      }
+    ],
+    "CheckedAtUtc": "2026-10-05T19:34:37.9676907+00:00",
+    "ResultCode": 2,
+    "State": "UpdateAvailable",
+    "History": [
+      {
+        "Date": "2026-10-05T15:14:05.0000000Z",
+        "Title": "Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.459.560.0) - Current Channel (Broad)",
+        "ResultCode": 2,
+        "HResult": 0
+      },
+      {
+        "Date": "2026-10-05T09:52:08.0000000Z",
+        "Title": "Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.459.557.0) - Current Channel (Broad)",
+        "ResultCode": 2,
+        "HResult": 0
+      },
+      {
+        "Date": "2026-10-04T23:01:11.0000000Z",
+        "Title": "Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.459.551.0) - Current Channel (Broad)",
+        "ResultCode": 2,
+        "HResult": 0
+      },
+      {
+        "Date": "2026-10-04T10:44:30.0000000Z",
+        "Title": "Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.459.543.0) - Current Channel (Broad)",
+        "ResultCode": 2,
+        "HResult": 0
+      },
+      {
+        "Date": "2026-10-04T05:05:18.0000000Z",
+        "Title": "Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.459.539.0) - Current Channel (Broad)",
+        "ResultCode": 2,
+        "HResult": 0
+      },
+      {
+        "Date": "2026-10-03T22:40:27.0000000Z",
+        "Title": "Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.459.536.0) - Current Channel (Broad)",
+        "ResultCode": 2,
+        "HResult": 0
+      },
+      {
+        "Date": "2026-10-03T22:32:53.0000000Z",
+        "Title": "9NRZT3Q9R3DL-Microsoft.WindowsAppRuntime.2",
+        "ResultCode": 2,
+        "HResult": 0
+      },
+      {
+        "Date": "2026-10-03T22:32:53.0000000Z",
+        "Title": "9NRZT3Q9R3DL-Microsoft.WindowsAppRuntime.2",
+        "ResultCode": 2,
+        "HResult": 0
+      },
+      {
+        "Date": "2026-10-03T22:32:24.0000000Z",
+        "Title": "9NRZT3Q9R3DL-Microsoft.WindowsAppRuntime.2",
+        "ResultCode": 2,
+        "HResult": 0
+      },
+      {
+        "Date": "2026-10-03T22:32:24.0000000Z",
+        "Title": "9NRZT3Q9R3DL-Microsoft.WindowsAppRuntime.2",
+        "ResultCode": 2,
+        "HResult": 0
+      },
+      {
+        "Date": "2026-10-03T19:19:20.0000000Z",
+        "Title": "Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.459.534.0) - Current Channel (Broad)",
+        "ResultCode": 2,
+        "HResult": 0
+      },
+      {
+        "Date": "2026-10-03T10:32:24.0000000Z",
+        "Title": "Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.459.528.0) - Current Channel (Broad)",
+        "ResultCode": 2,
+        "HResult": 0
+      },
+      {
+        "Date": "2026-10-02T22:01:06.0000000Z",
+        "Title": "Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.459.520.0) - Current Channel (Broad)",
+        "ResultCode": 2,
+        "HResult": 0
+      },
+      {
+        "Date": "2026-10-02T19:29:50.0000000Z",
+        "Title": "Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.459.518.0) - Current Channel (Broad)",
+        "ResultCode": 2,
+        "HResult": 0
+      },
+      {
+        "Date": "2026-10-02T09:47:16.0000000Z",
+        "Title": "Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.459.512.0) - Current Channel (Broad)",
+        "ResultCode": 2,
+        "HResult": 0
+      },
+      {
+        "Date": "2026-10-02T08:28:48.0000000Z",
+        "Title": "9NRZT3Q9R3DL-Microsoft.WindowsAppRuntime.2",
+        "ResultCode": 2,
+        "HResult": 0
+      },
+      {
+        "Date": "2026-10-02T08:28:48.0000000Z",
+        "Title": "9NRZT3Q9R3DL-Microsoft.WindowsAppRuntime.2",
+        "ResultCode": 2,
+        "HResult": 0
+      },
+      {
+        "Date": "2026-10-01T21:16:10.0000000Z",
+        "Title": "Security Intelligence Update for Microsoft Defender Antivirus - KB2267602 (Version 1.459.503.0) - Current Channel (Broad)",
+        "ResultCode": 2,
+        "HResult": 0
+      },
+      {
+        "Date": "2026-10-01T18:27:07.0000000Z",
+        "Title": "9NRZT3Q9R3DL-Microsoft.WindowsAppRuntime.2",
+        "ResultCode": 2,
+        "HResult": 0
+      },
+      {
+        "Date": "2026-10-01T18:27:07.0000000Z",
+        "Title": "9NRZT3Q9R3DL-Microsoft.WindowsAppRuntime.2",
+        "ResultCode": 2,
+        "HResult": 0
+      }
+    ],
+    "Reason": "No install/download requested. Feature upgrades and OEM driver currency are not inferred from this result."
+  },
+  "Errors": [],
+  "Bindings": [],
+  "DeviceProblems": [],
+  "DriverStore": {
+    "State": "NotInventoried",
+    "Packages": [],
+    "Reason": "Host-specific inventory omitted from fixture"
+  }
+}

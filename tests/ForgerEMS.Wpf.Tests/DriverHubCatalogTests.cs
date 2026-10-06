@@ -616,6 +616,18 @@ public sealed class DriverHubCatalogTests
         Assert.Empty(DriverHubFilterEngine.Filter(views, "All", "no-such-driver-card"));
     }
 
+    [Fact]
+    public void UbuntuAdditionalDriversEntry_PointsAtCanonicalVendorDocs()
+    {
+        var entry = DriverHubCatalog.All.Single(e => e.Id == "ubuntu-additional-drivers");
+
+        Assert.Equal(
+            "https://ubuntu.com/desktop/docs/en/latest/how-to/graphics/install-nvidia-drivers/",
+            entry.EffectiveOfficialPageUrl);
+        Assert.DoesNotContain("help.ubuntu.com", entry.EffectiveOfficialPageUrl, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("NVIDIA", entry.Name, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static DirectoryInfo FindRepoRoot()
     {
         var current = new DirectoryInfo(Directory.GetCurrentDirectory());

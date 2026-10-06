@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Json;
 using VentoyToolkitSetup.Wpf.Models;
 
@@ -96,7 +96,7 @@ public static class UsbBuilderProfileItemCatalog
             Tier = UsbBuilderProfileItemTier.Required,
             SpaceEstimate = UsbBuilderProfileSpaceEstimate.Range(40 * Mb, 60 * Mb, 80 * Mb,
                 UsbBuilderPackSizeConfidence.Known, "bootloader + Ventoy data"),
-            ManifestEntryName = "Ventoy pinned fallback 1.1.12 (Windows package)",
+            ManifestEntryName = "Ventoy Windows Package",
             Notes = "Required for multi-ISO boot. ForgerEMS preserves your existing Ventoy install."
         };
 
@@ -353,8 +353,8 @@ public static class UsbBuilderProfileItemCatalog
             Subcategory = "Recovery",
             Kind = UsbBuilderProfileItemKind.Iso,
             Tier = UsbBuilderProfileItemTier.Recommended,
-            ManifestEntryName = "Rescuezilla 2.6.2 (64-bit oracular)",
-            UsbRelativePath = @"ISO\Tools\rescuezilla-2.6.2-64bit.oracular.iso",
+            ManifestEntryName = "Rescuezilla",
+            UsbRelativePath = @"ISO\Tools\rescuezilla.iso",
             SpaceEstimate = UsbBuilderProfileSpaceEstimate.Fixed(2 * Gb + 500 * Mb, "imaging + recovery"),
             Notes = "Disk imaging and rescue toolkit; highly recommended for field repair USBs."
         };
@@ -367,8 +367,8 @@ public static class UsbBuilderProfileItemCatalog
             Subcategory = "Distro",
             Kind = UsbBuilderProfileItemKind.Iso,
             Tier = UsbBuilderProfileItemTier.Recommended,
-            ManifestEntryName = "Ubuntu 24.04.4 LTS Desktop (amd64)",
-            UsbRelativePath = @"ISO\Linux\ubuntu-24.04.4-desktop-amd64.iso",
+            ManifestEntryName = "Ubuntu LTS Desktop",
+            UsbRelativePath = @"ISO\Linux\ubuntu-desktop.iso",
             SpaceEstimate = UsbBuilderProfileSpaceEstimate.Fixed(5L * Gb, "live + installer"),
             LargePayload = true,
             Notes = "Common live-boot environment for diagnostics and recovery."
@@ -382,8 +382,8 @@ public static class UsbBuilderProfileItemCatalog
             Subcategory = "Distro",
             Kind = UsbBuilderProfileItemKind.Iso,
             Tier = UsbBuilderProfileItemTier.Optional,
-            ManifestEntryName = "Debian GNU/Linux 13.5.0 netinst (amd64)",
-            UsbRelativePath = @"ISO\Linux\debian-13.5.0-amd64-netinst.iso",
+            ManifestEntryName = "Debian Stable Netinst",
+            UsbRelativePath = @"ISO\Linux\debian-netinst.iso",
             SpaceEstimate = UsbBuilderProfileSpaceEstimate.Fixed(700 * Mb, "netinst"),
             Notes = "Minimal Debian installer; good for low-resource recoveries."
         };
@@ -396,8 +396,8 @@ public static class UsbBuilderProfileItemCatalog
             Subcategory = "Distro",
             Kind = UsbBuilderProfileItemKind.Iso,
             Tier = UsbBuilderProfileItemTier.Optional,
-            ManifestEntryName = "Fedora Workstation 44-1.7 Live (x86_64)",
-            UsbRelativePath = @"ISO\Linux\Fedora-Workstation-Live-44-1.7.x86_64.iso",
+            ManifestEntryName = "Fedora Workstation",
+            UsbRelativePath = @"ISO\Linux\DOWNLOAD - fedora-workstation.url",
             SpaceEstimate = UsbBuilderProfileSpaceEstimate.Fixed(2L * Gb, "live image"),
             LargePayload = true
         };
@@ -410,8 +410,8 @@ public static class UsbBuilderProfileItemCatalog
             Subcategory = "Distro",
             Kind = UsbBuilderProfileItemKind.Iso,
             Tier = UsbBuilderProfileItemTier.Optional,
-            ManifestEntryName = "Rocky Linux 10.1 Minimal (x86_64)",
-            UsbRelativePath = @"ISO\Linux\Rocky-10.1-x86_64-minimal.iso",
+            ManifestEntryName = "Rocky Linux Minimal",
+            UsbRelativePath = @"ISO\Linux\DOWNLOAD - rocky-minimal.url",
             SpaceEstimate = UsbBuilderProfileSpaceEstimate.Fixed(2L * Gb, "minimal ISO"),
             LargePayload = true
         };
@@ -424,8 +424,8 @@ public static class UsbBuilderProfileItemCatalog
             Subcategory = "Distro",
             Kind = UsbBuilderProfileItemKind.Iso,
             Tier = UsbBuilderProfileItemTier.Optional,
-            ManifestEntryName = "AlmaLinux 10.2 Minimal (x86_64)",
-            UsbRelativePath = @"ISO\Linux\AlmaLinux-10.2-x86_64-minimal.iso",
+            ManifestEntryName = "AlmaLinux Minimal",
+            UsbRelativePath = @"ISO\Linux\DOWNLOAD - alma-minimal.url",
             SpaceEstimate = UsbBuilderProfileSpaceEstimate.Fixed(2L * Gb, "minimal ISO"),
             LargePayload = true
         };
@@ -438,8 +438,8 @@ public static class UsbBuilderProfileItemCatalog
             Subcategory = "Hypervisor",
             Kind = UsbBuilderProfileItemKind.Iso,
             Tier = UsbBuilderProfileItemTier.Optional,
-            ManifestEntryName = "Proxmox VE 9.2-1 ISO Installer",
-            UsbRelativePath = @"ISO\Linux\proxmox-ve_9.2-1.iso",
+            ManifestEntryName = "Proxmox VE",
+            UsbRelativePath = @"ISO\Linux\DOWNLOAD - proxmox-ve.url",
             SpaceEstimate = UsbBuilderProfileSpaceEstimate.Fixed(1L * Gb + 200 * Mb, "VE installer"),
             LargePayload = true,
             Notes = "Hypervisor installer; only useful for server-grade rebuilds."
@@ -453,8 +453,8 @@ public static class UsbBuilderProfileItemCatalog
             Subcategory = "Distro",
             Kind = UsbBuilderProfileItemKind.Iso,
             Tier = UsbBuilderProfileItemTier.Optional,
-            ManifestEntryName = "Alpine Linux 3.23.4 Standard (x86_64)",
-            UsbRelativePath = @"ISO\Linux\alpine-standard-3.23.4-x86_64.iso",
+            ManifestEntryName = "Alpine Linux Standard",
+            UsbRelativePath = @"ISO\Linux\DOWNLOAD - alpine.url",
             SpaceEstimate = UsbBuilderProfileSpaceEstimate.Fixed(200 * Mb, "minimal"),
             Notes = "Compact distro for tiny rescue USBs."
         };
@@ -471,7 +471,7 @@ public static class UsbBuilderProfileItemCatalog
             Kind = UsbBuilderProfileItemKind.HtmlGuide,
             Tier = UsbBuilderProfileItemTier.Recommended,
             ManifestEntryName = "Apple macOS Download and Install Guide",
-            UsbRelativePath = @"ISO\macOS\GUIDE - Apple macOS download and install guide.url",
+            UsbRelativePath = @"ISO\macOS\GUIDE - Apple macOS download and install.url",
             Source = "apple.com",
             SpaceEstimate = UsbBuilderProfileSpaceEstimate.Fixed(100 * 1024, "HTML + .url"),
             Notes = "Apple workflow references. ForgerEMS does not host macOS installers."
@@ -618,7 +618,7 @@ public static class UsbBuilderProfileItemCatalog
             Kind = UsbBuilderProfileItemKind.HtmlGuide,
             Tier = UsbBuilderProfileItemTier.Recommended,
             ManifestEntryName = "iPhone iPad Recovery Mode Restore",
-            UsbRelativePath = @"ISO\iOS-iPadOS\GUIDE - iPhone iPad recovery mode restore.url",
+            UsbRelativePath = @"Tools\Apple-Mobile\GUIDE - iPhone iPad recovery mode restore.url",
             Source = "support.apple.com",
             SpaceEstimate = UsbBuilderProfileSpaceEstimate.Fixed(80 * 1024, "HTML doc"),
             Notes = "Finder / iTunes restore reference."
@@ -648,7 +648,7 @@ public static class UsbBuilderProfileItemCatalog
             Kind = UsbBuilderProfileItemKind.OfficialPage,
             Tier = UsbBuilderProfileItemTier.Recommended,
             ManifestEntryName = "Apple Configurator Restore Revive Guide",
-            UsbRelativePath = @"ISO\iOS-iPadOS\GUIDE - Apple Configurator restore revive.url",
+            UsbRelativePath = @"Tools\Apple-Mobile\GUIDE - Apple Configurator restore and revive.url",
             Source = "support.apple.com",
             SpaceEstimate = UsbBuilderProfileSpaceEstimate.Fixed(4 * 1024, ".url shortcuts"),
             Notes = "Curated set of Apple support article shortcuts."
@@ -720,7 +720,7 @@ public static class UsbBuilderProfileItemCatalog
             Tier = UsbBuilderProfileItemTier.Recommended,
             VendorPortalOnly = true,
             ManifestEntryName = "Intel Driver Download Center",
-            UsbRelativePath = @"Drivers\Vendor\DOWNLOAD - Intel Driver Download Center.url",
+            UsbRelativePath = @"Drivers\Chipset\DOWNLOAD - Intel Drivers.url",
             Source = "intel.com",
             SpaceEstimate = UsbBuilderProfileSpaceEstimate.Fixed(2 * 1024, ".url shortcut"),
             Notes = "Intel Driver & Support Assistant landing page."
@@ -736,7 +736,7 @@ public static class UsbBuilderProfileItemCatalog
             Tier = UsbBuilderProfileItemTier.Recommended,
             VendorPortalOnly = true,
             ManifestEntryName = "NVIDIA Drivers",
-            UsbRelativePath = @"Drivers\Vendor\DOWNLOAD - NVIDIA Drivers.url",
+            UsbRelativePath = @"Drivers\Graphics\DOWNLOAD - NVIDIA Drivers.url",
             Source = "nvidia.com",
             SpaceEstimate = UsbBuilderProfileSpaceEstimate.Fixed(2 * 1024, ".url shortcut"),
             Notes = "NVIDIA driver download landing page."
@@ -752,7 +752,7 @@ public static class UsbBuilderProfileItemCatalog
             Tier = UsbBuilderProfileItemTier.Recommended,
             VendorPortalOnly = true,
             ManifestEntryName = "AMD Drivers and Support",
-            UsbRelativePath = @"Drivers\Vendor\DOWNLOAD - AMD Drivers.url",
+            UsbRelativePath = @"Drivers\Graphics\DOWNLOAD - AMD Drivers.url",
             Source = "amd.com",
             SpaceEstimate = UsbBuilderProfileSpaceEstimate.Fixed(2 * 1024, ".url shortcut"),
             Notes = "AMD driver auto-detect landing page."
@@ -769,8 +769,8 @@ public static class UsbBuilderProfileItemCatalog
             Subcategory = "Disk health",
             Kind = UsbBuilderProfileItemKind.ManagedDownload,
             Tier = UsbBuilderProfileItemTier.Recommended,
-            ManifestEntryName = "CrystalDiskInfo 9.8.0 (standard zip)",
-            UsbRelativePath = @"Tools\Portable\Disk\CrystalDiskInfo9_8_0.zip",
+            ManifestEntryName = "CrystalDiskInfo Download Page",
+            UsbRelativePath = @"Tools\Portable\Disk\DOWNLOAD - CrystalDiskInfo.url",
             SpaceEstimate = UsbBuilderProfileSpaceEstimate.Fixed(8 * Mb, "portable build"),
             Notes = "SMART read-only disk health utility."
         };
@@ -783,8 +783,8 @@ public static class UsbBuilderProfileItemCatalog
             Subcategory = "Imaging",
             Kind = UsbBuilderProfileItemKind.ManagedDownload,
             Tier = UsbBuilderProfileItemTier.Recommended,
-            ManifestEntryName = "Rufus 4.14 Portable (x64)",
-            UsbRelativePath = @"Tools\Portable\USB\rufus-4.14p.exe",
+            ManifestEntryName = "Rufus Portable",
+            UsbRelativePath = @"Tools\Portable\USB\rufus.exe",
             SpaceEstimate = UsbBuilderProfileSpaceEstimate.Fixed(2 * Mb, "portable .exe"),
             Notes = "Bootable USB image writer."
         };
@@ -797,8 +797,8 @@ public static class UsbBuilderProfileItemCatalog
             Subcategory = "Imaging",
             Kind = UsbBuilderProfileItemKind.ManagedDownload,
             Tier = UsbBuilderProfileItemTier.Optional,
-            ManifestEntryName = "balenaEtcher 2.1.6 Setup (x64)",
-            UsbRelativePath = @"Tools\Portable\USB\balenaEtcher-Setup-2.1.6.exe",
+            ManifestEntryName = "balenaEtcher",
+            UsbRelativePath = @"Tools\Portable\USB\etcher.exe",
             SpaceEstimate = UsbBuilderProfileSpaceEstimate.Fixed(140 * Mb, "portable"),
             Notes = "Alternative image writer."
         };
@@ -811,8 +811,8 @@ public static class UsbBuilderProfileItemCatalog
             Subcategory = "Memory",
             Kind = UsbBuilderProfileItemKind.ManagedDownload,
             Tier = UsbBuilderProfileItemTier.Recommended,
-            ManifestEntryName = "MemTest86+ 8.10 (x86_64 ISO archive)",
-            UsbRelativePath = @"ISO\Tools\mt86plus_8.10_x86_64.iso.zip",
+            ManifestEntryName = "MemTest86+",
+            UsbRelativePath = @"ISO\Tools\DOWNLOAD - memtest86plus.url",
             SpaceEstimate = UsbBuilderProfileSpaceEstimate.Fixed(12 * Mb, "boot image"),
             Notes = "Open-source RAM tester boot image."
         };
@@ -825,8 +825,8 @@ public static class UsbBuilderProfileItemCatalog
             Subcategory = "Partitioning",
             Kind = UsbBuilderProfileItemKind.Iso,
             Tier = UsbBuilderProfileItemTier.Recommended,
-            ManifestEntryName = "GParted Live 1.8.1-3 (amd64)",
-            UsbRelativePath = @"ISO\Tools\gparted-live-1.8.1-3-amd64.iso",
+            ManifestEntryName = "GParted Live",
+            UsbRelativePath = @"ISO\Tools\DOWNLOAD - gparted.url",
             SpaceEstimate = UsbBuilderProfileSpaceEstimate.Fixed(500 * Mb, "live ISO"),
             Notes = "Partitioning live ISO."
         };
@@ -839,8 +839,8 @@ public static class UsbBuilderProfileItemCatalog
             Subcategory = "Network",
             Kind = UsbBuilderProfileItemKind.ManagedDownload,
             Tier = UsbBuilderProfileItemTier.Optional,
-            ManifestEntryName = "Angry IP Scanner 3.9.3 (Windows setup)",
-            UsbRelativePath = @"Tools\Portable\Network\ipscan-3.9.3-setup.exe",
+            ManifestEntryName = "Angry IP Scanner",
+            UsbRelativePath = @"Tools\Portable\Network\angryip.exe",
             SpaceEstimate = UsbBuilderProfileSpaceEstimate.Fixed(40 * Mb, "portable tools"),
             Notes = "Curated network / port / DNS portable utilities."
         };
@@ -853,8 +853,8 @@ public static class UsbBuilderProfileItemCatalog
             Subcategory = "Security",
             Kind = UsbBuilderProfileItemKind.ManagedDownload,
             Tier = UsbBuilderProfileItemTier.Optional,
-            ManifestEntryName = "KeePassXC 2.7.12 Win64 Portable (zip)",
-            UsbRelativePath = @"Tools\Portable\Security\KeePassXC-2.7.12-Win64.zip",
+            ManifestEntryName = "KeePassXC Portable",
+            UsbRelativePath = @"Tools\Portable\Security\keepassxc.zip",
             SpaceEstimate = UsbBuilderProfileSpaceEstimate.Fixed(200 * Mb, "portable tools"),
             Notes = "On-demand scanners and offline cleanup tools."
         };

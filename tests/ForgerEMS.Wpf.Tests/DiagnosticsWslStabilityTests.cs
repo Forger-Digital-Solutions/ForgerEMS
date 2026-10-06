@@ -47,23 +47,6 @@ public sealed class DiagnosticsWslStabilityTests
         Assert.DoesNotContain("SecretUser", copy, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
-    public void Kyra_WslCrashInsideForger_RecommendsExternalTerminalAndSandbox()
-    {
-        var reply = LocalRulesCopilotEngine.GenerateReply(
-            "Why does WSL crash inside ForgerEMS?",
-            new CopilotContext
-            {
-                UserQuestion = "Why does WSL crash inside ForgerEMS?",
-                Intent = KyraIntent.ForgerEMSQuestion,
-                SystemContext = new SystemContext()
-            });
-
-        Assert.Contains("experimental", reply, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("external", reply, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Sandbox", reply, StringComparison.OrdinalIgnoreCase);
-    }
-
     private sealed class TimeoutLikeWslExecutor : IWslCommandExecutor
     {
         public bool IsWslInstalled() => true;

@@ -489,7 +489,12 @@ function Get-ManifestDownloadModePolicyIssues {
         }
 
         if ($mode -eq "ManagedDownload" -and $requireChecksum -and -not (Test-ManifestItemChecksumProof -Item $item)) {
-            [void]$issues.Add("$name is ManagedDownload without checksum proof under require-for-release.")
+            $requiresRuntimeResolution = ($null -ne $item.PSObject.Properties['requiresResolution'] -and
+                [bool]$item.requiresResolution -and
+                -not [string]::IsNullOrWhiteSpace([string]$item.resourceId))
+            if (-not $requiresRuntimeResolution) {
+                [void]$issues.Add("$name is ManagedDownload without checksum proof under require-for-release.")
+            }
         }
 
         if ($type -eq "page") {

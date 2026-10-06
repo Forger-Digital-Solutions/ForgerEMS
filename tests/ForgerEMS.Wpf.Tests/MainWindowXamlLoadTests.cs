@@ -70,7 +70,6 @@ public sealed class MainWindowXamlLoadTests
             "Port / USB Intelligence",
             "▤  Toolkit Manager",
             "▥  Driver Hub",
-            "◇  Kyra (Beta)",
             "☰  Settings"
         };
 
@@ -190,7 +189,7 @@ public sealed class MainWindowXamlLoadTests
         var supportBlock = text[supportStart..supportBlockEnd];
         Assert.Contains("Beta issue? Send logs/screenshots", supportBlock, StringComparison.Ordinal);
         Assert.Contains("SupportEmailDoNotSecretsText", supportBlock, StringComparison.Ordinal);
-        Assert.Contains("PublicPreviewBannerText", supportBlock, StringComparison.Ordinal);
+        Assert.Contains("ProductBannerText", supportBlock, StringComparison.Ordinal);
         Assert.Contains("TextWrapping=\"NoWrap\"", supportBlock, StringComparison.Ordinal);
         Assert.Contains("TextTrimming=\"CharacterEllipsis\"", supportBlock, StringComparison.Ordinal);
     }
@@ -228,13 +227,6 @@ public sealed class MainWindowXamlLoadTests
         Assert.True(settingsStart >= 0);
         var settings = text[settingsStart..];
 
-        Assert.Contains("Keep Local Only", settings, StringComparison.Ordinal);
-        Assert.Contains("Help Improve Kyra", settings, StringComparison.Ordinal);
-        Assert.Contains("Learn More", settings, StringComparison.Ordinal);
-        Assert.Contains("View Shared Preview", settings, StringComparison.Ordinal);
-        Assert.Contains("Export Memory", settings, StringComparison.Ordinal);
-        Assert.Contains("Delete Memory", settings, StringComparison.Ordinal);
-        Assert.Contains("Reset Learning", settings, StringComparison.Ordinal);
         Assert.Contains("AppUpdateCheckButtonText", settings, StringComparison.Ordinal);
         Assert.Contains("AppUpdateCheckHelperText", settings, StringComparison.Ordinal);
         Assert.Contains("Copy Update Diagnostics", settings, StringComparison.Ordinal);
@@ -272,8 +264,6 @@ public sealed class MainWindowXamlLoadTests
                 var userPromptService = new UserPromptService();
                 var ventoyIntegrationService = new VentoyIntegrationService(powerShellRunnerService, runtimeService);
                 var usbBenchmarkService = new UsbBenchmarkService(powerShellRunnerService);
-                var copilotProviderRegistry = new CopilotProviderRegistry();
-                var copilotService = new CopilotService(copilotProviderRegistry);
 
                 var mainViewModel = new MainViewModel(
                     backendDiscoveryService,
@@ -286,8 +276,6 @@ public sealed class MainWindowXamlLoadTests
                     new ManagedDownloadResolverService(new HttpClient()),
                     runtimeService,
                     usbBenchmarkService,
-                    copilotService,
-                    copilotProviderRegistry,
                     wslExecutor: null,
                     usbIntelligenceService: new UsbIntelligenceService(),
                     autoIntelligenceOrchestrator: new NoOpAutoIntelligenceOrchestrator());
@@ -301,12 +289,6 @@ public sealed class MainWindowXamlLoadTests
                 Assert.NotNull(mainWindow.TryFindResource("ReadableComboBoxItemStyle"));
                 Assert.NotNull(mainWindow.TryFindResource("SecondaryButtonStyle"));
                 Assert.NotNull(mainWindow.TryFindResource("FooterButtonStyle"));
-                Assert.NotNull(mainWindow.TryFindResource("CopilotChatScrollViewerStyle"));
-                var kyraAdvanced = new KyraAdvancedSettingsWindow
-                {
-                    DataContext = mainViewModel
-                };
-                kyraAdvanced.Close();
                 mainWindow.Close();
                 app.Shutdown();
             }
@@ -720,50 +702,20 @@ public sealed class MainWindowXamlLoadTests
     }
 
     [Fact]
-    public void MainWindow_KyraSidebarNavButton_DisplaysBeta()
+    public void MainWindow_AssistantTabAndNav_AreRemoved()
     {
         var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
         var text = File.ReadAllText(xamlPath);
-        // The sidebar nav button must say "Kyra (Beta)" — not bare "Kyra".
-        Assert.Contains("NavCopilotButton", text, StringComparison.Ordinal);
-        Assert.Contains("Content=\"◇  Kyra (Beta)\"", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("Content=\"◇  Kyra\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("NavCopilotButton", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Kyra", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Copilot", text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void MainWindow_KyraTabItem_HeaderDisplaysBeta()
+    public void KyraAdvancedSettingsWindow_IsRemoved()
     {
-        var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
-        var text = File.ReadAllText(xamlPath);
-        Assert.Contains("Header=\"◇  Kyra (Beta)\"", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("Header=\"◇  Kyra\"", text, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void MainWindow_KyraPageGroupBoxHeader_DisplaysBeta()
-    {
-        var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
-        var text = File.ReadAllText(xamlPath);
-        // The in-page GroupBox title next to the Kyra icon.
-        Assert.Contains("Text=\"Kyra (Beta)\"", text, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void MainWindow_KyraSettingsGroupBox_HeaderDisplaysBeta()
-    {
-        var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml");
-        var text = File.ReadAllText(xamlPath);
-        Assert.Contains("Header=\"Kyra Assistant (Beta)\"", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("Header=\"Kyra Assistant\"", text, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void KyraAdvancedSettingsWindow_TitleAndHeaderDisplayBeta()
-    {
-        var xamlPath = FindRepoFile("src", "ForgerEMS.Wpf", "KyraAdvancedSettingsWindow.xaml");
-        var text = File.ReadAllText(xamlPath);
-        Assert.Contains("Title=\"Kyra AI Settings (Beta)\"", text, StringComparison.Ordinal);
-        Assert.Contains("Text=\"Kyra AI Settings (Beta)\"", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("Title=\"Kyra AI Settings\"", text, StringComparison.Ordinal);
+        var projectDir = Path.GetDirectoryName(FindRepoFile("src", "ForgerEMS.Wpf", "ForgerEMS.Wpf.csproj"));
+        Assert.NotNull(projectDir);
+        Assert.False(File.Exists(Path.Combine(projectDir, "KyraAdvancedSettingsWindow.xaml")));
     }
 }

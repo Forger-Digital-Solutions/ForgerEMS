@@ -70,13 +70,40 @@ public sealed record UpdateCheckResult
 
     public string? RecommendedZipDownloadUrl { get; init; }
 
+    /// <summary>Expected SHA-256 (from the GitHub asset digest) for the recommended ZIP.</summary>
+    public string? ExpectedZipSha256 { get; init; }
+
+    /// <summary>Expected SHA-256 (from the GitHub asset digest) for the installer EXE.</summary>
+    public string? ExpectedInstallerSha256 { get; init; }
+
+    /// <summary>Expected SHA-256 of the same-release CHECKSUMS.sha256 manifest, when published.</summary>
+    public string? ExpectedChecksumsSha256 { get; init; }
+
+    /// <summary>Expected SHA-256 of the same-release release.json manifest, when published.</summary>
+    public string? ExpectedReleaseManifestSha256 { get; init; }
+
+    /// <summary>HTTPS URL of the same-release release.json manifest, when published.</summary>
+    public string? ReleaseManifestDownloadUrl { get; init; }
+
+    /// <summary>True when the selected ZIP filename carries the target-architecture token.</summary>
+    public bool ZipArchQualified { get; init; }
+
+    /// <summary>True when the selected installer filename carries the target-architecture token.</summary>
+    public bool InstallerArchQualified { get; init; }
+
+    /// <summary>Target runtime architecture the check selected assets for (e.g. win-x64).</summary>
+    public string SelectedArchitecture { get; init; } = "win-x64";
+
+    /// <summary>True when the selected assets carry no explicit arch token and were validated via release.json.</summary>
+    public bool AssetsValidatedViaReleaseManifest { get; init; }
+
     /// <summary>HTTPS URL to CHECKSUMS.sha256 when published on the release.</summary>
     public string? ChecksumsDownloadUrl { get; init; }
 
     /// <summary>HTTPS URL to DOWNLOAD_BETA.txt when published on the release.</summary>
     public string? DownloadInstructionsUrl { get; init; }
 
-    /// <summary>True when the release tag/name could not be parsed to semver; compare used publish date only for selection.</summary>
+    /// <summary>Retained for diagnostic compatibility. Releases whose tag/name cannot be parsed as a semantic version are never selected or offered; this flag is no longer set by the update check.</summary>
     public bool VersionComparisonUncertain { get; init; }
 
     /// <summary>True when a Beta-style or ForgerEMS-v*.zip pattern was matched.</summary>
@@ -133,6 +160,6 @@ public interface IUpdateCheckService
     Task<UpdateCheckResult> CheckForNewerReleaseAsync(
         string installedVersionLabel,
         string? ignoredVersionNormalized,
-        UpdateReleaseChannel channel = UpdateReleaseChannel.BetaRcAllowed,
+        UpdateReleaseChannel channel = UpdateReleaseChannel.StableOnly,
         CancellationToken cancellationToken = default);
 }

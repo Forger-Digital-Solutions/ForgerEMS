@@ -1,5 +1,4 @@
 #pragma warning disable CA1001 // VentoyIntegrationService.SemaphoreSlim is long-lived; disposal handled by host
-#pragma warning disable CS0414 // _ownsHttpClient: reserved for future disposal path
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -7,9 +6,9 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using ForgerEMS.Wpf.Services.Resources;
 using VentoyToolkitSetup.Wpf.Models;
 
 namespace VentoyToolkitSetup.Wpf.Services;
@@ -30,19 +29,28 @@ public interface IVentoyIntegrationService
 
 public sealed class VentoyIntegrationService : IVentoyIntegrationService
 {
+    internal const string VentoyResourceId = "ventoy";
+
     private static readonly TimeSpan LatestVentoyTtl = TimeSpan.FromMinutes(20);
-    private static readonly Regex VersionPattern = new(@"\d+\.\d+\.\d+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-    private static readonly Regex VentoyWindowsAssetPattern = new(
-        @"^ventoy-(\d+\.\d+\.\d+)-windows\.zip$",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.CultureInvariant);
-    private static readonly Regex ShaLinePattern = new(
-        @"(?<sha>[a-fA-F0-9]{64})\s+[* ]?(?<file>ventoy-\d+\.\d+\.\d+-windows\.zip)",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly string[] GitHubArtifactHosts =
+    {
+        "github.com",
+        "release-assets.githubusercontent.com",
+        "objects.githubusercontent.com"
+    };
 
     private readonly IPowerShellRunnerService _powerShellRunnerService;
     private readonly IAppRuntimeService _appRuntimeService;
-    private readonly HttpClient _httpClient;
-    private readonly bool _ownsHttpClient;
+    private readonly HttpClient? _httpClient;
+    private readonly ResourceCheckService? _injectedCheckService;
+    private readonly ArtifactDownloadService _artifactDownloads;
+
+    /// <summary>
+    /// Seam for the final user-confirmed Ventoy2Disk launch; tests substitute a capture
+    /// so no process is ever started outside the real interactive flow.
+    /// </summary>
+    internal Func<ProcessStartInfo, Process?> ProcessStarter { get; set; } = info => Process.Start(info);
     private readonly SemaphoreSlim _resolutionLock = new(1, 1);
     private VentoyPackageResolution? _cachedLatestResolution;
     private DateTimeOffset _cachedLatestAtUtc;
@@ -50,25 +58,15 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
     public VentoyIntegrationService(
         IPowerShellRunnerService powerShellRunnerService,
         IAppRuntimeService appRuntimeService,
-        HttpClient? httpClient = null)
+        HttpClient? httpClient = null,
+        ResourceCheckService? checkService = null,
+        ArtifactDownloadService? artifactDownloads = null)
     {
         _powerShellRunnerService = powerShellRunnerService;
         _appRuntimeService = appRuntimeService;
-        if (httpClient is not null)
-        {
-            _httpClient = httpClient;
-            _ownsHttpClient = false;
-        }
-        else
-        {
-            _httpClient = new HttpClient
-            {
-                Timeout = TimeSpan.FromSeconds(20)
-            };
-            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "ForgerEMS-Wpf/1.2");
-            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/vnd.github+json");
-            _ownsHttpClient = true;
-        }
+        _httpClient = httpClient;
+        _injectedCheckService = checkService;
+        _artifactDownloads = artifactDownloads ?? new ArtifactDownloadService();
     }
 
     public async Task<VentoyStatusInfo> GetStatusAsync(
@@ -78,8 +76,8 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
     {
         var package = await ResolvePackageAsync(backendContext, cancellationToken).ConfigureAwait(false);
         var packageText = package is null
-            ? "Official Ventoy package source was not found in the backend manifest."
-            : $"{package.DisplayName} | SHA-256 verified | Source: {package.Url} ({package.SourceLabel})";
+            ? "Official Ventoy package could not be resolved from the resource policy (offline or metadata unavailable)."
+            : $"{package.DisplayName} | expected SHA-256 bound from official metadata | Source: {package.Url} ({package.SourceLabel})";
 
         if (target is null)
         {
@@ -126,36 +124,64 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
             {
                 Succeeded = false,
                 Summary = "Ventoy package source unavailable",
-                Details = "The official Ventoy package entry could not be resolved from the current backend manifest."
+                Details =
+                    "The official Ventoy package could not be resolved through the resource policy (offline, unavailable, or failed trust checks). ForgerEMS does not fall back to a frozen archive."
             };
         }
 
         _appRuntimeService.EnsureInitialized();
+        Directory.CreateDirectory(_appRuntimeService.VentoyPackagesRoot);
+        Directory.CreateDirectory(_appRuntimeService.VentoyExtractedRoot);
 
-        var extractRoot = Path.Combine(_appRuntimeService.VentoyExtractedRoot, Path.GetFileNameWithoutExtension(package.FileName));
-        var packagePath = Path.Combine(_appRuntimeService.VentoyPackagesRoot, package.FileName);
+        onOutput?.Invoke(new LogLine(
+            DateTimeOffset.Now,
+            $"[INFO] Ventoy package source: {package.SourceLabel}; expected SHA-256 bound from official metadata.",
+            LogSeverity.Info));
 
-        var request = new PowerShellRunRequest
-        {
-            DisplayName = "Prepare official Ventoy package",
-            WorkingDirectory = backendContext.WorkingDirectory,
-            InlineCommand = BuildPreparationCommand(package.Url, packagePath, extractRoot, package.Sha256, package.SourceLabel, package.ResolutionNote),
-            ProgressItemName = "Ventoy package"
-        };
+        var download = await _artifactDownloads.DownloadAsync(
+            new ArtifactDownloadService.ArtifactDownloadRequest
+            {
+                RequestedId = VentoyResourceId,
+                Version = package.Version,
+                Source = package.SourceLabel,
+                ArtifactUri = new Uri(package.Url),
+                ExpectedSha256 = package.Sha256,
+                ExpectedSizeBytes = package.SizeBytes,
+                AllowedHosts = package.AllowedHosts
+            },
+            _appRuntimeService.VentoyPackagesRoot,
+            cancellationToken).ConfigureAwait(false);
 
-        var runResult = await _powerShellRunnerService.RunAsync(request, onOutput, cancellationToken).ConfigureAwait(false);
-        if (!runResult.Succeeded)
+        if (!download.VerifiedArtifactPresent || download.FinalPath is null)
         {
             return new VentoyLaunchResult
             {
                 Succeeded = false,
-                Summary = "Ventoy package preparation failed",
-                Details = $"PowerShell exited with code {runResult.ExitCode}. Review the log pane for the download or extraction failure."
+                Summary = "Ventoy package download failed verification",
+                Details = download.Reason ?? download.State.ToString()
+            };
+        }
+
+        onOutput?.Invoke(new LogLine(
+            DateTimeOffset.Now,
+            $"[OK] Ventoy package downloaded and SHA-256 verified: {download.ActualSha256}",
+            LogSeverity.Success));
+
+        var extraction = await SafeZipExtractor
+            .ExtractToFreshDirectoryAsync(download.FinalPath, _appRuntimeService.VentoyExtractedRoot, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+        if (!extraction.Succeeded || extraction.OutputDirectory is null)
+        {
+            return new VentoyLaunchResult
+            {
+                Succeeded = false,
+                Summary = "Ventoy package extraction failed",
+                Details = extraction.FailureReason ?? "The archive could not be extracted safely."
             };
         }
 
         var ventoyExecutable = Directory
-            .GetFiles(extractRoot, "Ventoy2Disk.exe", SearchOption.AllDirectories)
+            .GetFiles(extraction.OutputDirectory, "Ventoy2Disk.exe", SearchOption.AllDirectories)
             .FirstOrDefault();
 
         if (string.IsNullOrWhiteSpace(ventoyExecutable))
@@ -164,16 +190,16 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
             {
                 Succeeded = false,
                 Summary = "Ventoy2Disk was not found",
-                Details = "The official package was prepared, but Ventoy2Disk.exe could not be located after extraction."
+                Details = "The official package was verified and extracted, but Ventoy2Disk.exe could not be located."
             };
         }
 
         try
         {
-            Process.Start(new ProcessStartInfo
+            ProcessStarter(new ProcessStartInfo
             {
                 FileName = ventoyExecutable,
-                WorkingDirectory = Path.GetDirectoryName(ventoyExecutable) ?? extractRoot,
+                WorkingDirectory = Path.GetDirectoryName(ventoyExecutable) ?? extraction.OutputDirectory,
                 UseShellExecute = true
             });
         }
@@ -192,11 +218,18 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
             Succeeded = true,
             Summary = "Ventoy2Disk launched",
             Details =
-                $"Official package {package.DisplayName} was prepared and Ventoy2Disk.exe was launched. Complete the install/update in Ventoy2Disk for {target.RootPath}, then refresh the USB target list to inspect the device again."
+                $"Official package {package.DisplayName} was hash-verified and extracted, and Ventoy2Disk.exe was launched. Complete the install/update in Ventoy2Disk for {target.RootPath}, then refresh the USB target list to inspect the device again."
         };
     }
 
-    private async Task<VentoyPackageResolution?> ResolvePackageAsync(BackendContext backendContext, CancellationToken cancellationToken)
+    /// <summary>
+    /// Resolves the official Ventoy Windows package through the shared resource policy
+    /// ('ventoy' descriptor). There is no frozen/pinned fallback: when live official
+    /// metadata cannot be resolved and verified, the package is unavailable.
+    /// </summary>
+    private async Task<VentoyPackageResolution?> ResolvePackageAsync(
+        BackendContext backendContext,
+        CancellationToken cancellationToken)
     {
         if (_cachedLatestResolution is not null &&
             DateTimeOffset.UtcNow - _cachedLatestAtUtc < LatestVentoyTtl)
@@ -213,27 +246,16 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
                 return _cachedLatestResolution;
             }
 
-            var pinned = await TryLoadPinnedPackageAsync(backendContext, cancellationToken).ConfigureAwait(false);
-            var latest = await TryResolveLatestGitHubReleaseAsync(backendContext, pinned, cancellationToken).ConfigureAwait(false);
-            if (latest is not null)
-            {
-                _cachedLatestResolution = latest;
-                _cachedLatestAtUtc = DateTimeOffset.UtcNow;
-                return latest;
-            }
-
-            if (pinned is null)
+            var resolution = await TryResolveViaPolicyAsync(backendContext, cancellationToken)
+                .ConfigureAwait(false);
+            if (resolution is null)
             {
                 return null;
             }
 
-            var fallback = new VentoyPackageResolution(
-                pinned,
-                "Pinned fallback",
-                $"Latest lookup unavailable; using pinned verified Ventoy package {pinned.Version}.");
-            _cachedLatestResolution = fallback;
+            _cachedLatestResolution = resolution;
             _cachedLatestAtUtc = DateTimeOffset.UtcNow;
-            return fallback;
+            return resolution;
         }
         finally
         {
@@ -241,82 +263,53 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
         }
     }
 
-    private async Task<VentoyPackageResolution?> TryResolveLatestGitHubReleaseAsync(
+    private async Task<VentoyPackageResolution?> TryResolveViaPolicyAsync(
         BackendContext backendContext,
-        ManifestVentoyPackage? pinned,
         CancellationToken cancellationToken)
     {
         try
         {
-            using var releaseResponse = await _httpClient
-                .GetAsync("https://api.github.com/repos/ventoy/Ventoy/releases/latest", cancellationToken)
-                .ConfigureAwait(false);
-            if (!releaseResponse.IsSuccessStatusCode)
+            var checkService = _injectedCheckService ?? BuildCheckService(backendContext);
+            if (checkService is null)
             {
                 return null;
             }
 
-            await using var stream = await releaseResponse.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-            using var releaseDoc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
-            var root = releaseDoc.RootElement;
-            if (!root.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
-            {
-                return null;
-            }
-
-            string? zipUrl = null;
-            string? zipName = null;
-            string? releaseTag = GetString(root, "tag_name");
-            string? checksumUrl = null;
-            foreach (var asset in assets.EnumerateArray())
-            {
-                var name = GetString(asset, "name");
-                var url = GetString(asset, "browser_download_url");
-                if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(url))
+            var results = await checkService.CheckAsync(
+                new ResourceCheckRequest
                 {
-                    continue;
-                }
+                    ResourceIds = new[] { VentoyResourceId },
+                    Architecture = "x64",
+                    Channel = ResourcePolicyValues.StableChannel
+                },
+                cancellationToken).ConfigureAwait(false);
 
-                if (VentoyWindowsAssetPattern.IsMatch(name))
-                {
-                    zipName = name;
-                    zipUrl = url;
-                }
-                else if (name.Contains("sha256", StringComparison.OrdinalIgnoreCase) ||
-                         name.Contains("checksum", StringComparison.OrdinalIgnoreCase))
-                {
-                    checksumUrl ??= url;
-                }
-            }
-
-            if (string.IsNullOrWhiteSpace(zipUrl) || string.IsNullOrWhiteSpace(zipName))
+            var resolution = results.FirstOrDefault(r =>
+                string.Equals(r.ResourceId, VentoyResourceId, StringComparison.Ordinal));
+            if (resolution is null || !resolution.IsDownloadEligible)
             {
                 return null;
             }
 
-            var version = ExtractVersion(releaseTag ?? string.Empty, zipName);
-            var sha = await TryReadReleaseSha256Async(zipName, checksumUrl, root, cancellationToken).ConfigureAwait(false);
-            if (string.IsNullOrWhiteSpace(sha))
+            var package = new ManifestVentoyPackage
             {
-                return null;
-            }
-
-            var latest = new ManifestVentoyPackage
-            {
-                DisplayName = $"Ventoy {version} (Windows package)",
-                Version = version,
-                Url = zipUrl,
-                Sha256 = sha,
-                FileName = zipName,
+                DisplayName = resolution.Descriptor.DisplayName,
+                Version = resolution.Version ?? string.Empty,
+                Url = resolution.ArtifactUri!,
+                Sha256 = resolution.ExpectedSha256!,
+                FileName = resolution.ArtifactFileName ?? "ventoy-windows.zip",
+                SizeBytes = resolution.SizeBytes,
+                AllowedHosts = resolution.Descriptor.AllowedHosts
+                    .Concat(GitHubArtifactHosts)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray(),
                 ManualNotePath = FindManualNotePath(backendContext)
             };
 
-            var source = pinned is not null &&
-                         string.Equals(pinned.Version, latest.Version, StringComparison.OrdinalIgnoreCase) &&
-                         string.Equals(pinned.Sha256, latest.Sha256, StringComparison.OrdinalIgnoreCase)
-                ? "Cached latest"
-                : "Latest official release";
-            return new VentoyPackageResolution(latest, source, string.Empty);
+            var label = resolution.FromCache
+                ? "Cached official metadata"
+                : "Latest official release metadata";
+            return new VentoyPackageResolution(package, label, string.Empty);
         }
         catch
         {
@@ -324,111 +317,20 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
         }
     }
 
-    private async Task<string?> TryReadReleaseSha256Async(
-        string zipName,
-        string? checksumUrl,
-        JsonElement releaseRoot,
-        CancellationToken cancellationToken)
+    private ResourceCheckService? BuildCheckService(BackendContext backendContext)
     {
-        if (!string.IsNullOrWhiteSpace(checksumUrl))
-        {
-            try
-            {
-                var checksumBody = await _httpClient.GetStringAsync(checksumUrl, cancellationToken).ConfigureAwait(false);
-                var parsedFromAsset = ParseSha256FromText(checksumBody, zipName);
-                if (!string.IsNullOrWhiteSpace(parsedFromAsset))
-                {
-                    return parsedFromAsset;
-                }
-            }
-            catch
-            {
-            }
-        }
-
-        var body = GetString(releaseRoot, "body");
-        return ParseSha256FromText(body, zipName);
-    }
-
-    private static string? ParseSha256FromText(string? text, string zipName)
-    {
-        if (string.IsNullOrWhiteSpace(text))
+        var policyPath = ResourceCatalog.FindPolicyPath(backendContext);
+        if (policyPath is null)
         {
             return null;
         }
 
-        foreach (Match match in ShaLinePattern.Matches(text))
-        {
-            var file = match.Groups["file"].Value;
-            if (string.Equals(file, zipName, StringComparison.OrdinalIgnoreCase))
-            {
-                return match.Groups["sha"].Value.ToLowerInvariant();
-            }
-        }
-
-        return null;
-    }
-
-    private static async Task<ManifestVentoyPackage?> TryLoadPinnedPackageAsync(BackendContext backendContext, CancellationToken cancellationToken)
-    {
-        if (!backendContext.IsAvailable)
-        {
-            return null;
-        }
-
-        foreach (var manifestPath in GetManifestCandidatePaths(backendContext))
-        {
-            if (!File.Exists(manifestPath))
-            {
-                continue;
-            }
-
-            await using var stream = File.OpenRead(manifestPath);
-            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            if (!document.RootElement.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
-            {
-                continue;
-            }
-
-            foreach (var item in items.EnumerateArray())
-            {
-                var name = GetString(item, "name");
-                var type = GetString(item, "type");
-                var destination = GetString(item, "dest");
-                var url = GetString(item, "url");
-                var sha256 = GetString(item, "sha256");
-
-                if (!string.Equals(type, "file", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                if (!name.StartsWith("Ventoy ", StringComparison.OrdinalIgnoreCase) &&
-                    !destination.Contains("ventoy-", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                var fileName = Path.GetFileName(destination.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar));
-                if (string.IsNullOrWhiteSpace(fileName))
-                {
-                    fileName = Path.GetFileName(new Uri(url).AbsolutePath);
-                }
-
-                return new ManifestVentoyPackage
-                {
-                    DisplayName = name,
-                    Version = ExtractVersion(name, fileName),
-                    Url = url,
-                    Sha256 = sha256,
-                    FileName = fileName,
-                    ManualNotePath = FindManualNotePath(backendContext)
-                };
-            }
-        }
-
-        return null;
+        var catalog = ResourceCatalog.Parse(File.ReadAllText(policyPath));
+        var providers = new ResourceProviderResolver(
+            new OfficialMetadataClient(_httpClient),
+            catalog.MaximumAttempts);
+        var cache = new ResourceMetadataCache(ResourceCheckService.DefaultCacheDirectory());
+        return new ResourceCheckService(catalog, providers, cache);
     }
 
     private async Task<VentoyDetectionResult> DetectVentoyAsync(
@@ -549,25 +451,6 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
         }
     }
 
-    private static IEnumerable<string> GetManifestCandidatePaths(BackendContext backendContext)
-    {
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var path in new[]
-        {
-            backendContext.PrimaryManifestPath,
-            backendContext.RepoManifestPath,
-            Path.Combine(backendContext.WorkingDirectory, "ForgerEMS.updates.json"),
-            Path.Combine(backendContext.WorkingDirectory, "manifests", "ForgerEMS.updates.json")
-        })
-        {
-            if (!string.IsNullOrWhiteSpace(path) && seen.Add(path))
-            {
-                yield return path;
-            }
-        }
-    }
-
     private static string FindManualNotePath(BackendContext backendContext)
     {
         foreach (var path in new[]
@@ -585,146 +468,9 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
         return string.Empty;
     }
 
-    private static string BuildPreparationCommand(
-        string packageUrl,
-        string packagePath,
-        string extractRoot,
-        string expectedSha256,
-        string sourceLabel,
-        string resolutionNote)
-    {
-        return $$"""
-            $ErrorActionPreference = 'Stop'
-            $ProgressPreference = 'SilentlyContinue'
-            try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
-
-            $packageUrl = {{ToSingleQuotedPowerShellLiteral(packageUrl)}}
-            $packagePath = {{ToSingleQuotedPowerShellLiteral(packagePath)}}
-            $extractRoot = {{ToSingleQuotedPowerShellLiteral(extractRoot)}}
-            $expectedSha256 = {{ToSingleQuotedPowerShellLiteral(expectedSha256)}}
-            $sourceLabel = {{ToSingleQuotedPowerShellLiteral(sourceLabel)}}
-            $resolutionNote = {{ToSingleQuotedPowerShellLiteral(resolutionNote)}}
-
-            Write-Host ('[INFO] Ventoy package source: ' + $sourceLabel)
-            if (-not [string]::IsNullOrWhiteSpace($resolutionNote)) {
-                Write-Host ('[WARN] ' + $resolutionNote)
-            }
-
-            $runtimeCandidates = @(
-                (Join-Path (Get-Location).Path 'ForgerEMS.Runtime.ps1'),
-                (Join-Path (Get-Location).Path 'backend\ForgerEMS.Runtime.ps1')
-            ) | Select-Object -Unique
-
-            $runtimeLoaded = $false
-            foreach ($candidate in $runtimeCandidates) {
-                if (Test-Path -LiteralPath $candidate) {
-                    . $candidate
-                    $runtimeLoaded = $true
-                    break
-                }
-            }
-
-            if (-not $runtimeLoaded -or -not (Get-Command -Name Get-ForgerSha256 -ErrorAction SilentlyContinue)) {
-                throw 'Could not load the ForgerEMS SHA-256 helper needed to verify the Ventoy package.'
-            }
-
-            function Write-ForgerHashProviderLog {
-                param([Parameter(Mandatory = $true)][string]$Path)
-
-                $provider = Get-ForgerLastHashProvider
-                if ([string]::IsNullOrWhiteSpace($provider)) {
-                    $provider = 'Unknown'
-                }
-
-                $friendlyProvider = switch ($provider) {
-                    'DotNetFallback' { 'Built-in .NET (large-file safe)' }
-                    'Get-FileHash' { 'Windows Get-FileHash' }
-                    default { $provider }
-                }
-
-                $safePath = Get-ForgerSafePathForLog -Path $Path
-                Write-Host ('[INFO] SHA256 hash provider: ' + $friendlyProvider + ' file=' + $safePath)
-            }
-
-            function Get-VerifiedVentoyPackageHash {
-                param([Parameter(Mandatory = $true)][string]$Path)
-
-                try {
-                    $hash = Get-ForgerSha256 -LiteralPath $Path
-                    Write-ForgerHashProviderLog -Path $Path
-                    return $hash
-                }
-                catch {
-                    throw ('Could not verify Ventoy package checksum. ' + $_.Exception.Message)
-                }
-            }
-
-            $packageDirectory = Split-Path -Parent $packagePath
-            New-Item -ItemType Directory -Path $packageDirectory -Force | Out-Null
-            New-Item -ItemType Directory -Path $extractRoot -Force | Out-Null
-
-            $needsDownload = $true
-            if (Test-Path -LiteralPath $packagePath) {
-                $existingHash = Get-VerifiedVentoyPackageHash -Path $packagePath
-                if ($existingHash -eq $expectedSha256) {
-                    Write-Host '[OK] Reusing cached official Ventoy package.'
-                    $needsDownload = $false
-                }
-                else {
-                    Write-Host '[WARN] Cached Ventoy package hash mismatch. Re-downloading.'
-                    Remove-Item -LiteralPath $packagePath -Force -ErrorAction SilentlyContinue
-                }
-            }
-
-            if ($needsDownload) {
-                try {
-                    Start-BitsTransfer -Source $packageUrl -Destination $packagePath -ErrorAction Stop
-                }
-                catch {
-                    Write-Host '[WARN] BITS download failed, falling back to Invoke-WebRequest.'
-                    Invoke-WebRequest -Uri $packageUrl -OutFile $packagePath -UseBasicParsing -Headers @{ 'User-Agent' = 'ForgerEMS-Wpf/1.0' }
-                }
-
-                $actualHash = Get-VerifiedVentoyPackageHash -Path $packagePath
-                if ($actualHash -ne $expectedSha256) {
-                    throw ('SHA-256 mismatch for Ventoy package. Expected ' + $expectedSha256 + ' but received ' + $actualHash + '.')
-                }
-
-                Write-Host '[OK] Downloaded and verified the official Ventoy package.'
-            }
-
-            $ventoyExecutable = Get-ChildItem -Path $extractRoot -Filter 'Ventoy2Disk.exe' -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
-            if (-not $ventoyExecutable) {
-                Expand-Archive -LiteralPath $packagePath -DestinationPath $extractRoot -Force
-                $ventoyExecutable = Get-ChildItem -Path $extractRoot -Filter 'Ventoy2Disk.exe' -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
-            }
-
-            if (-not $ventoyExecutable) {
-                throw 'Ventoy2Disk.exe was not found after extracting the official package.'
-            }
-
-            Write-Host ('[OK] Ventoy package ready: ' + $ventoyExecutable.FullName)
-            Write-Host '[WARN] Ventoy installation remains an operator-confirmed action inside Ventoy2Disk.'
-            """;
-    }
-
     private static string ToSingleQuotedPowerShellLiteral(string value)
     {
         return "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'";
-    }
-
-    private static string ExtractVersion(string displayName, string fileName)
-    {
-        foreach (var candidate in new[] { displayName, fileName })
-        {
-            var match = VersionPattern.Match(candidate);
-            if (match.Success)
-            {
-                return match.Value;
-            }
-        }
-
-        return string.Empty;
     }
 
     private static string GetString(JsonElement element, string propertyName, string defaultValue = "")
@@ -753,6 +499,10 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
 
         public string FileName { get; init; } = string.Empty;
 
+        public long? SizeBytes { get; init; }
+
+        public IReadOnlyList<string> AllowedHosts { get; init; } = GitHubArtifactHosts;
+
         public string ManualNotePath { get; init; } = string.Empty;
     }
 
@@ -780,6 +530,10 @@ public sealed class VentoyIntegrationService : IVentoyIntegrationService
         public string Sha256 => Package.Sha256;
 
         public string FileName => Package.FileName;
+
+        public long? SizeBytes => Package.SizeBytes;
+
+        public IReadOnlyList<string> AllowedHosts => Package.AllowedHosts;
 
         public string ManualNotePath => Package.ManualNotePath;
     }

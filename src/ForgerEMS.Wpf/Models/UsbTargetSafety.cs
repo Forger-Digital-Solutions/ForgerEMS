@@ -4,7 +4,7 @@ namespace VentoyToolkitSetup.Wpf.Models;
 
 public static class UsbTargetSafety
 {
-    /// <summary>User-facing explanation when the Windows OS volume is excluded from USB/Ventoy actions (Kyra + UI).</summary>
+    /// <summary>User-facing explanation when the Windows OS volume is excluded from USB/Ventoy actions (UI).</summary>
     public const string WindowsOsDriveBlockedExplanation =
         "ForgerEMS blocks the Windows OS drive from USB build actions to prevent wiping the machine.";
 

@@ -244,47 +244,6 @@ public sealed class UsbIntelligenceProTests
     }
 
     [Fact]
-    public void KyraSafeContextBuilder_DoesNotEmitRawUsbSerialTokens()
-    {
-        var tmp = Path.Combine(Path.GetTempPath(), $"kyra-usb-{Guid.NewGuid():N}.json");
-        try
-        {
-            File.WriteAllText(
-                tmp,
-                """
-                {
-                  "summaryLine": "USB ok",
-                  "selectedTargetRecommendation": {
-                    "summary": "OK",
-                    "detail": "detail",
-                    "quality": "good",
-                    "classificationLine": "Quality: Good",
-                    "risk": "Low",
-                    "speed": "usb3"
-                  },
-                  "topologyDiff": {
-                    "summaryLine": "SECRET123456789012345678901234567890ABCDEF token",
-                    "recommendationLine": "replug"
-                  }
-                }
-                """);
-
-            var text = KyraSafeContextBuilder.BuildBriefSummary(null, tmp, null, null, enableRedaction: true);
-            Assert.DoesNotContain("SECRET123456789012345678901234567890ABCDEF", text);
-        }
-        finally
-        {
-            try
-            {
-                File.Delete(tmp);
-            }
-            catch
-            {
-            }
-        }
-    }
-
-    [Fact]
     public void DiagnosticsUsbSeverity_UsesIssueList()
     {
         var issues = new UsbDiagnosticIssue[]

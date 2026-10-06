@@ -28,8 +28,6 @@ using ForgerEMS.Wpf.Services;
 using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services;
 using VentoyToolkitSetup.Wpf.Services.Intelligence;
-using VentoyToolkitSetup.Wpf.Services.Kyra;
-using VentoyToolkitSetup.Wpf.Services.KyraTools;
 using VentoyToolkitSetup.Wpf.Services.Licensing;
 using VentoyToolkitSetup.Wpf.Services.DriveValidation;
 
@@ -71,8 +69,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly TermsConsentStore _termsConsentStore;
     private readonly IUsbBenchmarkService _usbBenchmarkService;
     private readonly IDriveValidationService _driveValidationService;
-    private readonly ICopilotService _copilotService;
-    private readonly ICopilotProviderRegistry _copilotProviderRegistry;
     private readonly IUsbIntelligenceService _usbIntelligenceService;
     private readonly IPortPowerTelemetryService _portPowerTelemetryService;
     private readonly IElevatedScanTelemetryCache _elevatedScanTelemetryCache;
@@ -89,7 +85,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private string _usbMappingLabelDraft = string.Empty;
     private readonly string _benchmarkCachePath;
     private readonly string _driveValidationCachePath;
-    private readonly string _copilotConfigPath;
     private readonly string _betaConfigPath;
     private readonly string _updateConfigPath;
     private readonly string _usbBuilderProfileConfigPath;
@@ -120,6 +115,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private bool _termsConsentDeclined;
     private string _pendingInstallerUrl = string.Empty;
     private string _pendingAdvancedInstallerUrl = string.Empty;
+    private string _pendingInstallerExpectedSha256 = string.Empty;
+    private string _pendingAdvancedInstallerExpectedSha256 = string.Empty;
     private string _pendingReleaseNotesUrl = string.Empty;
     private string _pendingVersionLabel = string.Empty;
     private string _pendingZipUrlForClipboard = string.Empty;
@@ -135,6 +132,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private Visibility _appUpdateViewReleaseNotesVisibility = Visibility.Visible;
     private Visibility _appUpdateDiagnosticsHintVisibility = Visibility.Collapsed;
     private bool _verboseLiveLogs;
+    private Visibility _betaWelcomeVisibility = Visibility.Collapsed;
+    private bool _neverShowWelcomeCenterAgain;
     private UsbManagedHeartbeatPhase _usbManagedHeartbeatPhase = UsbManagedHeartbeatPhase.Unknown;
     private UsbDeviceChangeDebouncer? _usbDeviceChangeDebouncer;
     private UsbDeviceChangeWindowHook? _usbDeviceChangeWindowHook;
@@ -144,12 +143,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private CancellationTokenSource? _autoUsbBenchmarkDebounceCts;
     private readonly UsbAutomaticBenchmarkPolicy _usbAutomaticBenchmarkPolicy = new();
     private DispatcherTimer? _usbIntelligenceDebounceTimer;
-    private CancellationTokenSource? _copilotGenerationCancellation;
-    private CopilotSettings _copilotSettings = new();
-    private readonly string _kyraMemoryPath;
-    private readonly string _kyraMachineMemoryPath;
-    private string _kyraSanitizedContextPreviewText = string.Empty;
-    private string _kyraAssistantStatusSummary = string.Empty;
     private bool _disposed;
 
     private enum UsbBenchmarkHostInterruptKind
@@ -189,11 +182,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private string _usbProgressTransferText = "Transferred: unknown";
     private string _usbProgressSpeedText = "Speed: unknown";
     private string _usbProgressHeartbeatText = "Waiting for USB/build activity.";
-    private Visibility _betaWelcomeVisibility = Visibility.Collapsed;
-    private bool _neverShowWelcomeCenterAgain;
-    private Visibility _betaWelcomeKyraConfirmVisibility = Visibility.Collapsed;
-    private string _betaWelcomeKyraConfirmSummary = string.Empty;
-    private bool _betaWelcomeKyraConfirmHasSelection;
     private bool _betaTesterEntitlement;
     private Visibility _betaTesterEntitlementVisibility = Visibility.Collapsed;
     private Brush _statusBackground = RunningBackground;
@@ -327,31 +315,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private string _toolkitLinkVerificationExplanationText =
         "Safe HTTP-only verification checks HEAD/ranged GET metadata — downloads/archives are not executed.";
     private string _toolkitLinkVerificationSummaryForCopy = string.Empty;
-    private string _copilotInput = string.Empty;
-    private string _kyraActivityStatusText = string.Empty;
 
-    private string _kyraGatewayProviderStatusSummary =
-        "Tap “Check gateway status” for server-side provider readiness. The app never logs your gateway token.";
-    private bool _kyraSlashPopupOpen;
-    private bool _kyraHasSystemScanReport;
-    private bool _kyraHasRecentWarningLog;
-    private bool _kyraShowLiveToolsQuickButton;
-    private int _kyraSlashSelectedIndex = -1;
-    private DateTime _kyraSlashPopupQuietUntilUtc = DateTime.MinValue;
-    private bool _betaWelcomeKyraShareRepair;
-    private bool _betaWelcomeKyraShareHardware;
-    private bool _betaWelcomeKyraShareResolved;
-    private bool _betaWelcomeKyraShareCrash;
-    private string _copilotContextText = "Load a local device snapshot and select a USB target to load Kyra context.";
-    private string _copilotContextSummaryText = "Device Context\n- Device: no local snapshot loaded\n- CPU: unknown\n- RAM: unknown\n- GPU: unknown\n- Storage: unknown\n- Battery: unknown\n- USB: none selected";
-    private string _copilotProviderSummaryText = "Local Offline Rules: Ready\nOnline AI: Not configured\nLocal AI: Not configured\nPricing Lookup: Not configured";
-    private string _copilotProviderBadgeText = "Offline Ready";
-    private string _copilotPrivacyBadgeText = "Local Only";
-    private string _copilotActiveProviderText = "Provider: Local Kyra";
-    private string _copilotDiagnosticsSummaryText = "Kyra online assistants enabled: 0 | configured: 0 | Fallback: Local Kyra";
-    private string _copilotLastProviderFailureText = "Last provider failure: none";
-    private Visibility _copilotTechnicalContextVisibility = Visibility.Collapsed;
-    private string _copilotTechnicalContextButtonText = "View technical context";
     private string _usbIntelligenceBuilderHintText =
         "USB Intelligence: select a USB target to classify the port speed and builder readiness.";
 
@@ -447,7 +411,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private string _diagnosticsUsbChipText = "USB: none";
     private string _diagnosticsSystemChipText = "System Intelligence: unknown";
     private string _diagnosticsToolkitChipText = "Toolkit: unknown";
-    private string _diagnosticsKyraChipText = "Kyra: unknown";
     private string _diagnosticsUpdateChipText = "Update: unknown";
     private string _diagnosticsLogSearchText = string.Empty;
     private DateTimeOffset? _lastCommandStartedAt;
@@ -456,17 +419,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private string _lastCommandStatusText = "Not started";
     private string _lastCommandSummaryText = "No command summary yet.";
 
-    private string _copilotRoutingPolicyText = string.Empty;
-    private string _selectedCopilotMode = "Offline Local";
     private bool _allowOnlineSystemContextSharing;
     private bool _enableFreeProviderPool = true;
     private bool _enableByokProviders;
     private bool _useLatestSystemScanContext = true;
-    private bool _isCopilotGenerating;
-    private string _copilotOnlineStatusText = "Offline Only - no data leaves this machine.";
-    private Brush _copilotOnlineStatusBackground = ReadyBackground;
-    private Brush _copilotOnlineStatusBorderBrush = ReadyBorder;
-    private Brush _copilotOnlineStatusForeground = ReadyForeground;
     private string _wslRunnerSummaryText = string.Empty;
     private string _wslRunnerOutputText = string.Empty;
     private string _wslRunnerCommandInput = string.Empty;
@@ -534,8 +490,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         IManagedDownloadResolverService managedDownloadResolverService,
         IAppRuntimeService appRuntimeService,
         IUsbBenchmarkService usbBenchmarkService,
-        ICopilotService copilotService,
-        ICopilotProviderRegistry copilotProviderRegistry,
         IWslCommandExecutor? wslExecutor = null,
         IUsbIntelligenceService? usbIntelligenceService = null,
         IAutoIntelligenceOrchestrator? autoIntelligenceOrchestrator = null,
@@ -559,8 +513,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             out _);
         _usbBenchmarkService = usbBenchmarkService;
         _driveValidationService = driveValidationService ?? new DriveValidationService();
-        _copilotService = copilotService;
-        _copilotProviderRegistry = copilotProviderRegistry;
         _usbIntelligenceService = usbIntelligenceService ?? new UsbIntelligenceService();
         _portPowerTelemetryService = portPowerTelemetryService ?? new PortPowerTelemetryService();
         _elevatedScanTelemetryCache = elevatedScanTelemetryCache ?? new ElevatedScanTelemetryCache();
@@ -576,9 +528,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _machineProfileStore = new MachineProfileStore(_appRuntimeService.RuntimeRoot);
         _benchmarkCachePath = Path.Combine(_appRuntimeService.RuntimeRoot, "cache", "usb-benchmarks.json");
         _driveValidationCachePath = Path.Combine(_appRuntimeService.RuntimeRoot, "cache", "drive-validation-results.json");
-        _copilotConfigPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "copilot-settings.json");
-        _kyraMemoryPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "kyra-memory.json");
-        _kyraMachineMemoryPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "kyra-machine-memory.json");
         _betaConfigPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "beta-settings.json");
         _updateConfigPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "update-settings.json");
         _usbBuilderProfileConfigPath = Path.Combine(_appRuntimeService.RuntimeRoot, "config", "usb-builder-profile.json");
@@ -589,7 +538,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _updateCheckService = new GitHubReleaseUpdateCheckService();
         LoadBenchmarkCache();
         LoadDriveValidationCache();
-        LoadCopilotSettings();
         LoadBetaSettings();
         LoadUpdateSettings();
         LoadUsbBuilderProfileSettings();
@@ -668,7 +616,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         AcceptTermsCommand = new AsyncRelayCommand(AcceptTermsAsync, CanAcceptTerms);
         DeclineTermsCommand = new RelayCommand(DeclineTerms);
         ExitForgerEmsCommand = new RelayCommand(ExitForgerEms);
-        OpenWelcomeCenterCommand = new RelayCommand(OpenWelcomeCenter);
         OpenUbuntuTerminalCommand = new AsyncRelayCommand(OpenUbuntuTerminalAsync, () => !IsBusy);
         RefreshSafeTestingEnvironmentCommand = new AsyncRelayCommand(RefreshSafeTestingEnvironmentAsync, () => !IsBusy);
         CopySafeTestingSummaryCommand = new RelayCommand(CopySafeTestingSummary);
@@ -712,12 +659,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         CopyLocalFileSafetyReportCommand = new RelayCommand(CopyLocalFileSafetyReport, () => !string.IsNullOrWhiteSpace(_localFileSafetyResultText));
         OpenLocalSafetyQuarantineFolderCommand = new RelayCommand(OpenLocalSafetyQuarantineFolder);
         CopyLocalFileToQuarantineCommand = new RelayCommand(CopyLocalFileToQuarantine, () => !IsBusy && !string.IsNullOrWhiteSpace(_localFileSafetyPath));
-        SendCopilotMessageCommand = new AsyncRelayCommand(SendCopilotMessageAsync, () => !IsCopilotGenerating && !string.IsNullOrWhiteSpace(CopilotInput));
-        AskCopilotValueCommand = new AsyncRelayCommand(() => AskCopilotAsync("/resale"), () => !IsCopilotGenerating);
-        AskCopilotUpgradeCommand = new AsyncRelayCommand(() => AskCopilotAsync("/resale"), () => !IsCopilotGenerating);
-        AskCopilotLagCommand = new AsyncRelayCommand(() => AskCopilotAsync("/diagnose lag"), () => !IsCopilotGenerating);
-        AskCopilotOsCommand = new AsyncRelayCommand(() => AskCopilotAsync("/os"), () => !IsCopilotGenerating);
-        AskCopilotUsbCommand = new AsyncRelayCommand(() => AskCopilotAsync("/usb"), () => !IsCopilotGenerating);
         StartUsbPortMappingWorkflowCommand = new RelayCommand(StartUsbPortMappingWorkflow, () => SelectedUsbTarget is not null);
         CaptureUsbMappingBeforeCommand = new RelayCommand(CaptureUsbMappingBefore, () => SelectedUsbTarget is not null);
         CaptureUsbMappingAfterCommand = new RelayCommand(CaptureUsbMappingAfter, () => SelectedUsbTarget is not null);
@@ -731,46 +672,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         RunDriveValidatorCommand = new AsyncRelayCommand(RunDriveValidatorAsync, CanRunDriveValidator);
         CancelDriveValidatorCommand = new RelayCommand(CancelDriveValidator, () => _driveValidationCts is { Token.IsCancellationRequested: false });
         OpenDriveValidatorWizardCommand = new RelayCommand(OpenDriveValidatorWizard);
-        AskCopilotWarningCommand = new AsyncRelayCommand(() => AskCopilotAsync("/warning"), () => !IsCopilotGenerating);
-        AskCopilotListingCommand = new AsyncRelayCommand(() => AskCopilotAsync("/listing facebook"), () => !IsCopilotGenerating);
-        AskCopilotLiveToolsCommand = new AsyncRelayCommand(() => AskCopilotAsync("/provider"), () => !IsCopilotGenerating);
-        AskCopilotFixCodeCommand = new AsyncRelayCommand(() => AskCopilotAsync("/fixcode"), () => !IsCopilotGenerating);
-        ClearCopilotHistoryCommand = new RelayCommand(ClearCopilotHistoryAndCache);
-        StopCopilotGenerationCommand = new RelayCommand(StopCopilotGeneration, () => IsCopilotGenerating);
-        UseLatestSystemScanContextCommand = new RelayCommand(UseLatestSystemScanContextNow);
-        ToggleCopilotTechnicalContextCommand = new RelayCommand(ToggleCopilotTechnicalContext);
-        OpenKyraAdvancedSettingsCommand = new RelayCommand(OpenKyraAdvancedSettings);
-        TestCopilotConnectionCommand = new AsyncRelayCommand(TestCopilotConnectionAsync, () => !IsCopilotGenerating);
-        CheckKyraGatewayStatusCommand = new AsyncRelayCommand(CheckKyraGatewayStatusAsync, () => !IsCopilotGenerating);
-        ClearProviderSessionKeysCommand = new RelayCommand(ClearProviderSessionKeys);
-        RefreshCopilotProviderStatusCommand = new RelayCommand(RefreshCopilotProviderStatus);
-        SaveProviderKeyCommand = new RelayCommand<CopilotProviderSettingView>(SaveProviderKey);
-        ClearProviderKeyCommand = new RelayCommand<CopilotProviderSettingView>(ClearProviderKey);
-        UseProviderAsDefaultCommand = new RelayCommand<CopilotProviderSettingView>(UseProviderAsDefault);
-        TestProviderConnectionCommand = new RelayCommand<CopilotProviderSettingView>(provider => _ = TestProviderConnectionAsync(provider));
-        SaveKyraLiveToolsSettingsCommand = new RelayCommand(SaveCopilotSettings);
-        ExportKyraMemoryCommand = new RelayCommand(ExportKyraMemory);
-        ClearKyraMemoryCommand = new RelayCommand(ClearKyraMemory);
-        ViewKyraMemoryCommand = new RelayCommand(ViewKyraMemory);
-        ViewKyraCommunityPayloadPreviewCommand = new RelayCommand(ViewKyraCommunityPayloadPreview);
-        ExportKyraIntelligenceMemoryCommand = new RelayCommand(ExportKyraIntelligenceMemory);
-        DeleteKyraIntelligenceMemoryCommand = new RelayCommand(DeleteKyraIntelligenceMemory);
-        KeepKyraLocalOnlyCommand = new RelayCommand(KeepKyraLocalOnly);
-        EnableKyraCommunityLearningCommand = new RelayCommand(EnableKyraCommunityLearning);
-        LearnMoreKyraIntelligenceCommand = new RelayCommand(ShowPrivacy);
-        KyraFeedbackThisFixedItCommand = new RelayCommand<CopilotChatMessage>(ApplyKyraFeedbackThisFixedIt);
-        KyraFeedbackStillBrokenCommand = new RelayCommand<CopilotChatMessage>(ApplyKyraFeedbackStillBroken);
-        KyraFeedbackNotSureCommand = new RelayCommand<CopilotChatMessage>(ApplyKyraFeedbackNotSure);
-        KyraFeedbackSaveRepairNoteCommand = new RelayCommand<CopilotChatMessage>(ApplyKyraFeedbackSaveRepairNote);
-        BetaWelcomeKyraKeepLocalOnlyCommand = new RelayCommand(BetaWelcomeKyraKeepLocalOnly);
-        BetaWelcomeKyraHelpImproveCommand = new RelayCommand(BetaWelcomeKyraHelpImprove);
-        BetaWelcomeKyraViewSharingPreviewCommand = new RelayCommand(BetaWelcomeKyraViewSharingPreview);
-        BetaWelcomeKyraConfirmEnableCommand = new RelayCommand(BetaWelcomeKyraConfirmEnable);
-        BetaWelcomeKyraCancelConfirmCommand = new RelayCommand(BetaWelcomeKyraCancelConfirm);
-        NeverShowWelcomeCenterAgainCommand = new RelayCommand(NeverShowWelcomeCenterAgain);
-        ShowTermsOfServiceCommand = new RelayCommand(ShowTermsOfService);
-        ResetKyraMachineLearningCommand = new RelayCommand(ResetKyraMachineLearning);
+
         OpenLogsFolderCommand = new RelayCommand(() => OpenFolder(_appRuntimeService.LogsRoot, "logs folder", createIfMissing: true));
+        OpenWelcomeCenterCommand = new RelayCommand(OpenWelcomeCenter);
+        NeverShowWelcomeCenterAgainCommand = new RelayCommand(NeverShowWelcomeCenterAgain);
         SelectDrForgeCliPathCommand = new RelayCommand(SelectDrForgeCliPath, CanRunDrForgeCliAction);
         CheckDrForgePackageCommand = new AsyncRelayCommand(CheckDrForgePackageAsync, CanRunDrForgeCliAction);
         RefreshDrForgeStatusCommand = new AsyncRelayCommand(CheckDrForgePackageAsync, CanRunDrForgeCliAction);
@@ -801,20 +706,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ClearIgnoredAppUpdateVersionCommand.RaiseCanExecuteChanged();
         CheckForUpdatesNowCommand.RaiseCanExecuteChanged();
         InitializeDriverHub();
+        InitializeWindowsMaintenance();
 
-        CopilotMessages.Add(new CopilotChatMessage
-        {
-            Role = "Kyra",
-            Text = KyraOnboardingCopy.BuildInitialWelcomeMessage(_copilotSettings),
-            SourceLabel = "Kyra"
-        });
 
-        Logs.CollectionChanged += (_, _) => RefreshKyraQuickPromptVisibilities();
 
         RefreshWslRunnerSummary();
         RefreshDiagnosticsAuxiliaryText();
         RefreshEmbeddedWslDiagnosticsBindings();
-        RefreshKyraQuickPromptVisibilities();
         RefreshToolkitProfileOptions();
         RefreshToolkitDownloadPlan();
         ScheduleBackgroundUpdateCheck();
@@ -838,25 +736,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<string> ToolkitProfileOptions { get; } = [];
 
-    public ObservableCollection<CopilotChatMessage> CopilotMessages { get; } = [];
 
-    public ObservableCollection<string> KyraSlashSuggestions { get; } = [];
 
-    public ObservableCollection<KyraToolStatusRowView> KyraToolStatusRows { get; } = [];
 
-    /// <summary>Bind Kyra Advanced → Live APIs fields; same instance persisted with copilot settings.</summary>
-    public KyraLiveToolsSettings KyraLiveToolsForBinding
-    {
-        get
-        {
-            _copilotSettings ??= new CopilotSettings();
-            _copilotSettings.LiveTools ??= new KyraLiveToolsSettings();
-            return _copilotSettings.LiveTools;
-        }
-    }
 
-    public ObservableCollection<CopilotProviderSettingView> CopilotProviderSettings { get; } = [];
-    public ObservableCollection<CopilotProviderSettingView> LocalAiProviderSettings { get; } = [];
 
     public IReadOnlyList<string> LogLevelFilterOptions { get; } = ["All", "Info", "Success", "Warning", "Error"];
 
@@ -934,7 +817,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         "manual"
     ];
 
-    public IReadOnlyList<string> CopilotModeOptions { get; } = ["ForgerEMS Beta Gateway", "BYOK", "Local Only", "Offline Only", "Free API Pool", "Hybrid", "Online/API", "Ask First"];
 
     public AsyncRelayCommand RefreshAllCommand { get; }
 
@@ -1047,7 +929,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public RelayCommand ExitForgerEmsCommand { get; }
 
-    public RelayCommand OpenWelcomeCenterCommand { get; }
 
     public AsyncRelayCommand OpenUbuntuTerminalCommand { get; }
 
@@ -1107,17 +988,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public RelayCommand CopyLocalFileToQuarantineCommand { get; }
 
-    public AsyncRelayCommand SendCopilotMessageCommand { get; }
 
-    public AsyncRelayCommand AskCopilotValueCommand { get; }
 
-    public AsyncRelayCommand AskCopilotUpgradeCommand { get; }
 
-    public AsyncRelayCommand AskCopilotLagCommand { get; }
 
-    public AsyncRelayCommand AskCopilotOsCommand { get; }
 
-    public AsyncRelayCommand AskCopilotUsbCommand { get; }
 
     public RelayCommand StartUsbPortMappingWorkflowCommand { get; }
 
@@ -1141,83 +1016,51 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public RelayCommand OpenDriveValidatorWizardCommand { get; }
 
-    public AsyncRelayCommand AskCopilotWarningCommand { get; }
 
-    public AsyncRelayCommand AskCopilotListingCommand { get; }
 
-    public AsyncRelayCommand AskCopilotLiveToolsCommand { get; }
 
-    public AsyncRelayCommand AskCopilotFixCodeCommand { get; }
 
-    public RelayCommand ClearCopilotHistoryCommand { get; }
 
-    public RelayCommand StopCopilotGenerationCommand { get; }
 
     public RelayCommand UseLatestSystemScanContextCommand { get; }
 
-    public RelayCommand ToggleCopilotTechnicalContextCommand { get; }
 
-    public RelayCommand OpenKyraAdvancedSettingsCommand { get; }
 
-    public AsyncRelayCommand TestCopilotConnectionCommand { get; }
 
-    public AsyncRelayCommand CheckKyraGatewayStatusCommand { get; }
 
     public RelayCommand ClearProviderSessionKeysCommand { get; }
 
-    public RelayCommand RefreshCopilotProviderStatusCommand { get; }
 
-    public RelayCommand<CopilotProviderSettingView> SaveProviderKeyCommand { get; }
 
-    public RelayCommand<CopilotProviderSettingView> ClearProviderKeyCommand { get; }
 
-    public RelayCommand<CopilotProviderSettingView> UseProviderAsDefaultCommand { get; }
 
-    public RelayCommand<CopilotProviderSettingView> TestProviderConnectionCommand { get; }
 
-    public RelayCommand SaveKyraLiveToolsSettingsCommand { get; }
 
-    public RelayCommand ExportKyraMemoryCommand { get; }
 
-    public RelayCommand ClearKyraMemoryCommand { get; }
 
-    public RelayCommand ViewKyraMemoryCommand { get; }
 
-    public RelayCommand ViewKyraCommunityPayloadPreviewCommand { get; }
 
-    public RelayCommand ExportKyraIntelligenceMemoryCommand { get; }
 
-    public RelayCommand DeleteKyraIntelligenceMemoryCommand { get; }
 
-    public RelayCommand KeepKyraLocalOnlyCommand { get; }
 
-    public RelayCommand EnableKyraCommunityLearningCommand { get; }
 
-    public RelayCommand LearnMoreKyraIntelligenceCommand { get; }
 
-    public RelayCommand<CopilotChatMessage> KyraFeedbackThisFixedItCommand { get; }
 
-    public RelayCommand<CopilotChatMessage> KyraFeedbackStillBrokenCommand { get; }
 
-    public RelayCommand<CopilotChatMessage> KyraFeedbackNotSureCommand { get; }
 
-    public RelayCommand<CopilotChatMessage> KyraFeedbackSaveRepairNoteCommand { get; }
 
-    public RelayCommand BetaWelcomeKyraKeepLocalOnlyCommand { get; }
 
-    public RelayCommand BetaWelcomeKyraHelpImproveCommand { get; }
 
-    public RelayCommand BetaWelcomeKyraViewSharingPreviewCommand { get; }
 
-    public RelayCommand BetaWelcomeKyraConfirmEnableCommand { get; }
 
-    public RelayCommand BetaWelcomeKyraCancelConfirmCommand { get; }
 
-    public RelayCommand NeverShowWelcomeCenterAgainCommand { get; }
 
     public RelayCommand ShowTermsOfServiceCommand { get; }
 
-    public RelayCommand ResetKyraMachineLearningCommand { get; }
+    public RelayCommand OpenWelcomeCenterCommand { get; }
+
+    public RelayCommand NeverShowWelcomeCenterAgainCommand { get; }
+
 
     public RelayCommand CopySupportEmailCommand { get; }
 
@@ -1269,14 +1112,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public RelayCommand CopyDrForgeReportSummaryCommand { get; }
 
-    /// <summary>Assigned by MainWindow to open the Kyra Advanced Settings dialog.</summary>
-    public Action? OpenKyraAdvancedSettingsAction { get; set; }
 
     /// <summary>Navigates main window tab when header contains the given substring (e.g. "Settings").</summary>
     public Action<string>? MainTabNavigationAction { get; set; }
 
     /// <summary>Assigned by MainWindow to show small modeless Welcome Center helper windows.</summary>
     public Action<string, string, string?, Action?>? WelcomeCenterInfoAction { get; set; }
+
 
     /// <summary>Assigned by MainWindow after Loaded so first-run consent can start the normal app initialization path.</summary>
     public Func<Task>? PostConsentInitializeAsync { get; set; }
@@ -1372,7 +1214,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(HeaderUsbTargetText));
             OnPropertyChanged(nameof(ToolkitTargetChipText));
             OnPropertyChanged(nameof(LogStatusLineText));
-            RefreshCopilotContextText();
 
             if (!_suppressSelectionRefresh)
             {
@@ -1616,11 +1457,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public string AppVersionText { get; } = AppReleaseInfo.DisplayVersion;
 
-    public string PublicPreviewBannerText { get; } = AppReleaseInfo.PublicPreviewBannerLine;
+    public string ProductBannerText { get; } = AppReleaseInfo.ProductBannerLine;
 
     public string FeatureMaturityGuideText => FeatureStatusService.BuildFeatureMaturityGuide();
 
-    public string KyraProviderHubConfigHealthSummary => KyraProviderHubConfigHealthFormatter.BuildSummary();
 
     public string HeaderUsbTargetText => SelectedUsbTarget is null ? "USB: none" : $"USB: {SelectedUsbTarget.RootPath}";
 
@@ -1719,29 +1559,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _usbProgressHeartbeatText, value);
     }
 
-    public Visibility BetaWelcomeVisibility
-    {
-        get => _betaWelcomeVisibility;
-        private set => SetProperty(ref _betaWelcomeVisibility, value);
-    }
 
-    public Visibility BetaWelcomeKyraConfirmVisibility
-    {
-        get => _betaWelcomeKyraConfirmVisibility;
-        private set => SetProperty(ref _betaWelcomeKyraConfirmVisibility, value);
-    }
 
-    public string BetaWelcomeKyraConfirmSummary
-    {
-        get => _betaWelcomeKyraConfirmSummary;
-        private set => SetProperty(ref _betaWelcomeKyraConfirmSummary, value);
-    }
 
-    public bool BetaWelcomeKyraConfirmHasSelection
-    {
-        get => _betaWelcomeKyraConfirmHasSelection;
-        private set => SetProperty(ref _betaWelcomeKyraConfirmHasSelection, value);
-    }
 
     public bool BetaTesterEntitlement
     {
@@ -1759,6 +1579,12 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         get => _betaTesterEntitlementVisibility;
         private set => SetProperty(ref _betaTesterEntitlementVisibility, value);
+    }
+
+    public Visibility BetaWelcomeVisibility
+    {
+        get => _betaWelcomeVisibility;
+        private set => SetProperty(ref _betaWelcomeVisibility, value);
     }
 
     public Brush StatusBackground
@@ -2205,6 +2031,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public string WelcomeCenterFooterCopyrightText { get; } = BetaSupportInfo.WelcomeCenterFooterCopyright;
 
+
     public string SystemIntelligenceStatusText
     {
         get => _systemIntelligenceStatusText;
@@ -2424,58 +2251,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _systemIntelligenceStatusForeground, value);
     }
 
-    public string CopilotInput
-    {
-        get => _copilotInput;
-        set
-        {
-            if (SetProperty(ref _copilotInput, value))
-            {
-                OnPropertyChanged(nameof(CopilotInputPlaceholderVisibility));
-                SendCopilotMessageCommand.RaiseCanExecuteChanged();
-                RefreshKyraSlashSuggestions();
-            }
-        }
-    }
 
-    public string CopilotContextText
-    {
-        get => _copilotContextText;
-        private set => SetProperty(ref _copilotContextText, value);
-    }
 
-    public string CopilotContextSummaryText
-    {
-        get => _copilotContextSummaryText;
-        private set => SetProperty(ref _copilotContextSummaryText, value);
-    }
 
-    public string CopilotProviderSummaryText
-    {
-        get => _copilotProviderSummaryText;
-        private set => SetProperty(ref _copilotProviderSummaryText, value);
-    }
 
-    public string CopilotProviderBadgeText
-    {
-        get => _copilotProviderBadgeText;
-        private set => SetProperty(ref _copilotProviderBadgeText, value);
-    }
 
-    public string CopilotActiveProviderText
-    {
-        get => _copilotActiveProviderText;
-        private set => SetProperty(ref _copilotActiveProviderText, value);
-    }
 
-    public string CopilotDiagnosticsSummaryText
-    {
-        get => _copilotDiagnosticsSummaryText;
-        private set => SetProperty(ref _copilotDiagnosticsSummaryText, value);
-    }
 
 #pragma warning disable CA1822 // Instance properties consumed by WPF bindings.
-    public string CopilotProviderEnvironmentHelpText => CopilotProviderEnvironmentVariableNames.UxHowToConfigure;
 
     public string BetaIssueSupportLineText => BetaSupportInfo.BetaIssueSupportLine;
 
@@ -2489,7 +2272,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         $"Installed version: ForgerEMS v{AppReleaseInfo.Version} ({AppReleaseInfo.DisplayVersion})";
 
     public string AppUpdateSettingsSourceLine =>
-        "Update source: GitHub Releases on Forger-Digital-Solutions/ForgerEMS. Latest release is chosen by GitHub release publish date, then assets are inspected.";
+        "Update source: GitHub Releases on Forger-Digital-Solutions/ForgerEMS. Latest release is chosen by highest semantic version tag, then assets are inspected.";
 
     public string AppUpdateSettingsChannelLine =>
         IncludeBetaRcChannels
@@ -2669,479 +2452,53 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             ? $"Last checked: {utc.ToLocalTime():g}"
             : "Last checked: never";
 
-    public string CopilotLastProviderFailureText
-    {
-        get => _copilotLastProviderFailureText;
-        private set => SetProperty(ref _copilotLastProviderFailureText, value);
-    }
 
-    public string CopilotPrivacyBadgeText
-    {
-        get => _copilotPrivacyBadgeText;
-        private set => SetProperty(ref _copilotPrivacyBadgeText, value);
-    }
 
-    public Visibility CopilotTechnicalContextVisibility
-    {
-        get => _copilotTechnicalContextVisibility;
-        private set => SetProperty(ref _copilotTechnicalContextVisibility, value);
-    }
 
-    public string CopilotTechnicalContextButtonText
-    {
-        get => _copilotTechnicalContextButtonText;
-        private set => SetProperty(ref _copilotTechnicalContextButtonText, value);
-    }
 
-    public string CopilotRoutingPolicyText
-    {
-        get => _copilotRoutingPolicyText;
-        private set
-        {
-            if (SetProperty(ref _copilotRoutingPolicyText, value))
-            {
-                OnPropertyChanged(nameof(CopilotRoutingPolicyVisibility));
-            }
-        }
-    }
 
-    public Visibility CopilotRoutingPolicyVisibility =>
-        string.IsNullOrWhiteSpace(_copilotRoutingPolicyText) ? Visibility.Collapsed : Visibility.Visible;
 
-    public string KyraSanitizedContextPreviewText
-    {
-        get => _kyraSanitizedContextPreviewText;
-        private set => SetProperty(ref _kyraSanitizedContextPreviewText, value);
-    }
 
-    public string KyraAssistantStatusSummary
-    {
-        get => _kyraAssistantStatusSummary;
-        private set => SetProperty(ref _kyraAssistantStatusSummary, value);
-    }
 
-    public bool KyraApiFirstRouting
-    {
-        get => _copilotSettings.ApiFirstRouting;
-        set
-        {
-            if (_copilotSettings.ApiFirstRouting != value)
-            {
-                _copilotSettings.ApiFirstRouting = value;
-                OnPropertyChanged();
-                SaveCopilotSettings();
-            }
-        }
-    }
 
-    /// <summary>When false (beta default), Kyra Advanced hides BYOK/session key editing and treats providers as operator-configured.</summary>
-    public bool KyraDeveloperManagedProviderUi =>
-        _copilotSettings.ProviderConfigurationMode == KyraProviderConfigurationMode.DeveloperManaged;
 
-    public bool KyraTesterEditableProviders =>
-        _copilotSettings.ProviderConfigurationMode == KyraProviderConfigurationMode.UserManagedFuture;
 
-    /// <summary>Expose raw session API key fields only for tester mode or when FORGEREMS_DEV_PROVIDER_SETTINGS=1.</summary>
-    public bool KyraShowDeveloperProviderPlumbing =>
-        KyraTesterEditableProviders ||
-        string.Equals(Environment.GetEnvironmentVariable("FORGEREMS_DEV_PROVIDER_SETTINGS"), "1", StringComparison.OrdinalIgnoreCase);
 
-    public bool KyraOfflineFallbackEnabled
-    {
-        get => _copilotSettings.OfflineFallbackEnabled;
-        set
-        {
-            if (_copilotSettings.OfflineFallbackEnabled != value)
-            {
-                _copilotSettings.OfflineFallbackEnabled = value;
-                OnPropertyChanged();
-                SaveCopilotSettings();
-            }
-        }
-    }
 
-    public bool KyraPersistentMemoryEnabled
-    {
-        get => _copilotSettings.KyraPersistentMemoryEnabled;
-        set
-        {
-            if (_copilotSettings.KyraPersistentMemoryEnabled != value)
-            {
-                _copilotSettings.KyraPersistentMemoryEnabled = value;
-                try
-                {
-                    var store = new KyraPersistentMemoryStore(_kyraMemoryPath);
-                    var doc = store.Load();
-                    doc.Enabled = value;
-                    KyraPersistentMemoryStore.SanitizeInPlace(doc);
-                    store.Save(doc);
-                }
-                catch
-                {
-                }
 
-                OnPropertyChanged();
-                SaveCopilotSettings();
-            }
-        }
-    }
 
-    public bool KyraLocalRepairMemoryEnabled
-    {
-        get => _copilotSettings.KyraLocalRepairMemoryEnabled;
-        set
-        {
-            if (_copilotSettings.KyraLocalRepairMemoryEnabled != value)
-            {
-                _copilotSettings.KyraLocalRepairMemoryEnabled = value;
-                OnPropertyChanged();
-                SaveCopilotSettings();
-            }
-        }
-    }
 
-    public bool KyraCommunitySharingEnabled
-    {
-        get => _copilotSettings.KyraCommunitySharingEnabled;
-        set
-        {
-            if (_copilotSettings.KyraCommunitySharingEnabled != value)
-            {
-                _copilotSettings.KyraCommunitySharingEnabled = value;
-                if (!value)
-                {
-                    _copilotSettings.KyraShareResolvedIssueFixPatterns = false;
-                    _copilotSettings.KyraShareHardwareCompatibilityPerformancePatterns = false;
-                    _copilotSettings.KyraShareCrashErrorDiagnostics = false;
-                    OnPropertyChanged(nameof(KyraShareResolvedIssueFixPatterns));
-                    OnPropertyChanged(nameof(KyraShareHardwareCompatibilityPerformancePatterns));
-                    OnPropertyChanged(nameof(KyraShareCrashErrorDiagnostics));
-                }
 
-                OnPropertyChanged();
-                SaveCopilotSettings();
-            }
-        }
-    }
 
-    public bool KyraShareResolvedIssueFixPatterns
-    {
-        get => _copilotSettings.KyraShareResolvedIssueFixPatterns;
-        set
-        {
-            if (value && !_copilotSettings.KyraCommunitySharingEnabled)
-            {
-                _copilotSettings.KyraCommunitySharingEnabled = true;
-                OnPropertyChanged(nameof(KyraCommunitySharingEnabled));
-            }
 
-            var effective = value && _copilotSettings.KyraCommunitySharingEnabled;
-            if (_copilotSettings.KyraShareResolvedIssueFixPatterns == effective)
-            {
-                return;
-            }
 
-            _copilotSettings.KyraShareResolvedIssueFixPatterns = effective;
-            OnPropertyChanged();
-            SaveCopilotSettings();
-        }
-    }
 
-    public bool KyraShareHardwareCompatibilityPerformancePatterns
-    {
-        get => _copilotSettings.KyraShareHardwareCompatibilityPerformancePatterns;
-        set
-        {
-            if (value && !_copilotSettings.KyraCommunitySharingEnabled)
-            {
-                _copilotSettings.KyraCommunitySharingEnabled = true;
-                OnPropertyChanged(nameof(KyraCommunitySharingEnabled));
-            }
 
-            var effective = value && _copilotSettings.KyraCommunitySharingEnabled;
-            if (_copilotSettings.KyraShareHardwareCompatibilityPerformancePatterns == effective)
-            {
-                return;
-            }
 
-            _copilotSettings.KyraShareHardwareCompatibilityPerformancePatterns = effective;
-            OnPropertyChanged();
-            SaveCopilotSettings();
-        }
-    }
 
-    public bool KyraShareCrashErrorDiagnostics
-    {
-        get => _copilotSettings.KyraShareCrashErrorDiagnostics;
-        set
-        {
-            if (value && !_copilotSettings.KyraCommunitySharingEnabled)
-            {
-                _copilotSettings.KyraCommunitySharingEnabled = true;
-                OnPropertyChanged(nameof(KyraCommunitySharingEnabled));
-            }
 
-            var effective = value && _copilotSettings.KyraCommunitySharingEnabled;
-            if (_copilotSettings.KyraShareCrashErrorDiagnostics == effective)
-            {
-                return;
-            }
 
-            _copilotSettings.KyraShareCrashErrorDiagnostics = effective;
-            OnPropertyChanged();
-            SaveCopilotSettings();
-        }
-    }
 
-    public string KyraGatewayProviderStatusSummary
-    {
-        get => _kyraGatewayProviderStatusSummary;
-        private set => SetProperty(ref _kyraGatewayProviderStatusSummary, value);
-    }
 
-    public bool KyraRealtimeGatewayEnabled
-    {
-        get => _copilotSettings.KyraRealtimeGatewayEnabled;
-        set
-        {
-            if (_copilotSettings.KyraRealtimeGatewayEnabled != value)
-            {
-                _copilotSettings.KyraRealtimeGatewayEnabled = value;
-                OnPropertyChanged();
-                SaveCopilotSettings();
-            }
-        }
-    }
 
-    public bool KyraRealtimeGatewayResearchEnabled
-    {
-        get => _copilotSettings.KyraRealtimeGatewayResearchEnabled;
-        set
-        {
-            if (_copilotSettings.KyraRealtimeGatewayResearchEnabled != value)
-            {
-                _copilotSettings.KyraRealtimeGatewayResearchEnabled = value;
-                OnPropertyChanged();
-                SaveCopilotSettings();
-            }
-        }
-    }
 
-    public bool KyraRealtimeGatewayResearchConsent
-    {
-        get => _copilotSettings.KyraRealtimeGatewayResearchConsent;
-        set
-        {
-            if (_copilotSettings.KyraRealtimeGatewayResearchConsent != value)
-            {
-                _copilotSettings.KyraRealtimeGatewayResearchConsent = value;
-                OnPropertyChanged();
-                SaveCopilotSettings();
-            }
-        }
-    }
 
-    public bool KyraUseSanitizedSystemIntelligenceContext
-    {
-        get => _copilotSettings.KyraUseSanitizedSystemIntelligenceContext;
-        set
-        {
-            if (_copilotSettings.KyraUseSanitizedSystemIntelligenceContext != value)
-            {
-                _copilotSettings.KyraUseSanitizedSystemIntelligenceContext = value;
-                OnPropertyChanged();
-                SaveCopilotSettings();
-            }
-        }
-    }
 
-    public bool IncludeUsbToolkitStatusInKyraContext
-    {
-        get => _copilotSettings.IncludeUsbToolkitStatusInKyraContext;
-        set
-        {
-            if (_copilotSettings.IncludeUsbToolkitStatusInKyraContext != value)
-            {
-                _copilotSettings.IncludeUsbToolkitStatusInKyraContext = value;
-                OnPropertyChanged();
-                SaveCopilotSettings();
-            }
-        }
-    }
 
-    public bool BetaWelcomeKyraShareRepairIntelligence
-    {
-        get => _betaWelcomeKyraShareRepair;
-        set => SetProperty(ref _betaWelcomeKyraShareRepair, value);
-    }
 
-    public bool BetaWelcomeKyraShareHardwarePatterns
-    {
-        get => _betaWelcomeKyraShareHardware;
-        set => SetProperty(ref _betaWelcomeKyraShareHardware, value);
-    }
 
-    public bool BetaWelcomeKyraShareResolvedCategories
-    {
-        get => _betaWelcomeKyraShareResolved;
-        set => SetProperty(ref _betaWelcomeKyraShareResolved, value);
-    }
 
-    public bool BetaWelcomeKyraShareCrashDiagnostics
-    {
-        get => _betaWelcomeKyraShareCrash;
-        set => SetProperty(ref _betaWelcomeKyraShareCrash, value);
-    }
 
-    public bool UseLatestSystemScanContext
-    {
-        get => _useLatestSystemScanContext;
-        set
-        {
-            if (SetProperty(ref _useLatestSystemScanContext, value))
-            {
-                RefreshCopilotContextText();
-                SaveCopilotSettings();
-            }
-        }
-    }
 
-    public bool AllowOnlineSystemContextSharing
-    {
-        get => _allowOnlineSystemContextSharing;
-        set
-        {
-            if (SetProperty(ref _allowOnlineSystemContextSharing, value))
-            {
-                SaveCopilotSettings();
-            }
-        }
-    }
 
-    public bool EnableFreeProviderPool
-    {
-        get => _enableFreeProviderPool;
-        set
-        {
-            if (SetProperty(ref _enableFreeProviderPool, value))
-            {
-                SaveCopilotSettings();
-            }
-        }
-    }
 
-    public bool EnableByokProviders
-    {
-        get => _enableByokProviders;
-        set
-        {
-            if (SetProperty(ref _enableByokProviders, value))
-            {
-                SaveCopilotSettings();
-            }
-        }
-    }
 
-    public bool IsCopilotGenerating
-    {
-        get => _isCopilotGenerating;
-        private set
-        {
-            if (SetProperty(ref _isCopilotGenerating, value))
-            {
-                OnPropertyChanged(nameof(CopilotThinkingVisibility));
-                OnPropertyChanged(nameof(StopCopilotGenerationVisibility));
-                SendCopilotMessageCommand.RaiseCanExecuteChanged();
-                AskCopilotValueCommand.RaiseCanExecuteChanged();
-                AskCopilotUpgradeCommand.RaiseCanExecuteChanged();
-                AskCopilotLagCommand.RaiseCanExecuteChanged();
-                AskCopilotOsCommand.RaiseCanExecuteChanged();
-                AskCopilotUsbCommand.RaiseCanExecuteChanged();
-                AskCopilotWarningCommand.RaiseCanExecuteChanged();
-                AskCopilotListingCommand.RaiseCanExecuteChanged();
-                AskCopilotLiveToolsCommand.RaiseCanExecuteChanged();
-                AskCopilotFixCodeCommand.RaiseCanExecuteChanged();
-                StopCopilotGenerationCommand.RaiseCanExecuteChanged();
-                TestCopilotConnectionCommand.RaiseCanExecuteChanged();
-                CheckKyraGatewayStatusCommand.RaiseCanExecuteChanged();
-            }
-        }
-    }
 
-    public Visibility CopilotThinkingVisibility => IsCopilotGenerating ? Visibility.Visible : Visibility.Collapsed;
 
-    public Visibility StopCopilotGenerationVisibility => IsCopilotGenerating ? Visibility.Visible : Visibility.Collapsed;
 
-    public Visibility CopilotInputPlaceholderVisibility => string.IsNullOrWhiteSpace(CopilotInput) ? Visibility.Visible : Visibility.Collapsed;
 
-    public string KyraActivityStatusText
-    {
-        get => _kyraActivityStatusText;
-        private set => SetProperty(ref _kyraActivityStatusText, value);
-    }
 
-    public bool KyraSlashPopupOpen
-    {
-        get => _kyraSlashPopupOpen;
-        set => SetProperty(ref _kyraSlashPopupOpen, value);
-    }
 
-    public Visibility KyraListingQuickButtonVisibility =>
-        _kyraHasSystemScanReport ? Visibility.Visible : Visibility.Collapsed;
-
-    public Visibility KyraWarningQuickButtonVisibility =>
-        _kyraHasRecentWarningLog ? Visibility.Visible : Visibility.Collapsed;
-
-    public Visibility KyraLiveToolsQuickButtonVisibility =>
-        _kyraShowLiveToolsQuickButton ? Visibility.Visible : Visibility.Collapsed;
-
-    public int KyraSlashSelectedIndex
-    {
-        get => _kyraSlashSelectedIndex;
-        set
-        {
-            var max = KyraSlashSuggestions.Count - 1;
-            var v = max < 0 ? -1 : Math.Clamp(value, 0, max);
-            SetProperty(ref _kyraSlashSelectedIndex, v);
-        }
-    }
-
-    public string SelectedCopilotMode
-    {
-        get => _selectedCopilotMode;
-        set
-        {
-            if (SetProperty(ref _selectedCopilotMode, value))
-            {
-                UpdateCopilotOnlineIndicator();
-                SaveCopilotSettings();
-            }
-        }
-    }
-
-    public string CopilotOnlineStatusText
-    {
-        get => _copilotOnlineStatusText;
-        private set => SetProperty(ref _copilotOnlineStatusText, value);
-    }
-
-    public Brush CopilotOnlineStatusBackground
-    {
-        get => _copilotOnlineStatusBackground;
-        private set => SetProperty(ref _copilotOnlineStatusBackground, value);
-    }
-
-    public Brush CopilotOnlineStatusBorderBrush
-    {
-        get => _copilotOnlineStatusBorderBrush;
-        private set => SetProperty(ref _copilotOnlineStatusBorderBrush, value);
-    }
-
-    public Brush CopilotOnlineStatusForeground
-    {
-        get => _copilotOnlineStatusForeground;
-        private set => SetProperty(ref _copilotOnlineStatusForeground, value);
-    }
 
     public string WslRunnerSummaryText
     {
@@ -3203,11 +2560,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         private set => SetProperty(ref _diagnosticsToolkitChipText, value);
     }
 
-    public string DiagnosticsKyraChipText
-    {
-        get => _diagnosticsKyraChipText;
-        private set => SetProperty(ref _diagnosticsKyraChipText, value);
-    }
 
     public string DiagnosticsUpdateChipText
     {
@@ -4376,7 +3728,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         };
         AddIncludedUsbBuilderProfileItemArguments(arguments, includedProfileItems);
 
-        await AppendResolvedOverlayArgumentAsync(arguments);
+        await AppendResolvedOverlayArgumentAsync(arguments, FreshResolveOverlayToken());
 
         try
         {
@@ -4431,7 +3783,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         };
         AddIncludedUsbBuilderProfileItemArguments(arguments);
 
-        await AppendResolvedOverlayArgumentAsync(arguments);
+        await AppendResolvedOverlayArgumentAsync(arguments, FreshResolveOverlayToken());
 
         await RunScriptAsync(
             ScriptActionType.UpdateUsb,
@@ -4694,6 +4046,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             "-RetryFailedManagedDownloads"
         };
 
+        await AppendResolvedOverlayArgumentAsync(arguments, FreshResolveOverlayToken());
+
         await RunScriptAsync(
             ScriptActionType.UpdateUsb,
             new PowerShellRunRequest
@@ -4706,7 +4060,19 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             });
     }
 
-    private async Task AppendResolvedOverlayArgumentAsync(System.Collections.Generic.List<string> arguments)
+    private CancellationTokenSource? _resolveOverlayCts;
+
+    private CancellationToken FreshResolveOverlayToken()
+    {
+        _resolveOverlayCts?.Cancel();
+        _resolveOverlayCts?.Dispose();
+        _resolveOverlayCts = new CancellationTokenSource();
+        return _resolveOverlayCts.Token;
+    }
+
+    private async Task AppendResolvedOverlayArgumentAsync(
+        System.Collections.Generic.List<string> arguments,
+        CancellationToken cancellationToken = default)
     {
         if (_managedDownloadResolverService is null || _backendContext is null)
         {
@@ -4722,7 +4088,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             var resolvedPath = await _managedDownloadResolverService.ResolveAndSaveAsync(
                 _backendContext,
                 overlayPath,
-                line => Logs.Add(line));
+                line => AppendLog(line),
+                cancellationToken);
 
             if (File.Exists(resolvedPath))
             {
@@ -4730,9 +4097,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 arguments.Add(resolvedPath);
             }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            AppendLog(new LogLine(DateTimeOffset.UtcNow,
+                "Auto-resolve cancelled; proceeding without a resolved overlay.",
+                LogSeverity.Warning, false, LiveLogChannel.Update));
+        }
         catch (Exception ex)
         {
-            Logs.Add(new LogLine(DateTimeOffset.UtcNow,
+            AppendLog(new LogLine(DateTimeOffset.UtcNow,
                 $"Auto-resolve skipped: {ex.Message}",
                 LogSeverity.Warning, false, LiveLogChannel.Update));
         }
@@ -4792,7 +4165,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         LoadSystemIntelligenceReport();
         await RefreshPortPowerTelemetryAsync().ConfigureAwait(true);
-        TryRecordKyraSystemScanLearning();
     }
 
     private async Task RunElevatedSystemScanAsync(bool resumedFromElevatedLaunch = false)
@@ -4898,7 +4270,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 RefreshUsbIntelligenceFromDisk();
             }
 
-            TryRecordKyraSystemScanLearning();
         }
     }
 
@@ -5537,1378 +4908,56 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private async Task AskCopilotAsync(string prompt)
-    {
-        CopilotInput = prompt;
-        await SendCopilotMessageAsync();
-    }
-
-    private async Task SendCopilotMessageAsync()
-    {
-        var userText = CopilotInput.Trim();
-        if (string.IsNullOrWhiteSpace(userText))
-        {
-            return;
-        }
-
-        // Flush Settings / Kyra Intelligence bindings into _copilotSettings before routing (avoids stale metadata).
-        BuildCopilotSettingsFromUi();
-
-        CopilotMessages.Add(new CopilotChatMessage
-        {
-            Role = "You",
-            Text = userText
-        });
-
-        CopilotInput = string.Empty;
-        KyraSlashPopupOpen = false;
-        KyraSlashSuggestions.Clear();
-
-        var routedIntent = KyraIntentRouter.DetectIntent(userText);
-        var reportPath = Path.Combine(GetRuntimeReportsDirectory(), "system-intelligence-latest.json");
-        var toolkitReportPath = Path.Combine(GetRuntimeReportsDirectory(), "toolkit-health-latest.json");
-        CopilotResponse response;
-        _copilotGenerationCancellation?.Dispose();
-        _copilotGenerationCancellation = new CancellationTokenSource();
-        IsCopilotGenerating = true;
-        KyraActivityStatusText = KyraResponseComposer.KyraThinkingStatus;
-        try
-        {
-            var parse = KyraSlashCommandParser.Parse(userText);
-            if (parse.IsSlashCommand)
-            {
-                ReportKyraActivity("Reading command…");
-                if (KyraLiveSlashCoordinator.IsLiveDataSlash(parse.MatchedCommand))
-                {
-                    ReportKyraActivity("Researching live data…");
-                    var uiSettings = BuildCopilotSettingsFromUi();
-                    var liveFacts = BuildKyraToolHostFacts(reportPath, toolkitReportPath, uiSettings);
-                    var liveRoute = await KyraLiveSlashCoordinator.ExecuteLiveAsync(
-                        parse,
-                        uiSettings,
-                        liveFacts,
-                        _copilotGenerationCancellation.Token);
-                    var liveResp = liveRoute.ToCopilotResponse();
-                    if (liveResp is not null)
-                    {
-                        ReportKyraActivity("Formatting Kyra response…");
-                        response = new CopilotResponse
-                        {
-                            Text = liveResp.Text,
-                            UsedOnlineData = liveResp.UsedOnlineData,
-                            ProviderType = liveResp.ProviderType,
-                            ProviderNotes = liveResp.ProviderNotes,
-                            ResponseSource = liveResp.ResponseSource,
-                            SourceLabel = liveResp.UsedOnlineData ? "Live research" : "Live tool unavailable",
-                            OnlineStatus = "Live tool result",
-                            FallbackUsed = liveResp.FallbackUsed,
-                            OnlineEnhancementApplied = liveResp.OnlineEnhancementApplied,
-                            GroundedInSystemIntelligence = liveResp.GroundedInSystemIntelligence,
-                            ActionSuggestions = liveResp.ActionSuggestions
-                        };
-                        ReportKyraActivity("Done.");
-                    }
-                    else
-                    {
-                        response = new CopilotResponse
-                        {
-                            Text = "Live tool returned no text. Try `/provider`.",
-                            ProviderType = CopilotProviderType.LocalOffline,
-                            OnlineStatus = "Local live tool",
-                            SourceLabel = "Live tool"
-                        };
-                        ReportKyraActivity("Done.");
-                    }
-                }
-                else
-                {
-                    var route = KyraSlashCommandRouter.Handle(parse, BuildKyraSlashHostSnapshot());
-                    var inline = route.ToCopilotResponse();
-                    if (inline is not null)
-                    {
-                        ReportKyraActivity("Formatting Kyra response…");
-                        response = inline;
-                        ReportKyraActivity("Done.");
-                    }
-                    else if (!string.IsNullOrWhiteSpace(route.ForwardPrompt))
-                    {
-                        ReportKyraActivity(DescribeKyraLlmPhase(route.ForwardPrompt));
-                        var req = CreateKyraCopilotRequest(route.ForwardPrompt, reportPath, toolkitReportPath);
-                        response = await _copilotService.GenerateReplyAsync(req, _copilotGenerationCancellation.Token);
-                    }
-                    else
-                    {
-                        response = new CopilotResponse
-                        {
-                            Text = "That command didn’t produce a response. Try `/help`.",
-                            ProviderType = CopilotProviderType.LocalOffline,
-                            OnlineStatus = "Local command routing",
-                            SourceLabel = "Command"
-                        };
-                        ReportKyraActivity("Done.");
-                    }
-                }
-            }
-            else
-            {
-                if (KyraInlineLivePromptRouter.TryBuildWeatherParse(userText, out var weatherParse))
-                {
-                    response = await ExecuteInlineLiveToolAsync(weatherParse, reportPath, toolkitReportPath);
-                }
-                else if (TryBuildLiveToolParseForPrompt(userText, out var liveParse))
-                {
-                    response = await ExecuteInlineLiveToolAsync(liveParse, reportPath, toolkitReportPath);
-                }
-                else
-                {
-                    var appVer = GetType().Assembly.GetName().Version?.ToString() ?? "unknown";
-                    var uiForResearch = BuildCopilotSettingsFromUi();
-                    var researchResp = await KyraGatewayResearchCoordinator.TryRealtimeResearchAsync(
-                        userText,
-                        uiForResearch,
-                        reportPath,
-                        toolkitReportPath,
-                        appVer,
-                        client: null,
-                        _copilotGenerationCancellation.Token);
-                    if (researchResp is not null)
-                    {
-                        response = researchResp;
-                    }
-                    else
-                    {
-                        ReportKyraActivity(DescribeKyraLlmPhase(userText));
-                        var req = CreateKyraCopilotRequest(userText, reportPath, toolkitReportPath);
-                        response = await _copilotService.GenerateReplyAsync(req, _copilotGenerationCancellation.Token);
-                    }
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            response = new CopilotResponse
-            {
-                Text = "Stopped. Kyra did not change anything.",
-                ProviderType = CopilotProviderType.LocalOffline,
-                OnlineStatus = "Offline fallback - stopped by user."
-            };
-        }
-        catch (Exception exception)
-        {
-            response = new CopilotResponse
-            {
-                Text = $"Kyra hit an error and fell back safely: {exception.Message}",
-                ProviderType = CopilotProviderType.LocalOffline,
-                OnlineStatus = "Error - offline fallback available."
-            };
-        }
-        finally
-        {
-            IsCopilotGenerating = false;
-            KyraActivityStatusText = string.Empty;
-        }
-
-        var localMemoryUsed = KyraLocalRepairMemoryWouldApply(userText);
-        BuildCopilotSettingsFromUi();
-        var showFixFeedback = KyraMemorySanitizer.ShouldOfferFixFeedback(routedIntent, userText, response.Text ?? string.Empty);
-        CopilotMessages.Add(new CopilotChatMessage
-        {
-            Role = "Kyra",
-            Text = FormatKyraResponseText(response),
-            SourceLabel = response.SourceLabel,
-            OnlineEnhancementApplied = response.OnlineEnhancementApplied,
-            MetadataSummary = BuildKyraMetadataSummary(response, localMemoryUsed),
-            MetadataDetails = BuildKyraMetadataDetails(response, localMemoryUsed, _copilotSettings),
-            LearningUserPrompt = userText,
-            LearningKyraResponsePlain = response.Text?.Trim() ?? string.Empty,
-            LearningIntent = routedIntent,
-            ShowTroubleshootingFeedback = showFixFeedback
-        });
-
-        ApplyCopilotOnlineIndicator(response);
-        TryRecordKyraIntelligenceMemory(userText, response, reportPath, routedIntent);
-        SaveCopilotSettings();
-        if (VerboseLiveLogs)
-        {
-            foreach (var note in response.ProviderNotes)
-            {
-                if (note.StartsWith("Kyra routing:", StringComparison.OrdinalIgnoreCase))
-                {
-                    AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] " + note, LogSeverity.Info, channel: LiveLogChannel.KyraDetail));
-                }
-            }
-        }
-
-        AppendLog(new LogLine(
-            DateTimeOffset.Now,
-            response.UsedOnlineData ? "[INFO] Kyra answered with sanitized online provider data." : "[INFO] Kyra answered from local/offline fallback context.",
-            LogSeverity.Info,
-            channel: LiveLogChannel.KyraDetail));
-    }
-
-    private static string FormatKyraResponseText(CopilotResponse response)
-    {
-        var t = (response.Text ?? string.Empty).TrimEnd();
-
-        if (response.ActionSuggestions is not { Count: > 0 })
-        {
-            return t;
-        }
-
-        var sb = new StringBuilder(t);
-        sb.AppendLine().AppendLine("Suggested next steps:");
-        var n = 1;
-        foreach (var a in response.ActionSuggestions)
-        {
-            var line = string.IsNullOrWhiteSpace(a.Description) ? a.Title : $"{a.Title} — {a.Description}";
-            var safety = a.SafetyLevel switch
-            {
-                KyraActionSafetyLevel.Caution => " (caution)",
-                KyraActionSafetyLevel.Destructive =>
-                    a.RequiresConfirmation ? " (needs confirmation)" : " (destructive)",
-                _ => string.Empty
-            };
-            var cat = string.IsNullOrWhiteSpace(a.Category) ? string.Empty : $" [{a.Category}]";
-            sb.AppendLine($"{n}. {line}{cat}{safety}");
-            n++;
-        }
-
-        return sb.ToString().TrimEnd();
-    }
-
-    private static string BuildKyraMetadataSummary(
-        CopilotResponse response,
-        bool localMemoryUsed = false)
-    {
-        var parts = new List<string>();
-        var sourceLabel = response.SourceLabel ?? string.Empty;
-
-        if (sourceLabel.Contains("Code assist", StringComparison.OrdinalIgnoreCase) ||
-            response.ProviderNotes.Any(static n => n.Contains("Intent detected: CodeAssist", StringComparison.OrdinalIgnoreCase)))
-        {
-            parts.Add("Local tool");
-            parts.Add("Code assist");
-            parts.Add("Private");
-            return string.Join(" • ", parts);
-        }
-
-        if (response.ProviderNotes.Any(static n =>
-                n.Contains("local deterministic calculator", StringComparison.OrdinalIgnoreCase)) ||
-            sourceLabel.Contains("Calculator", StringComparison.OrdinalIgnoreCase))
-        {
-            parts.Add("Local tool");
-            parts.Add("Calculator");
-            parts.Add("Private");
-            return string.Join(" • ", parts);
-        }
-
-        if (response.ResponseSource == KyraResponseSource.ForgerEmsGateway && response.UsedOnlineData)
-        {
-            parts.Add(response.GroundedInSystemIntelligence ? "Local scan" : "Gateway research");
-            parts.Add("Gateway research");
-            parts.Add("Private");
-            return string.Join(" • ", parts);
-        }
-
-        if (sourceLabel.Contains("unavailable", StringComparison.OrdinalIgnoreCase))
-        {
-            parts.Add("Local rules");
-            parts.Add("Live research unavailable");
-        }
-        else if (sourceLabel.Contains("live research", StringComparison.OrdinalIgnoreCase) ||
-                 (response.UsedOnlineData && sourceLabel.Contains("live", StringComparison.OrdinalIgnoreCase)))
-        {
-            parts.Add("Live research");
-        }
-        else if (response.UsedOnlineData || response.ProviderType is not CopilotProviderType.LocalOffline)
-        {
-            parts.Add("Online");
-        }
-        else if (sourceLabel.Contains("live tool", StringComparison.OrdinalIgnoreCase))
-        {
-            parts.Add("Live tool");
-        }
-        else if (sourceLabel.Contains("command", StringComparison.OrdinalIgnoreCase))
-        {
-            parts.Add("Command");
-        }
-        else
-        {
-            parts.Add(response.GroundedInSystemIntelligence ? "Local scan" : "Local rules");
-        }
-
-        if (response.GroundedInSystemIntelligence)
-        {
-            parts.Add("System Intelligence");
-        }
-
-        if (response.ProviderNotes.Any(static n =>
-                n.Contains("hardware facts -> local System Intelligence", StringComparison.OrdinalIgnoreCase)))
-        {
-            parts.Add("Local hardware facts");
-        }
-
-        if (localMemoryUsed)
-        {
-            parts.Add("Local memory");
-        }
-
-        if (response.OnlineEnhancementApplied)
-        {
-            parts.Add("Online assist");
-        }
-
-        parts.Add("Private");
-        if (!response.UsedOnlineData &&
-            !parts.Any(static p => p.Contains("Live research unavailable", StringComparison.OrdinalIgnoreCase)))
-        {
-            parts.Add("Live research off");
-        }
-
-        return string.Join(" • ", parts.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct(StringComparer.OrdinalIgnoreCase));
-    }
-
-    private static string BuildKyraMetadataDetails(
-        CopilotResponse response,
-        bool localMemoryUsed = false,
-        CopilotSettings? sharingSettings = null)
-    {
-        var details = new List<string>();
-        var sourceLabel = response.SourceLabel ?? string.Empty;
-        if (!string.IsNullOrWhiteSpace(sourceLabel))
-        {
-            details.Add("Source: " + sourceLabel.Trim());
-        }
-
-        if (!string.IsNullOrWhiteSpace(response.KyraTransparencySummary))
-        {
-            details.Add("Why this answer: " + response.KyraTransparencySummary.Trim());
-        }
-
-        if (!string.IsNullOrWhiteSpace(response.OnlineStatus))
-        {
-            details.Add(response.OnlineStatus.Trim());
-        }
-
-        if (localMemoryUsed)
-        {
-            details.Add("Local Kyra repair memory was used for this machine-scoped answer.");
-        }
-
-        details.Add(KyraCommunityMetadataFormatter.DetailsParagraph(sharingSettings));
-
-        if (response.ProviderNotes is { Count: > 0 })
-        {
-            details.AddRange(response.ProviderNotes.Where(n => !string.IsNullOrWhiteSpace(n)));
-        }
-
-        if (details.Count == 0)
-        {
-            return string.Empty;
-        }
-
-        return string.Join(Environment.NewLine, details.Distinct(StringComparer.OrdinalIgnoreCase));
-    }
-
-    private static bool TryBuildLiveToolParseForPrompt(string prompt, out KyraSlashCommandParseResult parse)
-    {
-        return KyraInlineLivePromptRouter.TryBuildParse(prompt, out parse);
-    }
-
-    private async Task<CopilotResponse> ExecuteInlineLiveToolAsync(
-        KyraSlashCommandParseResult liveParse,
-        string reportPath,
-        string toolkitReportPath)
-    {
-        ReportKyraActivity("Researching live data…");
-        var uiSettings = BuildCopilotSettingsFromUi();
-        var liveFacts = BuildKyraToolHostFacts(reportPath, toolkitReportPath, uiSettings);
-        var liveRoute = await KyraLiveSlashCoordinator.ExecuteLiveAsync(
-            liveParse,
-            uiSettings,
-            liveFacts,
-            _copilotGenerationCancellation?.Token ?? CancellationToken.None);
-        var liveResp = liveRoute.ToCopilotResponse();
-        if (liveResp is not null)
-        {
-            return new CopilotResponse
-            {
-                Text = liveResp.Text,
-                UsedOnlineData = liveResp.UsedOnlineData,
-                ProviderType = liveResp.ProviderType,
-                ProviderNotes = liveResp.ProviderNotes,
-                ResponseSource = liveResp.ResponseSource,
-                SourceLabel = liveResp.UsedOnlineData ? "Live research" : "Live tool unavailable",
-                OnlineStatus = liveResp.UsedOnlineData ? "Live tool result" : "Live data unavailable",
-                FallbackUsed = liveResp.FallbackUsed,
-                OnlineEnhancementApplied = liveResp.OnlineEnhancementApplied,
-                GroundedInSystemIntelligence = liveResp.GroundedInSystemIntelligence,
-                ActionSuggestions = liveResp.ActionSuggestions
-            };
-        }
-
-        return new CopilotResponse
-        {
-            Text = "Live tool is unavailable right now. Try `/provider` to check status.",
-            ProviderType = CopilotProviderType.LocalOffline,
-            SourceLabel = "Live tool unavailable",
-            OnlineStatus = "Live data unavailable"
-        };
-    }
-
-    private void ReportKyraActivity(string message)
-    {
-        var d = Application.Current?.Dispatcher;
-        if (d is null)
-        {
-            KyraActivityStatusText = message;
-            return;
-        }
-
-        _ = d.BeginInvoke(() => KyraActivityStatusText = message, DispatcherPriority.Background);
-    }
-
-    private CopilotRequest CreateKyraCopilotRequest(string prompt, string reportPath, string toolkitReportPath)
-    {
-        var ui = BuildCopilotSettingsFromUi();
-        var usbReportPath = ui.IncludeUsbToolkitStatusInKyraContext
-            ? Path.Combine(GetRuntimeReportsDirectory(), "usb-intelligence-latest.json")
-            : string.Empty;
-        var effectiveToolkitReportPath = ui.IncludeUsbToolkitStatusInKyraContext ? toolkitReportPath : string.Empty;
-        var cross = ui.KyraUseSanitizedSystemIntelligenceContext
-            ? KyraSafeContextBuilder.BuildBriefSummary(
-                reportPath,
-                usbReportPath,
-                effectiveToolkitReportPath,
-                Path.Combine(GetRuntimeReportsDirectory(), "diagnostics-latest.json"),
-                ui.RedactContextEnabled)
-            : string.Empty;
-        return new CopilotRequest
-        {
-            Prompt = prompt,
-            SystemIntelligenceReportPath = reportPath,
-            ToolkitHealthReportPath = effectiveToolkitReportPath,
-            AppVersion = GetType().Assembly.GetName().Version?.ToString() ?? "unknown",
-            RecentLogLines = Logs.Select(line => line.DisplayText).TakeLast(24).ToArray(),
-            SelectedUsbTarget = SelectedUsbTarget,
-            Settings = ui,
-            VerboseDiagnosticNotes = VerboseLiveLogs,
-            KyraMemorySummaryForPrompt = BuildKyraMemorySummaryForPrompt(prompt),
-            KyraActivityStatusCallback = ReportKyraActivity,
-            KyraSafeCrossSystemSummary = cross,
-            KyraMachineMemoryStorePath = _kyraMachineMemoryPath,
-            MachineProfilesPath = MachineProfileStore.ProfilePathForRuntime(_appRuntimeService.RuntimeRoot)
-        };
-    }
-
-    private string DescribeKyraLlmPhase(string forwardPrompt)
-    {
-        if (forwardPrompt.Contains("weather", StringComparison.OrdinalIgnoreCase) ||
-            forwardPrompt.Contains("Latest news", StringComparison.OrdinalIgnoreCase) ||
-            forwardPrompt.Contains("Stock price", StringComparison.OrdinalIgnoreCase) ||
-            forwardPrompt.Contains("Crypto price", StringComparison.OrdinalIgnoreCase) ||
-            forwardPrompt.Contains("Sports", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Checking configured tools…";
-        }
-
-        if (forwardPrompt.Contains("System Intelligence", StringComparison.OrdinalIgnoreCase))
-        {
-            return "Checking system context…";
-        }
-
-        if (_copilotSettings.ApiFirstRouting)
-        {
-            return "Kyra is thinking…";
-        }
-
-        return "Kyra is thinking…";
-    }
-
-    public void InsertKyraSlashSuggestion(string commandLine)
-    {
-        _kyraSlashPopupQuietUntilUtc = DateTime.UtcNow.AddMilliseconds(400);
-        CopilotInput = string.IsNullOrWhiteSpace(commandLine) ? "/" : commandLine.TrimEnd() + " ";
-        KyraSlashSuggestions.Clear();
-        KyraSlashSelectedIndex = -1;
-        KyraSlashPopupOpen = false;
-    }
-
-    public void ApplyKyraSlashSelection()
-    {
-        if (KyraSlashSelectedIndex >= 0 && KyraSlashSelectedIndex < KyraSlashSuggestions.Count)
-        {
-            InsertKyraSlashSuggestion(KyraSlashSuggestions[KyraSlashSelectedIndex]);
-        }
-    }
-
-    private void RefreshKyraSlashSuggestions()
-    {
-        if (DateTime.UtcNow < _kyraSlashPopupQuietUntilUtc)
-        {
-            return;
-        }
-
-        KyraSlashSuggestions.Clear();
-        var t = CopilotInput ?? string.Empty;
-        if (!t.StartsWith('/'))
-        {
-            KyraSlashPopupOpen = false;
-            KyraSlashSelectedIndex = -1;
-            return;
-        }
-
-        var firstToken = t.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .FirstOrDefault() ?? "/";
-        var filter = firstToken.Length > 1 ? firstToken[1..] : string.Empty;
-
-        foreach (var c in KyraSlashCommandRegistry.All.OrderBy(x => x.Name))
-        {
-            if (string.IsNullOrEmpty(filter) ||
-                c.Name.StartsWith(filter, StringComparison.OrdinalIgnoreCase) ||
-                c.Aliases.Any(a => a.StartsWith(filter, StringComparison.OrdinalIgnoreCase)))
-            {
-                KyraSlashSuggestions.Add("/" + c.Name);
-            }
-        }
-
-        if (KyraSlashSuggestions.Count == 0 && !string.IsNullOrEmpty(filter))
-        {
-            KyraSlashSuggestions.Add("/help");
-        }
-
-        KyraSlashPopupOpen = KyraSlashSuggestions.Count > 0;
-        KyraSlashSelectedIndex = KyraSlashSuggestions.Count > 0 ? 0 : -1;
-    }
-
-    private void RefreshKyraQuickPromptVisibilities()
-    {
-        var scan = File.Exists(Path.Combine(GetRuntimeReportsDirectory(), "system-intelligence-latest.json"));
-        if (_kyraHasSystemScanReport != scan)
-        {
-            _kyraHasSystemScanReport = scan;
-            OnPropertyChanged(nameof(KyraListingQuickButtonVisibility));
-        }
-
-        var warn = Logs.Any(l => l.Severity is LogSeverity.Warning or LogSeverity.Error);
-        if (_kyraHasRecentWarningLog != warn)
-        {
-            _kyraHasRecentWarningLog = warn;
-            OnPropertyChanged(nameof(KyraWarningQuickButtonVisibility));
-        }
-
-        var toolkitReport = Path.Combine(GetRuntimeReportsDirectory(), "toolkit-health-latest.json");
-        var hasToolkit = File.Exists(toolkitReport);
-        var loc = _copilotSettings?.LiveTools?.DefaultWeatherLocation?.Trim();
-        var facts = new KyraToolHostFacts
-        {
-            HasSystemIntelligenceScan = scan,
-            HasToolkitHealthReport = hasToolkit,
-            DefaultWeatherLocation = string.IsNullOrEmpty(loc) ? null : loc
-        };
-        var liveOk = new KyraToolRegistry().HasConfiguredLiveDataCapability(_copilotSettings ?? new CopilotSettings(), facts);
-        if (_kyraShowLiveToolsQuickButton != liveOk)
-        {
-            _kyraShowLiveToolsQuickButton = liveOk;
-            OnPropertyChanged(nameof(KyraLiveToolsQuickButtonVisibility));
-        }
-    }
-
-    private KyraSlashHostSnapshot BuildKyraSlashHostSnapshot()
-    {
-        var reportPath = Path.Combine(GetRuntimeReportsDirectory(), "system-intelligence-latest.json");
-        var toolkitReportPath = Path.Combine(GetRuntimeReportsDirectory(), "toolkit-health-latest.json");
-        var profile = CopilotService.TryLoadSystemProfileFromReport(reportPath);
-        var health = SystemHealthEvaluator.Evaluate(profile);
-
-        var usbLine = SelectedUsbTarget is { } u
-            ? $"{u.DisplayName}; safety={u.SafetyStatusText}; {u.SafetyReasonText}"
-            : "No USB target selected.";
-
-        var missing = ToolkitHealthItems.Count(x =>
-            x.Status.Contains("MISSING", StringComparison.OrdinalIgnoreCase));
-        var manual = ToolkitHealthItems.Count(x =>
-            x.Status.Contains("MANUAL", StringComparison.OrdinalIgnoreCase));
-        var installed = ToolkitHealthItems.Count(x =>
-            x.Status.Contains("INSTALLED", StringComparison.OrdinalIgnoreCase) ||
-            x.Status.Contains("READY", StringComparison.OrdinalIgnoreCase));
-        var toolkitLine =
-            $"{ToolkitLastScanText}; tracked={ToolkitHealthItems.Count}; installed/ready≈{installed}; missing≈{missing}; manual≈{manual}; {ToolkitHealthVerdictText}; {ToolkitReadinessScoreText}";
-
-        var warn = Logs.LastOrDefault(l => l.Severity is LogSeverity.Warning or LogSeverity.Error);
-
-        return new KyraSlashHostSnapshot
-        {
-            LogsRoot = _appRuntimeService.LogsRoot,
-            RuntimeRoot = _appRuntimeService.RuntimeRoot,
-            ApiFirstRouting = KyraApiFirstRouting,
-            OfflineFallbackEnabled = KyraOfflineFallbackEnabled,
-            ModeDisplayName = SelectedCopilotMode,
-            ActiveProviderSummary = CopilotActiveProviderText + Environment.NewLine + CopilotProviderSummaryText,
-            ToolStatusSummary = new KyraToolRegistry().BuildStatusSummary(),
-            MemoryEnabled = KyraPersistentMemoryEnabled,
-            VerboseLiveLogs = VerboseLiveLogs,
-            HasSystemIntelligenceScan = File.Exists(reportPath),
-            HasToolkitHealthReport = File.Exists(toolkitReportPath),
-            ToolSettings = BuildCopilotSettingsFromUi(),
-            UsbSummaryLine = usbLine,
-            ToolkitSummaryLine = toolkitLine,
-            LatestWarningSnippet = warn?.DisplayText ?? string.Empty,
-            SystemProfile = profile,
-            Health = health,
-            OpenLogsFolder = () => OpenFolder(_appRuntimeService.LogsRoot, "logs folder", createIfMissing: true),
-            NavigateToSettingsTab = () => MainTabNavigationAction?.Invoke("Settings"),
-            NavigateToSystemIntelligenceTab = () => MainTabNavigationAction?.Invoke("System Intelligence"),
-            ClearChatHistory = () =>
-            {
-                _copilotService.ClearMemory();
-                CopilotMessages.Clear();
-            },
-            ClearKyraMemoryConfirmed = () =>
-            {
-                try
-                {
-                    new KyraPersistentMemoryStore(_kyraMemoryPath).Clear();
-                    AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Kyra memory cleared (slash command).", LogSeverity.Success));
-                }
-                catch (Exception ex)
-                {
-                    AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Kyra memory clear failed: {ex.Message}", LogSeverity.Warning));
-                }
-            },
-            ExportKyraMemory = ExportKyraMemory,
-            SetKyraMemoryEnabled = on =>
-            {
-                if (KyraPersistentMemoryEnabled != on)
-                {
-                    KyraPersistentMemoryEnabled = on;
-                }
-            },
-            BuildSanitizedMemoryPreview = () =>
-            {
-                var store = new KyraPersistentMemoryStore(_kyraMemoryPath);
-                var doc = store.Load();
-                KyraPersistentMemoryStore.SanitizeInPlace(doc);
-                return JsonSerializer.Serialize(doc, IndentedJsonOptions);
-            }
-        };
-    }
-
-    private static KyraToolHostFacts BuildKyraToolHostFacts(string reportPath, string toolkitReportPath, CopilotSettings settings)
-    {
-        var loc = settings.LiveTools?.DefaultWeatherLocation?.Trim();
-        return new KyraToolHostFacts
-        {
-            HasSystemIntelligenceScan = File.Exists(reportPath),
-            HasToolkitHealthReport = File.Exists(toolkitReportPath),
-            DefaultWeatherLocation = string.IsNullOrEmpty(loc) ? null : loc
-        };
-    }
-
-    private void StopCopilotGeneration()
-    {
-        _copilotGenerationCancellation?.Cancel();
-        AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Kyra stop requested.", LogSeverity.Info));
-    }
-
-    private void ToggleCopilotTechnicalContext()
-    {
-        var expanded = CopilotTechnicalContextVisibility != Visibility.Visible;
-        CopilotTechnicalContextVisibility = expanded ? Visibility.Visible : Visibility.Collapsed;
-        CopilotTechnicalContextButtonText = expanded ? "Hide technical context" : "View technical context";
-    }
-
-    private void OpenKyraAdvancedSettings()
-    {
-        OpenKyraAdvancedSettingsAction?.Invoke();
-    }
-
-    public void RefreshKyraAssistantPanel()
-    {
-        var reportPath = Path.Combine(GetRuntimeReportsDirectory(), "system-intelligence-latest.json");
-        var toolkitPath = Path.Combine(GetRuntimeReportsDirectory(), "toolkit-health-latest.json");
-        var ctx = new CopilotContextBuilder().Build(new CopilotRequest
-        {
-            Prompt = ".",
-            SystemIntelligenceReportPath = reportPath,
-            ToolkitHealthReportPath = toolkitPath,
-            SelectedUsbTarget = SelectedUsbTarget,
-            Settings = new CopilotSettings
-            {
-                UseLatestSystemScanContext = true,
-                RedactContextEnabled = true,
-                KyraPersistentMemoryEnabled = _copilotSettings.KyraPersistentMemoryEnabled
-            }
-        });
-        KyraSanitizedContextPreviewText = KyraPrivacyGate.BuildSanitizedProviderSummary(ctx);
-        var toolStatus = new KyraToolRegistry().BuildStatusSummary();
-        var sb = new StringBuilder();
-        sb.AppendLine(_copilotSettings.ApiFirstRouting
-            ? "Kyra Mode: API-first hybrid — configured providers may answer first when mode and privacy settings allow."
-            : "Online assist: off — Local Kyra drafts first when polish mode applies.");
-        sb.AppendLine(_copilotSettings.OfflineFallbackEnabled ? "Local fallback: enabled." : "Local fallback: disabled.");
-        sb.AppendLine(_copilotSettings.AllowOnlineSystemContextSharing ? "System context to online providers: on (sanitized summary only)." : "System context to online providers: off.");
-        sb.AppendLine($"Provider priority: {_copilotSettings.ProviderPriorityCsv}");
-        sb.AppendLine($"Memory: {_copilotSettings.MaxContextTurns} turns / {_copilotSettings.MemoryMode}; personality: {_copilotSettings.PersonalityProfile}.");
-        sb.AppendLine("Live tools: weather/crypto/search readiness appears under Kyra AI Settings > Live Tools.");
-        sb.AppendLine(_copilotSettings.ProviderConfigurationMode == KyraProviderConfigurationMode.DeveloperManaged
-            ? "Provider setup: ForgerEMS Gateway is preferred for beta testers when configured; BYOK remains optional."
-            : "Provider setup: BYOK/local provider preferences are user controlled.");
-        sb.AppendLine(ctx.SystemProfile is not null ? "System context: available from last scan." : "System context: run System Intelligence for machine-specific answers.");
-        sb.AppendLine(_copilotSettings.KyraPersistentMemoryEnabled ? "Kyra memory: enabled (local disk, user-controlled)." : "Kyra memory: off.");
-        sb.AppendLine(
-            _copilotSettings.KyraRealtimeGatewayResearchEnabled && _copilotSettings.KyraRealtimeGatewayEnabled
-                ? "Realtime gateway research: enabled when gateway URL + token are configured (provider keys stay server-side)."
-                : "Realtime gateway research: off — current-data questions use local Kyra and configured live tools only.");
-        sb.AppendLine(VerboseLiveLogs ? "Verbose Kyra notes: on." : "Verbose Kyra notes: off (routing noise hidden in chat footnotes).");
-        sb.AppendLine(toolStatus);
-        KyraAssistantStatusSummary = sb.ToString().TrimEnd();
-
-        var locPanel = _copilotSettings?.LiveTools?.DefaultWeatherLocation?.Trim();
-        var factsPanel = new KyraToolHostFacts
-        {
-            HasSystemIntelligenceScan = File.Exists(reportPath),
-            HasToolkitHealthReport = File.Exists(toolkitPath),
-            DefaultWeatherLocation = string.IsNullOrEmpty(locPanel) ? null : locPanel
-        };
-        var reg = new KyraToolRegistry();
-        KyraToolStatusRows.Clear();
-        foreach (var row in reg.BuildStatusGridRows(BuildCopilotSettingsFromUi(), factsPanel))
-        {
-            KyraToolStatusRows.Add(row);
-        }
-
-        RefreshKyraQuickPromptVisibilities();
-    }
-
-    private string? BuildKyraMemorySummaryForPrompt(string prompt)
-    {
-        if (KyraCodeSnippetDetector.LooksLikeCodeSnippet(prompt))
-        {
-            return null;
-        }
-
-        var parts = new List<string>();
-        if (_copilotSettings.KyraPersistentMemoryEnabled)
-        {
-            var store = new KyraPersistentMemoryStore(_kyraMemoryPath);
-            var doc = store.Load();
-            doc.Enabled = _copilotSettings.KyraPersistentMemoryEnabled;
-            var legacyHint = store.BuildPromptHint(doc);
-            if (!string.IsNullOrWhiteSpace(legacyHint))
-            {
-                parts.Add(legacyHint);
-            }
-        }
-
-        if (_copilotSettings.KyraLocalRepairMemoryEnabled && KyraMemorySanitizer.IsMachineScopedPrompt(prompt))
-        {
-            var machineStore = new KyraMachineMemoryStore(_kyraMachineMemoryPath);
-            var summary = KyraMemorySummaryBuilder.BuildForPrompt(machineStore.Load(), prompt);
-            if (!string.IsNullOrWhiteSpace(summary))
-            {
-                parts.Add(summary);
-            }
-        }
-
-        return parts.Count == 0 ? null : string.Join(Environment.NewLine + Environment.NewLine, parts);
-    }
-
-    private bool KyraLocalRepairMemoryWouldApply(string prompt)
-    {
-        if (!_copilotSettings.KyraLocalRepairMemoryEnabled || !KyraMemorySanitizer.IsMachineScopedPrompt(prompt))
-        {
-            return false;
-        }
-
-        try
-        {
-            return new KyraMachineMemoryStore(_kyraMachineMemoryPath).Load().Entries.Count > 0;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private void ExportKyraMemory()
-    {
-        try
-        {
-            if (!ConfirmExportOrSharingConsent("Export Kyra Memory"))
-            {
-                AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Kyra memory export cancelled before packaging local context.", LogSeverity.Info));
-                return;
-            }
-
-            var store = new KyraPersistentMemoryStore(_kyraMemoryPath);
-            var doc = store.Load();
-            var dlg = new SaveFileDialog
-            {
-                Filter = "JSON (*.json)|*.json",
-                FileName = "kyra-memory-export.json"
-            };
-            if (dlg.ShowDialog() == true)
-            {
-                KyraPersistentMemoryStore.SanitizeInPlace(doc);
-                File.WriteAllText(dlg.FileName, JsonSerializer.Serialize(doc, IndentedJsonOptions));
-                AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Exported Kyra memory (sanitized).", LogSeverity.Success));
-            }
-        }
-        catch (Exception exception)
-        {
-            AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Kyra memory export failed: {exception.Message}", LogSeverity.Warning));
-        }
-    }
-
-    private void ClearKyraMemory()
-    {
-        try
-        {
-            new KyraPersistentMemoryStore(_kyraMemoryPath).Clear();
-            AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Kyra memory cleared from disk.", LogSeverity.Success));
-        }
-        catch (Exception exception)
-        {
-            AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Kyra memory clear failed: {exception.Message}", LogSeverity.Warning));
-        }
-    }
-
-    private void ViewKyraMemory()
-    {
-        try
-        {
-            var doc = new KyraPersistentMemoryStore(_kyraMemoryPath).Load();
-            KyraPersistentMemoryStore.SanitizeInPlace(doc);
-            var json = JsonSerializer.Serialize(doc, IndentedJsonOptions);
-            MessageBox.Show(
-                string.IsNullOrWhiteSpace(json) ? "{}" : json,
-                "Kyra memory (sanitized view)",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
-        }
-        catch (Exception exception)
-        {
-            MessageBox.Show(exception.Message, "Kyra memory", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
-    }
-
-    private static string KyraPrivacyModeForLearning(CopilotSettings settings) =>
-        settings.KyraCommunitySharingEnabled ? "community-preview" : "local-only";
-
-    private void TryRecordKyraIntelligenceMemory(string prompt, CopilotResponse response, string reportPath, KyraIntent intent)
-    {
-        try
-        {
-            if (!_copilotSettings.KyraLocalRepairMemoryEnabled ||
-                !KyraMemorySanitizer.IsMachineScopedPrompt(prompt) ||
-                KyraCodeSnippetDetector.LooksLikeCodeSnippet(prompt))
-            {
-                return;
-            }
-
-            var profile = CopilotService.TryLoadSystemProfileFromReport(reportPath);
-            var health = SystemHealthEvaluator.Evaluate(profile);
-            var appVer = GetType().Assembly.GetName().Version?.ToString() ?? "unknown";
-            var entry = KyraMemorySanitizer.BuildEntryFromPrompt(
-                prompt,
-                response.Text,
-                profile,
-                health,
-                intent,
-                appVer,
-                "beta",
-                KyraPrivacyModeForLearning(_copilotSettings));
-            var store = new KyraMachineMemoryStore(_kyraMachineMemoryPath);
-            if (store.TryAppend(entry, KyraMemorySanitizer.FromCopilotSettings(_copilotSettings)))
-            {
-                AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Kyra saved a sanitized local repair memory note.", LogSeverity.Info, channel: LiveLogChannel.KyraDetail));
-                _ = TryPrepareCommunityLearningStubAsync(entry);
-            }
-        }
-        catch (Exception exception)
-        {
-            AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Kyra local repair memory write skipped: {exception.Message}", LogSeverity.Warning, channel: LiveLogChannel.KyraDetail));
-        }
-    }
-
-    private void TryRecordKyraSystemScanLearning()
-    {
-        try
-        {
-            if (!_copilotSettings.KyraLocalRepairMemoryEnabled)
-            {
-                return;
-            }
-
-            var reportPath = Path.Combine(GetRuntimeReportsDirectory(), "system-intelligence-latest.json");
-            if (!File.Exists(reportPath))
-            {
-                return;
-            }
-
-            var profile = CopilotService.TryLoadSystemProfileFromReport(reportPath);
-            var health = SystemHealthEvaluator.Evaluate(profile);
-            var appVer = GetType().Assembly.GetName().Version?.ToString() ?? "unknown";
-            var entry = KyraMemorySanitizer.BuildEntryFromPrompt(
-                "Local device snapshot completed for this machine.",
-                "Device context refreshed on this PC.",
-                profile,
-                health,
-                KyraIntent.SystemHealthSummary,
-                appVer,
-                "beta",
-                KyraPrivacyModeForLearning(_copilotSettings),
-                kyraActionCategory: "system_scan",
-                outcomeCategory: "scan_completed",
-                sanitizedNotesOverride: "system scan",
-                userConfirmedFix: "unknown");
-            var store = new KyraMachineMemoryStore(_kyraMachineMemoryPath);
-            if (store.TryAppend(entry, KyraMemorySanitizer.FromCopilotSettings(_copilotSettings)))
-            {
-                _ = TryPrepareCommunityLearningStubAsync(entry);
-            }
-        }
-        catch
-        {
-            // best-effort learning note
-        }
-    }
-
-    private void TryRecordKyraUsbBenchmarkLearning(UsbBenchmarkResult result)
-    {
-        try
-        {
-            if (!_copilotSettings.KyraLocalRepairMemoryEnabled || !result.Succeeded)
-            {
-                return;
-            }
-
-            var reportPath = Path.Combine(GetRuntimeReportsDirectory(), "system-intelligence-latest.json");
-            var profile = CopilotService.TryLoadSystemProfileFromReport(reportPath);
-            var health = SystemHealthEvaluator.Evaluate(profile);
-            var response =
-                $"USB benchmark completed. Summary: {result.Summary}. Read: {result.ReadSpeedDisplay}. Write: {result.WriteSpeedDisplay}.";
-            var appVer = GetType().Assembly.GetName().Version?.ToString() ?? "unknown";
-            var entry = KyraMemorySanitizer.BuildEntryFromPrompt(
-                "USB benchmark completed for the selected removable target.",
-                response,
-                profile,
-                health,
-                KyraIntent.USBBuilderHelp,
-                appVer,
-                "beta",
-                KyraPrivacyModeForLearning(_copilotSettings),
-                kyraActionCategory: "usb_benchmark",
-                outcomeCategory: "benchmark_completed",
-                sanitizedNotesOverride: "usb benchmark",
-                userConfirmedFix: "unknown");
-            var store = new KyraMachineMemoryStore(_kyraMachineMemoryPath);
-            if (store.TryAppend(entry, KyraMemorySanitizer.FromCopilotSettings(_copilotSettings)))
-            {
-                _ = TryPrepareCommunityLearningStubAsync(entry);
-            }
-        }
-        catch
-        {
-        }
-    }
-
-    private void TryRecordKyraUsbBenchmarkBlockedLearning(string blockReason)
-    {
-        try
-        {
-            if (!_copilotSettings.KyraLocalRepairMemoryEnabled)
-            {
-                return;
-            }
-
-            var reportPath = Path.Combine(GetRuntimeReportsDirectory(), "system-intelligence-latest.json");
-            var profile = CopilotService.TryLoadSystemProfileFromReport(reportPath);
-            var health = SystemHealthEvaluator.Evaluate(profile);
-            var appVer = GetType().Assembly.GetName().Version?.ToString() ?? "unknown";
-            var entry = KyraMemorySanitizer.BuildEntryFromPrompt(
-                "USB benchmark was blocked for safety on this machine.",
-                blockReason,
-                profile,
-                health,
-                KyraIntent.USBBuilderHelp,
-                appVer,
-                "beta",
-                KyraPrivacyModeForLearning(_copilotSettings),
-                kyraActionCategory: "usb_safety",
-                outcomeCategory: "blocked",
-                sanitizedNotesOverride: "usb target blocked",
-                userConfirmedFix: "unknown");
-            var store = new KyraMachineMemoryStore(_kyraMachineMemoryPath);
-            store.TryAppend(entry, KyraMemorySanitizer.FromCopilotSettings(_copilotSettings));
-        }
-        catch
-        {
-        }
-    }
-
-    private async Task TryPrepareCommunityLearningStubAsync(KyraMemoryEntry entry)
-    {
-        try
-        {
-            var settings = KyraMemorySanitizer.FromCopilotSettings(_copilotSettings);
-            if (!settings.CommunitySharingEnabled)
-            {
-                return;
-            }
-
-            var client = new DisabledKyraCommunityIntelligenceClient();
-            var dto = KyraCommunityPayloadPreviewBuilder.FromMemoryEntry(
-                entry,
-                GetType().Assembly.GetName().Version?.ToString() ?? "unknown",
-                "beta");
-            await new KyraCommunityConsentService()
-                .TrySubmitAsync(client, dto, settings, CancellationToken.None)
-                .ConfigureAwait(false);
-        }
-        catch
-        {
-        }
-    }
-
-    private void ApplyKyraFeedbackThisFixedIt(CopilotChatMessage? message) =>
-        ApplyKyraUserFeedback(message, "yes", "resolved", "User confirmed the suggested fix worked.");
-
-    private void ApplyKyraFeedbackStillBroken(CopilotChatMessage? message) =>
-        ApplyKyraUserFeedback(message, "no", "unresolved", "User reported the issue is still present.");
-
-    private void ApplyKyraFeedbackNotSure(CopilotChatMessage? message) =>
-        ApplyKyraUserFeedback(message, "unknown", "unknown", "User was not sure whether the fix worked.");
-
-    private void ApplyKyraFeedbackSaveRepairNote(CopilotChatMessage? message)
-    {
-        if (message is null)
-        {
-            return;
-        }
-
-        var note = _userPromptService.PromptText(
-            "Save repair note",
-            "Short repair note (sanitized; no secrets, paths, or serials):",
-            string.Empty);
-        if (string.IsNullOrWhiteSpace(note))
-        {
-            return;
-        }
-
-        ApplyKyraUserFeedback(message, "unknown", "note_saved", note.Trim());
-    }
-
-    private void ApplyKyraUserFeedback(
-        CopilotChatMessage? message,
-        string userConfirmedFix,
-        string outcomeCategory,
-        string sanitizedNotes)
-    {
-        if (message is null || !message.Role.Equals("Kyra", StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        message.ShowTroubleshootingFeedback = false;
-        if (!_copilotSettings.KyraLocalRepairMemoryEnabled)
-        {
-            return;
-        }
-
-        try
-        {
-            var reportPath = Path.Combine(GetRuntimeReportsDirectory(), "system-intelligence-latest.json");
-            var profile = CopilotService.TryLoadSystemProfileFromReport(reportPath);
-            var health = SystemHealthEvaluator.Evaluate(profile);
-            var prompt = message.LearningUserPrompt ?? string.Empty;
-            var responseText = message.LearningKyraResponsePlain ?? string.Empty;
-            var appVer = GetType().Assembly.GetName().Version?.ToString() ?? "unknown";
-            var entry = KyraMemorySanitizer.BuildEntryFromPrompt(
-                prompt,
-                responseText,
-                profile,
-                health,
-                message.LearningIntent,
-                appVer,
-                "beta",
-                KyraPrivacyModeForLearning(_copilotSettings),
-                kyraActionCategory: "user_feedback",
-                outcomeCategory: outcomeCategory,
-                sanitizedNotesOverride: sanitizedNotes,
-                userConfirmedFix: userConfirmedFix);
-            var store = new KyraMachineMemoryStore(_kyraMachineMemoryPath);
-            if (store.TryAppend(entry, KyraMemorySanitizer.FromCopilotSettings(_copilotSettings)))
-            {
-                AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Kyra saved your feedback as a sanitized local learning note.", LogSeverity.Info, channel: LiveLogChannel.KyraDetail));
-                _ = TryPrepareCommunityLearningStubAsync(entry);
-            }
-        }
-        catch (Exception exception)
-        {
-            AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Kyra feedback could not be saved: {exception.Message}", LogSeverity.Warning, channel: LiveLogChannel.KyraDetail));
-        }
-    }
-
-    private void BetaWelcomeKyraKeepLocalOnly()
-    {
-        KeepKyraLocalOnly();
-        ResetBetaWelcomeKyraConsentCheckboxes();
-        ShowWelcomeCenterInfo(
-            "Keep Local Only",
-            "Kyra is set to local-only mode. Local repair notes stay on this PC, community sharing categories are off, and no provider API keys, passwords, private paths, raw logs, product keys, serial numbers, emails, IP addresses, or exact location are shared." +
-            Environment.NewLine + Environment.NewLine +
-            "You can review or change Kyra privacy choices later in Settings.");
-    }
-
-    private void BetaWelcomeKyraHelpImprove()
-    {
-        var any =
-            BetaWelcomeKyraShareRepairIntelligence ||
-            BetaWelcomeKyraShareHardwarePatterns ||
-            BetaWelcomeKyraShareResolvedCategories ||
-            BetaWelcomeKyraShareCrashDiagnostics;
-
-        BetaWelcomeKyraConfirmHasSelection = any;
-        BetaWelcomeKyraConfirmSummary = any
-            ? "Review the selected categories before enabling them. Shared examples are sanitized repair categories, broad hardware compatibility patterns, tool result categories, and user-confirmed fix outcomes." +
-              Environment.NewLine + Environment.NewLine +
-              "Not shared: API keys, passwords, product keys, serial numbers, private files, full local paths, emails, IP addresses, exact location, or raw logs."
-            : "Choose at least one anonymous sharing category above before enabling Kyra community intelligence. Nothing is enabled until you confirm." +
-              Environment.NewLine + Environment.NewLine +
-              "ForgerEMS never shares API keys, passwords, private file paths, raw logs, product keys, serial numbers, emails, IP addresses, or exact location.";
-        BetaWelcomeKyraConfirmVisibility = Visibility.Visible;
-    }
-
-    private void BetaWelcomeKyraConfirmEnable()
-    {
-        if (!BetaWelcomeKyraConfirmHasSelection)
-        {
-            return;
-        }
-
-        ApplyBetaWelcomeKyraSharingSelection();
-        BetaWelcomeKyraConfirmVisibility = Visibility.Collapsed;
-    }
-
-    private void BetaWelcomeKyraCancelConfirm()
-    {
-        BetaWelcomeKyraConfirmVisibility = Visibility.Collapsed;
-        AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Help Improve Kyra confirmation canceled. No sharing settings were changed.", LogSeverity.Info, channel: LiveLogChannel.KyraDetail));
-    }
-
-    private void ApplyBetaWelcomeKyraSharingSelection()
-    {
-        var any =
-            BetaWelcomeKyraShareRepairIntelligence ||
-            BetaWelcomeKyraShareHardwarePatterns ||
-            BetaWelcomeKyraShareResolvedCategories ||
-            BetaWelcomeKyraShareCrashDiagnostics;
-        KyraCommunitySharingEnabled = any;
-        if (any)
-        {
-            KyraShareHardwareCompatibilityPerformancePatterns = BetaWelcomeKyraShareHardwarePatterns;
-            KyraShareResolvedIssueFixPatterns = BetaWelcomeKyraShareResolvedCategories;
-            KyraShareCrashErrorDiagnostics = BetaWelcomeKyraShareCrashDiagnostics;
-            if (BetaWelcomeKyraShareRepairIntelligence &&
-                !BetaWelcomeKyraShareHardwarePatterns &&
-                !BetaWelcomeKyraShareResolvedCategories &&
-                !BetaWelcomeKyraShareCrashDiagnostics)
-            {
-                KyraShareResolvedIssueFixPatterns = true;
-            }
-        }
-
-        SaveCopilotSettings();
-        AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Welcome Center applied Kyra sharing choices. Welcome Center remains open.", LogSeverity.Info, channel: LiveLogChannel.KyraDetail));
-    }
-
-    private void BetaWelcomeKyraViewSharingPreview()
-    {
-        try
-        {
-            var any =
-                BetaWelcomeKyraShareRepairIntelligence ||
-                BetaWelcomeKyraShareHardwarePatterns ||
-                BetaWelcomeKyraShareResolvedCategories ||
-                BetaWelcomeKyraShareCrashDiagnostics;
-            var hypo = new KyraMemorySettings
-            {
-                LocalRepairMemoryEnabled = true,
-                CommunitySharingEnabled = any,
-                ShareResolvedIssueFixPatterns = BetaWelcomeKyraShareResolvedCategories,
-                ShareHardwareCompatibilityPerformancePatterns = BetaWelcomeKyraShareHardwarePatterns,
-                ShareCrashErrorDiagnostics = BetaWelcomeKyraShareCrashDiagnostics
-            };
-            var preview = KyraCommunityPayloadPreviewBuilder.BuildPreview(
-                new KyraMachineMemoryStore(_kyraMachineMemoryPath).Load(),
-                KyraMemorySanitizer.FromCopilotSettings(_copilotSettings),
-                GetType().Assembly.GetName().Version?.ToString() ?? "unknown",
-                "beta",
-                hypo);
-            ShowWelcomeCenterInfo(
-                "View What Would Be Shared",
-                preview);
-        }
-        catch (Exception exception)
-        {
-            AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Welcome Center sharing preview unavailable: {exception.Message}", LogSeverity.Warning, channel: LiveLogChannel.KyraDetail));
-            ShowWelcomeCenterInfo(
-                "View What Would Be Shared",
-                "The sanitized sharing preview is unavailable right now. No data was shared. Check the app logs for a sanitized warning if you need details.");
-        }
-    }
-
-    private void ShowWelcomeCenterInfo(string title, string body, string? actionText = null, Action? action = null)
-    {
-        if (WelcomeCenterInfoAction is not null)
-        {
-            WelcomeCenterInfoAction(title, body, actionText, action);
-            return;
-        }
-
-        AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] Welcome Center helper requested: {title}", LogSeverity.Info, channel: LiveLogChannel.KyraDetail));
-    }
-
-    private void SeedBetaWelcomeKyraCheckboxesFromSettings()
-    {
-        BetaWelcomeKyraConfirmVisibility = Visibility.Collapsed;
-
-        var snap = KyraInstallerIntelligenceRegistry.ReadSnapshot();
-        if (snap.Any)
-        {
-            BetaWelcomeKyraShareRepairIntelligence = snap.Repair != 0;
-            BetaWelcomeKyraShareHardwarePatterns = snap.Hardware != 0;
-            BetaWelcomeKyraShareResolvedCategories = snap.Resolved != 0;
-            BetaWelcomeKyraShareCrashDiagnostics = snap.Crash != 0;
-            return;
-        }
-
-        BetaWelcomeKyraShareHardwarePatterns = _copilotSettings.KyraShareHardwareCompatibilityPerformancePatterns;
-        BetaWelcomeKyraShareResolvedCategories = _copilotSettings.KyraShareResolvedIssueFixPatterns;
-        BetaWelcomeKyraShareCrashDiagnostics = _copilotSettings.KyraShareCrashErrorDiagnostics;
-        BetaWelcomeKyraShareRepairIntelligence =
-            _copilotSettings.KyraCommunitySharingEnabled &&
-            !BetaWelcomeKyraShareHardwarePatterns &&
-            !BetaWelcomeKyraShareResolvedCategories &&
-            !BetaWelcomeKyraShareCrashDiagnostics;
-    }
-
-    private void ResetBetaWelcomeKyraConsentCheckboxes()
-    {
-        BetaWelcomeKyraShareRepairIntelligence = false;
-        BetaWelcomeKyraShareHardwarePatterns = false;
-        BetaWelcomeKyraShareResolvedCategories = false;
-        BetaWelcomeKyraShareCrashDiagnostics = false;
-    }
-
-    private void ResetKyraMachineLearning()
-    {
-        if (!_userPromptService.Confirm(
-                "Reset Kyra learning",
-                "Delete local Kyra Intelligence memory for this machine? Consent choices are not changed."))
-        {
-            return;
-        }
-
-        try
-        {
-            new KyraMachineMemoryStore(_kyraMachineMemoryPath).Delete();
-            AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Kyra machine learning memory reset on this PC.", LogSeverity.Success));
-        }
-        catch (Exception exception)
-        {
-            AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Kyra learning reset failed: {exception.Message}", LogSeverity.Warning));
-        }
-    }
-
-    private void ViewKyraCommunityPayloadPreview()
-    {
-        try
-        {
-            var store = new KyraMachineMemoryStore(_kyraMachineMemoryPath);
-            var preview = KyraCommunityPayloadPreviewBuilder.BuildPreview(
-                store.Load(),
-                KyraMemorySanitizer.FromCopilotSettings(BuildCopilotSettingsFromUi()),
-                GetType().Assembly.GetName().Version?.ToString() ?? "unknown",
-                "beta");
-            MessageBox.Show(preview, "Kyra Intelligence sharing preview (sanitized)", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-        catch (Exception exception)
-        {
-            MessageBox.Show(exception.Message, "Kyra Intelligence preview", MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
-    }
-
-    private void ExportKyraIntelligenceMemory()
-    {
-        try
-        {
-            if (!ConfirmExportOrSharingConsent("Export Kyra Intelligence Memory"))
-            {
-                AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Kyra Intelligence memory export cancelled before packaging local context.", LogSeverity.Info));
-                return;
-            }
-
-            var dlg = new SaveFileDialog
-            {
-                Filter = "JSON (*.json)|*.json",
-                FileName = "kyra-intelligence-memory-export.json"
-            };
-            if (dlg.ShowDialog() == true)
-            {
-                File.WriteAllText(dlg.FileName, new KyraMachineMemoryStore(_kyraMachineMemoryPath).ExportSanitized());
-                AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Exported Kyra Intelligence memory (sanitized).", LogSeverity.Success));
-            }
-        }
-        catch (Exception exception)
-        {
-            AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Kyra Intelligence memory export failed: {exception.Message}", LogSeverity.Warning));
-        }
-    }
-
-    private void DeleteKyraIntelligenceMemory()
-    {
-        if (!_userPromptService.Confirm(
-                "Delete Kyra Memory",
-                "Delete local Kyra repair memory from this PC? This keeps Kyra local-only behavior intact, but removes stored sanitized repair notes."))
-        {
-            return;
-        }
-
-        try
-        {
-            new KyraMachineMemoryStore(_kyraMachineMemoryPath).Delete();
-            AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Kyra Intelligence memory deleted from disk.", LogSeverity.Success));
-        }
-        catch (Exception exception)
-        {
-            AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Kyra Intelligence memory delete failed: {exception.Message}", LogSeverity.Warning));
-        }
-    }
-
-    private void KeepKyraLocalOnly()
-    {
-        KyraCommunitySharingEnabled = false;
-        KyraShareResolvedIssueFixPatterns = false;
-        KyraShareHardwareCompatibilityPerformancePatterns = false;
-        KyraShareCrashErrorDiagnostics = false;
-        SaveCopilotSettings();
-    }
-
-    private void EnableKyraCommunityLearning()
-    {
-        KyraCommunitySharingEnabled = true;
-        if (!KyraShareResolvedIssueFixPatterns &&
-            !KyraShareHardwareCompatibilityPerformancePatterns &&
-            !KyraShareCrashErrorDiagnostics)
-        {
-            KyraShareResolvedIssueFixPatterns = true;
-        }
-
-        SaveCopilotSettings();
-    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     private void CopyBetaReportTemplate()
     {
@@ -6938,246 +4987,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Copied beta issue template to clipboard.", LogSeverity.Info));
     }
 
-    private async Task CheckKyraGatewayStatusAsync()
-    {
-        try
-        {
-            if (!ForgerEmsEnvironmentConfiguration.KyraGatewayEnabled)
-            {
-                KyraGatewayProviderStatusSummary =
-                    "Realtime gateway is off (FORGEREMS_KYRA_GATEWAY_ENABLED=false). Local Kyra stays available.";
-                AppendLog(new LogLine(
-                    DateTimeOffset.Now,
-                    "[INFO] Kyra gateway status: disabled via environment.",
-                    LogSeverity.Info,
-                    channel: LiveLogChannel.KyraDetail));
-                return;
-            }
 
-            var settings = BuildCopilotSettingsFromUi();
-            if (!settings.KyraRealtimeGatewayEnabled)
-            {
-                KyraGatewayProviderStatusSummary =
-                    "Kyra Realtime Gateway is disabled in Kyra Advanced. Enable it here to use the secure gateway path.";
-                return;
-            }
 
-            var cfg = settings.Providers.TryGetValue(KyraGatewayProvider.ProviderId, out var pc)
-                ? KyraGatewayProviderConfig.FromProviderConfiguration(pc)
-                : KyraGatewayProviderConfig.FromEnvironment();
 
-            if (!cfg.IsConfigured)
-            {
-                KyraGatewayProviderStatusSummary =
-                    "Gateway URL or beta token is missing. Configure the ForgerEMS gateway provider under Providers, or set FORGEREMS_KYRA_GATEWAY_URL and FORGEREMS_KYRA_GATEWAY_BETA_TOKEN.";
-                return;
-            }
-
-            var endpoint = KyraGatewayStatusClient.BuildStatusEndpoint(cfg.GatewayUrl);
-            var result = await KyraGatewayStatusClient.FetchAsync(
-                    endpoint,
-                    cfg.BetaToken,
-                    cfg.TimeoutSeconds,
-                    CancellationToken.None)
-                .ConfigureAwait(true);
-
-            if (!result.Ok || result.Providers is null)
-            {
-                var code = result.ErrorCode ?? "unknown";
-                KyraGatewayProviderStatusSummary =
-                    $"Gateway status request did not succeed (code: {code}). The worker may be unreachable, outdated, or the token may be invalid. Local Kyra is still available.";
-                AppendLog(new LogLine(
-                    DateTimeOffset.Now,
-                    "[INFO] Kyra gateway status check finished without OK response (no secrets logged).",
-                    LogSeverity.Info,
-                    channel: LiveLogChannel.KyraDetail));
-                return;
-            }
-
-            var p = result.Providers;
-            KyraGatewayProviderStatusSummary =
-                $"Gateway host: {cfg.GatewayHost}{Environment.NewLine}" +
-                $"AI chat: {p.AiChat ?? "unknown"}{Environment.NewLine}" +
-                $"Crypto: {p.Crypto ?? "unknown"}{Environment.NewLine}" +
-                $"Weather: {p.Weather ?? "unknown"}{Environment.NewLine}" +
-                $"Finance: {p.Finance ?? "unknown"}{Environment.NewLine}" +
-                $"News: {p.News ?? "unknown"}{Environment.NewLine}" +
-                $"Web research: {p.WebResearch ?? "unknown"}{Environment.NewLine}" +
-                "Server-side readiness only — no provider secrets are returned to the app.";
-
-            AppendLog(new LogLine(
-                DateTimeOffset.Now,
-                "[INFO] Kyra gateway status check completed.",
-                LogSeverity.Info,
-                channel: LiveLogChannel.KyraDetail));
-        }
-        catch (Exception exception)
-        {
-            KyraGatewayProviderStatusSummary =
-                "Gateway status check encountered an error. Local Kyra is still available.";
-            AppendLog(new LogLine(
-                DateTimeOffset.Now,
-                $"[WARN] Kyra gateway status: {exception.Message}",
-                LogSeverity.Warning));
-        }
-    }
-
-    private async Task TestCopilotConnectionAsync()
-    {
-        RefreshCopilotProviderStatus();
-        var settings = _copilotSettings ?? BuildCopilotSettingsFromUi();
-        var ollama = settings.Providers.TryGetValue("ollama-local", out var ollamaConfig) ? ollamaConfig : null;
-        if (ollama?.IsEnabled == true)
-        {
-            try
-            {
-                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
-                using var response = await client.GetAsync($"{ollama.BaseUrl.TrimEnd('/')}/api/tags").ConfigureAwait(true);
-                CopilotOnlineStatusText = response.IsSuccessStatusCode
-                    ? "Ollama Available: local model endpoint responded."
-                    : "Ollama selected, but the local endpoint did not respond successfully.";
-                UpdateCopilotOnlineIndicator();
-                return;
-            }
-            catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or InvalidOperationException)
-            {
-                CopilotOnlineStatusText = "Ollama not reachable. Offline Kyra is still ready.";
-                UpdateCopilotOnlineIndicator();
-                return;
-            }
-        }
-
-        var lmStudio = settings.Providers.TryGetValue("lm-studio-local", out var lmStudioConfig) ? lmStudioConfig : null;
-        if (lmStudio?.IsEnabled == true)
-        {
-            try
-            {
-                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
-                using var response = await client.GetAsync($"{lmStudio.BaseUrl.TrimEnd('/')}/models").ConfigureAwait(true);
-                CopilotOnlineStatusText = response.IsSuccessStatusCode
-                    ? "LM Studio Available: local model endpoint responded."
-                    : "LM Studio selected, but the local endpoint did not respond successfully.";
-                UpdateCopilotOnlineIndicator();
-                return;
-            }
-            catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or InvalidOperationException)
-            {
-                CopilotOnlineStatusText = "LM Studio not reachable. Offline Kyra is still ready.";
-                UpdateCopilotOnlineIndicator();
-                return;
-            }
-        }
-
-        var openAi = settings.Providers.TryGetValue("openai-compatible", out var openAiConfig) ? openAiConfig : null;
-        if (openAi?.IsEnabled == true)
-        {
-            var envVar = string.IsNullOrWhiteSpace(openAi.ApiKeyEnvironmentVariable)
-                ? "OPENAI_API_KEY"
-                : openAi.ApiKeyEnvironmentVariable;
-            var hasKey = !string.IsNullOrWhiteSpace(KyraApiKeyStore.ResolveApiKey("openai-compatible", openAi));
-            CopilotOnlineStatusText = hasKey
-                ? "OpenAI-compatible provider: key present (session or environment). Kyra exercises the endpoint on send."
-                : $"OpenAI-compatible: key not found. Enter a session key or set {envVar}.";
-            AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] " + CopilotOnlineStatusText, LogSeverity.Info));
-            UpdateCopilotOnlineIndicator();
-            return;
-        }
-
-        AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Kyra connection test — scanning enabled providers…", LogSeverity.Info));
-        var lines = new List<string>();
-        foreach (var provider in _copilotProviderRegistry.Providers)
-        {
-            if (!settings.Providers.TryGetValue(provider.Id, out var cfg) || !cfg.IsEnabled)
-            {
-                continue;
-            }
-
-            if (CopilotProviderStatusFormatter.IsPlaceholderProvider(provider))
-            {
-                lines.Add($"{provider.DisplayName}: placeholder / future — not active for live API.");
-                continue;
-            }
-
-            if (!provider.IsOnlineProvider)
-            {
-                lines.Add($"{provider.DisplayName}: local/offline — no API key required.");
-                continue;
-            }
-
-            var env = string.IsNullOrWhiteSpace(cfg.ApiKeyEnvironmentVariable)
-                ? provider.DefaultApiKeyEnvironmentVariable
-                : cfg.ApiKeyEnvironmentVariable;
-            var hasSession = !string.IsNullOrWhiteSpace(KyraApiKeyStore.GetSessionKey(provider.Id));
-            var hasEnv = !string.IsNullOrWhiteSpace(env) &&
-                         !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(env));
-
-            if (!provider.IsConfigured(cfg))
-            {
-                lines.Add(string.IsNullOrWhiteSpace(env)
-                    ? $"{provider.DisplayName}: not configured — check Base URL / model / session key."
-                    : $"{provider.DisplayName}: key not found. Enter a session key or set {env}.");
-                continue;
-            }
-
-            if (provider is OpenAiStyleCopilotProvider)
-            {
-                lines.Add(hasSession
-                    ? $"{provider.DisplayName}: configured for this session; Kyra will attempt chat on send."
-                    : hasEnv
-                        ? $"{provider.DisplayName}: configured via environment variable {env}; Kyra will attempt chat on send."
-                        : $"{provider.DisplayName}: configured; Kyra will attempt chat on send.");
-            }
-            else
-            {
-                lines.Add($"{provider.DisplayName}: configured.");
-            }
-        }
-
-        foreach (var line in lines)
-        {
-            AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] " + line, LogSeverity.Info));
-        }
-
-        CopilotOnlineStatusText = lines.Count == 0
-            ? "No enabled online providers to test. Local Kyra is active. Online providers are optional."
-            : "Connection test finished — see Full Logs for each provider line.";
-        UpdateCopilotOnlineIndicator();
-        await Task.CompletedTask.ConfigureAwait(true);
-    }
-
-    private void UseLatestSystemScanContextNow()
-    {
-        UseLatestSystemScanContext = true;
-        LoadSystemIntelligenceReport();
-        RefreshCopilotContextText();
-        AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Kyra context refreshed from latest local System Intelligence report.", LogSeverity.Success));
-    }
-
-    private void ClearCopilotHistoryAndCache()
-    {
-        _copilotService.ClearMemory();
-        CopilotMessages.Clear();
-        CopilotMessages.Add(new CopilotChatMessage
-        {
-            Role = "Kyra",
-            Text = "Kyra history and local provider cache were cleared. Offline rules remain available."
-        });
-
-        try
-        {
-            var cacheRoot = Path.Combine(_appRuntimeService.RuntimeRoot, "cache", "copilot");
-            if (Directory.Exists(cacheRoot))
-            {
-                Directory.Delete(cacheRoot, recursive: true);
-            }
-        }
-        catch (Exception exception)
-        {
-            AppendLog(new LogLine(DateTimeOffset.Now, $"[WARN] Kyra cache cleanup skipped: {exception.Message}", LogSeverity.Warning));
-        }
-
-        AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Kyra history/cache cleared.", LogSeverity.Success));
-    }
 
     private void OpenToolkitUsbReports()
     {
@@ -8102,7 +5914,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             };
             ApplyBenchmarkResult(target, blocked);
             _benchmarksInProgress.Remove(benchmarkKey);
-            TryRecordKyraUsbBenchmarkBlockedLearning(blockReason);
             return blocked;
         }
 
@@ -8561,8 +6372,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             MachineProfileLastHealthText = "Last health score: unknown";
             MachineProfileLastToolkitReadinessText = "Last toolkit readiness: unknown";
             RefreshDriverHubRecommendations();
-            RefreshCopilotContextText();
-            RefreshKyraQuickPromptVisibilities();
             return;
         }
 
@@ -8684,7 +6493,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 : "Standard scan runs automatically. Elevated scan unlocks extra detail when needed.";
             SystemIntelligenceElevatedFindingsText = BuildSystemIntelligenceElevatedFindings(root, _lastElevatedScanTelemetrySnapshot);
             RefreshSystemIntelligenceReportLocationText("Report available");
-            RefreshCopilotContextText(root);
 
             SystemIntelligenceRecommendations.Clear();
             if (root.TryGetProperty("recommendations", out var recommendations) &&
@@ -8715,7 +6523,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             RefreshMachineProfileSummary(root);
 
             RefreshDriverHubRecommendations();
-            RefreshKyraQuickPromptVisibilities();
         }
         catch
         {
@@ -8749,7 +6556,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                     SystemIntelligenceStatusForeground = foreground;
                 });
             RefreshDriverHubRecommendations();
-            RefreshKyraQuickPromptVisibilities();
         }
     }
 
@@ -9801,8 +7607,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         ApplyDiagnosticsFromDisk();
         RefreshUsbIntelligenceFromDisk();
         RefreshPortPowerTelemetry();
-        RefreshCopilotContextText();
-        RefreshKyraAssistantPanel();
     }
 
     private void ApplyDiagnosticsFromDisk()
@@ -9820,7 +7624,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             DiagnosticsUsbChipText = $"USB: {(SelectedUsbTarget?.DisplayName ?? "none")}";
             DiagnosticsSystemChipText = $"System Intelligence: {SystemIntelligenceStatusText}";
             DiagnosticsToolkitChipText = $"Toolkit: {ToolkitStatusText}";
-            DiagnosticsKyraChipText = $"Kyra: {CopilotProviderBadgeText}";
             DiagnosticsUpdateChipText = $"Update: {AppUpdateMachineStateDisplay}";
             DiagnosticsActionCenterItems.Clear();
             DiagnosticsActionCenterItems.Add("[Warning] General | Missing diagnostics report | Run Refresh Backend Context | source: Diagnostics");
@@ -9843,7 +7646,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             DiagnosticsUsbChipText = $"USB: {(SelectedUsbTarget?.DisplayName ?? "none")}";
             DiagnosticsSystemChipText = $"System Intelligence: {SystemIntelligenceStatusText}";
             DiagnosticsToolkitChipText = $"Toolkit: {ToolkitStatusText}";
-            DiagnosticsKyraChipText = $"Kyra: {CopilotProviderBadgeText}";
             DiagnosticsUpdateChipText = $"Update: {AppUpdateMachineStateDisplay}";
             DiagnosticsActionCenterItems.Clear();
             foreach (var action in DiagnosticsUiFormatter.BuildActionCenterItems(root, limit: 5))
@@ -11607,97 +9409,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void RefreshCopilotContextText()
-    {
-        var reportPath = Path.Combine(GetRuntimeReportsDirectory(), "system-intelligence-latest.json");
-        if (!File.Exists(reportPath))
-        {
-            CopilotContextText = BuildCopilotUsbContext("System scan: not loaded");
-            CopilotContextSummaryText = BuildCopilotFriendlyContextSummary(null);
-            return;
-        }
 
-        try
-        {
-            using var document = JsonDocument.Parse(File.ReadAllText(reportPath));
-            RefreshCopilotContextText(document.RootElement);
-        }
-        catch
-        {
-            CopilotContextText = BuildCopilotUsbContext("System scan: parse failed");
-            CopilotContextSummaryText = BuildCopilotFriendlyContextSummary(null);
-        }
-    }
 
-    private void RefreshCopilotContextText(JsonElement root)
-    {
-        var summaryText = "System scan: loaded";
-        if (root.TryGetProperty("summary", out var summary))
-        {
-            summaryText =
-                $"Model: {GetJsonString(summary, "manufacturer", "Unknown")} {GetJsonString(summary, "model", string.Empty)}{Environment.NewLine}" +
-                $"CPU: {GetJsonString(summary, "cpu", "Unknown CPU")}{Environment.NewLine}" +
-                $"RAM: {GetJsonString(summary, "ramInstalledDisplay", GetJsonString(summary, "ramTotal", "Unknown RAM"))} @ {GetJsonString(summary, "ramConfiguredSpeedDisplay", GetJsonString(summary, "ramSpeed", "Configured speed not reported"))}{Environment.NewLine}" +
-                $"GPU: {FormatList(GetJsonGpuDisplayArray(summary, "gpus"), "Unknown GPU")}{Environment.NewLine}" +
-                $"Battery: {SystemIntelligenceBatteryText}{Environment.NewLine}" +
-                $"Storage: {SystemIntelligenceDiskHealthText}{Environment.NewLine}" +
-                $"Best use: {ShortenForSummary(SystemIntelligenceDeviceFitCardText)}{Environment.NewLine}" +
-                $"Hardware X-Ray: {ShortenForSummary(SystemIntelligenceHardwareXrayCardText)}";
-        }
 
-        CopilotContextText = BuildCopilotUsbContext(summaryText);
-        CopilotContextSummaryText = root.TryGetProperty("summary", out var friendlySummary)
-            ? BuildCopilotFriendlyContextSummary(friendlySummary)
-            : BuildCopilotFriendlyContextSummary(null);
-    }
-
-    private string BuildCopilotFriendlyContextSummary(JsonElement? summary)
-    {
-        var device = summary.HasValue
-            ? $"{GetJsonString(summary.Value, "manufacturer", "Unknown")} {GetJsonString(summary.Value, "model", string.Empty)}".Trim()
-            : "No local device snapshot loaded";
-        var cpu = summary.HasValue ? GetJsonString(summary.Value, "cpu", "Unknown") : "Unknown";
-        var ram = summary.HasValue
-            ? GetJsonString(summary.Value, "ramInstalledDisplay", GetJsonString(summary.Value, "ramTotal", "Unknown"))
-            : "Unknown";
-        var gpu = summary.HasValue ? FormatList(GetJsonGpuDisplayArray(summary.Value, "gpus"), "Unknown") : "Unknown";
-        var storage = SystemIntelligenceStorageCardText.StartsWith("UNKNOWN", StringComparison.OrdinalIgnoreCase)
-            ? "Run scan for storage health"
-            : ShortenForSummary(SystemIntelligenceStorageCardText);
-        var battery = SystemIntelligenceBatteryCardText.StartsWith("UNKNOWN", StringComparison.OrdinalIgnoreCase)
-            ? "Run scan for battery health"
-            : ShortenForSummary(SystemIntelligenceBatteryCardText);
-        var deviceFit = SystemIntelligenceDeviceFitCardText.StartsWith("Run a system scan", StringComparison.OrdinalIgnoreCase)
-            ? "Run scan for device-fit guidance"
-            : ShortenForSummary(SystemIntelligenceDeviceFitCardText);
-        var hardwareXray = SystemIntelligenceHardwareXrayCardText.StartsWith("Run a system scan", StringComparison.OrdinalIgnoreCase)
-            ? "Run scan for machine class and sensor coverage"
-            : ShortenForSummary(SystemIntelligenceHardwareXrayCardText);
-        var usb = SelectedUsbTarget is null
-            ? "none selected"
-            : $"{SelectedUsbTarget.RootPath} {SelectedUsbTarget.LabelDisplay}; {SelectedUsbTarget.DisplayTotalBytes}; {SelectedUsbTarget.SelectionStatusText}";
-
-        return
-            $"Device Context{Environment.NewLine}" +
-            $"- Device: {device}{Environment.NewLine}" +
-            $"- CPU: {cpu}{Environment.NewLine}" +
-            $"- RAM: {ram}{Environment.NewLine}" +
-            $"- GPU: {gpu}{Environment.NewLine}" +
-            $"- Storage: {storage}{Environment.NewLine}" +
-            $"- Battery: {battery}{Environment.NewLine}" +
-            $"- Best use: {deviceFit}{Environment.NewLine}" +
-            $"- Hardware X-Ray: {hardwareXray}{Environment.NewLine}" +
-            $"- USB: {usb}";
-    }
-
-    private string BuildCopilotUsbContext(string systemContext)
-    {
-        var usbContext = SelectedUsbTarget is null
-            ? "Selected USB target: none"
-            : $"Selected USB target: {SelectedUsbTarget.RootPath} {SelectedUsbTarget.LabelDisplay}; {SelectedUsbTarget.DisplayTotalBytes}; write {SelectedUsbTarget.WriteSpeedDisplayNormalized}; read {SelectedUsbTarget.ReadSpeedDisplayNormalized}; benchmark {SelectedUsbTarget.BenchmarkStatusDisplay}";
-
-        return $"{systemContext}{Environment.NewLine}{usbContext}";
-    }
 
     private static string ShortenForSummary(string value)
     {
@@ -12452,12 +10166,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             SetSelectedUsbTargetWithoutRefresh(replacement);
         }
 
-        RefreshCopilotContextText();
         RefreshUsbIntelligenceFromDisk();
         RaiseCommandStates();
         if (result.Succeeded)
         {
-            TryRecordKyraUsbBenchmarkLearning(result);
         }
     }
 
@@ -12474,142 +10186,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void LoadCopilotSettings()
-    {
-        CopilotProviderSettings.Clear();
-        LocalAiProviderSettings.Clear();
-        var copilotConfigExisted = File.Exists(_copilotConfigPath);
-        var settings = new CopilotSettingsStore(_copilotConfigPath, _copilotProviderRegistry).Load();
-        KyraInstallerIntelligenceRegistry.ApplyWhenNewConfig(settings, copilotConfigExisted);
-        _copilotSettings = settings;
 
-        _useLatestSystemScanContext = settings.UseLatestSystemScanContext;
-        _allowOnlineSystemContextSharing = settings.AllowOnlineSystemContextSharing;
-        _enableFreeProviderPool = settings.EnableFreeProviderPool;
-        _enableByokProviders = settings.EnableByokProviders;
-        foreach (var provider in _copilotProviderRegistry.Providers)
-        {
-            if (!settings.Providers.TryGetValue(provider.Id, out var providerConfig))
-            {
-                providerConfig = new CopilotProviderConfiguration
-                {
-                    IsEnabled = provider.EnabledByDefault,
-                    BaseUrl = provider.DefaultBaseUrl,
-                    ModelName = provider.DefaultModelName,
-                    ApiKeyEnvironmentVariable = provider.DefaultApiKeyEnvironmentVariable
-                };
-            }
-
-            var encryptedPresent = KyraProviderCredentialStore.Default.HasSecret(provider.Id);
-            CopilotProviderSettings.Add(new CopilotProviderSettingView
-            {
-                Id = provider.Id,
-                DisplayName = provider.DisplayName,
-                Category = provider.Category,
-                Status = provider.StatusText,
-                IsEnabled = providerConfig.IsEnabled,
-                IsConfigured = provider.IsConfigured(providerConfig),
-                IsPaidProvider = provider.IsPaidProvider,
-                IsPlaceholder = CopilotProviderStatusFormatter.IsPlaceholderProvider(provider),
-                BaseUrl = providerConfig.BaseUrl,
-                ModelName = providerConfig.ModelName,
-                ApiKeyEnvironmentVariable = providerConfig.ApiKeyEnvironmentVariable,
-                MaskedApiKey = KyraApiKeyStore.Mask(KyraApiKeyStore.GetSessionKey(provider.Id)),
-                KeyStorageMode = string.IsNullOrWhiteSpace(providerConfig.KeyStorageMode)
-                    ? (encryptedPresent ? "encrypted-local" : "environment")
-                    : providerConfig.KeyStorageMode,
-                SavedKeyPresent = encryptedPresent || providerConfig.SavedKeyPresent,
-                SavedKeyStatus = encryptedPresent ? "Protected local key present" : "No saved key",
-                LastTestResult = providerConfig.LastTestResult,
-                ProviderStatusLabel = CopilotProviderStatusFormatter.BuildStatusLabel(provider, providerConfig),
-                CredentialSourceText = CopilotProviderStatusFormatter.BuildCredentialSourceLine(provider, providerConfig)
-            });
-        }
-
-        SyncLocalAiProviderSettings();
-
-        var localOllamaEnabled = CopilotProviderSettings.Any(item => item.IsEnabled && string.Equals(item.Id, "ollama-local", StringComparison.OrdinalIgnoreCase));
-        var localLmStudioEnabled = CopilotProviderSettings.Any(item => item.IsEnabled && string.Equals(item.Id, "lm-studio-local", StringComparison.OrdinalIgnoreCase));
-        var anyOnlineConfigured = CopilotProviderSettings.Any(item => item.IsEnabled &&
-                                                                      item.IsConfigured &&
-                                                                      item.Id != "local-offline" &&
-                                                                      item.Id != "ollama-local" &&
-                                                                      item.Id != "lm-studio-local");
-        var normalizedMode = KyraModeConnectivity.NormalizeModeForAvailableProviders(settings.Mode, anyOnlineConfigured, localOllamaEnabled, localLmStudioEnabled);
-        if (normalizedMode != settings.Mode)
-        {
-            settings.Mode = normalizedMode;
-            _copilotSettings = settings;
-            try
-            {
-                new CopilotSettingsStore(_copilotConfigPath, _copilotProviderRegistry).Save(settings);
-            }
-            catch
-            {
-            }
-        }
-
-        if (!copilotConfigExisted)
-        {
-            try
-            {
-                new CopilotSettingsStore(_copilotConfigPath, _copilotProviderRegistry).Save(settings);
-            }
-            catch
-            {
-            }
-        }
-
-        _selectedCopilotMode = ToModeDisplayName(settings.Mode);
-        OnPropertyChanged(nameof(SelectedCopilotMode));
-
-        UpdateCopilotOnlineIndicator();
-        UpdateProviderDiagnosticsSummary();
-
-        try
-        {
-            var memStore = new KyraPersistentMemoryStore(_kyraMemoryPath);
-            var memDoc = memStore.Load();
-            if (memDoc.Enabled != settings.KyraPersistentMemoryEnabled)
-            {
-                memDoc.Enabled = settings.KyraPersistentMemoryEnabled;
-                KyraPersistentMemoryStore.SanitizeInPlace(memDoc);
-                memStore.Save(memDoc);
-            }
-        }
-        catch
-        {
-        }
-
-        OnPropertyChanged(nameof(KyraApiFirstRouting));
-        OnPropertyChanged(nameof(KyraOfflineFallbackEnabled));
-        OnPropertyChanged(nameof(KyraPersistentMemoryEnabled));
-        OnPropertyChanged(nameof(KyraLocalRepairMemoryEnabled));
-        OnPropertyChanged(nameof(KyraCommunitySharingEnabled));
-        OnPropertyChanged(nameof(KyraShareResolvedIssueFixPatterns));
-        OnPropertyChanged(nameof(KyraShareHardwareCompatibilityPerformancePatterns));
-        OnPropertyChanged(nameof(KyraShareCrashErrorDiagnostics));
-        OnPropertyChanged(nameof(KyraRealtimeGatewayEnabled));
-        OnPropertyChanged(nameof(KyraRealtimeGatewayResearchEnabled));
-        OnPropertyChanged(nameof(KyraRealtimeGatewayResearchConsent));
-        OnPropertyChanged(nameof(KyraUseSanitizedSystemIntelligenceContext));
-        OnPropertyChanged(nameof(IncludeUsbToolkitStatusInKyraContext));
-        OnPropertyChanged(nameof(KyraLiveToolsForBinding));
-        OnPropertyChanged(nameof(KyraDeveloperManagedProviderUi));
-        OnPropertyChanged(nameof(KyraTesterEditableProviders));
-    }
-
-    private void SyncLocalAiProviderSettings()
-    {
-        LocalAiProviderSettings.Clear();
-        foreach (var providerView in CopilotProviderSettings.Where(view =>
-                     string.Equals(view.Id, "ollama-local", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(view.Id, "lm-studio-local", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(view.Id, "local-offline", StringComparison.OrdinalIgnoreCase)))
-        {
-            LocalAiProviderSettings.Add(providerView);
-        }
-    }
 
     private void LoadBetaSettings()
     {
@@ -12646,7 +10223,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         BetaTesterEntitlement = entitlement;
         _neverShowWelcomeCenterAgain = neverShowWelcomeCenterAgain;
         BetaWelcomeVisibility = neverShowWelcomeCenterAgain ? Visibility.Collapsed : Visibility.Visible;
-        SeedBetaWelcomeKyraCheckboxesFromSettings();
 
         _verboseLiveLogs = verboseLogs;
         _experimentalEmbeddedWslRunner = embeddedWslRunner;
@@ -12656,7 +10232,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     public void OpenWelcomeCenter()
     {
-        SeedBetaWelcomeKyraCheckboxesFromSettings();
         BetaWelcomeVisibility = Visibility.Visible;
         AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Welcome Center opened.", LogSeverity.Info));
     }
@@ -12673,6 +10248,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         SaveBetaSettings();
         BetaWelcomeVisibility = Visibility.Collapsed;
         AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Welcome Center will no longer open automatically on launch. Reopen anytime from Settings.", LogSeverity.Info));
+    }
+
+    private void ShowWelcomeCenterInfo(string title, string body, string? actionText = null, Action? action = null)
+    {
+        if (WelcomeCenterInfoAction is not null)
+        {
+            WelcomeCenterInfoAction(title, body, actionText, action);
+            return;
+        }
+
+        AppendLog(new LogLine(DateTimeOffset.Now, $"[INFO] {title}: {body}", LogSeverity.Info));
     }
 
     private void SaveBetaSettings()
@@ -12697,410 +10283,18 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private CopilotSettings BuildCopilotSettingsFromUi()
-    {
-        var settings = _copilotSettings ?? new CopilotSettings();
-        settings.LiveTools ??= new KyraLiveToolsSettings();
-        settings.Mode = ToCopilotMode(SelectedCopilotMode);
-        settings.ProviderType = CopilotProviderType.LocalOffline;
-        settings.TimeoutSeconds = settings.TimeoutSeconds <= 0 ? ForgerEmsEnvironmentConfiguration.KyraProviderTimeoutSeconds : settings.TimeoutSeconds;
-        settings.OfflineFallbackEnabled = _copilotSettings?.OfflineFallbackEnabled ?? settings.OfflineFallbackEnabled;
-        settings.RedactContextEnabled = true;
-        settings.MaxContextCharacters = settings.MaxContextCharacters <= 0 ? ForgerEmsEnvironmentConfiguration.KyraContextMaxChars : settings.MaxContextCharacters;
-        settings.UseLatestSystemScanContext = UseLatestSystemScanContext;
-        settings.AllowOnlineSystemContextSharing = AllowOnlineSystemContextSharing;
-        settings.EnableFreeProviderPool = EnableFreeProviderPool;
-        settings.EnableByokProviders = EnableByokProviders;
-        settings.KyraLocalRepairMemoryEnabled = KyraLocalRepairMemoryEnabled;
-        settings.KyraCommunitySharingEnabled = KyraCommunitySharingEnabled;
-        settings.KyraShareResolvedIssueFixPatterns = KyraShareResolvedIssueFixPatterns && KyraCommunitySharingEnabled;
-        settings.KyraShareHardwareCompatibilityPerformancePatterns = KyraShareHardwareCompatibilityPerformancePatterns && KyraCommunitySharingEnabled;
-        settings.KyraShareCrashErrorDiagnostics = KyraShareCrashErrorDiagnostics && KyraCommunitySharingEnabled;
-        settings.KyraRealtimeGatewayEnabled = KyraRealtimeGatewayEnabled;
-        settings.KyraRealtimeGatewayResearchEnabled = KyraRealtimeGatewayResearchEnabled;
-        settings.KyraRealtimeGatewayResearchConsent = KyraRealtimeGatewayResearchConsent;
-        settings.KyraUseSanitizedSystemIntelligenceContext = KyraUseSanitizedSystemIntelligenceContext;
-        settings.IncludeUsbToolkitStatusInKyraContext = IncludeUsbToolkitStatusInKyraContext;
-        settings.MaxContextTurns = Math.Clamp(settings.MaxContextTurns <= 0 ? ForgerEmsEnvironmentConfiguration.KyraMaxContextTurns : settings.MaxContextTurns, 1, 200);
-        settings.ProviderPriorityCsv = string.IsNullOrWhiteSpace(settings.ProviderPriorityCsv)
-            ? ForgerEmsEnvironmentConfiguration.KyraProviderPriority
-            : settings.ProviderPriorityCsv;
-        settings.MemoryMode = string.IsNullOrWhiteSpace(settings.MemoryMode) ? ForgerEmsEnvironmentConfiguration.KyraMemoryMode : settings.MemoryMode;
-        settings.PersonalityProfile = string.IsNullOrWhiteSpace(settings.PersonalityProfile) ? ForgerEmsEnvironmentConfiguration.KyraPersonality : settings.PersonalityProfile;
 
-        foreach (var provider in _copilotProviderRegistry.Providers)
-        {
-            var view = CopilotProviderSettings.FirstOrDefault(item => string.Equals(item.Id, provider.Id, StringComparison.OrdinalIgnoreCase));
-            var isEnabled = view?.IsEnabled == true;
-            if (isEnabled && provider.ProviderType != CopilotProviderType.LocalOffline && settings.ProviderType == CopilotProviderType.LocalOffline)
-            {
-                settings.ProviderType = provider.ProviderType;
-            }
 
-            if (!settings.Providers.TryGetValue(provider.Id, out var providerConfig))
-            {
-                providerConfig = new CopilotProviderConfiguration
-                {
-                    BaseUrl = provider.DefaultBaseUrl,
-                    ModelName = provider.DefaultModelName,
-                    ApiKeyEnvironmentVariable = provider.DefaultApiKeyEnvironmentVariable,
-                    TimeoutSeconds = settings.TimeoutSeconds,
-                    MaxRequestsPerMinute = 12,
-                    MaxRetries = provider.IsOnlineProvider ? 1 : 0
-                };
-                settings.Providers[provider.Id] = providerConfig;
-            }
 
-            providerConfig.IsEnabled = isEnabled;
-            providerConfig.BaseUrl = string.IsNullOrWhiteSpace(view?.BaseUrl) ? provider.DefaultBaseUrl : view!.BaseUrl;
-            providerConfig.ModelName = string.IsNullOrWhiteSpace(view?.ModelName) ? provider.DefaultModelName : view!.ModelName;
-            providerConfig.ApiKeyEnvironmentVariable = string.IsNullOrWhiteSpace(view?.ApiKeyEnvironmentVariable)
-                ? provider.DefaultApiKeyEnvironmentVariable
-                : view!.ApiKeyEnvironmentVariable;
-            providerConfig.KeyStorageMode = string.IsNullOrWhiteSpace(view?.KeyStorageMode)
-                ? providerConfig.KeyStorageMode
-                : view!.KeyStorageMode;
-            providerConfig.SavedKeyPresent = view?.SavedKeyPresent == true || KyraProviderCredentialStore.Default.HasSecret(provider.Id);
-            providerConfig.LastTestResult = view?.LastTestResult ?? providerConfig.LastTestResult;
-            providerConfig.TimeoutSeconds = providerConfig.TimeoutSeconds <= 0 ? settings.TimeoutSeconds : providerConfig.TimeoutSeconds;
-            providerConfig.MaxRequestsPerMinute = providerConfig.MaxRequestsPerMinute <= 0 ? 12 : providerConfig.MaxRequestsPerMinute;
-            providerConfig.MaxRetries = providerConfig.MaxRetries < 0 ? 0 : providerConfig.MaxRetries;
-            providerConfig.DailyRequestCap = providerConfig.DailyRequestCap <= 0 ? (provider.IsOnlineProvider ? 60 : int.MaxValue) : providerConfig.DailyRequestCap;
-            providerConfig.MaxInputCharacters = providerConfig.MaxInputCharacters <= 0 ? settings.MaxInputCharactersOnline : providerConfig.MaxInputCharacters;
-            providerConfig.MaxOutputTokens = providerConfig.MaxOutputTokens <= 0 ? settings.MaxOutputTokensOnline : providerConfig.MaxOutputTokens;
 
-            if (!string.IsNullOrWhiteSpace(view?.SessionApiKey))
-            {
-                if (string.Equals(view.KeyStorageMode, "encrypted-local", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (KyraProviderCredentialStore.Default.SaveSecret(provider.Id, view.SessionApiKey, out var status))
-                    {
-                        KyraApiKeyStore.ClearSessionKey(provider.Id);
-                        view.SavedKeyPresent = true;
-                        view.SavedKeyStatus = status;
-                        view.MaskedApiKey = string.Empty;
-                    }
-                    else
-                    {
-                        KyraApiKeyStore.SetSessionKey(provider.Id, view.SessionApiKey);
-                        view.KeyStorageMode = "session";
-                        view.SavedKeyStatus = status;
-                        view.MaskedApiKey = KyraApiKeyStore.Mask(view.SessionApiKey);
-                    }
-                }
-                else if (string.Equals(view.KeyStorageMode, "session", StringComparison.OrdinalIgnoreCase))
-                {
-                    KyraApiKeyStore.SetSessionKey(provider.Id, view.SessionApiKey);
-                    view.MaskedApiKey = KyraApiKeyStore.Mask(view.SessionApiKey);
-                }
-                view.SessionApiKey = string.Empty;
-            }
 
-            if (view is not null)
-            {
-                view.SavedKeyPresent = KyraProviderCredentialStore.Default.HasSecret(provider.Id);
-                providerConfig.SavedKeyPresent = view.SavedKeyPresent;
-                view.IsConfigured = provider.IsConfigured(providerConfig);
-                view.ProviderStatusLabel = CopilotProviderStatusFormatter.BuildStatusLabel(provider, providerConfig);
-                view.CredentialSourceText = CopilotProviderStatusFormatter.BuildCredentialSourceLine(provider, providerConfig);
-            }
-        }
 
-        _copilotSettings = settings;
-        UpdateProviderDiagnosticsSummary();
-        return settings;
-    }
 
-    private void SaveCopilotSettings()
-    {
-        try
-        {
-            new CopilotSettingsStore(_copilotConfigPath, _copilotProviderRegistry).Save(BuildCopilotSettingsFromUi());
-        }
-        catch
-        {
-            // Copilot preferences are best effort.
-        }
-    }
 
-    private void UpdateCopilotOnlineIndicator()
-    {
-        var mode = ToCopilotMode(SelectedCopilotMode);
-        var localOllamaEnabled = CopilotProviderSettings.Any(item => item.IsEnabled && string.Equals(item.Id, "ollama-local", StringComparison.OrdinalIgnoreCase));
-        var localLmStudioEnabled = CopilotProviderSettings.Any(item => item.IsEnabled && string.Equals(item.Id, "lm-studio-local", StringComparison.OrdinalIgnoreCase));
-        var openAiConfigured = CopilotProviderSettings.Any(item => item.IsEnabled && item.IsConfigured && string.Equals(item.Id, "openai-compatible", StringComparison.OrdinalIgnoreCase));
-        var anyOnlineConfigured = CopilotProviderSettings.Any(item => item.IsEnabled &&
-                                                                      item.IsConfigured &&
-                                                                      item.Id != "local-offline" &&
-                                                                      item.Id != "ollama-local" &&
-                                                                      item.Id != "lm-studio-local");
-        var anyPricingConfigured = CopilotProviderSettings.Any(item => item.IsEnabled && item.IsConfigured && item.Category.Contains("Pricing", StringComparison.OrdinalIgnoreCase));
-        CopilotProviderBadgeText = KyraProviderStatusPresenter.GetProviderBadge(mode, localOllamaEnabled, localLmStudioEnabled, openAiConfigured, anyOnlineConfigured);
-        CopilotPrivacyBadgeText = KyraProviderStatusPresenter.GetPrivacyBadge(mode);
-        CopilotProviderSummaryText = KyraProviderStatusPresenter.GetOnlineSummary(
-            localOllamaEnabled,
-            localLmStudioEnabled,
-            openAiConfigured,
-            anyPricingConfigured,
-            anyOnlineConfigured);
 
-        CopilotRoutingPolicyText = mode == CopilotMode.HybridAuto
-            ? "Hybrid/API-first: local facts stay authoritative; online providers receive sanitized system context only when sharing is enabled."
-            : string.Empty;
 
-        if (mode == CopilotMode.OfflineOnly)
-        {
-            CopilotOnlineStatusText = "Kyra Mode: Offline Local - using local Kyra rules and local system context.";
-            CopilotOnlineStatusBackground = ReadyBackground;
-            CopilotOnlineStatusBorderBrush = ReadyBorder;
-            CopilotOnlineStatusForeground = ReadyForeground;
-            return;
-        }
 
-        CopilotOnlineStatusText = mode switch
-        {
-            CopilotMode.ForgerEmsBetaGateway => anyOnlineConfigured
-                ? "Kyra Mode: ForgerEMS Beta Gateway - gateway first, then BYOK/local/offline fallback."
-                : "ForgerEMS Gateway not configured. Local Kyra is active.",
-            CopilotMode.FreeApiPool => anyOnlineConfigured
-                ? "Kyra Mode: Free API Pool - using configured free-tier providers with local fallback."
-                : "Online provider not configured. Local Kyra is active. (Free API Pool selected but no provider is configured yet.)",
-            CopilotMode.BringYourOwnKey => anyOnlineConfigured
-                ? "Kyra Mode: BYOK - only configured BYOK providers will be used; Local Kyra fallback stays enabled."
-                : "Online provider not configured. Local Kyra is active. (BYOK selected but no paid provider is configured yet.)",
-            CopilotMode.AskFirst => "Kyra Mode: Hybrid (Ask First) - Kyra stays local/offline unless you explicitly choose an online lookup.",
-            CopilotMode.OnlineWhenAvailable => anyOnlineConfigured
-                ? "Kyra Mode: Online/API - Kyra can use sanitized provider context when you enable providers."
-                : "Online provider not configured. Local Kyra is active. (Online/API mode will use providers only after you configure one.)",
-            CopilotMode.OnlineAssisted => anyOnlineConfigured
-                ? "Kyra Mode: Online Assisted - providers may be used when configured."
-                : "Online provider not configured. Local Kyra is active.",
-            _ => anyOnlineConfigured || localOllamaEnabled || localLmStudioEnabled
-                ? "Kyra Mode: API-first hybrid - configured providers first, Local Kyra fallback always available."
-                : "Online provider not configured. Local Kyra is active."
-        };
-        var hasReachableProvider = anyOnlineConfigured || localOllamaEnabled || localLmStudioEnabled;
-        CopilotOnlineStatusBackground = hasReachableProvider ? WarningBackground : ReadyBackground;
-        CopilotOnlineStatusBorderBrush = hasReachableProvider ? WarningBorder : ReadyBorder;
-        CopilotOnlineStatusForeground = hasReachableProvider ? WarningForeground : ReadyForeground;
-        UpdateProviderDiagnosticsSummary();
-    }
 
-    private void ApplyCopilotOnlineIndicator(CopilotResponse response)
-    {
-        CopilotOnlineStatusText = response.OnlineStatus;
-        CopilotActiveProviderText = response.OnlineEnhancementApplied
-            ? "Kyra · online assist contributed"
-            : "Kyra";
-        var lastFailure = response.ProviderNotes.LastOrDefault(note => note.Contains("failed", StringComparison.OrdinalIgnoreCase) || note.Contains("timeout", StringComparison.OrdinalIgnoreCase) || note.Contains("rate limit", StringComparison.OrdinalIgnoreCase));
-        CopilotLastProviderFailureText = string.IsNullOrWhiteSpace(lastFailure) ? "Last provider failure: none" : $"Last provider failure: {lastFailure}";
-        UpdateProviderDiagnosticsSummary();
-        if (response.OnlineStatus.Contains("Error", StringComparison.OrdinalIgnoreCase))
-        {
-            CopilotOnlineStatusBackground = ErrorBackground;
-            CopilotOnlineStatusBorderBrush = ErrorBorder;
-            CopilotOnlineStatusForeground = ErrorForeground;
-            return;
-        }
-
-        if (response.UsedOnlineData)
-        {
-            CopilotOnlineStatusBackground = WarningBackground;
-            CopilotOnlineStatusBorderBrush = WarningBorder;
-            CopilotOnlineStatusForeground = WarningForeground;
-            return;
-        }
-
-        UpdateCopilotOnlineIndicator();
-        CopilotOnlineStatusText = response.OnlineStatus;
-    }
-
-    private void ClearProviderSessionKeys()
-    {
-        foreach (var providerView in CopilotProviderSettings)
-        {
-            KyraApiKeyStore.ClearSessionKey(providerView.Id);
-            providerView.SessionApiKey = string.Empty;
-            providerView.MaskedApiKey = string.Empty;
-        }
-
-        SaveCopilotSettings();
-    }
-
-    private void SaveProviderKey(CopilotProviderSettingView? providerView)
-    {
-        if (providerView is null)
-        {
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(providerView.SessionApiKey))
-        {
-            providerView.LastTestResult = "No key entered. Paste a key, choose storage, then save.";
-            return;
-        }
-
-        if (string.Equals(providerView.KeyStorageMode, "encrypted-local", StringComparison.OrdinalIgnoreCase))
-        {
-            if (KyraProviderCredentialStore.Default.SaveSecret(providerView.Id, providerView.SessionApiKey, out var status))
-            {
-                KyraApiKeyStore.ClearSessionKey(providerView.Id);
-                providerView.SessionApiKey = string.Empty;
-                providerView.MaskedApiKey = string.Empty;
-                providerView.SavedKeyPresent = true;
-                providerView.SavedKeyStatus = status;
-                providerView.LastTestResult = "Protected key saved. Test connection when ready.";
-            }
-            else
-            {
-                KyraApiKeyStore.SetSessionKey(providerView.Id, providerView.SessionApiKey);
-                providerView.MaskedApiKey = KyraApiKeyStore.Mask(providerView.SessionApiKey);
-                providerView.SessionApiKey = string.Empty;
-                providerView.KeyStorageMode = "session";
-                providerView.SavedKeyStatus = status;
-                providerView.LastTestResult = "Protected storage unavailable; using session-only key until app closes.";
-            }
-        }
-        else
-        {
-            providerView.KeyStorageMode = "session";
-            KyraApiKeyStore.SetSessionKey(providerView.Id, providerView.SessionApiKey);
-            providerView.MaskedApiKey = KyraApiKeyStore.Mask(providerView.SessionApiKey);
-            providerView.SessionApiKey = string.Empty;
-            providerView.LastTestResult = "Session key saved until app closes.";
-        }
-
-        SaveCopilotSettings();
-        RefreshCopilotProviderStatus();
-    }
-
-    private void ClearProviderKey(CopilotProviderSettingView? providerView)
-    {
-        if (providerView is null)
-        {
-            return;
-        }
-
-        KyraApiKeyStore.ClearSessionKey(providerView.Id);
-        KyraProviderCredentialStore.Default.ClearSecret(providerView.Id);
-        providerView.SessionApiKey = string.Empty;
-        providerView.MaskedApiKey = string.Empty;
-        providerView.SavedKeyPresent = false;
-        providerView.SavedKeyStatus = "No saved key";
-        providerView.LastTestResult = "Key cleared.";
-        SaveCopilotSettings();
-        RefreshCopilotProviderStatus();
-    }
-
-    private void UseProviderAsDefault(CopilotProviderSettingView? providerView)
-    {
-        if (providerView is null)
-        {
-            return;
-        }
-
-        foreach (var item in CopilotProviderSettings)
-        {
-            item.IsEnabled = string.Equals(item.Id, providerView.Id, StringComparison.OrdinalIgnoreCase) ||
-                             string.Equals(item.Id, "local-offline", StringComparison.OrdinalIgnoreCase);
-        }
-
-        SelectedCopilotMode = providerView.Id switch
-        {
-            "forgerems-gateway" => "ForgerEMS Beta Gateway",
-            "ollama-local" or "lm-studio-local" or "local-offline" => "Local Only",
-            _ => "BYOK"
-        };
-        providerView.LastTestResult = "Selected as preferred provider. Local fallback remains available.";
-        SaveCopilotSettings();
-        RefreshCopilotProviderStatus();
-    }
-
-    private async Task TestProviderConnectionAsync(CopilotProviderSettingView? providerView)
-    {
-        if (providerView is null)
-        {
-            return;
-        }
-
-        var provider = _copilotProviderRegistry.Providers.FirstOrDefault(p =>
-            string.Equals(p.Id, providerView.Id, StringComparison.OrdinalIgnoreCase));
-        if (provider is null)
-        {
-            providerView.LastTestResult = "Provider not found.";
-            return;
-        }
-
-        var settings = BuildCopilotSettingsFromUi();
-        var cfg = settings.Providers.TryGetValue(provider.Id, out var providerConfig)
-            ? providerConfig
-            : new CopilotProviderConfiguration();
-        cfg.LastTestedUtc = DateTimeOffset.UtcNow;
-
-        providerView.LastTestResult = "Testing connection with sanitized prompt...";
-        var result = await new KyraProviderConnectionTester()
-            .TestAsync(provider, cfg, settings, GetType().Assembly.GetName().Version?.ToString() ?? "unknown")
-            .ConfigureAwait(true);
-        providerView.LastTestResult = result.UserMessage;
-
-        cfg.LastTestResult = providerView.LastTestResult;
-        SaveCopilotSettings();
-        RefreshCopilotProviderStatus();
-    }
-
-    private void UpdateProviderDiagnosticsSummary()
-    {
-        var enabledCount = CopilotProviderSettings.Count(item => item.IsEnabled);
-        var configuredCount = CopilotProviderSettings.Count(item =>
-            item.IsEnabled && item.IsConfigured && !item.IsPlaceholder);
-        var coolingCount = CopilotProviderSettings.Count(item => item.ProviderStatusLabel.Contains("Rate limited", StringComparison.OrdinalIgnoreCase) || item.ProviderStatusLabel.Contains("Cooling", StringComparison.OrdinalIgnoreCase));
-        var fallback = CopilotOnlineStatusText.Contains("Local", StringComparison.OrdinalIgnoreCase) || CopilotOnlineStatusText.Contains("offline", StringComparison.OrdinalIgnoreCase)
-            ? "Fallback: Local Kyra active"
-            : "Fallback: not active";
-        CopilotDiagnosticsSummaryText =
-            $"Kyra online assistants — enabled: {enabledCount} | configured: {configuredCount} | cooling down: {coolingCount} | {fallback}";
-    }
-
-    private string GetProviderDisplayName(CopilotProviderType providerType)
-    {
-        return _copilotProviderRegistry.FindByType(providerType)?.DisplayName ?? providerType.ToString();
-    }
-
-    private static CopilotMode ToCopilotMode(string mode)
-    {
-        return mode switch
-        {
-            "ForgerEMS Beta Gateway" => CopilotMode.ForgerEmsBetaGateway,
-            "Local Only" => CopilotMode.OfflineOnly,
-            "Offline Only" => CopilotMode.OfflineOnly,
-            "Offline Local" => CopilotMode.OfflineOnly,
-            "Free API Pool" => CopilotMode.FreeApiPool,
-            "Hybrid" => CopilotMode.HybridAuto,
-            "Online/API" => CopilotMode.OnlineWhenAvailable,
-            "BYOK" => CopilotMode.BringYourOwnKey,
-            "Online Assisted" => CopilotMode.OnlineAssisted,
-            "Online When Available" => CopilotMode.OnlineWhenAvailable,
-            "Hybrid Auto" => CopilotMode.HybridAuto,
-            "Ask First" => CopilotMode.AskFirst,
-            _ => CopilotMode.OfflineOnly
-        };
-    }
-
-    private static string ToModeDisplayName(CopilotMode mode)
-    {
-        return mode switch
-        {
-            CopilotMode.ForgerEmsBetaGateway => "ForgerEMS Beta Gateway",
-            CopilotMode.FreeApiPool => "Free API Pool",
-            CopilotMode.BringYourOwnKey => "BYOK",
-            CopilotMode.ForgerEmsCloudFuture => "Online/API",
-            CopilotMode.OnlineAssisted => "Online Assisted",
-            CopilotMode.OnlineWhenAvailable => "Online/API",
-            CopilotMode.HybridAuto => "Hybrid",
-            CopilotMode.AskFirst => "Ask First",
-            _ => "Offline Local"
-        };
-    }
 
     private UsbTargetInfo ApplyCachedBenchmarkResult(UsbTargetInfo target)
     {
@@ -13562,7 +10756,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         try
         {
-            var safe = CopilotRedactor.Redact(line ?? string.Empty, enabled: true);
+            var safe = DiagnosticRedactor.Redact(line ?? string.Empty, enabled: true);
             _wslPendingOutputLines.Enqueue(safe);
             ScheduleWslOutputFlush();
         }
@@ -13853,7 +11047,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         try
         {
-            var safe = CopilotRedactor.Redact(line, enabled: true);
+            var safe = DiagnosticRedactor.Redact(line, enabled: true);
             var next = string.IsNullOrEmpty(WslRunnerOutputText)
                 ? safe
                 : WslRunnerOutputText + Environment.NewLine + safe;
@@ -13948,7 +11142,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 new Dictionary<string, string>
                 {
                     ["source"] = "wsl_host_args",
-                    ["display"] = CopilotRedactor.Redact(displayLine, enabled: true)
+                    ["display"] = DiagnosticRedactor.Redact(displayLine, enabled: true)
                 });
         }
         finally
@@ -14051,7 +11245,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 new Dictionary<string, string>
                 {
                     ["source"] = "wsl_shell_run",
-                    ["command"] = CopilotRedactor.Redact(cmd, enabled: true)
+                    ["command"] = DiagnosticRedactor.Redact(cmd, enabled: true)
                 });
         }
         finally
@@ -14262,11 +11456,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Copied file to quarantine (not executed): " + CopilotRedactor.Redact(dest, enabled: true), LogSeverity.Success));
+            AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Copied file to quarantine (not executed): " + DiagnosticRedactor.Redact(dest, enabled: true), LogSeverity.Success));
             LocalFileSafetyResultText = (LocalFileSafetyResultText ?? string.Empty) + Environment.NewLine + Environment.NewLine +
                                         "Copied to ForgerEMS quarantine with neutral extension (read-only copy; original untouched; no execution):" + Environment.NewLine +
-                                        CopilotRedactor.Redact(dest, enabled: true) + Environment.NewLine +
-                                        "Metadata: " + CopilotRedactor.Redact(metadataPath ?? "(not available)", enabled: true);
+                                        DiagnosticRedactor.Redact(dest, enabled: true) + Environment.NewLine +
+                                        "Metadata: " + DiagnosticRedactor.Redact(metadataPath ?? "(not available)", enabled: true);
         }
         catch (Exception exception)
         {
@@ -14307,7 +11501,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             LinkSafetyResultText = QuarantineDownloadService.FormatResult(result);
             if (result.Outcome == QuarantineOutcome.Quarantined)
             {
-                AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Downloaded to ForgerEMS quarantine (not executed): " + CopilotRedactor.Redact(result.PayloadPath ?? string.Empty, enabled: true), LogSeverity.Success));
+                AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Downloaded to ForgerEMS quarantine (not executed): " + DiagnosticRedactor.Redact(result.PayloadPath ?? string.Empty, enabled: true), LogSeverity.Success));
             }
             else if (result.Outcome == QuarantineOutcome.BlockedByExternalSecurity)
             {
@@ -15085,6 +12279,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
         _pendingInstallerUrl = state.PendingInstallerUrl;
         _pendingAdvancedInstallerUrl = state.PendingAdvancedInstallerUrl;
+        _pendingInstallerExpectedSha256 = state.PendingInstallerExpectedSha256;
+        _pendingAdvancedInstallerExpectedSha256 = state.PendingAdvancedInstallerExpectedSha256;
         _pendingReleaseNotesUrl = state.PendingReleaseNotesUrl;
         _pendingVersionLabel = state.PendingVersionLabel;
         _pendingZipUrlForClipboard = state.PendingZipUrlForClipboard;
@@ -15674,8 +12870,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             var tier = FeatureGateService.ResolveEffectiveTier(BetaTesterEntitlement);
             var configHealth =
-                KyraProviderHubConfigHealthFormatter.BuildSummary() +
-                Environment.NewLine +
                 $"Effective license tier (local): {tier}" + Environment.NewLine +
                 $"FORGEREMS_ENV: {ForgerEmsEnvironmentConfiguration.ForgerEmsEnv}" + Environment.NewLine +
                 $"FORGEREMS_RELEASE_CHANNEL: {ForgerEmsEnvironmentConfiguration.ReleaseChannel}" + Environment.NewLine +
@@ -15698,7 +12892,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 return;
             }
 
-            var redactedBundlePath = CopilotRedactor.Redact(dlg.FileName, enabled: true);
+            var redactedBundlePath = DiagnosticRedactor.Redact(dlg.FileName, enabled: true);
             var entryCount = 0;
             try
             {
@@ -15845,18 +13039,33 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private async Task DownloadPendingInstallerAsync()
     {
-        await DownloadPendingReleaseAssetAsync(_pendingInstallerUrl, isAdvancedInstaller: false).ConfigureAwait(false);
+        await DownloadPendingReleaseAssetAsync(
+            _pendingInstallerUrl,
+            _pendingInstallerExpectedSha256,
+            isAdvancedInstaller: false).ConfigureAwait(false);
     }
 
     private async Task DownloadPendingAdvancedInstallerAsync()
     {
-        await DownloadPendingReleaseAssetAsync(_pendingAdvancedInstallerUrl, isAdvancedInstaller: true).ConfigureAwait(false);
+        await DownloadPendingReleaseAssetAsync(
+            _pendingAdvancedInstallerUrl,
+            _pendingAdvancedInstallerExpectedSha256,
+            isAdvancedInstaller: true).ConfigureAwait(false);
     }
 
-    private async Task DownloadPendingReleaseAssetAsync(string downloadUrl, bool isAdvancedInstaller)
+    private async Task DownloadPendingReleaseAssetAsync(
+        string downloadUrl,
+        string expectedSha256,
+        bool isAdvancedInstaller)
     {
-        if (string.IsNullOrWhiteSpace(downloadUrl))
+        if (string.IsNullOrWhiteSpace(downloadUrl) || string.IsNullOrWhiteSpace(expectedSha256))
         {
+            RunOnUi(() =>
+            {
+                AppUpdateBannerDetail =
+                    "This asset cannot be downloaded automatically because no verified SHA-256 is bound to it. Use the GitHub Release page instead.";
+                AppUpdateStateDisplay = "Download unavailable.";
+            });
             return;
         }
 
@@ -15866,66 +13075,64 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             AppUpdateDownloadInstallerCommand.RaiseCanExecuteChanged();
             AppUpdateDownloadAdvancedInstallerCommand.RaiseCanExecuteChanged();
             AppUpdateBannerDetail = isAdvancedInstaller
-                ? "Downloading installer EXE (not running it; SmartScreen may prompt separately)…"
-                : "Downloading release asset (not running it)…";
+                ? "Downloading installer EXE (verified, not run; SmartScreen may prompt separately)…"
+                : "Downloading release asset (verified, not run)…";
             AppUpdateStateDisplay = "Downloading…";
         });
 
         try
         {
-            var updatesDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ForgerEMS", "Updates");
-            Directory.CreateDirectory(updatesDir);
-            var uri = new Uri(downloadUrl);
-            var fileName = Path.GetFileName(uri.LocalPath);
-            if (string.IsNullOrWhiteSpace(fileName))
-            {
-                fileName = isAdvancedInstaller ? "ForgerEMS-Update.exe" : "ForgerEMS-Update.zip";
-            }
+            var updatesDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "ForgerEMS", "Updates");
 
-            foreach (var c in Path.GetInvalidFileNameChars())
+            var isInstaller = downloadUrl.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
+            var request = new ForgerEMS.Wpf.Services.Resources.ArtifactDownloadService.ArtifactDownloadRequest
             {
-                fileName = fileName.Replace(c, '_');
-            }
-
-            var targetPath = Path.Combine(updatesDir, $"{DateTimeOffset.Now:yyyyMMdd-HHmmss}-{fileName}");
-
-            using var client = new HttpClient();
-            client.Timeout = TimeSpan.FromMinutes(20);
-            client.DefaultRequestHeaders.UserAgent.ParseAdd($"ForgerEMS-UpdateDownload/{AppReleaseInfo.Version}");
-            await using var stream = await client.GetStreamAsync(downloadUrl).ConfigureAwait(false);
-            await using var file = File.Create(targetPath);
-            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-            var buffer = new byte[81920];
-            long total = 0;
-            int read;
-            var maxBytes = fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
-                ? 650L * 1024 * 1024
-                : 280L * 1024 * 1024;
-            while ((read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length)).ConfigureAwait(false)) > 0)
-            {
-                total += read;
-                if (total > maxBytes)
+                RequestedId = "forgerems-self-update",
+                Version = _pendingVersionLabel,
+                Source = "github-release",
+                ArtifactUri = new Uri(downloadUrl),
+                ExpectedSha256 = expectedSha256,
+                // Installer EXEs must be Authenticode-signed by the expected publisher; the
+                // portable ZIP is hash-verified only and extracted manually by the user.
+                RequireAuthenticode = isInstaller,
+                ExpectedPublisher = isInstaller ? "Forger Digital Solutions" : null,
+                AllowedHosts = new[]
                 {
-                    throw new IOException("Download exceeds allowed size for this beta channel.");
+                    "github.com",
+                    "release-assets.githubusercontent.com",
+                    "objects.githubusercontent.com"
                 }
+            };
 
-                hash.AppendData(new ReadOnlySpan<byte>(buffer, 0, read));
-                await file.WriteAsync(buffer.AsMemory(0, read)).ConfigureAwait(false);
+            var download = await new ForgerEMS.Wpf.Services.Resources.ArtifactDownloadService()
+                .DownloadAsync(request, updatesDir)
+                .ConfigureAwait(false);
+
+            if (!download.VerifiedArtifactPresent || download.FinalPath is null)
+            {
+                RunOnUi(() =>
+                {
+                    AppUpdateBannerDetail = "Download failed verification: " + (download.Reason ?? download.State.ToString());
+                    AppUpdateStateDisplay = "Download failed.";
+                });
+                return;
             }
 
-            var sha = Convert.ToHexString(hash.GetHashAndReset());
-            _appUpdateSettings.LastDownloadPath = targetPath;
-            _appUpdateSettings.LastDownloadSha256 = sha;
+            _appUpdateSettings.LastDownloadPath = download.FinalPath;
+            _appUpdateSettings.LastDownloadSha256 = download.ActualSha256 ?? string.Empty;
             SaveUpdateSettings();
 
             RunOnUi(() =>
             {
                 AppUpdateBannerDetail =
-                    "Download complete (file was not run).\n" + targetPath + "\nSHA256: " + sha;
-                AppUpdateStateDisplay = "Download complete.";
+                    "Verified download complete — manual installation required (file was not run).\n" +
+                    download.FinalPath + "\nSHA256: " + download.ActualSha256;
+                AppUpdateStateDisplay = "Verified download complete.";
                 AppendLog(new LogLine(
                     DateTimeOffset.Now,
-                    "[OK] Update asset saved under local Updates folder (not executed).",
+                    "[OK] Verified update asset saved under local Updates folder (not executed).",
                     LogSeverity.Success));
             });
         }
@@ -15973,34 +13180,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void RefreshCopilotProviderStatus()
-    {
-        var settings = BuildCopilotSettingsFromUi();
-        foreach (var provider in _copilotProviderRegistry.Providers)
-        {
-            if (!settings.Providers.TryGetValue(provider.Id, out var providerConfig))
-            {
-                continue;
-            }
-
-            var view = CopilotProviderSettings.FirstOrDefault(item => string.Equals(item.Id, provider.Id, StringComparison.OrdinalIgnoreCase));
-            if (view is null)
-            {
-                continue;
-            }
-
-            view.IsConfigured = provider.IsConfigured(providerConfig);
-            view.ProviderStatusLabel = CopilotProviderStatusFormatter.BuildStatusLabel(provider, providerConfig);
-            view.CredentialSourceText = CopilotProviderStatusFormatter.BuildCredentialSourceLine(provider, providerConfig);
-            view.MaskedApiKey = KyraApiKeyStore.Mask(KyraApiKeyStore.GetSessionKey(provider.Id));
-            view.SavedKeyPresent = KyraProviderCredentialStore.Default.HasSecret(provider.Id);
-            view.SavedKeyStatus = KyraProviderCredentialStore.Default.BuildSanitizedStatus(provider.Id);
-            view.LastTestResult = providerConfig.LastTestResult;
-        }
-
-        UpdateCopilotOnlineIndicator();
-        AppendLog(new LogLine(DateTimeOffset.Now, "[INFO] Kyra provider status refreshed from environment and session (keys never logged).", LogSeverity.Info));
-    }
 
     private void ShowAbout()
     {
@@ -16018,7 +13197,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         ScrollableInfoWindow.Show(
             Application.Current?.MainWindow,
-            "ForgerEMS FAQ (Beta)",
+            $"ForgerEMS FAQ — v{AppReleaseInfo.DisplayVersion}",
             InfoDocumentTexts.BuildFaq());
     }
 
@@ -16026,7 +13205,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         ScrollableInfoWindow.Show(
             Application.Current?.MainWindow,
-            "ForgerEMS Legal (Beta)",
+            $"ForgerEMS Legal — v{AppReleaseInfo.DisplayVersion}",
             InfoDocumentTexts.BuildLegal());
     }
 
@@ -16467,8 +13646,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         CopyLocalFileToQuarantineCommand.RaiseCanExecuteChanged();
         CopyLogsCommand.RaiseCanExecuteChanged();
         ClearLogsCommand.RaiseCanExecuteChanged();
-        SendCopilotMessageCommand.RaiseCanExecuteChanged();
-        StopCopilotGenerationCommand.RaiseCanExecuteChanged();
         StartUsbPortMappingWorkflowCommand.RaiseCanExecuteChanged();
         CaptureUsbMappingBeforeCommand.RaiseCanExecuteChanged();
         CaptureUsbMappingAfterCommand.RaiseCanExecuteChanged();
@@ -16718,10 +13895,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private bool IsVisibleInFullLogViewer(LogLine line)
     {
-        if (!VerboseLiveLogs && line.Channel == LiveLogChannel.KyraDetail)
-        {
-            return false;
-        }
 
         var levelVisible = SelectedLogLevelFilter switch
         {
@@ -16974,7 +14147,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
 
         _disposed = true;
-        _copilotGenerationCancellation?.Cancel();
         _usbBenchmarkHostInterruptKind = UsbBenchmarkHostInterruptKind.AppShutdown;
         try
         {
@@ -17005,7 +14177,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             // time during shutdown is harmless.
         }
 
-        _copilotGenerationCancellation?.Dispose();
         _manualUsbBenchmarkCts?.Dispose();
         _autoUsbBenchmarkCts?.Dispose();
         CancelScheduledAutomaticUsbBenchmark();

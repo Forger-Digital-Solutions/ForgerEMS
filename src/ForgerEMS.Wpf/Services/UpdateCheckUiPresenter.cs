@@ -30,6 +30,10 @@ public sealed record UpdateCheckViewState(
     string InstalledVersionNormalized,
     string? LatestVersionNormalized,
     string PendingAdvancedInstallerUrl = "",
+    /// <summary>Expected SHA-256 for the primary (ZIP-preferred) pending download.</summary>
+    string PendingInstallerExpectedSha256 = "",
+    /// <summary>Expected SHA-256 for the advanced installer pending download.</summary>
+    string PendingAdvancedInstallerExpectedSha256 = "",
     Visibility AdvancedInstallerDownloadVisibility = Visibility.Collapsed,
     Visibility CopyZipLinkVisibility = Visibility.Collapsed,
     string PendingZipUrlForClipboard = "",
@@ -146,11 +150,15 @@ public static class UpdateCheckUiPresenter
                               string.Equals(notesUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
                               string.Equals(notesUri.Host, "github.com", StringComparison.OrdinalIgnoreCase);
 
+        // Downloads without a verifiable expected hash are never offered — the release page
+        // remains the only path for hash-less assets.
         var primaryUrl = result.HasRecommendedZipDownload
+            && !string.IsNullOrWhiteSpace(result.ExpectedZipSha256)
             ? result.RecommendedZipDownloadUrl!
             : string.Empty;
 
         var advancedExe = result.HasActionableInstaller
+            && !string.IsNullOrWhiteSpace(result.ExpectedInstallerSha256)
             ? result.InstallerDownloadUrl ?? string.Empty
             : string.Empty;
 
@@ -198,7 +206,7 @@ public static class UpdateCheckUiPresenter
         }
 
         var detail = string.Join(Environment.NewLine, extras);
-        var showPrimaryDownload = result.HasRecommendedZipDownload;
+        var showPrimaryDownload = !string.IsNullOrWhiteSpace(primaryUrl);
         var zipForCopy = result.HasRecommendedZipDownload ? result.RecommendedZipDownloadUrl! : string.Empty;
         var showCopyZip = result.HasRecommendedZipDownload ? Visibility.Visible : Visibility.Collapsed;
         var showChecksumCopy = !string.IsNullOrWhiteSpace(result.ChecksumsDownloadUrl) ||
@@ -232,6 +240,12 @@ public static class UpdateCheckUiPresenter
             InstalledVersionNormalized: installedNorm,
             LatestVersionNormalized: latestNorm,
             PendingAdvancedInstallerUrl: advancedExe,
+            PendingInstallerExpectedSha256: string.IsNullOrWhiteSpace(primaryUrl)
+                ? string.Empty
+                : result.ExpectedZipSha256 ?? string.Empty,
+            PendingAdvancedInstallerExpectedSha256: string.IsNullOrWhiteSpace(advancedExe)
+                ? string.Empty
+                : result.ExpectedInstallerSha256 ?? string.Empty,
             AdvancedInstallerDownloadVisibility: string.IsNullOrWhiteSpace(advancedExe)
                 ? Visibility.Collapsed
                 : Visibility.Visible,

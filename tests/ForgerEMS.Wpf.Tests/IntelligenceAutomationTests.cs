@@ -46,38 +46,6 @@ public sealed class IntelligenceAutomationTests
     }
 
     [Fact]
-    public void KyraSafeContextBuilder_RedactsLongTokens()
-    {
-        var tmp = Path.Combine(Path.GetTempPath(), $"kyra-safe-{Guid.NewGuid():N}.txt");
-        try
-        {
-            File.WriteAllText(
-                tmp,
-                """
-                {
-                  "forgerAutomation": {
-                    "summaryLine": "SECRET123456789012345678901234567890ABCDEF token"
-                  }
-                }
-                """);
-
-            var text = KyraSafeContextBuilder.BuildBriefSummary(tmp, null, null, null, enableRedaction: true);
-            Assert.DoesNotContain("SECRET123456789012345678901234567890ABCDEF", text);
-            Assert.Contains("[redacted]", text);
-        }
-        finally
-        {
-            try
-            {
-                File.Delete(tmp);
-            }
-            catch
-            {
-            }
-        }
-    }
-
-    [Fact]
     public void SystemIntelligenceAutomationMerger_WritesForgerAutomation()
     {
         var tmp = Path.Combine(Path.GetTempPath(), $"si-merge-{Guid.NewGuid():N}.json");
@@ -288,12 +256,5 @@ public sealed class IntelligenceAutomationTests
             {
             }
         }
-    }
-
-    [Fact]
-    public void KyraIntentRouter_UsbSlowRoutesToUsbBuilder()
-    {
-        Assert.Equal(KyraIntent.USBBuilderHelp, KyraIntentRouter.DetectIntent("Why is my USB stick so slow?"));
-        Assert.Equal(KyraIntent.USBBuilderHelp, KyraIntentRouter.DetectIntent("What is the best port to use for this USB stick?"));
     }
 }

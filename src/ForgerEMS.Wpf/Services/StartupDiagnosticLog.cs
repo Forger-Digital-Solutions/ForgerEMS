@@ -56,23 +56,23 @@ public static class StartupDiagnosticLog
             builder.AppendLine(FormattableString.Invariant($"[{DateTimeOffset.UtcNow:O}] ExceptionSource: {source}"));
             builder.AppendLine(FormattableString.Invariant($"ManagedThreadId: {Environment.CurrentManagedThreadId}"));
             builder.AppendLine(FormattableString.Invariant($"Type: {exception.GetType().FullName}"));
-            builder.AppendLine(FormattableString.Invariant($"Message: {CopilotRedactor.Redact(exception.Message, enabled: true)}"));
+            builder.AppendLine(FormattableString.Invariant($"Message: {DiagnosticRedactor.Redact(exception.Message, enabled: true)}"));
             if (exception.InnerException is not null)
             {
                 builder.AppendLine(FormattableString.Invariant(
-                    $"Inner: {exception.InnerException.GetType().FullName}: {CopilotRedactor.Redact(exception.InnerException.Message, enabled: true)}"));
+                    $"Inner: {exception.InnerException.GetType().FullName}: {DiagnosticRedactor.Redact(exception.InnerException.Message, enabled: true)}"));
             }
 
             if (context is not null)
             {
                 foreach (var pair in context)
                 {
-                    builder.AppendLine(FormattableString.Invariant($"{pair.Key}: {CopilotRedactor.Redact(pair.Value, enabled: true)}"));
+                    builder.AppendLine(FormattableString.Invariant($"{pair.Key}: {DiagnosticRedactor.Redact(pair.Value, enabled: true)}"));
                 }
             }
 
             builder.AppendLine("StackTrace:");
-            builder.AppendLine(CopilotRedactor.Redact(exception.ToString(), enabled: true));
+            builder.AppendLine(DiagnosticRedactor.Redact(exception.ToString(), enabled: true));
             AppendBlock(builder.ToString());
         }
         catch

@@ -22,4 +22,6 @@ ForgerEMS may include **LibreHardwareMonitorLib** as a bundled local read-only s
 - Packaged license path: `providers/sensors/LICENSES/LibreHardwareMonitor-MPL-2.0.txt`
 - Sensor notice documentation: [THIRD-PARTY-SENSOR-NOTICES.md](THIRD-PARTY-SENSOR-NOTICES.md)
 
+The **complete shipped notice bundle** lives under `providers/sensors/`: `THIRD-PARTY-NOTICES.txt` is the authoritative runtime notice — it discloses the embedded PawnIO modules (LGPL-2.1-or-later, corresponding source at `providers/sensors/SOURCE/`), the MPL/Apache dependency packages (BlackSharp, DiskInfoToolkit, RAMSPDToolkit, HidSharp) with their pinned upstream repositories, the resolved Microsoft package versions, the .NET runtime-pack licenses, and the Windows SDK/WinRT counsel-review flags. `providers/sensors/LICENSES/` carries every referenced license text.
+
 ForgerEMS proprietary code remains separate from MPL-covered LibreHardwareMonitor code. ForgerEMS does not redistribute HWiNFO, AIDA64, CPU-Z, or other proprietary sensor tools unless a license explicitly allows it.

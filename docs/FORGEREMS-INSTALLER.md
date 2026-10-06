@@ -3,13 +3,13 @@
 This document covers the lightweight Windows installer strategy for the native
 `ForgerEMS` frontend and the installed-mode backend bundle.
 
-## Current Preview Status
+## Current Release Status
 
-Current public preview:
+Current release:
 
-- App version: `1.2.4-preview.4`
-- Installer artifact: `ForgerEMS-Setup-v1.2.4-preview.4.exe`
-- Portable artifact: `ForgerEMS-v1.2.4-preview.4.zip`
+- App version: `1.2.4`
+- Installer artifact: `ForgerEMS-Setup-v1.2.4.exe`
+- Portable artifact: `ForgerEMS-v1.2.4.zip`
 
 ForgerEMS now ships both a direct installer and a true portable app ZIP. The
 portable ZIP contains `ForgerEMS.exe`, bundled backend/runtime content, docs,
@@ -79,11 +79,11 @@ Installer note:
 
 Current version example:
 
-- `1.2.4-preview.4`
+- `1.2.4`
 
 Installer output name:
 
-- `ForgerEMS-Setup-v1.2.4-preview.4.exe`
+- `ForgerEMS-Setup-v1.2.4.exe`
 
 Upgrade behavior:
 
@@ -155,7 +155,7 @@ What the script does:
 Expected installer output:
 
 ```text
-dist\installer\ForgerEMS-Setup-v1.2.4-preview.4.exe
+dist\installer\ForgerEMS-Setup-v1.2.4.exe
 ```
 
 Release staging output from `build-release.ps1` is generated under `release\current\`.
@@ -182,15 +182,24 @@ When you move to a new version:
 1. update the WPF project version metadata in
    `src\ForgerEMS.Wpf\ForgerEMS.Wpf.csproj`
 2. build/publish the new frontend
-3. build the installer with:
+3. build the installer. Production packaging is signed by default and fails
+   closed when no certificate is configured:
 
    ```powershell
-   .\tools\build-release.ps1 -Version 1.2.4-preview.4
+   .\tools\build-release.ps1 -Version 1.2.4 -RequireSigning -CertificateThumbprint <thumbprint>
+   ```
+
+   A local **unsigned candidate** for QA — never publishable — must be requested
+   explicitly and is marked `unsignedCandidate` / `productionEligible=false` in
+   its `release.json`:
+
+   ```powershell
+   .\tools\build-release.ps1 -Version 1.2.4 -UnsignedCandidate
    ```
 
 4. if desired, update any docs that explicitly mention the installer file name
 
-Versioned distribution artifacts (for example `ForgerEMS-Setup-v1.2.4-preview.4.exe` and `ForgerEMS-v1.2.4-preview.4.zip`) should be attached to a GitHub Release for the matching tag, rather than committed under `release\vX.Y.Z\`.
+Versioned distribution artifacts (for example `ForgerEMS-Setup-v1.2.4.exe` and `ForgerEMS-v1.2.4.zip`) should be attached to a GitHub Release for the matching tag, rather than committed under `release\vX.Y.Z\`.
 
 The `AppId` should stay the same so upgrades keep working.
 

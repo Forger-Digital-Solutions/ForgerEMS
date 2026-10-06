@@ -264,10 +264,10 @@ public static class DriverHubCatalog
                 new[] { "linux", "firmware", "lvfs", "fwupd" }),
             LinuxEntry(
                 "ubuntu-additional-drivers",
-                "Ubuntu Additional Drivers Guidance",
+                "Ubuntu NVIDIA / Additional Drivers Guidance",
                 "Ubuntu",
-                "Official Ubuntu community guidance for proprietary and additional driver management.",
-                "https://help.ubuntu.com/community/BinaryDriverHowto",
+                "Official Ubuntu documentation for installing NVIDIA drivers via Additional Drivers.",
+                "https://ubuntu.com/desktop/docs/en/latest/how-to/graphics/install-nvidia-drivers/",
                 @"Drivers\Linux\INFO - Ubuntu Additional Drivers.url",
                 new[] { "ubuntu", "linux", "additional drivers", "gpu" }),
             LinuxFirmwareEntry(

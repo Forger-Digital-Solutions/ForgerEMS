@@ -20,18 +20,24 @@ jobs:
   publish:
     name: Publish GitHub Release
     runs-on: windows-latest
+    # Protected environment: repository owner must configure 'production-release'
+    # with required reviewers and provision the Authenticode certificate in the
+    # runner certificate store (thumbprint via secret
+    # FORGEREMS_SIGNING_CERT_THUMBPRINT). This workflow never imports or creates
+    # certificates; -RequireSigning fails closed when they are absent.
+    environment: production-release
     defaults:
       run:
         shell: pwsh
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: 8.0.x
 
@@ -40,9 +46,11 @@ jobs:
 
       - name: Resolve version and assets
         id: meta
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
         run: |
           if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
-            $ver = '${{ inputs.version }}'.Trim()
+            $ver = "$env:VERSION_INPUT".Trim()
             $tag = "v$ver"
             git fetch --tags
             $ref = git rev-parse --verify "refs/tags/$tag" 2>$null
@@ -52,6 +60,19 @@ jobs:
           } else {
             $tag = $env:GITHUB_REF_NAME
             $ver = $tag.TrimStart('v')
+          }
+          if ($ver -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$') {
+            throw "Version '$ver' is not a strict semantic version; refusing to package."
+          }
+          # Fail closed if the tag does not point at the checked-out commit —
+          # never build a release from source other than the tagged revision.
+          $tagCommit = (git rev-parse --verify "refs/tags/$tag^{commit}" 2>$null).Trim()
+          $headCommit = (git rev-parse HEAD).Trim()
+          if (-not $tagCommit) {
+            throw "Could not resolve commit for tag '$tag'."
+          }
+          if ($tagCommit -ne $headCommit) {
+            throw "Tag '$tag' resolves to $tagCommit but checkout HEAD is $headCommit; refusing to build untagged source."
           }
           $installer = "ForgerEMS-Setup-v$ver.exe"
           $zip = "ForgerEMS-v$ver.zip"
@@ -64,7 +85,13 @@ jobs:
         run: .\tools\build-backend-release.ps1
 
       - name: Build release (installer + portable ZIP)
-        run: .\tools\build-release.ps1 -Version ${{ steps.meta.outputs.version }}
+        # Requires the signing certificate provisioned in the runner store under
+        # the protected 'production-release' environment; the build fails closed
+        # (before compilation) when it is absent.
+        env:
+          RELEASE_VERSION: ${{ steps.meta.outputs.version }}
+          FORGEREMS_SIGNING_CERT_THUMBPRINT: ${{ secrets.FORGEREMS_SIGNING_CERT_THUMBPRINT }}
+        run: .\tools\build-release.ps1 -Version $env:RELEASE_VERSION -RequireSigning -CertificateThumbprint $env:FORGEREMS_SIGNING_CERT_THUMBPRINT
 
       - name: Test (Release)
         run: dotnet test .\ForgerEMS.sln -c Release
@@ -80,7 +107,7 @@ jobs:
             "Download **$zip** for the portable ForgerEMS app package.$nl" +
             "Extract the ZIP, open the inner folder, then run **START_HERE.bat** or **ForgerEMS.exe**.$nl$nl" +
             "The installer **$exe** is published separately for users who prefer an installed app and are comfortable running a standalone installer.$nl$nl" +
-            "On first launch, review and accept the ForgerEMS Terms of Use before using the main tools. Review docs/TERMS_OF_USE.md, docs/PRIVACY_AND_DATA_HANDLING.md, and docs/LEGAL_NOTICES.md before sharing logs, support bundles, Kyra context, or exported reports.$nl$nl" +
+            "On first launch, review and accept the ForgerEMS Terms of Use before using the main tools. Review docs/TERMS_OF_USE.md, docs/PRIVACY_AND_DATA_HANDLING.md, and docs/LEGAL_NOTICES.md before sharing logs, support bundles, or exported reports.$nl$nl" +
             "**Incomplete Chrome download?** A .crdownload file is not finished — do not rename or run it. See docs/DOWNLOAD_TROUBLESHOOTING.md in the repo.$nl$nl" +
             "---$nl$nl" +
             "### Release assets$nl" +
@@ -106,7 +133,7 @@ jobs:
           Set-Content -LiteralPath "release-body.md" -Value $body -Encoding utf8
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
           name: ForgerEMS ${{ steps.meta.outputs.version }}

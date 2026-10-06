@@ -1,13 +1,13 @@
 # ForgerEMS Terms of Use
 
-Terms version: `2026-07-05.v1.2.4-preview.4`
-Applies to: ForgerEMS `v1.2.4-preview.4` public preview
+Terms version: `2026-10-06.v1.2.4`
+Applies to: ForgerEMS `v1.2.4`
 
 These are project-provided software terms for this preview build. They are not legal advice and no attorney review is claimed.
 
 ## What ForgerEMS Is
 
-ForgerEMS is a Windows technician utility suite from Forger Digital Solutions. It helps with local-device support workflows, USB toolkit/profile building, Driver Hub/vendor guidance, local device summaries (battery health and system specs), port/USB mapping, drive validation, safe removable-target benchmark workflows, and Kyra local-first help.
+ForgerEMS is a Windows technician utility suite from Forger Digital Solutions. It helps with local-device support workflows, USB toolkit/profile building, Driver Hub/vendor guidance, local device summaries (battery health and system specs), port/USB mapping, drive validation, and safe removable-target benchmark workflows.
 
 ## What ForgerEMS Is Not
 
@@ -19,15 +19,15 @@ You are responsible for checking the correct device, backing up data before risk
 
 ## Preview Limits
 
-This is prerelease software. Behavior, packaging, UI, docs, and features may change between builds. ForgerEMS does not guarantee diagnostics accuracy, repair results, data recovery, driver safety/compatibility, complete hardware telemetry, or Kyra answer accuracy.
+This is prerelease software. Behavior, packaging, UI, docs, and features may change between builds. ForgerEMS does not guarantee diagnostics accuracy, repair results, data recovery, driver safety/compatibility, or complete hardware telemetry.
 
 ## Third-party Tools and Downloads
 
 ForgerEMS may create vendor links, managed downloads, manual folders, and user-supplied media workflows. Third-party tools, drivers, firmware, operating-system media, and vendor downloads remain governed by their own licenses and terms. You are responsible for those licenses and vendor terms.
 
-## Logs, Support Bundles, and Kyra Context
+## Logs, Support Bundles, and Local Context
 
-General Terms acceptance does not grant permission to export/share logs or local context. ForgerEMS asks separately before packaging support bundles, Kyra memory, logs, or exported reports. Review files before sending them.
+General Terms acceptance does not grant permission to export/share logs or local context. ForgerEMS asks separately before packaging support bundles, logs, or exported reports. Review files before sending them.
 
 ## Acceptable Use
 

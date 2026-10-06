@@ -49,8 +49,6 @@ public sealed class DriveValidationFinalUiStateTests
             new ManagedDownloadResolverService(new HttpClient()),
             new AppRuntimeService(),
             new UsbBenchmarkService(new PowerShellRunnerService()),
-            new CopilotService(new CopilotProviderRegistry()),
-            new CopilotProviderRegistry(),
             driveValidationService: new ProgressEmittingStubService(result));
         vm.UsbTargets.Add(target);
         vm.SelectedUsbTarget = target;

@@ -4,7 +4,7 @@ namespace VentoyToolkitSetup.Wpf.Services;
 
 /// <summary>
 /// Central redaction for clipboard/support-safe summaries. Does not replace full log hygiene;
-/// use for user-facing copy/share paths in addition to <see cref="KyraSystemContextSanitizer"/>.
+/// use for user-facing copy/share paths in addition to <see cref="SupportContextSanitizer"/>.
 /// </summary>
 public static partial class SensitiveDataRedactor
 {
@@ -16,7 +16,7 @@ public static partial class SensitiveDataRedactor
             return string.Empty;
         }
 
-        var t = KyraSystemContextSanitizer.SanitizeForExternalProviders(text);
+        var t = SupportContextSanitizer.SanitizeForSupport(text);
 
         t = SerialLikeRegex().Replace(t, "[id redacted]");
         t = PnpInstanceRegex().Replace(t, "[device id redacted]");

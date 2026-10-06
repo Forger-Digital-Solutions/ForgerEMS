@@ -2101,6 +2101,294 @@ function Assert-ManifestDownloadModeField {
     }
 }
 
+$script:ResourcePolicyCache = $null
+
+function Get-ResourcePolicyDocument {
+    param([Parameter(Mandatory)][string]$ManifestPath)
+
+    if ($null -ne $script:ResourcePolicyCache) {
+        return $script:ResourcePolicyCache
+    }
+
+    $manifestDir = Split-Path -Parent $ManifestPath
+    $candidates = @(
+        (Join-Path $manifestDir "resource-policy.json"),
+        (Join-Path $manifestDir "manifests\resource-policy.json")
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate) {
+            try {
+                $script:ResourcePolicyCache = Get-Content -LiteralPath $candidate -Raw | ConvertFrom-Json
+                return $script:ResourcePolicyCache
+            }
+            catch {
+                Write-Log ("Failed to parse resource policy at {0}: {1}" -f $candidate, $_.Exception.Message) "WARN"
+            }
+        }
+    }
+
+    return $null
+}
+
+function Get-ResourcePolicyDescriptor {
+    param(
+        [Parameter(Mandatory)][string]$ManifestPath,
+        [Parameter(Mandatory)][string]$ResourceId
+    )
+
+    $policy = Get-ResourcePolicyDocument -ManifestPath $ManifestPath
+    if ($null -eq $policy) {
+        return $null
+    }
+
+    $descriptor = @($policy.resources) | Where-Object { [string]$_.id -eq $ResourceId } | Select-Object -First 1
+    if ($null -eq $descriptor) {
+        return $null
+    }
+
+    # Trusted download hosts = descriptor allowedHosts + source host + baseUrl host +
+    # (github-stable only) the three official GitHub artifact hosts.
+    $hosts = [System.Collections.Generic.List[string]]::new()
+    foreach ($h in @($descriptor.allowedHosts)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$h)) {
+            [void]$hosts.Add(([string]$h).Trim().ToLowerInvariant())
+        }
+    }
+    foreach ($urlProp in @("source", "baseUrl")) {
+        $u = $null
+        if ([Uri]::TryCreate([string]$descriptor.$urlProp, [UriKind]::Absolute, [ref]$u)) {
+            [void]$hosts.Add($u.Host.ToLowerInvariant())
+        }
+    }
+    if (([string]$descriptor.provider) -eq "github-stable") {
+        foreach ($h in @("github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com")) {
+            [void]$hosts.Add($h)
+        }
+    }
+
+    # Metadata TTL comes from the policy document, not a hardcoded constant.
+    $cacheTtl = 0
+    if ($null -ne $policy.cacheTtlMinutes) {
+        try { $cacheTtl = [int]$policy.cacheTtlMinutes } catch { $cacheTtl = 0 }
+    }
+
+    return [PSCustomObject]@{
+        ResourceId              = $ResourceId
+        Provider                = [string]$descriptor.provider
+        Repository              = [string]$descriptor.repository
+        AssetPattern            = [string]$descriptor.assetPattern
+        CacheTtlMinutes         = $cacheTtl
+        AllowedHostsForDownload = @($hosts | Select-Object -Unique)
+    }
+}
+
+# Fail-closed eligibility check for a resolved-overlay entry. Trust derives only from the
+# manifest hash binding and the resource-policy descriptor — never from overlay self-claims.
+function Test-ResolvedOverlayGate {
+    param(
+        $OverlayDoc,
+        $OverlayEntry,
+        [Parameter(Mandatory)][string]$ItemResourceId,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$ManifestHash,
+        $PolicyDescriptor
+    )
+
+    $reason = ""
+    $eligible = $false
+
+    if ($null -eq $OverlayDoc) {
+        $reason = "no resolved overlay document was loaded"
+    } elseif ($OverlayDoc.SchemaVersion -ne 1) {
+        $reason = "overlay schemaVersion is not 1"
+    } elseif ($null -eq $OverlayEntry) {
+        $reason = "no fresh overlay entry for resourceId '$ItemResourceId'"
+    } elseif ([string]::IsNullOrWhiteSpace($ItemResourceId) -or
+              ([string]$OverlayEntry.ResourceId) -ne $ItemResourceId) {
+        $reason = "overlay entry resourceId mismatch"
+    } elseif (-not ([string]$OverlayDoc.ManifestSha256 -match '^[0-9a-fA-F]{64}$')) {
+        $reason = "overlay has no 64-hex manifest SHA-256 binding"
+    } elseif ([string]::IsNullOrWhiteSpace($ManifestHash) -or
+              ([string]$OverlayDoc.ManifestSha256).ToLowerInvariant() -ne $ManifestHash.ToLowerInvariant()) {
+        $reason = "overlay manifest SHA-256 does not match the current manifest"
+    } elseif ([string]::IsNullOrWhiteSpace([string]$OverlayEntry.Url) -or
+              -not ([string]$OverlayEntry.Url).StartsWith("https://", [StringComparison]::OrdinalIgnoreCase)) {
+        $reason = "overlay entry has no HTTPS artifact URL"
+    } elseif (-not ([string]$OverlayEntry.Sha256 -match '^[0-9a-fA-F]{64}$')) {
+        $reason = "overlay entry lacks a 64-hex expected SHA-256"
+    } else {
+        $checkedAt = $null
+        $expiresAt = $null
+        $nowUtc = [DateTimeOffset]::UtcNow
+        try { $checkedAt = [DateTimeOffset]::Parse([string]$OverlayEntry.CheckedAtUtc) } catch {}
+        try { $expiresAt = [DateTimeOffset]::Parse([string]$OverlayEntry.ExpiresAtUtc) } catch {}
+        $cacheTtl = if ($null -ne $PolicyDescriptor) { [int]$PolicyDescriptor.CacheTtlMinutes } else { 0 }
+        if ($null -eq $checkedAt -or $null -eq $expiresAt) {
+            $reason = "overlay CheckedAtUtc/ExpiresAtUtc missing or malformed"
+        } elseif ($checkedAt -gt $nowUtc.AddMinutes(5)) {
+            $reason = "overlay CheckedAtUtc is in the future"
+        } elseif ($expiresAt -le $nowUtc) {
+            $reason = "overlay metadata is expired"
+        } elseif ($cacheTtl -le 0 -or $expiresAt -gt $checkedAt.AddMinutes($cacheTtl)) {
+            $reason = "overlay expiry exceeds the bounded policy TTL"
+        } else {
+            $uri = $null
+            [void][Uri]::TryCreate([string]$OverlayEntry.Url, [UriKind]::Absolute, [ref]$uri)
+            if ($null -eq $uri) {
+                $reason = "overlay artifact URL is not absolute"
+            } elseif ($uri.Scheme -ne "https" -or ($uri.Port -ne 443 -and $uri.Port -ne -1) -or
+                      -not [string]::IsNullOrEmpty($uri.UserInfo)) {
+                $reason = "overlay artifact URL must be https on port 443 without credentials"
+            } else {
+                $allowedHosts = @()
+                if ($null -ne $PolicyDescriptor -and $null -ne $PolicyDescriptor.AllowedHostsForDownload) {
+                    $allowedHosts = @($PolicyDescriptor.AllowedHostsForDownload)
+                }
+                if ($allowedHosts.Count -eq 0) {
+                    $reason = "no trusted host list in resource policy for '$ItemResourceId'"
+                } elseif ($allowedHosts -notcontains $uri.Host.ToLowerInvariant()) {
+                    $reason = "artifact host '$($uri.Host)' is not in the resource policy allowed hosts"
+                } else {
+                    # github-stable artifacts must be exact release-download URLs on the policy's own
+                    # repository; the filename must match the anchored policy assetPattern.
+                    $leaf = $uri.AbsolutePath.Substring($uri.AbsolutePath.LastIndexOf('/') + 1)
+                    $repoOk = $true
+                    if ($null -ne $PolicyDescriptor -and ([string]$PolicyDescriptor.Provider) -eq "github-stable") {
+                        $repo = ([string]$PolicyDescriptor.Repository).Trim('/')
+                        $expectedPrefix = "/" + $repo + "/releases/download/"
+                        $repoOk = -not [string]::IsNullOrWhiteSpace($repo) -and
+                                  $uri.Host.Equals("github.com", [StringComparison]::OrdinalIgnoreCase) -and
+                                  $uri.AbsolutePath.StartsWith($expectedPrefix, [StringComparison]::Ordinal)
+                    }
+                    if (-not $repoOk) {
+                        $reason = "overlay artifact URL is not a release download on the policy repository"
+                    } elseif (-not [string]::IsNullOrWhiteSpace([string]$PolicyDescriptor.AssetPattern) -and
+                              -not ([System.Text.RegularExpressions.Regex]::IsMatch(
+                                  $leaf, [string]$PolicyDescriptor.AssetPattern,
+                                  [System.Text.RegularExpressions.RegexOptions]::IgnoreCase))) {
+                        $reason = "overlay artifact filename does not match the policy asset pattern"
+                    } else {
+                        $eligible = $true
+                    }
+                }
+            }
+        }
+    }
+
+    return [PSCustomObject]@{ Eligible = $eligible; Reason = $reason }
+}
+
+# Trusted transfer for requiresResolution items: manual redirects only, every hop must be
+# https/443/no-credentials on a policy-allowed host, bounded size and timeout. No generic
+# fallback chain (Invoke-WebRequest/curl) is permitted for these payloads.
+function Invoke-TrustedManagedDownload {
+    param(
+        [Parameter(Mandatory)][string]$Url,
+        [Parameter(Mandatory)][string]$OutFile,
+        [Parameter(Mandatory)][string[]]$AllowedHosts,
+        [int]$TimeoutSec = 600,
+        [long]$MaxBytes = 8GB,
+        [string]$UserAgent = "ForgerEMS-Updater/3.1",
+        [int]$MaxRedirects = 5
+    )
+
+    Add-Type -AssemblyName System.Net.Http | Out-Null
+
+    $handler = New-Object System.Net.Http.HttpClientHandler
+    $handler.AllowAutoRedirect = $false
+    $client = New-Object System.Net.Http.HttpClient($handler)
+    $client.Timeout = [TimeSpan]::FromSeconds($TimeoutSec)
+
+    $current = $null
+    if (-not [Uri]::TryCreate($Url, [UriKind]::Absolute, [ref]$current)) {
+        $client.Dispose()
+        throw "Trusted download URL is not absolute."
+    }
+
+    $lowerHosts = @($AllowedHosts | ForEach-Object { ([string]$_).Trim().ToLowerInvariant() })
+
+    try {
+        $redirects = 0
+        while ($true) {
+            if ($current.Scheme -ne "https" -or ($current.Port -ne 443 -and $current.Port -ne -1) -or
+                -not [string]::IsNullOrEmpty($current.UserInfo)) {
+                throw "Trusted download hop must be https on port 443 without credentials: $($current.Host)$($current.AbsolutePath)"
+            }
+            if ($lowerHosts -notcontains $current.Host.ToLowerInvariant()) {
+                throw "Trusted download host '$($current.Host)' is not authorized by the resource policy."
+            }
+
+            $request = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Get, $current)
+            $request.Headers.UserAgent.ParseAdd($UserAgent)
+            $response = $client.SendAsync($request, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).GetAwaiter().GetResult()
+            $request.Dispose()
+
+            try {
+                $code = [int]$response.StatusCode
+                if ($code -ge 300 -and $code -lt 400) {
+                    $redirects++
+                    if ($redirects -gt $MaxRedirects) {
+                        throw "Trusted download exceeded $MaxRedirects redirects."
+                    }
+                    $location = $response.Headers.Location
+                    if ($null -eq $location) {
+                        throw "Trusted download redirect carried no Location header."
+                    }
+                    $next = if ($location.IsAbsoluteUri) { $location } else { New-Object System.Uri($current, $location) }
+                    $current = $next
+                    continue
+                }
+
+                if (-not $response.IsSuccessStatusCode) {
+                    throw "Trusted download failed with HTTP $code."
+                }
+
+                $declared = 0
+                if ($response.Content.Headers.ContentLength.HasValue) {
+                    $declared = [int64]$response.Content.Headers.ContentLength.Value
+                    if ($declared -gt $MaxBytes) {
+                        throw "Trusted download exceeds the $MaxBytes byte cap (declared $declared)."
+                    }
+                }
+
+                $responseStream = $response.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
+                $fileStream = New-Object System.IO.FileStream($OutFile, [IO.FileMode]::Create, [IO.FileAccess]::Write, [IO.FileShare]::None)
+                try {
+                    $buffer = New-Object byte[] 1048576
+                    $total = [int64]0
+                    while (($read = $responseStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                        $total += [int64]$read
+                        if ($total -gt $MaxBytes) {
+                            throw "Trusted download exceeded the $MaxBytes byte cap while streaming."
+                        }
+                        $fileStream.Write($buffer, 0, $read)
+                    }
+                    if ($declared -gt 0 -and $total -ne $declared) {
+                        throw "Trusted download byte count $total does not match declared Content-Length $declared."
+                    }
+                }
+                finally {
+                    $fileStream.Dispose()
+                    $responseStream.Dispose()
+                }
+
+                return [PSCustomObject]@{
+                    Method       = "TrustedHttpClient"
+                    StatusCode   = $code
+                    ReasonPhrase = [string]$response.ReasonPhrase
+                    FinalUri     = $current.AbsoluteUri
+                    Bytes        = $total
+                }
+            }
+            finally {
+                $response.Dispose()
+            }
+        }
+    }
+    finally {
+        $client.Dispose()
+    }
+}
+
 function Assert-ManifestContract {
     param(
         [Parameter(Mandatory)]$Manifest,
@@ -2195,6 +2483,19 @@ function Assert-ManifestContract {
         if ($null -ne $item.sha512Url -and -not [string]::IsNullOrWhiteSpace([string]$item.sha512Url)) {
             if ($type -ne "file") {
                 throw "$prefix.sha512Url is only valid for file items."
+            }
+        }
+
+        if ($null -ne $item.PSObject.Properties['requiresResolution'] -and $null -ne $item.requiresResolution) {
+            Assert-ManifestBooleanField -Value $item.requiresResolution -FieldName "$prefix.requiresResolution"
+            if ([bool]$item.requiresResolution) {
+                if ([string]::IsNullOrWhiteSpace([string]$item.resourceId)) {
+                    throw "$prefix.resourceId is required when requiresResolution is true."
+                }
+                $resolveStrategy = ([string]$item.resolveStrategy).Trim().ToLowerInvariant()
+                if ($resolveStrategy -notin @("github-stable", "checksum-index", "ubuntu-lts", "official-page")) {
+                    throw "$prefix.resolveStrategy '$resolveStrategy' is not a known resource provider."
+                }
             }
         }
 
@@ -2315,6 +2616,7 @@ Write-Log ("Release: " + $(if ($manifest.releaseType) { ([string]$manifest.relea
 Write-Log "Root: $root" "INFO"
 Write-Log "Manifest: $manifestPath" "INFO"
 $script:ResolvedOverlay = $null
+$script:ResolvedOverlayDoc = $null
 if (-not [string]::IsNullOrWhiteSpace($ResolvedOverlayPath) -and (Test-Path -LiteralPath $ResolvedOverlayPath)) {
     try {
         $overlayRaw = Get-Content -LiteralPath $ResolvedOverlayPath -Raw | ConvertFrom-Json
@@ -2324,13 +2626,19 @@ if (-not [string]::IsNullOrWhiteSpace($ResolvedOverlayPath) -and (Test-Path -Lit
             if (-not [string]::IsNullOrWhiteSpace($oName)) {
                 $overlayMap[$oName] = $oItem
             }
+            $oResourceId = [string]$oItem.ResourceId
+            if (-not [string]::IsNullOrWhiteSpace($oResourceId)) {
+                $overlayMap[("rid:" + $oResourceId)] = $oItem
+            }
         }
         $script:ResolvedOverlay = $overlayMap
-        Write-Log ("Resolved overlay loaded: {0} entries from {1}" -f $overlayMap.Count, $ResolvedOverlayPath) "OK"
+        $script:ResolvedOverlayDoc = $overlayRaw
+        Write-Log ("Resolved overlay loaded: {0} entries from {1}" -f @($overlayRaw.Items).Count, $ResolvedOverlayPath) "OK"
     }
     catch {
         Write-Log ("Failed to load resolved overlay from {0}: {1}" -f $ResolvedOverlayPath, $_.Exception.Message) "WARN"
         $script:ResolvedOverlay = $null
+        $script:ResolvedOverlayDoc = $null
     }
 }
 elseif (-not [string]::IsNullOrWhiteSpace($ResolvedOverlayPath)) {
@@ -2562,7 +2870,7 @@ ForgerEMS Portable App
 
 Run ForgerEMS.exe from this folder. Review _docs\ForgerEMS for Terms of Use, Privacy/Data Handling, Legal Notices, FAQ, About, and third-party notices.
 
-Logs/support files are local. Review exported logs, Kyra context, reports, and support bundles before sending them.
+Logs/support files are local. Review exported logs, reports, and support bundles before sending them.
 "@
     if ($PSCmdlet.ShouldProcess($portableReadme, "Write ForgerEMS portable README")) {
         Set-Content -LiteralPath $portableReadme -Value $portableReadmeText -Encoding UTF8
@@ -2654,8 +2962,51 @@ foreach ($item in $orderedItems) {
     $type = ([string]$(if ($item.type) { $item.type } else { "file" })).Trim().ToLowerInvariant()
     $url  = ([string]$item.url).Trim()
     $resolvedFromOverlay = $null
-    if ($script:ResolvedOverlay -and $script:ResolvedOverlay.Contains($name)) {
-        $overlayEntry = $script:ResolvedOverlay[$name]
+
+    $itemRequiresResolution = $false
+    if ($null -ne $item.PSObject.Properties['requiresResolution'] -and $null -ne $item.requiresResolution) {
+        $itemRequiresResolution = [bool]$item.requiresResolution
+    }
+    $itemResourceId = ([string]$item.resourceId).Trim()
+
+    $overlayEntry = $null
+    if ($script:ResolvedOverlay) {
+        if ($itemRequiresResolution -and -not [string]::IsNullOrWhiteSpace($itemResourceId) -and
+            $script:ResolvedOverlay.Contains("rid:" + $itemResourceId)) {
+            $overlayEntry = $script:ResolvedOverlay["rid:" + $itemResourceId]
+        }
+        elseif (-not $itemRequiresResolution -and $script:ResolvedOverlay.Contains($name)) {
+            $overlayEntry = $script:ResolvedOverlay[$name]
+        }
+    }
+
+    if ($itemRequiresResolution) {
+        # Load the trusted resource-policy descriptor for allowedHosts; the overlay's own
+        # host list is informational only and never authorizes anything by itself.
+        $policyDescriptor = $null
+        if (-not [string]::IsNullOrWhiteSpace($itemResourceId)) {
+            $policyDescriptor = Get-ResourcePolicyDescriptor -ManifestPath $manifestPath -ResourceId $itemResourceId
+        }
+
+        $overlayGate = Test-ResolvedOverlayGate -OverlayDoc $script:ResolvedOverlayDoc `
+            -OverlayEntry $overlayEntry -ItemResourceId $itemResourceId `
+            -ManifestHash $manifestHash -PolicyDescriptor $policyDescriptor
+
+        if ($overlayGate.Eligible) {
+            $url = [string]$overlayEntry.Url
+            $resolvedFromOverlay = [string]$overlayEntry.ResolvedVersion
+            $item | Add-Member -NotePropertyName "sha256" -NotePropertyValue ([string]$overlayEntry.Sha256).ToLowerInvariant() -Force
+            # Clear stale pinned checksum URLs; the overlay hash is authoritative.
+            if ($null -ne $item.PSObject.Properties['sha256Url']) { $item.sha256Url = "" }
+            if ($null -ne $item.PSObject.Properties['sha512Url']) { $item.sha512Url = "" }
+            Write-Log "Resolved overlay applied for '$name' (resourceId=$itemResourceId): version=$resolvedFromOverlay" "OK"
+        } else {
+            Write-Log ("SKIP (RequiresUserAction): managed item '{0}' requires a fresh verified overlay: {1}. No landing-page, API, or pinned fallback payload is downloaded." -f $name, $overlayGate.Reason) "WARN"
+            $script:Summary.Failed++
+            continue
+        }
+    }
+    elseif ($null -ne $overlayEntry) {
         $overlayUrl = [string]$overlayEntry.Url
         $overlaySha = [string]$overlayEntry.Sha256
         if (-not [string]::IsNullOrWhiteSpace($overlayUrl)) {
@@ -2908,7 +3259,16 @@ foreach ($item in $orderedItems) {
 
     try {
         Write-Log "Download start: $name" "INFO"
-        $downloadResult = Download-File -Url $url -OutFile $tmpPath -TimeoutSec $itemTimeout -UserAgent $userAgent -Retries $retries -ItemName $name
+        if ($itemRequiresResolution) {
+            # Resolved-overlay payloads use ONLY the trusted transfer: manual redirects with
+            # per-hop policy host validation — no Invoke-WebRequest/curl fallback chain.
+            $downloadResult = Invoke-TrustedManagedDownload -Url $url -OutFile $tmpPath `
+                -AllowedHosts @($policyDescriptor.AllowedHostsForDownload) `
+                -TimeoutSec $itemTimeout -UserAgent $userAgent
+        }
+        else {
+            $downloadResult = Download-File -Url $url -OutFile $tmpPath -TimeoutSec $itemTimeout -UserAgent $userAgent -Retries $retries -ItemName $name
+        }
         if ($downloadResult) {
             if (-not [string]::IsNullOrWhiteSpace([string]$downloadResult.AttemptSummary)) {
                 Write-Log "Downloader methods attempted: $($downloadResult.AttemptSummary)" "INFO"

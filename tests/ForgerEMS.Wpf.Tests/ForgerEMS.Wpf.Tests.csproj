@@ -16,12 +16,14 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
-    <Using Include="Kyra.Core" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Kyra.Core\Kyra.Core.csproj" BuildReference="true" ReferenceOutputAssembly="true" SkipGetTargetFrameworkProperties="true" />
     <ProjectReference Include="..\..\src\ForgerEMS.Wpf\ForgerEMS.Wpf.csproj" BuildReference="true" ReferenceOutputAssembly="true" SkipGetTargetFrameworkProperties="true" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Fixtures\windows-maintenance-schema1.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

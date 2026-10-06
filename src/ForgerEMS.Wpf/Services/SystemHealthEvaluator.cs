@@ -1,6 +1,4 @@
 ﻿#pragma warning disable CA1822 // DI-related code; instance methods called via interface references
-// FORGEREMS_KYRA_ADAPTER: ForgerEMS-specific coupling; stays in ForgerEMS.KyraAdapter.
-// ForgerEMS health heuristics; extract an IHealthEvaluator<T> interface for Kyra.Core.
 using System.Globalization;
 using System.IO;
 using System.Net.Http;
@@ -13,8 +11,6 @@ using VentoyToolkitSetup.Wpf.Infrastructure;
 using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services.Compatibility;
 using VentoyToolkitSetup.Wpf.Services.Intelligence;
-using VentoyToolkitSetup.Wpf.Services.Kyra;
-using VentoyToolkitSetup.Wpf.Services.KyraTools;
 
 namespace VentoyToolkitSetup.Wpf.Services;
 

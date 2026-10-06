@@ -15,8 +15,8 @@ public sealed class AppUpdateSettings
 
     public string LastDownloadSha256 { get; set; } = string.Empty;
 
-    /// <summary>When true (default for beta builds), GitHub prerelease/RC tags are considered. When false, stable releases only.</summary>
-    public bool IncludeBetaRcChannels { get; set; } = true;
+    /// <summary>When true, GitHub prerelease/RC releases are considered. Default false (stable only); an explicit persisted choice is preserved on load.</summary>
+    public bool IncludeBetaRcChannels { get; set; }
 }
 
 public sealed class AppUpdateSettingsStore

@@ -270,6 +270,29 @@
             ],
             "description": "First-class technician action mode. Optional for backward compatibility; legacy manifests infer from type/manualOnly/kind/sourceTrust/notes."
           },
+          "resourceId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Stable resource id in manifests/resource-policy.json. Required when requiresResolution is true; overlays bind by this id, never by display name."
+          },
+          "requiresResolution": {
+            "type": "boolean",
+            "description": "True when the item's artifact URL and expected SHA-256 must be resolved at runtime from the resource policy overlay before any download. Such items carry no static checksum; a fresh verified overlay entry is required."
+          },
+          "resolveStrategy": {
+            "type": "string",
+            "enum": [
+              "pinned",
+              "github-stable",
+              "checksum-index",
+              "ubuntu-lts",
+              "official-page",
+              "github-latest",
+              "sourceforge-project",
+              "directory-scan"
+            ],
+            "description": "Metadata resolution strategy. Provider names (github-stable/checksum-index/ubuntu-lts/official-page) bind to manifests/resource-policy.json; legacy strategies are retained for backward compatibility."
+          },
           "actionLabel": {
             "type": "string",
             "description": "Optional primary technician-facing action label. When absent, UI derives a label from downloadMode."

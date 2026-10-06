@@ -73,16 +73,20 @@ function Ensure-Dir {
     }
 }
 
-function Get-ProjectVersion {
-    param([Parameter(Mandatory)][string]$ProjectPath)
+function Get-RepoVersion {
+    param([Parameter(Mandatory)][string]$RepoRoot)
 
-    [xml]$projectXml = Get-Content -LiteralPath $ProjectPath -Raw
-    $versionNode = $projectXml.Project.PropertyGroup.Version | Select-Object -First 1
-    if ([string]::IsNullOrWhiteSpace([string]$versionNode)) {
-        throw "Could not read <Version> from $ProjectPath"
+    $versionFile = Join-Path $RepoRoot "VERSION"
+    if (-not (Test-Path -LiteralPath $versionFile)) {
+        throw "Authoritative version file not found: $versionFile"
     }
 
-    return [string]$versionNode
+    $value = (Get-Content -LiteralPath $versionFile -Raw).Trim()
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        throw "VERSION file is empty: $versionFile"
+    }
+
+    return $value
 }
 
 if (-not (Test-Path -LiteralPath $csprojPath)) {
@@ -101,7 +105,7 @@ if (-not (Test-Path -LiteralPath $installerScriptPath)) {
     throw "Installer script not found: $installerScriptPath"
 }
 
-$version = Get-ProjectVersion -ProjectPath $csprojPath
+$version = Get-RepoVersion -RepoRoot $appRoot
 $expectedInstallerPath = Join-Path $installerDistRoot ("ForgerEMS-Setup-v{0}.exe" -f $version)
 
 Write-Host "Refreshing bundled backend stage..." -ForegroundColor Cyan

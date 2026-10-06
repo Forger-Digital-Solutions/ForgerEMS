@@ -27,7 +27,7 @@ public sealed class DriverHubUiContractTests
         var xaml = LoadMainWindowXaml();
         var tabStart = xaml.IndexOf("<TabItem Header=\"▥  Driver Hub\">", StringComparison.Ordinal);
         Assert.True(tabStart >= 0);
-        var tabEnd = xaml.IndexOf("<TabItem Header=\"◇  Kyra (Beta)\">", tabStart, StringComparison.Ordinal);
+        var tabEnd = xaml.IndexOf("<TabItem Header=\"☰  Settings\">", tabStart, StringComparison.Ordinal);
         Assert.True(tabEnd > tabStart);
         var tab = xaml[tabStart..tabEnd];
 
@@ -85,7 +85,7 @@ public sealed class DriverHubUiContractTests
         var xaml = LoadMainWindowXaml();
         var tabStart = xaml.IndexOf("<TabItem Header=\"▥  Driver Hub\">", StringComparison.Ordinal);
         Assert.True(tabStart >= 0);
-        var tabEnd = xaml.IndexOf("<TabItem Header=\"◇  Kyra (Beta)\">", tabStart, StringComparison.Ordinal);
+        var tabEnd = xaml.IndexOf("<TabItem Header=\"☰  Settings\">", tabStart, StringComparison.Ordinal);
         Assert.True(tabEnd > tabStart);
         var tab = xaml[tabStart..tabEnd];
 
@@ -108,7 +108,7 @@ public sealed class DriverHubUiContractTests
         var xaml = LoadMainWindowXaml();
         var tabStart = xaml.IndexOf("<TabItem Header=\"▥  Driver Hub\">", StringComparison.Ordinal);
         Assert.True(tabStart >= 0);
-        var tabEnd = xaml.IndexOf("<TabItem Header=\"◇  Kyra (Beta)\">", tabStart, StringComparison.Ordinal);
+        var tabEnd = xaml.IndexOf("<TabItem Header=\"☰  Settings\">", tabStart, StringComparison.Ordinal);
         Assert.True(tabEnd > tabStart);
         var tab = xaml[tabStart..tabEnd];
 

@@ -52,6 +52,13 @@ public readonly struct AppSemanticVersion : IComparable<AppSemanticVersion>
         var plus = s.IndexOf('+', StringComparison.Ordinal);
         if (plus >= 0)
         {
+            var metadata = s[(plus + 1)..];
+            if (s.IndexOf('+', plus + 1) >= 0 ||
+                !IsValidIdentifierList(metadata, rejectNumericLeadingZeros: false))
+            {
+                return false;
+            }
+
             s = s[..plus];
         }
 
@@ -62,9 +69,9 @@ public readonly struct AppSemanticVersion : IComparable<AppSemanticVersion>
         {
             core = s[..dash];
             prerelease = s[(dash + 1)..];
-            if (string.IsNullOrWhiteSpace(prerelease))
+            if (!IsValidIdentifierList(prerelease, rejectNumericLeadingZeros: true))
             {
-                prerelease = null;
+                return false;
             }
         }
         else
@@ -73,28 +80,72 @@ public readonly struct AppSemanticVersion : IComparable<AppSemanticVersion>
         }
 
         var parts = core.Split('.');
-        if (parts.Length < 3)
+        if (parts.Length is < 3 or > 4)
         {
             return false;
         }
 
-        if (!int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var maj) ||
-            !int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var min) ||
-            !int.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out var pat))
+        if (!TryParseCoreNumber(parts[0], out var maj) ||
+            !TryParseCoreNumber(parts[1], out var min) ||
+            !TryParseCoreNumber(parts[2], out var pat))
         {
             return false;
         }
 
         var rev = 0;
-        if (parts.Length >= 4)
+        if (parts.Length == 4 && !TryParseCoreNumber(parts[3], out rev))
         {
-            if (!int.TryParse(parts[3], NumberStyles.Integer, CultureInfo.InvariantCulture, out rev))
+            return false;
+        }
+
+        version = new AppSemanticVersion(maj, min, pat, rev, prerelease);
+        return true;
+    }
+
+    /// <summary>Core numeric segment: ASCII digits only — no sign, whitespace, or non-ASCII digits.</summary>
+    private static bool TryParseCoreNumber(string part, out int value)
+    {
+        value = 0;
+        return IsAllDigits(part) &&
+            int.TryParse(part, NumberStyles.None, CultureInfo.InvariantCulture, out value);
+    }
+
+    /// <summary>Dot-separated identifiers, each nonempty ASCII alnum/hyphen; optionally rejects numeric identifiers with leading zeros.</summary>
+    private static bool IsValidIdentifierList(string value, bool rejectNumericLeadingZeros)
+    {
+        if (value.Length == 0)
+        {
+            return false;
+        }
+
+        foreach (var identifier in value.Split('.'))
+        {
+            if (identifier.Length == 0)
+            {
+                return false;
+            }
+
+            var allDigits = true;
+            foreach (var ch in identifier)
+            {
+                if (ch is >= '0' and <= '9')
+                {
+                    continue;
+                }
+
+                allDigits = false;
+                if (ch is not ((>= 'a' and <= 'z') or (>= 'A' and <= 'Z') or '-'))
+                {
+                    return false;
+                }
+            }
+
+            if (rejectNumericLeadingZeros && allDigits && identifier.Length > 1 && identifier[0] == '0')
             {
                 return false;
             }
         }
 
-        version = new AppSemanticVersion(maj, min, pat, rev, prerelease);
         return true;
     }
 
@@ -165,9 +216,7 @@ public readonly struct AppSemanticVersion : IComparable<AppSemanticVersion>
             var bNum = IsAllDigits(bc);
             if (aNum && bNum)
             {
-                var an = int.Parse(ac, CultureInfo.InvariantCulture);
-                var bn = int.Parse(bc, CultureInfo.InvariantCulture);
-                var cmp = an.CompareTo(bn);
+                var cmp = CompareNumericIdentifiers(ac, bc);
                 if (cmp != 0)
                 {
                     return cmp;
@@ -190,6 +239,15 @@ public readonly struct AppSemanticVersion : IComparable<AppSemanticVersion>
         return 0;
     }
 
+    /// <summary>Numeric order for digit strings of arbitrary length: normalized digit count first, then ordinal.</summary>
+    private static int CompareNumericIdentifiers(string a, string b)
+    {
+        var an = a.TrimStart('0');
+        var bn = b.TrimStart('0');
+        var cmp = an.Length.CompareTo(bn.Length);
+        return cmp != 0 ? cmp : string.CompareOrdinal(an, bn);
+    }
+
     private static bool IsAllDigits(string s)
     {
         if (string.IsNullOrEmpty(s))
@@ -210,7 +268,27 @@ public readonly struct AppSemanticVersion : IComparable<AppSemanticVersion>
 
     public override bool Equals(object? obj) => obj is AppSemanticVersion other && CompareTo(other) == 0;
     public bool Equals(AppSemanticVersion other) => CompareTo(other) == 0;
-    public override int GetHashCode() => HashCode.Combine(Major, Minor, Patch, Revision, Prerelease);
+    public override int GetHashCode() => HashCode.Combine(Major, Minor, Patch, Revision, NormalizedPrereleaseForHash());
+
+    /// <summary>Prerelease canonicalized the way <see cref="CompareTo"/> sees it: empty identifiers dropped and numeric identifiers zero-stripped.</summary>
+    private string? NormalizedPrereleaseForHash()
+    {
+        if (Prerelease is null)
+        {
+            return null;
+        }
+
+        var identifiers = Prerelease.Split('.', StringSplitOptions.RemoveEmptyEntries);
+        for (var i = 0; i < identifiers.Length; i++)
+        {
+            if (IsAllDigits(identifiers[i]))
+            {
+                identifiers[i] = identifiers[i].TrimStart('0');
+            }
+        }
+
+        return string.Join('.', identifiers);
+    }
 
     public static bool operator ==(AppSemanticVersion left, AppSemanticVersion right) => left.CompareTo(right) == 0;
     public static bool operator !=(AppSemanticVersion left, AppSemanticVersion right) => left.CompareTo(right) != 0;

@@ -10,7 +10,8 @@ This helper keeps the installer workflow reproducible:
 3. compile installer\ForgerEMS.iss with Inno Setup
 
 .PARAMETER Version
-Installer/app version. Defaults to the WPF project version.
+Installer/app version. Defaults to the repository VERSION file. A different
+explicit value is refused: VERSION is authoritative.
 
 .PARAMETER SkipPublish
 Skip dotnet publish and reuse the existing publish output.
@@ -44,16 +45,20 @@ $backendStageRoot = Join-Path $repoRoot "dist\backend-stage\backend"
 $outputDir = Join-Path $repoRoot "dist\installer"
 $appExePath = Join-Path $publishDir "ForgerEMS.exe"
 
-function Get-ProjectVersion {
-    param([Parameter(Mandatory)][string]$ProjectPath)
+function Get-RepoVersion {
+    param([Parameter(Mandatory)][string]$RepoRoot)
 
-    [xml]$projectXml = Get-Content -LiteralPath $ProjectPath -Raw
-    $versionNode = $projectXml.Project.PropertyGroup.Version | Select-Object -First 1
-    if ([string]::IsNullOrWhiteSpace([string]$versionNode)) {
-        throw "Could not read <Version> from $ProjectPath"
+    $versionFile = Join-Path $RepoRoot "VERSION"
+    if (-not (Test-Path -LiteralPath $versionFile)) {
+        throw "Authoritative version file not found: $versionFile"
     }
 
-    return [string]$versionNode
+    $value = (Get-Content -LiteralPath $versionFile -Raw).Trim()
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        throw "VERSION file is empty: $versionFile"
+    }
+
+    return $value
 }
 
 function Resolve-IsccPath {
@@ -97,11 +102,15 @@ if (-not (Test-Path -LiteralPath $stageScriptPath)) {
     throw "Bundled backend stage script not found: $stageScriptPath"
 }
 
+$authoritativeVersion = Get-RepoVersion -RepoRoot $repoRoot
 if ([string]::IsNullOrWhiteSpace($Version)) {
-    $Version = Get-ProjectVersion -ProjectPath $csprojPath
+    $Version = $authoritativeVersion
+}
+elseif ($Version.Trim() -ne $authoritativeVersion) {
+    throw "Refusing to override authoritative VERSION ($authoritativeVersion) with '$Version'."
 }
 
-$displayVersionLabel = "ForgerEMS v1.2.4 Public Preview"
+$displayVersionLabel = "ForgerEMS v$Version"
 $releaseIdentifierLabel = $displayVersionLabel
 
 if (-not $SkipPublish) {

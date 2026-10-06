@@ -6,11 +6,11 @@ namespace ForgerEMS.Wpf.Tests;
 public sealed class AppReleaseInfoTests
 {
     [Fact]
-    public void Version_Is_PublicPreview()
+    public void Version_Is_Stable_Release()
     {
-        Assert.Equal("1.2.4-preview.4", AppReleaseInfo.Version);
-        Assert.Contains("1.2.4", AppReleaseInfo.DisplayVersion, System.StringComparison.Ordinal);
-        Assert.Contains("Public Preview", AppReleaseInfo.DisplayVersion, System.StringComparison.Ordinal);
+        Assert.Equal("1.2.4", AppReleaseInfo.Version);
+        Assert.Contains("ForgerEMS v1.2.4", AppReleaseInfo.DisplayVersion, System.StringComparison.Ordinal);
+        Assert.DoesNotContain("Preview", AppReleaseInfo.DisplayVersion, System.StringComparison.Ordinal);
     }
 
     [Fact]
@@ -20,6 +20,6 @@ public sealed class AppReleaseInfoTests
         Assert.Equal(1, v.Major);
         Assert.Equal(2, v.Minor);
         Assert.Equal(4, v.Patch);
-        Assert.Equal("preview.4", v.Prerelease);
+        Assert.Null(v.Prerelease);
     }
 }

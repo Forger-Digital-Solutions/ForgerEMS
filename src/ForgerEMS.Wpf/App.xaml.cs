@@ -59,20 +59,11 @@ public partial class App : Application
             var managedDownloadResolverService = new ManagedDownloadResolverService(
                 new HttpClient { Timeout = TimeSpan.FromSeconds(30) });
             var usbBenchmarkService = new UsbBenchmarkService(powerShellRunnerService);
-            var copilotProviderRegistry = new CopilotProviderRegistry();
-            var copilotService = new CopilotService(copilotProviderRegistry);
             AppendStartupLog("Services initialized");
 
             if (HasArgument(e.Args, "--self-test"))
             {
                 var exitCode = await RunSelfTestAsync(runtimeService, backendDiscoveryService, powerShellRunnerService, usbBenchmarkService);
-                Shutdown(exitCode);
-                return;
-            }
-
-            if (HasArgument(e.Args, KyraSdkDogfoodProcessLauncher.CliArgument))
-            {
-                var exitCode = await KyraSdkDogfoodProcessLauncher.RunAsync(e.Args);
                 Shutdown(exitCode);
                 return;
             }
@@ -89,9 +80,7 @@ public partial class App : Application
                 ventoyIntegrationService,
                 managedDownloadResolverService,
                 runtimeService,
-                usbBenchmarkService,
-                copilotService,
-                copilotProviderRegistry);
+                usbBenchmarkService);
             mainViewModel.ElevatedScanStartupRequest = elevatedScanStartupRequest;
             mainViewModel.CompatibilityEnvironment = CompatibilityEnvironment;
 
@@ -289,8 +278,8 @@ public partial class App : Application
             $"StartedUtc: {startedUtc:O}",
             $"ExecutableBase: {RedactSelfTestFilesystemPath(executableBase)}",
             $"CurrentDirectory: {RedactSelfTestFilesystemPath(Directory.GetCurrentDirectory())}",
-            $"RuntimeRoot: {CopilotRedactor.Redact(runtimeService.RuntimeRoot, enabled: true)}",
-            $"SessionLogPath: {CopilotRedactor.Redact(runtimeService.SessionLogPath, enabled: true)}",
+            $"RuntimeRoot: {DiagnosticRedactor.Redact(runtimeService.RuntimeRoot, enabled: true)}",
+            $"SessionLogPath: {DiagnosticRedactor.Redact(runtimeService.SessionLogPath, enabled: true)}",
             $"FORGEREMS_ENV: {ForgerEmsEnvironmentConfiguration.ForgerEmsEnv}",
             $"FORGEREMS_RELEASE_CHANNEL: {ForgerEmsEnvironmentConfiguration.ReleaseChannel}",
             $"UpdateGitHubSource: {ForgerEmsEnvironmentConfiguration.GitHubOwner}/{ForgerEmsEnvironmentConfiguration.GitHubRepo}",
@@ -352,30 +341,6 @@ public partial class App : Application
             }).ConfigureAwait(false);
             lines.Add($"BenchmarkRefusesUnsafeDrive: {!blockedBenchmark.Succeeded}");
 
-            var copilotRegistry = new CopilotProviderRegistry();
-            var copilotService = new CopilotService(copilotRegistry);
-            var offlineCopilot = await copilotService.GenerateReplyAsync(new CopilotRequest
-            {
-                Prompt = "Best OS for this machine?",
-                SystemIntelligenceReportPath = Path.Combine(runtimeService.RuntimeRoot, "reports", "system-intelligence-latest.json"),
-                Settings = new CopilotSettings { Mode = CopilotMode.OfflineOnly }
-            }).ConfigureAwait(false);
-            var onlineFallbackCopilot = await copilotService.GenerateReplyAsync(new CopilotRequest
-            {
-                Prompt = "What is this laptop worth?",
-                SystemIntelligenceReportPath = Path.Combine(runtimeService.RuntimeRoot, "reports", "system-intelligence-latest.json"),
-                Settings = new CopilotSettings
-                {
-                    Mode = CopilotMode.OnlineAssisted,
-                    Providers =
-                    {
-                        ["ebay-sold-listings"] = new CopilotProviderConfiguration { IsEnabled = true }
-                    }
-                }
-            }).ConfigureAwait(false);
-            lines.Add($"KyraOfflineDoesNotUseOnline: {!offlineCopilot.UsedOnlineData}");
-            lines.Add($"KyraOnlineFallbackDoesNotCrash: {!string.IsNullOrWhiteSpace(onlineFallbackCopilot.Text)}");
-            lines.Add($"KyraProviderHooksAvailable: {copilotRegistry.Providers.Count}");
             lines.Add("StatusUpdatesDontCrash: True");
             lines.Add("AppLaunchSelfTestPath: True");
             lines.Add($"FinishedUtc: {DateTimeOffset.UtcNow:O}");
@@ -388,8 +353,6 @@ public partial class App : Application
             return result.Succeeded &&
                    scriptsResolve &&
                    !blockedBenchmark.Succeeded &&
-                   !offlineCopilot.UsedOnlineData &&
-                   !string.IsNullOrWhiteSpace(onlineFallbackCopilot.Text) &&
                    File.Exists(reportPath)
                 ? 0
                 : 1;

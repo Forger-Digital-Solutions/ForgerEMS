@@ -83,15 +83,16 @@ public sealed class FullManagedDownloadProfileTests
     [Fact]
     public void Planner_WithAllCategories_EligibleCountMatchesActiveManagedFileCount()
     {
-        // 2026-05-27 Batch 6 catalog-expansion pass left active count at 50. The planner's
-        // eligibility math must agree with the catalog's managed file count when every
-        // category is selected.
+        // The resolution-migrated catalog carries 20 managed file entries, all with
+        // requiresResolution (expected SHA-256 arrives via the verified overlay, not
+        // static fields). The planner's eligibility math must agree when every category
+        // is selected.
         var plan = UsbBuilderProfileFullManagedDownloadPlanner.Calculate(
             SourceManifestPath,
             new HashSet<string>(AllCategories, StringComparer.OrdinalIgnoreCase),
             usbRootPath: null);
 
-        Assert.Equal(50, plan.EligibleManagedCount);
+        Assert.Equal(20, plan.EligibleManagedCount);
     }
 
     [Fact]
@@ -102,12 +103,10 @@ public sealed class FullManagedDownloadProfileTests
             new HashSet<string>(AllCategories, StringComparer.OrdinalIgnoreCase),
             usbRootPath: null);
 
-        // Catalog has 217 items total; 50 managed files; the remaining 167 are
+        // Catalog has 206 items total; 20 managed files; the remaining 186 are
         // page/manual/vendor shortcuts. The planner must count those into the
-        // manual-or-vendor exclusion bucket. (Batch 6 expansion preserved the
-        // 167 non-file count because every promotion added a new file entry
-        // alongside the existing page entry, not in place of it.)
-        Assert.Equal(167, plan.ExcludedManualOrVendorCount);
+        // manual-or-vendor exclusion bucket.
+        Assert.Equal(186, plan.ExcludedManualOrVendorCount);
         Assert.DoesNotContain(plan.EligibleNames, n => n.Contains("Download Page", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(plan.EligibleNames, n => n.StartsWith("MSI ", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(plan.EligibleNames, n => n.StartsWith("Dell ", StringComparison.OrdinalIgnoreCase));
@@ -141,11 +140,13 @@ public sealed class FullManagedDownloadProfileTests
             new HashSet<string>(LinuxRescueAndCoreCategories, StringComparer.OrdinalIgnoreCase),
             usbRootPath: null);
 
-        Assert.Contains(plan.EligibleNames, n => n.Contains("NetBSD 10.1", StringComparison.Ordinal));
-        Assert.Contains(plan.EligibleNames, n => n.Contains("FreeBSD 15.0", StringComparison.Ordinal));
-        Assert.Contains(plan.EligibleNames, n => n.Contains("OpenBSD 7.9", StringComparison.Ordinal));
-        Assert.Contains(plan.EligibleNames, n => n.Contains("openSUSE Leap 16.0", StringComparison.Ordinal));
-        Assert.Contains(plan.EligibleNames, n => n.Contains("Ubuntu 24.04", StringComparison.Ordinal));
+        // Resolution-era names are versionless (the version arrives via overlay): Linux
+        // rescue covers Ubuntu/Debian/Kali managed ISOs.
+        Assert.Contains(plan.EligibleNames, n => n.Equals("Ubuntu LTS Desktop", StringComparison.Ordinal));
+        Assert.Contains(plan.EligibleNames, n => n.Equals("Ubuntu LTS Server", StringComparison.Ordinal));
+        Assert.Contains(plan.EligibleNames, n => n.Equals("Kali Linux Installer", StringComparison.Ordinal));
+        Assert.Contains(plan.EligibleNames, n => n.Equals("Debian Stable Netinst", StringComparison.Ordinal));
+        Assert.Contains(plan.EligibleNames, n => n.Equals("Debian Stable Live GNOME", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -177,13 +178,13 @@ public sealed class FullManagedDownloadProfileTests
             usbRootPath: null,
             includedProfileItems:
             [
-                "name:Rufus 4.14 Portable (x64)"
+                "name:Rufus Portable"
             ]);
 
-        Assert.Contains(plan.EligibleNames, n => n.StartsWith("Rufus 4.14", StringComparison.Ordinal));
+        Assert.Contains(plan.EligibleNames, n => n.Equals("Rufus Portable", StringComparison.Ordinal));
         Assert.Contains(plan.EligibleNames, n => n.Contains("Ventoy", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(plan.EligibleNames, n => n.Contains("CrystalDiskInfo", StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain(plan.EligibleNames, n => n.Contains("Ubuntu 24.04", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(plan.EligibleNames, n => n.Contains("Ubuntu", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(2, plan.EligibleManagedCount);
         Assert.True(plan.ExcludedByProfileCount > 0);
     }
@@ -197,14 +198,14 @@ public sealed class FullManagedDownloadProfileTests
             usbRootPath: null,
             includedProfileItems:
             [
-                "name:Ubuntu 24.04.4 LTS Desktop (amd64)"
+                "name:Ubuntu LTS Desktop"
             ]);
 
-        Assert.Contains(plan.EligibleNames, n => n.Equals("Ubuntu 24.04.4 LTS Desktop (amd64)", StringComparison.Ordinal));
+        Assert.Contains(plan.EligibleNames, n => n.Equals("Ubuntu LTS Desktop", StringComparison.Ordinal));
         Assert.Contains(plan.EligibleNames, n => n.Contains("Ventoy", StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain(plan.EligibleNames, n => n.StartsWith("Kubuntu 24.04.4", StringComparison.Ordinal));
-        Assert.DoesNotContain(plan.EligibleNames, n => n.StartsWith("Lubuntu 24.04.4", StringComparison.Ordinal));
-        Assert.DoesNotContain(plan.EligibleNames, n => n.StartsWith("Xubuntu 24.04.4", StringComparison.Ordinal));
+        Assert.DoesNotContain(plan.EligibleNames, n => n.Equals("Ubuntu LTS Server", StringComparison.Ordinal));
+        Assert.DoesNotContain(plan.EligibleNames, n => n.Contains("Kubuntu", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(plan.EligibleNames, n => n.Contains("Lubuntu", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(2, plan.EligibleManagedCount);
     }
 
@@ -237,7 +238,7 @@ public sealed class FullManagedDownloadProfileTests
         try
         {
             // Use the Rufus managed entry's dest as the synthetic "already present" anchor.
-            const string rufusDest = "Tools\\Portable\\USB\\rufus-4.14p.exe";
+            const string rufusDest = "Tools\\Portable\\USB\\rufus.exe";
             var stubPath = Path.Combine(tempRoot, rufusDest);
             Directory.CreateDirectory(Path.GetDirectoryName(stubPath)!);
             File.WriteAllText(stubPath, "stub");
@@ -248,8 +249,8 @@ public sealed class FullManagedDownloadProfileTests
                 usbRootPath: tempRoot);
 
             Assert.True(plan.HasUsbRoot);
-            Assert.Contains(plan.AlreadyPresentNames, n => n.StartsWith("Rufus 4.14", StringComparison.Ordinal));
-            Assert.DoesNotContain(plan.MissingNames, n => n.StartsWith("Rufus 4.14", StringComparison.Ordinal));
+            Assert.Contains(plan.AlreadyPresentNames, n => n.Equals("Rufus Portable", StringComparison.Ordinal));
+            Assert.DoesNotContain(plan.MissingNames, n => n.Equals("Rufus Portable", StringComparison.Ordinal));
         }
         finally
         {
@@ -271,20 +272,21 @@ public sealed class FullManagedDownloadProfileTests
     }
 
     [Theory]
-    [InlineData("Ubuntu 24.04.4 LTS Desktop (amd64)", "linux-rescue")]
-    [InlineData("Proxmox Backup Server 4.2-1 ISO Installer", "linux-rescue")]
-    [InlineData("Rocky Linux 10.1 DVD (x86_64)", "linux-rescue")]
-    [InlineData("AlmaLinux 10.2 DVD (x86_64)", "linux-rescue")]
-    [InlineData("Kali Linux 2026.1 Installer (amd64)", "linux-rescue")]
-    [InlineData("openSUSE Leap 16.0 Offline Installer (x86_64)", "linux-rescue")]
-    [InlineData("NetBSD 10.1 amd64 ISO Installer", "linux-rescue")]
-    [InlineData("FreeBSD 15.0-RELEASE amd64 disc1 ISO", "linux-rescue")]
-    [InlineData("OpenBSD 7.9 amd64 install ISO", "linux-rescue")]
-    [InlineData("MemTest86+ 8.10 (x86_64 ISO archive)", "diagnostics")]
-    [InlineData("Rufus 4.14 Portable (x64)", "diagnostics")]
-    [InlineData("CrystalDiskInfo 9.8.0 (standard zip)", "diagnostics")]
-    [InlineData("Wireshark 4.6.6 Win64 Installer", "diagnostics")]
-    [InlineData("Ventoy pinned fallback 1.1.12 (Windows package)", "core")]
+    [InlineData("Ubuntu LTS Desktop", "linux-rescue")]
+    [InlineData("Ubuntu LTS Server", "linux-rescue")]
+    [InlineData("Kali Linux Installer", "linux-rescue")]
+    [InlineData("Debian Stable Netinst", "linux-rescue")]
+    [InlineData("Debian Stable Live GNOME", "linux-rescue")]
+    [InlineData("Debian Stable Live KDE", "linux-rescue")]
+    [InlineData("Debian Stable Live Xfce", "linux-rescue")]
+    [InlineData("Rescuezilla", "linux-rescue")]
+    [InlineData("Angry IP Scanner", "diagnostics")]
+    [InlineData("Driver Store Explorer", "diagnostics")]
+    [InlineData("RustDesk", "diagnostics")]
+    [InlineData("Rufus Portable", "diagnostics")]
+    [InlineData("KeePassXC Portable", "diagnostics")]
+    [InlineData("TestDisk Win64", "diagnostics")]
+    [InlineData("Ventoy Windows Package", "core")]
     public void Planner_KnownManagedEntries_ClassifyToExpectedCategory(string entryName, string expectedCategory)
     {
         using var document = JsonDocument.Parse(File.ReadAllText(SourceManifestPath));

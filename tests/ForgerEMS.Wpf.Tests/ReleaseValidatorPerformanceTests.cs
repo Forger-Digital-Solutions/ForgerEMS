@@ -50,6 +50,7 @@ public sealed class ReleaseValidatorPerformanceTests
                 + Quote(scratchRoot)
                 + " -ManifestName "
                 + Quote(Path.Combine(RepoRoot, "manifests", "ForgerEMS.updates.json"))
+                + " -IncludedCategories forgerems-portable"
                 + " -WhatIf",
             WorkingDirectory = RepoRoot,
             UseShellExecute = false,

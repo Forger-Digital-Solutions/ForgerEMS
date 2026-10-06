@@ -21,16 +21,16 @@ public sealed class TermsConsentRecord
 
 public sealed class TermsConsentStore
 {
-    public const string CurrentTermsVersion = "2026-07-05.v1.2.4-preview.4";
+    public const string CurrentTermsVersion = "2026-10-06.v1.2.4";
 
     /// <summary>Date-only revision of the consent documents, shown separately from the app version.</summary>
-    public const string CurrentTermsRevisionDate = "2026-07-05";
+    public const string CurrentTermsRevisionDate = "2026-10-06";
 
     public const string RequiredAgreementText =
         "I have read and agree to the ForgerEMS Terms of Use and understand the Privacy/Data Handling notes.";
 
     public const string RequiredSharingNoticeText =
-        "I understand that logs, support bundles, Kyra context, and exported reports may contain local device/context information. I will review exported files before sharing them.";
+        "I understand that logs, support bundles, and exported reports may contain local device/context information. I will review exported files before sharing them.";
 
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 

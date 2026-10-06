@@ -189,7 +189,7 @@ public static class HardwarePrivacyRedactor
 {
     public static string Redact(string value)
     {
-        var redacted = CopilotRedactor.Redact(value, enabled: true);
+        var redacted = DiagnosticRedactor.Redact(value, enabled: true);
         redacted = Regex.Replace(redacted, "(?i)(serial|service\\s*tag)\\s*[:=]\\s*[a-z0-9\\-]{4,}", "$1=[redacted]");
         return redacted;
     }

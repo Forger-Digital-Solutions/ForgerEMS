@@ -2094,7 +2094,7 @@ ForgerEMS Portable App
 
 Run ForgerEMS.exe from this folder. Review _docs\ForgerEMS for Terms of Use, Privacy/Data Handling, Legal Notices, FAQ, About, and third-party notices.
 
-Logs/support files are local. Review exported logs, Kyra context, reports, and support bundles before sending them.
+Logs/support files are local. Review exported logs, reports, and support bundles before sending them.
 "@
     if ($PSCmdlet.ShouldProcess($portableReadme, "Write ForgerEMS portable README")) {
         Set-Content -LiteralPath $portableReadme -Value $portableReadmeText -Encoding UTF8

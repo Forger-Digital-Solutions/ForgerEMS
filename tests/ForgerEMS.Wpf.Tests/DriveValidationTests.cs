@@ -271,8 +271,6 @@ public sealed class DriveValidationTests
             new ManagedDownloadResolverService(new HttpClient()),
             new AppRuntimeService(),
             new UsbBenchmarkService(new PowerShellRunnerService()),
-            new CopilotService(new CopilotProviderRegistry()),
-            new CopilotProviderRegistry(),
             driveValidationService: new StubDriveValidationService(
                 DriveValidationResult.Blocked(DriveValidationStatus.UnsafeTargetBlocked, "blocked", "detail")));
 
@@ -302,8 +300,6 @@ public sealed class DriveValidationTests
             new ManagedDownloadResolverService(new HttpClient()),
             new AppRuntimeService(),
             new UsbBenchmarkService(new PowerShellRunnerService()),
-            new CopilotService(new CopilotProviderRegistry()),
-            new CopilotProviderRegistry(),
             driveValidationService: new StubDriveValidationService(failed));
 
         vm.UsbTargets.Add(target);

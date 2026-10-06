@@ -4,7 +4,7 @@ using System.Text;
 
 namespace VentoyToolkitSetup.Wpf.Services.Intelligence;
 
-/// <summary>Produces stable, non-reversible hashes for USB identity fields. Never place raw PNP/serial in Kyra or public JSON.</summary>
+/// <summary>Produces stable, non-reversible hashes for USB identity fields. Never place raw PNP/serial in public JSON.</summary>
 public static class UsbIdentityHasher
 {
     public static string Sha256Hex(string? value)

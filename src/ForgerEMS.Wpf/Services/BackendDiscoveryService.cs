@@ -39,12 +39,14 @@ public sealed class BackendDiscoveryService : IBackendDiscoveryService
         "Setup_USB_Toolkit.ps1",
         "SystemIntelligence\\Invoke-ForgerEMSSystemScan.ps1",
         "ToolkitManager\\Get-ForgerEMSToolkitHealth.ps1",
+        "Get-ForgerEMSWindowsMaintenance.ps1",
         "ForgerEMS.updates.json",
         "VERSION.txt",
         "RELEASE-BUNDLE.txt",
         "CHECKSUMS.sha256",
         "SIGNATURE.txt",
         "manifests\\ForgerEMS.updates.schema.json",
+        "manifests\\resource-policy.json",
         "manifests\\vendor.inventory.json",
         "manifests\\vendor.inventory.schema.json",
         BundledBackendMetadataFileName
@@ -60,10 +62,12 @@ public sealed class BackendDiscoveryService : IBackendDiscoveryService
         "Setup_USB_Toolkit.ps1",
         "SystemIntelligence\\Invoke-ForgerEMSSystemScan.ps1",
         "ToolkitManager\\Get-ForgerEMSToolkitHealth.ps1",
+        "Get-ForgerEMSWindowsMaintenance.ps1",
         "ForgerEMS.updates.json",
         "VERSION.txt",
         "RELEASE-BUNDLE.txt",
         "manifests\\ForgerEMS.updates.schema.json",
+        "manifests\\resource-policy.json",
         "manifests\\vendor.inventory.json",
         "manifests\\vendor.inventory.schema.json"
     ];

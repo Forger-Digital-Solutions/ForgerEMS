@@ -4,6 +4,10 @@ using VentoyToolkitSetup.Wpf.Services.Intelligence;
 
 namespace ForgerEMS.Wpf.Tests;
 
+// Tests in this collection mutate the process-global FORGEREMS_DEEP_SENSOR_MODE
+// environment variable and exercise the LibreHardwareMonitor native probe path,
+// so they are serialized against every other collection in the assembly.
+[Collection(DeepSensorEnvironmentCollection.Name)]
 public sealed class HardwareIntelligenceEngineTests
 {
     [Theory]
@@ -326,25 +330,6 @@ public sealed class HardwareIntelligenceEngineTests
     }
 
     [Fact]
-    public void KyraAnswersMachineClassAndMissingSensorQuestions()
-    {
-        var profile = Profile("Dell", "Precision 5540", "Intel Core i7-9850H", 32, "NVIDIA Quadro T2000", hasBattery: true);
-
-        Assert.True(VentoyToolkitSetup.Wpf.Services.Kyra.KyraLocalSpecAnswerBuilder.TryBuildLocalSpecAnswer(
-            "What kind of machine is this?",
-            profile,
-            out var classAnswer));
-        Assert.Contains("Mobile Workstation", classAnswer.Text);
-
-        Assert.True(VentoyToolkitSetup.Wpf.Services.Kyra.KyraLocalSpecAnswerBuilder.TryBuildLocalSpecAnswer(
-            "Why can't ForgerEMS read my fan speed?",
-            profile,
-            out var sensorAnswer));
-        Assert.Contains("does not mean", sensorAnswer.Text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Unknown = lower confidence", sensorAnswer.Text, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
     public void BackendMarkdownTemplateIncludesMachineClassAndSensorMatrix()
     {
         var path = FindRepoFile("backend", "SystemIntelligence", "Invoke-ForgerEMSSystemScan.ps1");
@@ -418,6 +403,59 @@ public sealed class HardwareIntelligenceEngineTests
         }
 
         throw new FileNotFoundException("Could not locate repo file.", Path.Combine(segments));
+    }
+
+    [Fact]
+    public void RunExclusiveProbe_SerializesConcurrentProbeLifecycles()
+    {
+        // LibreHardwareMonitor's Computer.Open/Close mutate process-global
+        // native buffers with no internal locking; the provider gate must hold
+        // every probe lifecycle to one at a time.
+        var inFlight = 0;
+        var maxSeen = 0;
+        var maxLock = new object();
+        var threads = Enumerable.Range(0, 8)
+            .Select(_ => new Thread(() =>
+            {
+                for (var i = 0; i < 20; i++)
+                {
+                    LibreHardwareMonitorSensorProvider.RunExclusiveProbe(() =>
+                    {
+                        var now = Interlocked.Increment(ref inFlight);
+                        lock (maxLock)
+                        {
+                            maxSeen = Math.Max(maxSeen, now);
+                        }
+                        Thread.SpinWait(2_000);
+                        Interlocked.Decrement(ref inFlight);
+                    });
+                }
+            }))
+            .ToArray();
+
+        foreach (var thread in threads)
+        {
+            thread.Start();
+        }
+        foreach (var thread in threads)
+        {
+            Assert.True(thread.Join(TimeSpan.FromSeconds(30)), "Probe worker did not finish in time.");
+        }
+
+        Assert.Equal(1, maxSeen);
+        Assert.Equal(0, inFlight);
+    }
+
+    [Fact]
+    public void RunExclusiveProbe_ReleasesGateAfterThrowingAction()
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            LibreHardwareMonitorSensorProvider.RunExclusiveProbe(
+                () => throw new InvalidOperationException("probe failed")));
+
+        var ran = false;
+        LibreHardwareMonitorSensorProvider.RunExclusiveProbe(() => ran = true);
+        Assert.True(ran);
     }
 
     private static void WithDeepSensorMode(string? value, Action action)

@@ -48,8 +48,8 @@ public sealed class ToolkitHealthScriptRegressionTests
     public void ToolkitHealthScript_ClonezillaManifestDestinationIsTrackedAsIsoPath()
     {
         var manifest = File.ReadAllText(FindRepoFile("manifests", "ForgerEMS.updates.json"));
-        Assert.Contains("clonezilla-live-3.3.1-35-amd64.iso", manifest, StringComparison.Ordinal);
-        Assert.Contains("ISO\\\\Tools\\\\clonezilla-live-3.3.1-35-amd64.iso", manifest, StringComparison.Ordinal);
+        Assert.Contains("Clonezilla Live", manifest, StringComparison.Ordinal);
+        Assert.Contains("ISO\\\\Tools\\\\DOWNLOAD - clonezilla.url", manifest, StringComparison.Ordinal);
     }
 
     [Fact]

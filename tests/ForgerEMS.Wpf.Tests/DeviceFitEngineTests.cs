@@ -155,20 +155,6 @@ public sealed class DeviceFitEngineTests
         Assert.Contains("## Best Use / Device Fit", text, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void KyraLocalSpecAnswerIncludesBestUseSummary()
-    {
-        Assert.True(VentoyToolkitSetup.Wpf.Services.Kyra.KyraLocalSpecAnswerBuilder.TryBuildLocalSpecAnswer(
-            "What is this laptop best for and can it run games?",
-            Precision5540(),
-            out var response));
-
-        Assert.Contains("Best use / device fit", response.Text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Developer", response.Text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Light", response.Text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("inferred from scanned CPU/RAM/GPU/storage/battery signals", response.Text, StringComparison.OrdinalIgnoreCase);
-    }
-
     private static int Score(DeviceFitResult result, string category) =>
         result.Scores.Single(score => score.Category == category).Score;
 

@@ -48,68 +48,6 @@ public sealed class UsbIntelligenceProUiTests
     }
 
     [Fact]
-    public void UsbKyraNarrativeBuilder_IncludesMappedLabelAndBenchmark()
-    {
-        var snap = new UsbTopologySnapshot
-        {
-            GeneratedUtc = DateTimeOffset.UtcNow,
-            SelectedTargetPortUserLabel = "Rear Blue USB 3",
-            CombinedConfidenceScore = 82,
-            SelectedTargetBenchmark = new UsbIntelligenceBenchmarkResult
-            {
-                Succeeded = true,
-                WriteSpeedMBps = 142,
-                ReadSpeedMBps = 155,
-                Classification = UsbSpeedMeasurementClass.Usb3,
-                ConfidenceScore = 80,
-                Timestamp = DateTimeOffset.UtcNow,
-                SummaryLine = "ok",
-                DetailReason = "Throughput typical."
-            },
-            SelectedTargetRecommendation = new UsbBuilderRecommendation
-            {
-                Summary = "x",
-                Detail = "y",
-                Quality = UsbBuilderQuality.Ideal,
-                Risk = UsbPortRiskLevel.Low,
-                Speed = UsbSpeedClassification.Usb3
-            }
-        };
-
-        var n = UsbKyraNarrativeBuilder.Build(snap);
-        Assert.Contains("Rear Blue USB 3", n.ShortAnswer, StringComparison.Ordinal);
-        Assert.Contains("142", n.ShortAnswer);
-        Assert.Contains("high", n.ShortAnswer, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void KyraUsbAnswerBuilder_FromJson_UsesMappedPortWording()
-    {
-        var json = """
-            {
-              "kyraUsbNarrative": {
-                "shortAnswer": "Short answer: ok",
-                "likelyCause": "cause",
-                "nextStep": "step"
-              },
-              "selectedTargetPortUserLabel": "Rear Blue USB 3",
-              "selectedTargetBenchmark": {
-                "succeeded": true,
-                "writeSpeedMBps": 142.0,
-                "readSpeedMBps": 150.0,
-                "classification": "usb3"
-              }
-            }
-            """;
-
-        var ans = KyraUsbAnswerBuilder.TryBuildAnswerFromJson("which port is best", json);
-        Assert.NotNull(ans);
-        Assert.Contains("Rear Blue USB 3", ans, StringComparison.Ordinal);
-        Assert.Contains("142", ans);
-        Assert.DoesNotContain("USBSTOR", ans, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
     public void UsbIntelligenceLatestPanelReader_BestPortDiagnosticsIgnoredWithoutSuccessfulBenchmark()
     {
         const string json = """
@@ -192,20 +130,6 @@ public sealed class UsbIntelligenceProUiTests
         var raw = new UsbIntelligencePanelUiState { BuilderSummaryLine = "x" };
         var finalized = UsbIntelligencePanelUiCopy.FinalizeForDisplay(raw, benchmarkSucceeded: false, 20, null, null);
         Assert.Equal(UsbIntelligencePanelUiCopy.RunBenchmarkRecommended, finalized.RunBenchmarkRecommendedLine);
-    }
-
-    [Fact]
-    public void KyraUsbAnswerBuilder_IncludesMappingWorkflowLines()
-    {
-        const string json = """
-            {
-              "kyraUsbNarrative": { "shortAnswer": "s", "likelyCause": "c", "nextStep": "n" }
-            }
-            """;
-        var ans = KyraUsbAnswerBuilder.TryBuildAnswerFromJson("How do I map USB ports?", json);
-        Assert.NotNull(ans);
-        Assert.Contains("USB Port Mapping Wizard", ans, StringComparison.Ordinal);
-        Assert.Contains("detect", ans, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

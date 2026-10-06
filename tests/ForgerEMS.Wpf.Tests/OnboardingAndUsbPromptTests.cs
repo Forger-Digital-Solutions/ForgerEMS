@@ -29,47 +29,6 @@ public sealed class OnboardingAndUsbPromptTests
     }
 
     [Fact]
-    public void KyraOnboardingCopy_MentionsCapabilitiesAndExamples()
-    {
-        Assert.Contains("beta", KyraOnboardingCopy.InitialWelcomeMessage, System.StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("USB Intelligence", KyraOnboardingCopy.InitialWelcomeMessage, System.StringComparison.Ordinal);
-        Assert.Contains("System Intelligence", KyraOnboardingCopy.InitialWelcomeMessage, System.StringComparison.Ordinal);
-        Assert.Contains("map USB ports", KyraOnboardingCopy.InitialWelcomeMessage, System.StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("/help", KyraOnboardingCopy.InitialWelcomeMessage, System.StringComparison.Ordinal);
-        Assert.Contains("Kyra Advanced settings", KyraOnboardingCopy.InitialWelcomeMessage, System.StringComparison.Ordinal);
-        Assert.DoesNotContain("KYRA_PROVIDER_ENVIRONMENT_SETUP.md", KyraOnboardingCopy.InitialWelcomeMessage, System.StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void KyraOnboardingCopy_MentionsGatewayWhenRealtimeEnabled()
-    {
-        var text = KyraOnboardingCopy.BuildInitialWelcomeMessage(new CopilotSettings
-        {
-            KyraRealtimeGatewayEnabled = true,
-            KyraRealtimeGatewayResearchEnabled = true,
-            KyraRealtimeGatewayResearchConsent = true
-        });
-
-        Assert.Contains("Realtime Gateway is enabled", text, System.StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Live tools may be used", text, System.StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("double-check USB targets", text, System.StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("docs/", text, System.StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void KyraOnboardingCopy_MentionsOnlineOffWhenGatewayDisabled()
-    {
-        var text = KyraOnboardingCopy.BuildInitialWelcomeMessage(new CopilotSettings
-        {
-            KyraRealtimeGatewayEnabled = false,
-            KyraRealtimeGatewayResearchEnabled = false
-        });
-
-        Assert.Contains("Optional online paths stay off until enabled", text, System.StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("double-check USB targets", text, System.StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
     public void UsbTargetBenchmarkUi_DetectsCompleteStatus()
     {
         var t = new UsbTargetInfo

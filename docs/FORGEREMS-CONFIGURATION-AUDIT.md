@@ -1,5 +1,7 @@
 # ForgerEMS Configuration, Provider, and Secret Audit
 
+> **Historical record (2026-05-05).** This audit predates the v1.2.4 removal of the in-app assistant (Kyra) and its provider variables. Entries referencing `FORGEREMS_KYRA_*`, AI provider keys, or the Kyra gateway describe a retired feature and are retained for audit history only. The current environment-variable list is [ENVIRONMENT.md](ENVIRONMENT.md).
+
 Audit date: 2026-05-05  
 Scope: source-controlled repo text files, scripts, manifests, workflows, installer sources, tests, docs, provider notices, and generated-template sources. Generated `bin/`, `obj/`, `dist/`, `release/current/`, and current Ventoy release output were excluded from secret pattern scans unless specifically noted.
 

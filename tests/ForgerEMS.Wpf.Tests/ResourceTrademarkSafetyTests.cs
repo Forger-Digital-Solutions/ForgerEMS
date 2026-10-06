@@ -182,7 +182,7 @@ public sealed class ResourceTrademarkSafetyTests
         var projectText = File.ReadAllText(Path.Combine(RepoRoot, "src", "ForgerEMS.Wpf", "ForgerEMS.Wpf.csproj"));
 
         Assert.Contains("Assets\\ForgerEMS_CommandCenterBackground.png", projectText, StringComparison.Ordinal);
-        Assert.Contains("Assets\\KyraAdvancedBackground.png", projectText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Kyra", projectText, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Archived", projectText, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Unsafe", projectText, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("LegacyBackground", projectText, StringComparison.OrdinalIgnoreCase);

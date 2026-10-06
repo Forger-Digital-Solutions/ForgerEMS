@@ -11,13 +11,12 @@ public enum LogSeverity
     Error = 3
 }
 
-/// <summary>Live Logs channel: operation-focused vs Kyra internals (hidden unless verbose).</summary>
+/// <summary>Live Logs channel: operation-focused entries vs diagnostic internals (hidden unless verbose).</summary>
 public enum LiveLogChannel
 {
-    Operation,
-    KyraDetail,
-    Update,
-    Diagnostics
+    Operation = 0,
+    Update = 2,
+    Diagnostics = 3
 }
 
 public sealed class LogLine

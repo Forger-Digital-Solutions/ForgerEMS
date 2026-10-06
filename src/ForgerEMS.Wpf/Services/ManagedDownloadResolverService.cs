@@ -1,12 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using VentoyToolkitSetup.Wpf.Models;
+using ForgerEMS.Wpf.Services.Resources;
 using VentoyToolkitSetup.Wpf.Models;
 
 namespace ForgerEMS.Wpf.Services;
@@ -23,42 +24,97 @@ public interface IManagedDownloadResolverService
         string outputPath,
         Action<LogLine>? onOutput = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Check resource policy descriptors and return typed resolutions. Default implementation
+    /// preserves existing test stubs that only implement the resolve facade.
+    /// </summary>
+    Task<IReadOnlyList<ResourceResolution>> CheckResourcesAsync(
+        BackendContext backendContext,
+        ResourceCheckRequest? request = null,
+        Action<LogLine>? onOutput = null,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<ResourceResolution>>(Array.Empty<ResourceResolution>());
 }
 
-public sealed record ResolvedItem(string Name, string Url, string Sha256, string Source, string ResolvedVersion);
+public sealed record ResolvedItem(
+    string Name,
+    string Url,
+    string Sha256,
+    string Source,
+    string ResolvedVersion)
+{
+    public string ResourceId { get; init; } = string.Empty;
+    public string FileName { get; init; } = string.Empty;
+    public IReadOnlyList<string> AllowedHosts { get; init; } = Array.Empty<string>();
+    public DateTimeOffset? CheckedAtUtc { get; init; }
+    public DateTimeOffset? ExpiresAtUtc { get; init; }
+}
 
 public sealed record ResolvedManifestOverlay(
     string SourceManifestPath,
     DateTimeOffset GeneratedAtUtc,
-    IReadOnlyList<ResolvedItem> Items);
+    IReadOnlyList<ResolvedItem> Items)
+{
+    public string ManifestSha256 { get; init; } = string.Empty;
+}
 
 internal sealed class ResolvedOverlayDocument
 {
+    public int SchemaVersion { get; set; } = 1;
     public DateTimeOffset GeneratedAtUtc { get; set; }
     public string? SourceManifestPath { get; set; }
+    public string? ManifestSha256 { get; set; }
+    public string? PolicySource { get; set; }
     public List<ResolvedItemEntry> Items { get; set; } = new();
 }
 
 internal sealed class ResolvedItemEntry
 {
     public string? Name { get; set; }
+    public string? ResourceId { get; set; }
     public string? Url { get; set; }
     public string? Sha256 { get; set; }
     public string? Source { get; set; }
     public string? ResolvedVersion { get; set; }
+    public string? FileName { get; set; }
+    public List<string>? AllowedHosts { get; set; }
+    public DateTimeOffset? CheckedAtUtc { get; set; }
+    public DateTimeOffset? ExpiresAtUtc { get; set; }
 }
 
+/// <summary>
+/// Resolves manifest items that carry <c>requiresResolution</c> through the lead-authored
+/// resource policy. Only fresh, verified, SHA-256-bound resolutions are overlaid; stale,
+/// unverified, unsupported, or manual-only results never produce download URLs.
+/// </summary>
 public sealed class ManagedDownloadResolverService : IManagedDownloadResolverService
 {
-    private static readonly Regex VersionPattern = new(@"\d+(?:\.\d+)+", RegexOptions.Compiled);
-    private static readonly Regex HrefPattern = new(@"href\s*=\s*[""']([^""']+)[""']", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly TimeSpan ResolutionTimeout = TimeSpan.FromSeconds(30);
-
-    private readonly HttpClient _httpClient;
+    private readonly ResourceCheckService? _injectedCheckService;
 
     public ManagedDownloadResolverService(HttpClient httpClient)
     {
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _ = httpClient; // transport is owned by OfficialMetadataClient now; ctor kept for callers
+    }
+
+    public ManagedDownloadResolverService(ResourceCheckService checkService)
+    {
+        _injectedCheckService = checkService;
+    }
+
+    public async Task<IReadOnlyList<ResourceResolution>> CheckResourcesAsync(
+        BackendContext backendContext,
+        ResourceCheckRequest? request = null,
+        Action<LogLine>? onOutput = null,
+        CancellationToken cancellationToken = default)
+    {
+        var checkService = _injectedCheckService ?? TryCreateCheckService(backendContext, onOutput);
+        if (checkService is null)
+        {
+            return Array.Empty<ResourceResolution>();
+        }
+
+        return await checkService.CheckAsync(request, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ResolvedManifestOverlay> ResolveAsync(
@@ -73,52 +129,82 @@ public sealed class ManagedDownloadResolverService : IManagedDownloadResolverSer
             return new ResolvedManifestOverlay(manifestPath, DateTimeOffset.UtcNow, Array.Empty<ResolvedItem>());
         }
 
-        await using var stream = File.OpenRead(manifestPath);
-        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+        using var doc = JsonDocument.Parse(await File.ReadAllTextAsync(manifestPath, cancellationToken).ConfigureAwait(false));
         var items = doc.RootElement.GetProperty("items");
 
-        var resolved = new System.Collections.Generic.List<ResolvedItem>();
+        var dynamicByResourceId = new Dictionary<string, string>(StringComparer.Ordinal);
+        var nameByResourceId = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var item in items.EnumerateArray())
         {
-            var strategy = GetString(item, "resolveStrategy");
-            if (string.IsNullOrWhiteSpace(strategy) ||
-                string.Equals(strategy, "pinned", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
+            var requires = item.TryGetProperty("requiresResolution", out var rr) && rr.GetBoolean();
+            var resourceId = GetString(item, "resourceId");
             var name = GetString(item, "name");
-            var hintsProp = item.TryGetProperty("resolveHints", out var h) ? h : default;
-
-            try
+            if (requires && !string.IsNullOrWhiteSpace(resourceId))
             {
-                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                cts.CancelAfter(ResolutionTimeout);
-                var resolvedItem = strategy.ToLowerInvariant() switch
-                {
-                    "github-latest" => await ResolveGitHubLatestAsync(name, hintsProp, cts.Token).ConfigureAwait(false),
-                    "sourceforge-project" => await ResolveSourceForgeLatestAsync(name, hintsProp, cts.Token).ConfigureAwait(false),
-                    "directory-scan" => await ResolveDirectoryScanAsync(name, hintsProp, cts.Token).ConfigureAwait(false),
-                    _ => null
-                };
-
-                if (resolvedItem is not null)
-                {
-                    resolved.Add(resolvedItem);
-                    onOutput?.Invoke(MakeLog($"Resolved {name}: {resolvedItem.ResolvedVersion} from {resolvedItem.Source}", LogSeverity.Success));
-                }
-                else
-                {
-                    onOutput?.Invoke(MakeLog($"Resolver returned no result for {name} (strategy={strategy})", LogSeverity.Warning));
-                }
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                onOutput?.Invoke(MakeLog($"Failed to resolve {name} (strategy={strategy}): {ex.Message}", LogSeverity.Warning));
+                dynamicByResourceId[resourceId] = name;
+                nameByResourceId[resourceId] = name;
             }
         }
 
-        return new ResolvedManifestOverlay(manifestPath, DateTimeOffset.UtcNow, resolved);
+        if (dynamicByResourceId.Count == 0)
+        {
+            return new ResolvedManifestOverlay(manifestPath, DateTimeOffset.UtcNow, Array.Empty<ResolvedItem>())
+            {
+                ManifestSha256 = ComputeSha256(manifestPath)
+            };
+        }
+
+        var checkService = _injectedCheckService ?? TryCreateCheckService(backendContext, onOutput);
+        if (checkService is null)
+        {
+            onOutput?.Invoke(MakeLog("Resource policy catalog is unavailable; no overlay items emitted.", LogSeverity.Warning));
+            return new ResolvedManifestOverlay(manifestPath, DateTimeOffset.UtcNow, Array.Empty<ResolvedItem>())
+            {
+                ManifestSha256 = ComputeSha256(manifestPath)
+            };
+        }
+
+        var resolutions = await checkService.CheckAsync(
+            new ResourceCheckRequest { ResourceIds = dynamicByResourceId.Keys.ToList() },
+            cancellationToken).ConfigureAwait(false);
+
+        var resolved = new List<ResolvedItem>();
+        foreach (var resolution in resolutions)
+        {
+            if (!resolution.IsDownloadEligible)
+            {
+                onOutput?.Invoke(MakeLog(
+                    $"Resolver skipped {resolution.ResourceId}: {resolution.State} — {resolution.Reason}",
+                    resolution.State == ResourceResolutionState.RequiresUserAction ? LogSeverity.Info : LogSeverity.Warning));
+                continue;
+            }
+
+            var name = dynamicByResourceId.TryGetValue(resolution.ResourceId, out var mapped) ? mapped : resolution.ResourceId;
+            // Overlay entries carry only this descriptor's trusted hosts — never a global union.
+            var hosts = OverlayAllowedHostsFor(resolution.Descriptor);
+
+            resolved.Add(new ResolvedItem(
+                name,
+                resolution.ArtifactUri!,
+                resolution.ExpectedSha256!,
+                resolution.Descriptor.Provider.ToString(),
+                resolution.Version ?? string.Empty)
+            {
+                ResourceId = resolution.ResourceId,
+                FileName = resolution.ArtifactFileName ?? string.Empty,
+                AllowedHosts = hosts.ToList(),
+                CheckedAtUtc = resolution.CheckedAtUtc,
+                ExpiresAtUtc = resolution.ExpiresAtUtc
+            });
+            onOutput?.Invoke(MakeLog(
+                $"Resolved {name} ({resolution.ResourceId}): {resolution.Version} via {resolution.Descriptor.Provider}",
+                LogSeverity.Success));
+        }
+
+        return new ResolvedManifestOverlay(manifestPath, DateTimeOffset.UtcNow, resolved)
+        {
+            ManifestSha256 = ComputeSha256(manifestPath)
+        };
     }
 
     public async Task<string> ResolveAndSaveAsync(
@@ -131,280 +217,94 @@ public sealed class ManagedDownloadResolverService : IManagedDownloadResolverSer
 
         var serializable = new ResolvedOverlayDocument
         {
+            SchemaVersion = 1,
             GeneratedAtUtc = overlay.GeneratedAtUtc,
             SourceManifestPath = overlay.SourceManifestPath,
+            ManifestSha256 = overlay.ManifestSha256,
+            PolicySource = "manifests/resource-policy.json",
             Items = overlay.Items.Select(i => new ResolvedItemEntry
             {
                 Name = i.Name,
+                ResourceId = i.ResourceId,
                 Url = i.Url,
                 Sha256 = i.Sha256,
                 Source = i.Source,
-                ResolvedVersion = i.ResolvedVersion
+                ResolvedVersion = i.ResolvedVersion,
+                FileName = i.FileName,
+                AllowedHosts = i.AllowedHosts.ToList(),
+                CheckedAtUtc = i.CheckedAtUtc,
+                ExpiresAtUtc = i.ExpiresAtUtc
             }).ToList()
         };
 
         var json = JsonSerializer.Serialize(serializable, new JsonSerializerOptions { WriteIndented = true });
         var dir = Path.GetDirectoryName(outputPath);
-        if (!string.IsNullOrWhiteSpace(dir)) Directory.CreateDirectory(dir);
-        await File.WriteAllTextAsync(outputPath, json, cancellationToken).ConfigureAwait(false);
+        if (!string.IsNullOrWhiteSpace(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
+        // Atomic write: temp file then rename.
+        var tmp = outputPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        await File.WriteAllTextAsync(tmp, json, cancellationToken).ConfigureAwait(false);
+        File.Move(tmp, outputPath, overwrite: true);
         onOutput?.Invoke(MakeLog($"Wrote resolved overlay with {serializable.Items.Count} items to {outputPath}", LogSeverity.Info));
         return outputPath;
     }
 
-    private async Task<ResolvedItem?> ResolveGitHubLatestAsync(
-        string name, JsonElement hints, CancellationToken cancellationToken)
+    private ResourceCheckService? TryCreateCheckService(BackendContext backendContext, Action<LogLine>? onOutput)
     {
-        var repo = GetString(hints, "repo");
-        if (string.IsNullOrWhiteSpace(repo)) return null;
-
-        var assetPattern = GetString(hints, "assetPattern") ?? ".*";
-
-        var request = new HttpRequestMessage(HttpMethod.Get,
-            $"https://api.github.com/repos/{repo}/releases/latest");
-        request.Headers.TryAddWithoutValidation("User-Agent", "ForgerEMS-Resolver/1.0");
-        request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
-
-        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode) return null;
-
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var root = doc.RootElement;
-
-        if (!root.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
+        var policyPath = ResourceCatalog.FindPolicyPath(backendContext);
+        if (policyPath is null)
+        {
+            onOutput?.Invoke(MakeLog("resource-policy.json not found beside manifests; resource checks unavailable.", LogSeverity.Warning));
             return null;
-
-        var assetRegex = new Regex(assetPattern, RegexOptions.Compiled | RegexOptions.IgnoreCase);
-        string? downloadUrl = null;
-        string? fileName = null;
-        string? releaseTag = GetString(root, "tag_name");
-        string? checksumUrl = null;
-
-        foreach (var asset in assets.EnumerateArray())
-        {
-            var assetName = GetString(asset, "name");
-            var url = GetString(asset, "browser_download_url");
-            if (string.IsNullOrWhiteSpace(assetName) || string.IsNullOrWhiteSpace(url)) continue;
-
-            if (assetRegex.IsMatch(assetName))
-            {
-                fileName = assetName;
-                downloadUrl = url;
-            }
-            else if (assetName.Contains("sha256", StringComparison.OrdinalIgnoreCase) ||
-                     assetName.Contains("checksum", StringComparison.OrdinalIgnoreCase))
-            {
-                checksumUrl ??= url;
-            }
         }
 
-        if (string.IsNullOrWhiteSpace(downloadUrl) || string.IsNullOrWhiteSpace(fileName)) return null;
-
-        var sha = await TryReadGitHubSha256Async(fileName, checksumUrl, root, cancellationToken).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(sha)) return null;
-
-        var version = ExtractVersion(releaseTag ?? string.Empty, fileName);
-        return new ResolvedItem(name, downloadUrl, sha, "github-latest", version ?? string.Empty);
-    }
-
-    private async Task<ResolvedItem?> ResolveSourceForgeLatestAsync(
-        string name, JsonElement hints, CancellationToken cancellationToken)
-    {
-        var project = GetString(hints, "project");
-        var filePattern = GetString(hints, "filePattern") ?? ".*";
-        if (string.IsNullOrWhiteSpace(project)) return null;
-
-        var bestReleaseUrl = $"https://sourceforge.net/projects/{project}/best_release.json";
-        var request = new HttpRequestMessage(HttpMethod.Get, bestReleaseUrl);
-        request.Headers.TryAddWithoutValidation("User-Agent", "ForgerEMS-Resolver/1.0");
-
-        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode) return null;
-
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var root = doc.RootElement;
-
-        var fileName = GetString(root, "filename") ?? GetString(root, "file_name");
-        if (string.IsNullOrWhiteSpace(fileName)) return null;
-
-        var fileRegex = new Regex(filePattern, RegexOptions.Compiled | RegexOptions.IgnoreCase);
-        if (!fileRegex.IsMatch(fileName)) return null;
-
-        var downloadUrl = GetString(root, "url") ?? GetString(root, "download_url");
-        if (string.IsNullOrWhiteSpace(downloadUrl)) return null;
-
-        var sha = GetString(root, "sha256");
-        if (string.IsNullOrWhiteSpace(sha)) sha = GetString(root, "sha1");
-
-        var version = ExtractVersion(fileName);
-        return new ResolvedItem(name, downloadUrl, sha ?? string.Empty, "sourceforge-project", version ?? string.Empty);
-    }
-
-    private async Task<ResolvedItem?> ResolveDirectoryScanAsync(
-        string name, JsonElement hints, CancellationToken cancellationToken)
-    {
-        var indexUrl = GetString(hints, "indexUrl");
-        var versionPattern = GetString(hints, "versionPattern") ?? @"(\d+(?:\.\d+)+)";
-        var filePattern = GetString(hints, "filePattern");
-        var checksumUrlTemplate = GetString(hints, "checksumUrlTemplate");
-        if (string.IsNullOrWhiteSpace(indexUrl) || string.IsNullOrWhiteSpace(filePattern)) return null;
-
-        using var response = await _httpClient.GetAsync(indexUrl, cancellationToken).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode) return null;
-
-        var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        var baseUrl = indexUrl.EndsWith("/") ? indexUrl : indexUrl.Substring(0, indexUrl.LastIndexOf('/') + 1);
-
-        var versionRegex = new Regex(versionPattern, RegexOptions.Compiled);
-        var fileRegex = new Regex(filePattern, RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
-        var bestVersion = string.Empty;
-        var bestUrl = string.Empty;
-
-        foreach (Match hrefMatch in HrefPattern.Matches(body))
-        {
-            var href = hrefMatch.Groups[1].Value;
-            if (href.StartsWith("?", StringComparison.Ordinal) ||
-                href.StartsWith("#", StringComparison.Ordinal) ||
-                href.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            if (!fileRegex.IsMatch(href)) continue;
-
-            var versionMatch = versionRegex.Match(href);
-            if (!versionMatch.Success) continue;
-            var candidateVersion = versionMatch.Groups[1].Value;
-
-            if (!Version.TryParse(candidateVersion, out var candidateVer)) continue;
-            if (Version.TryParse(bestVersion, out var bestVer) && candidateVer <= bestVer)
-                continue;
-
-            bestVersion = candidateVersion;
-            bestUrl = ResolveAbsoluteUrl(baseUrl, href);
-        }
-
-        if (string.IsNullOrWhiteSpace(bestUrl)) return null;
-
-        var sha = string.Empty;
-        if (!string.IsNullOrWhiteSpace(checksumUrlTemplate))
-        {
-            var checksumUrl = checksumUrlTemplate.Replace("$version", bestVersion).Replace("$url", bestUrl);
-            var targetFile = ExtractFileName(bestUrl);
-            sha = await TryFetchChecksumForFileAsync(checksumUrl, targetFile, cancellationToken).ConfigureAwait(false);
-        }
-
-        return new ResolvedItem(name, bestUrl, sha, "directory-scan", bestVersion);
-    }
-
-    private async Task<string?> TryReadGitHubSha256Async(
-        string fileName, string? checksumUrl, JsonElement releaseRoot, CancellationToken cancellationToken)
-    {
-        if (!string.IsNullOrWhiteSpace(checksumUrl))
-        {
-            try
-            {
-                var checksumBody = await _httpClient.GetStringAsync(checksumUrl, cancellationToken).ConfigureAwait(false);
-                var parsed = ParseSha256FromText(checksumBody, fileName);
-                if (!string.IsNullOrWhiteSpace(parsed)) return parsed;
-            }
-            catch { }
-        }
-
-        var body = GetString(releaseRoot, "body");
-        return ParseSha256FromText(body, fileName);
-    }
-
-    private async Task<string?> TryFetchChecksumForFileAsync(string checksumUrl, string fileName, CancellationToken cancellationToken)
-    {
         try
         {
-            var body = await _httpClient.GetStringAsync(checksumUrl, cancellationToken).ConfigureAwait(false);
-            return ParseSha256FromText(body, fileName);
+            var catalog = ResourceCatalog.Load(policyPath);
+            // Writable per-user cache — never write inside the installed backend root.
+            return new ResourceCheckService(
+                catalog,
+                new ResourceProviderResolver(new OfficialMetadataClient(), catalog.MaximumAttempts),
+                new ResourceMetadataCache(ResourceCheckService.DefaultCacheDirectory()));
         }
-        catch
+        catch (ResourceCatalogException ex)
         {
+            onOutput?.Invoke(MakeLog($"Resource policy is invalid: {ex.Message}", LogSeverity.Error));
             return null;
         }
     }
 
-    private static string? ParseSha256FromText(string? text, string fileName)
+    private static IReadOnlyList<string> OverlayAllowedHostsFor(ResourceDescriptor descriptor)
     {
-        if (string.IsNullOrWhiteSpace(text)) return null;
-        var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        foreach (var line in lines)
+        var hosts = new List<string>(descriptor.AllowedHosts);
+        if (Uri.TryCreate(descriptor.SourceUri, UriKind.Absolute, out var source))
         {
-            var trimmed = line.Trim();
-            if (trimmed.Length < 64) continue;
-
-            var match = Regex.Match(trimmed, @"([0-9a-fA-F]{64})");
-            if (!match.Success) continue;
-
-            var afterHash = trimmed.Substring(match.Index + match.Length).Trim();
-            var beforeHash = trimmed[..match.Index].Trim();
-
-            if (string.IsNullOrEmpty(afterHash) ||
-                afterHash.Contains(fileName, StringComparison.OrdinalIgnoreCase) ||
-                afterHash.StartsWith("*") ||
-                afterHash.Equals("sha256", StringComparison.OrdinalIgnoreCase) ||
-                beforeHash.Contains(fileName, StringComparison.OrdinalIgnoreCase) ||
-                beforeHash.EndsWith("SHA256", StringComparison.OrdinalIgnoreCase))
-            {
-                return match.Groups[1].Value.ToLowerInvariant();
-            }
+            hosts.Add(source.Host);
         }
 
-        if (lines.Length == 1)
+        if (descriptor.BaseUrl is not null
+            && Uri.TryCreate(descriptor.BaseUrl, UriKind.Absolute, out var baseUri))
         {
-            var solo = Regex.Match(text.Trim(), @"^([0-9a-fA-F]{64})\s*$");
-            if (solo.Success) return solo.Groups[1].Value.ToLowerInvariant();
+            hosts.Add(baseUri.Host);
         }
 
-        return null;
+        if (descriptor.Provider == ResourceProviderKind.GitHubStable)
+        {
+            hosts.Add("github.com");
+            hosts.Add("release-assets.githubusercontent.com");
+            hosts.Add("objects.githubusercontent.com");
+        }
+
+        return hosts.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    private static string ResolveAbsoluteUrl(string baseUrl, string href)
+    private static string ComputeSha256(string path)
     {
-        if (href.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-            href.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-            return href;
-
-        try
-        {
-            var baseUri = new Uri(baseUrl);
-            return new Uri(baseUri, href).ToString();
-        }
-        catch
-        {
-            var sep = baseUrl.EndsWith("/") ? "" : "/";
-            return baseUrl + sep + href.TrimStart('/', '\\');
-        }
-    }
-
-    private static string ExtractFileName(string url)
-    {
-        try
-        {
-            var queryIndex = url.IndexOf('?');
-            var path = queryIndex > 0 ? url[..queryIndex] : url;
-            var slashIndex = path.LastIndexOf('/');
-            return slashIndex >= 0 ? path[(slashIndex + 1)..] : path;
-        }
-        catch
-        {
-            return url;
-        }
-    }
-
-    private static string? ExtractVersion(params string[] candidates)
-    {
-        foreach (var candidate in candidates)
-        {
-            if (string.IsNullOrWhiteSpace(candidate)) continue;
-            var match = VersionPattern.Match(candidate);
-            if (match.Success) return match.Value;
-        }
-        return null;
+        using var stream = File.OpenRead(path);
+        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
     }
 
     private static LogLine MakeLog(string text, LogSeverity severity) =>
