@@ -433,8 +433,26 @@ public sealed class UsbBenchmarkHardeningTests
         await WaitForStartedAsync(service, 1);
         vm.CancelUsbIntelligenceBenchmarkCommand.Execute(null);
         Assert.True(service.Tokens[0].IsCancellationRequested);
-        first.SetResult(CancelledResult());
-        Assert.True(SpinWait.SpinUntil(() => vm.RunUsbIntelligenceBenchmarkCommand.CanExecute(null), TimeSpan.FromSeconds(5)));
+        var reenabled = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        EventHandler onStateChanged = (_, _) =>
+        {
+            if (vm.RunUsbIntelligenceBenchmarkCommand.CanExecute(null))
+            {
+                reenabled.TrySetResult(true);
+            }
+        };
+        vm.RunUsbIntelligenceBenchmarkCommand.CanExecuteChanged += onStateChanged;
+        try
+        {
+            first.SetResult(CancelledResult());
+            // Yield the test synchronization context so the command's captured continuation can finish.
+            await reenabled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(vm.RunUsbIntelligenceBenchmarkCommand.CanExecute(null));
+        }
+        finally
+        {
+            vm.RunUsbIntelligenceBenchmarkCommand.CanExecuteChanged -= onStateChanged;
+        }
 
         vm.RunUsbIntelligenceBenchmarkCommand.Execute(null);
         await WaitForStartedAsync(service, 2);
