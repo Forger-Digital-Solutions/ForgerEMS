@@ -106,7 +106,7 @@ It is **not** a sketchy driver-updater clone. Each card shows **one clear primar
 
 Recommendations are hints only, based on detected manufacturer/GPU/CPU/platform data from System Intelligence when available. Brand tiles are text monograms, not bundled vendor logo assets. Firmware cards remind you to confirm the exact model, power, battery/AC state, and vendor instructions before updates.
 
-Releases run an optional link-health pass via [`tools/Test-DriverHubLinks.ps1`](../tools/Test-DriverHubLinks.ps1), which probes each catalog URL with a reasonable timeout and a real-browser user agent. Some vendor pages reject automated checkers (HTTP 401 / 403 / 429) even when the page opens fine in a real browser — the script reports those as `ForbiddenLikelyOk` and only fails on confirmed 404s. The unit tests never depend on live vendor reachability.
+Releases run an optional link-health pass via `tools/Test-DriverHubLinks.ps1` (source checkout only — developer tooling is not shipped in the package), which probes each catalog URL with a reasonable timeout and a real-browser user agent. Some vendor pages reject automated checkers (HTTP 401 / 403 / 429) even when the page opens fine in a real browser — the script reports those as `ForbiddenLikelyOk` and only fails on confirmed 404s. The unit tests never depend on live vendor reachability.
 
 ---
 

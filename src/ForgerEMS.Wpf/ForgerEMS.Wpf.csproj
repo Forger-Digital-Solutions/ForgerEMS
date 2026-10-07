@@ -103,6 +103,76 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>
     </Content>
+    <Content Include="..\..\docs\BETA_ISSUE_REPORT_TEMPLATE.md">
+      <Link>docs\BETA_ISSUE_REPORT_TEMPLATE.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\BETA_TESTER_QUICKSTART.md">
+      <Link>docs\BETA_TESTER_QUICKSTART.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\DOWNLOAD_TROUBLESHOOTING.md">
+      <Link>docs\DOWNLOAD_TROUBLESHOOTING.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\ENVIRONMENT.md">
+      <Link>docs\ENVIRONMENT.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\FIRST_TESTER_DOWNLOAD_FLOW.md">
+      <Link>docs\FIRST_TESTER_DOWNLOAD_FLOW.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\FORGER-DEEP-SENSOR-DRIVER-ROADMAP.md">
+      <Link>docs\FORGER-DEEP-SENSOR-DRIVER-ROADMAP.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\FORGER-SENSOR-STACK.md">
+      <Link>docs\FORGER-SENSOR-STACK.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\LEGAL.md">
+      <Link>docs\LEGAL.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\LINUX-WINE-COMPATIBILITY.md">
+      <Link>docs\LINUX-WINE-COMPATIBILITY.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\marketing\PUBLIC-FAQ.md">
+      <Link>docs\marketing\PUBLIC-FAQ.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\SENSOR-LIMITATIONS.md">
+      <Link>docs\SENSOR-LIMITATIONS.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\THIRD-PARTY-SENSOR-NOTICES.md">
+      <Link>docs\THIRD-PARTY-SENSOR-NOTICES.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\UPDATE_SYSTEM.md">
+      <Link>docs\UPDATE_SYSTEM.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\SECURITY.md">
+      <Link>SECURITY.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 
   <Target Name="CopyLibreHardwareMonitorProviderToOutput" AfterTargets="Build" Condition="Exists('$(ForgerLibreHardwareMonitorDll)')">

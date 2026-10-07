@@ -21,7 +21,7 @@ The default safe provider is **Forger Sensor Core**, which uses local Windows/na
 - Pinned upstream source: LibreHardwareMonitor commit `3d331e3370efb858411f19511373eff65a218701` (https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/tree/3d331e3370efb858411f19511373eff65a218701)
 - Status: reviewed local read-only provider, disabled by default
 - Modified MPL-covered files: none
-- Replaceability: the assembly is shipped as a loose `LibreHardwareMonitorLib.dll` (excluded from single-file bundling), so the LGPL-bearing dependency carrying the embedded PawnIO modules can be replaced or rebuilt by the user as LGPL obligations may require. Counsel review of bundled-module and relinking obligations remains flagged; no compliance certification is asserted.
+- Replaceability: the assembly is shipped as a loose `LibreHardwareMonitorLib.dll` (excluded from single-file bundling), so the LGPL-bearing dependency carrying the embedded PawnIO modules can be replaced or rebuilt by the user as LGPL obligations may require. Step-by-step replacement instructions ship as `providers/sensors/REPLACING-LGPL-COMPONENTS.md` (copied into `providers\sensors\` in packaged builds). The runtime binds the app-root `LibreHardwareMonitorLib.dll`; the `providers\sensors\` copy is the packaged provider copy — both must be replaced together. Counsel review of bundled-module and relinking obligations remains flagged; no compliance certification is asserted.
 
 ### Embedded PawnIO modules (inside LibreHardwareMonitorLib 0.9.6)
 

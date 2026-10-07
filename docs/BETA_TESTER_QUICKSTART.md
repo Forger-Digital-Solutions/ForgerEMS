@@ -68,4 +68,4 @@ Use **Run USB Benchmark**. Confirm speeds update or show a clear “not measured
 
 Use [BETA_ISSUE_REPORT_TEMPLATE.md](BETA_ISSUE_REPORT_TEMPLATE.md). Attach screenshots and **redacted** log excerpts. **Do not** include passwords, API keys, product keys, serial numbers, or private documents.
 
-Manual QA checklist reference: [PUBLIC_PREVIEW_MANUAL_QA_v1.2.0-preview.1.md](PUBLIC_PREVIEW_MANUAL_QA_v1.2.0-preview.1.md) (v1.2.0 checklist, updated for v1.2.1 where noted in release notes).
+Current documentation: [FAQ.md](FAQ.md) and [RELEASE_NOTES_v1.2.4.md](RELEASE_NOTES_v1.2.4.md).

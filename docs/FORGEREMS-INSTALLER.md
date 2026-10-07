@@ -112,9 +112,13 @@ Installer script:
 
 - `installer/ForgerEMS.iss`
 
-Build helper:
+Build helper (unsigned local candidates only):
 
 - `tools/build-forgerems-installer.ps1`
+
+Canonical production release builder (signed, gated):
+
+- `tools/build-release.ps1`
 
 Installed readme:
 
@@ -139,8 +143,14 @@ Bundled backend staging helper:
 
 ### Scripted build
 
+`build-forgerems-installer.ps1` is an **unsigned-candidate-only** adjunct — it
+refuses to run without `-UnsignedCandidate`, compiles with
+`/DUnsignedCandidate=1`, and emits a `*.candidate.json` sidecar next to the
+installer recording `unsignedCandidate=true`, `productionEligible=false`,
+`signed=false`, plus the source HEAD and dirty-file count:
+
 ```powershell
-.\tools\build-forgerems-installer.ps1
+.\tools\build-forgerems-installer.ps1 -UnsignedCandidate
 ```
 
 What the script does:
@@ -149,6 +159,21 @@ What the script does:
 - stages a minimal version-matched backend from a verified release bundle
 - resolves `ISCC.exe`
 - compiles the installer into the output folder
+- writes `<installer>.candidate.json` next to the installer
+
+Production packaging is **not** done here — use the canonical signed path:
+
+```powershell
+.\tools\build-release.ps1 -RequireSigning -CertificateThumbprint <thumbprint>
+```
+
+`build-release.ps1` resolves the certificate store (CurrentUser first, then
+LocalMachine), signs the frontend executable, and configures Inno Setup with a
+`ForgerEMSRelease` SignTool callback (absolute Windows PowerShell invoking
+`tools\sign-release-artifact.ps1`) so the installer, temporary copies, and the
+cached signed uninstaller are each signed **and** verified during compile.
+Production fails closed when credentials are missing/invalid, the source tree
+is dirty, or any required signature is absent or invalid.
 
 ## Output Location
 
@@ -202,6 +227,19 @@ When you move to a new version:
 Versioned distribution artifacts (for example `ForgerEMS-Setup-v1.2.4.exe` and `ForgerEMS-v1.2.4.zip`) should be attached to a GitHub Release for the matching tag, rather than committed under `release\vX.Y.Z\`.
 
 The `AppId` should stay the same so upgrades keep working.
+
+## Retention / Downgrade Policy
+
+- Installing an **older version over a newer install (downgrade) is not
+  supported**. ForgerEMS does not test or guarantee downgrade paths; if an
+  older build must be used, uninstall first and install the older build clean.
+- Do not assert that the installer itself detects or blocks older published
+  installers — treat downgrades as unsupported at the policy level.
+- Upgrades in place preserve user data (settings, consent, profiles, reports
+  under `%LOCALAPPDATA%\ForgerEMS` are outside the install directory and are
+  not removed on upgrade or uninstall).
+- Unsigned-candidate installers (`*.candidate.json` sidecar) are QA-only and
+  must never be published or offered as updates.
 
 ## Installed Layout
 

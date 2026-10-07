@@ -64,6 +64,36 @@ public sealed class WinVerifyTrustAuthenticodeVerifierTests
         Assert.Contains("does not exactly match", result.Failure, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    // expected null/blank -> pinning disabled, any signer accepted
+    [InlineData("Microsoft Corporation", null, true)]
+    [InlineData("Microsoft Corporation", "", true)]
+    [InlineData("Microsoft Corporation", "   ", true)]
+    [InlineData(null, null, true)]
+    [InlineData(null, "", true)]
+    // exact match, case-insensitive
+    [InlineData("Forger Digital Solutions", "Forger Digital Solutions", true)]
+    [InlineData("FORGER DIGITAL SOLUTIONS", "forger digital solutions", true)]
+    // expected set -> only exact matches pass
+    [InlineData("Forger Digital Solutions Ltd", "Forger Digital Solutions", false)] // suffix
+    [InlineData("Evil Forger Digital Solutions", "Forger Digital Solutions", false)] // prefix
+    [InlineData("xForger Digital Solutionsx", "Forger Digital Solutions", false)] // substring
+    [InlineData("", "Forger Digital Solutions", false)] // blank actual
+    [InlineData("   ", "Forger Digital Solutions", false)] // whitespace actual
+    [InlineData(null, "Forger Digital Solutions", false)] // null actual
+    [InlineData("Other Publisher", "Forger Digital Solutions", false)]
+    public void PublisherMatches_ExactCaseInsensitiveOnlyWhenPinned(string? signer, string? expected, bool expectedResult)
+    {
+        Assert.Equal(expectedResult, WinVerifyTrustAuthenticodeVerifier.PublisherMatches(signer, expected));
+    }
+
+    [Fact]
+    public void Verify_UsesExtractedPublisherMatches()
+    {
+        var text = File.ReadAllText(FindRepoFile("Services", "Resources", "WinVerifyTrustAuthenticodeVerifier.cs"));
+        Assert.Contains("PublisherMatches(signer, expectedPublisher)", text, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void UnsignedFile_Rejected()
     {
@@ -80,5 +110,22 @@ public sealed class WinVerifyTrustAuthenticodeVerifierTests
         {
             File.Delete(temp);
         }
+    }
+
+    private static string FindRepoFile(params string[] segments)
+    {
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        while (current is not null)
+        {
+            var candidate = Path.Combine(new[] { current.FullName, "src", "ForgerEMS.Wpf" }.Concat(segments).ToArray());
+            if (File.Exists(candidate) || Directory.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            current = current.Parent;
+        }
+
+        throw new FileNotFoundException("Could not locate repo path.", Path.Combine(segments));
     }
 }

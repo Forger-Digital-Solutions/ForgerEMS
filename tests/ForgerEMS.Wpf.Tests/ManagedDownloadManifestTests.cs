@@ -405,7 +405,7 @@ public sealed class ManagedDownloadManifestTests
     [InlineData("Advanced IP Scanner Download Page", "Vendor portal selects build/region; no stable versioned URL or machine-readable checksum file.")]
     [InlineData("Everything Search Download Page", "Vendor portal selects per-architecture installer; no machine-readable checksum file at a stable URL.")]
     [InlineData("GPU-Z Download Page", "TechPowerUp vendor portal with mirror/CDN selection; no machine-readable checksum file.")]
-    [InlineData("DDU Download Page", "Guru3D vendor portal with rotating mirror selection; no machine-readable checksum file.")]
+    [InlineData("DDU Download Page", "Wagnardsoft publisher page without a machine-readable checksum file; third-party mirrors are avoided.")]
     [InlineData("NVCleanInstall Download Page", "TechPowerUp vendor portal with mirror selection; no machine-readable checksum file.")]
     public void ManagedDownloadManifest_Batch3UnsafeCandidatesStayManualOnly(string itemName, string reasonDocumented)
     {

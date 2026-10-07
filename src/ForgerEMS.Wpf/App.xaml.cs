@@ -459,7 +459,15 @@ public partial class App : Application
 
     private static IEnumerable<string> GetStartupCrashWriteCandidates()
     {
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        // Match StartupDiagnosticLog/AppRuntimeService: honor the process
+        // LOCALAPPDATA override first so crash reports land in the same isolated
+        // root as the rest of runtime diagnostics, then known-folder, then temp.
+        var localAppData = Environment.GetEnvironmentVariable("LOCALAPPDATA");
+        if (string.IsNullOrWhiteSpace(localAppData))
+        {
+            localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        }
+
         if (!string.IsNullOrWhiteSpace(localAppData))
         {
             yield return Path.Combine(localAppData, "ForgerEMS", "Runtime", "diagnostics", "startup-crash.txt");

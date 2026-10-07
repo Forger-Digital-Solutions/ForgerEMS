@@ -131,8 +131,7 @@ public sealed class WinVerifyTrustAuthenticodeVerifier : IAuthenticodeVerifier
                 $"WinVerifyTrust passed but signer certificate could not be read: {ex.Message}");
         }
 
-        if (!string.IsNullOrWhiteSpace(expectedPublisher)
-            && !string.Equals(signer, expectedPublisher, StringComparison.OrdinalIgnoreCase))
+        if (!PublisherMatches(signer, expectedPublisher))
         {
             return new AuthenticodeResult(
                 false, signer,
@@ -140,6 +139,21 @@ public sealed class WinVerifyTrustAuthenticodeVerifier : IAuthenticodeVerifier
         }
 
         return new AuthenticodeResult(true, signer, null);
+    }
+
+    /// <summary>
+    /// Publisher pinning contract: a null/blank expected publisher disables
+    /// pinning (any signer accepted); when set, the signer must be an exact
+    /// case-insensitive match — no prefix/suffix/substring leniency.
+    /// </summary>
+    internal static bool PublisherMatches(string? signer, string? expected)
+    {
+        if (string.IsNullOrWhiteSpace(expected))
+        {
+            return true;
+        }
+
+        return string.Equals(signer, expected, StringComparison.OrdinalIgnoreCase);
     }
 
     [DllImport("wintrust.dll", SetLastError = true, CharSet = CharSet.Unicode)]

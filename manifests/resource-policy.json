@@ -416,7 +416,7 @@
       "id": "truenas",
       "name": "TrueNAS Community Edition",
       "provider": "official-page",
-      "source": "https://www.truenas.com/download-truenas-community-edition/",
+      "source": "https://www.truenas.com/download/",
       "architecture": "x64",
       "exception": "Vendor recommended vs early-adopter channel and storage compatibility must not be inferred from the largest release number."
     },

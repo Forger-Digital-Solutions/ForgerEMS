@@ -51,6 +51,10 @@ NuGet runtime dependency packages resolved with the bundled provider:
   https://github.com/Blacktempel/RAMSPDToolkit tree 3b47b960e0830fef344624ad5e389675d5f0a1ce
 - HidSharp 2.6.4 — Apache-2.0 —
   license text: providers/sensors/LICENSES/HidSharp-Apache-2.0.txt
+Replacement instructions for the LGPL-bearing component (pinned source,
+rebuild steps, which files to replace): see REPLACING-LGPL-COMPONENTS.md in
+this folder.
+
 - Mono.Posix.NETStandard 1.0.0 — package metadata declares a license URL
   (https://go.microsoft.com/fwlink/?linkid=869050) pointing at the Mono project
   license, not an SPDX identifier. Current upstream Mono text states the
