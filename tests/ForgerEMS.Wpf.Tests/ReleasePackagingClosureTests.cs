@@ -440,6 +440,78 @@ public sealed class ReleasePackagingClosureTests
         Assert.Contains("refusing to treat an unreadable source tree as clean", build, StringComparison.OrdinalIgnoreCase);
     }
 
+    // ---- sidebar navigation accessibility ----
+
+    private static readonly (string Name, string AutomationName, string Tag)[] ExpectedNavButtons =
+    {
+        ("NavUsbButton", "USB Builder", "0"),
+        ("NavPortUsbIntelligenceButton", "Port / USB Intelligence", "1"),
+        ("NavToolkitButton", "Toolkit Manager", "2"),
+        ("NavDriverHubButton", "Driver Hub", "3"),
+        ("NavSettingsButton", "Settings", "4"),
+    };
+
+    [Fact]
+    public void SidebarNavStyle_IsKeyboardFocusable_WithVisibleFocusCue()
+    {
+        var xamlPath = Path.Combine(RepoRoot, "src", "ForgerEMS.Wpf", "MainWindow.xaml");
+        var doc = XDocument.Load(xamlPath);
+        XNamespace wpf = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var style = doc.Descendants(wpf + "Style")
+            .Single(s => (string?)s.Attribute(x + "Key") == "SidebarNavButtonStyle");
+
+        var setters = style.Elements(wpf + "Setter").ToList();
+        Assert.Contains(setters, s =>
+            (string?)s.Attribute("Property") == "Focusable" &&
+            (string?)s.Attribute("Value") == "True");
+        Assert.Contains(setters, s =>
+            (string?)s.Attribute("Property") == "FocusVisualStyle" &&
+            (string?)s.Attribute("Value") == "{x:Null}");
+        Assert.DoesNotContain(setters, s =>
+            (string?)s.Attribute("Property") == "Focusable" &&
+            (string?)s.Attribute("Value") == "False");
+
+        var trigger = style.Descendants(wpf + "Trigger")
+            .Single(t => (string?)t.Attribute("Property") == "IsKeyboardFocused" &&
+                         (string?)t.Attribute("Value") == "True");
+        var triggerSetters = trigger.Elements(wpf + "Setter").ToList();
+        Assert.Contains(triggerSetters, s =>
+            (string?)s.Attribute("TargetName") == "NavBorder" &&
+            (string?)s.Attribute("Property") == "BorderThickness" &&
+            (string?)s.Attribute("Value") == "2");
+        Assert.Contains(triggerSetters, s =>
+            (string?)s.Attribute("TargetName") == "NavBorder" &&
+            (string?)s.Attribute("Property") == "BorderBrush" &&
+            (string?)s.Attribute("Value") == "#FF57C7E8");
+    }
+
+    [Fact]
+    public void SidebarNavButtons_HaveAutomationNames_AndSequentialTags()
+    {
+        var xamlPath = Path.Combine(RepoRoot, "src", "ForgerEMS.Wpf", "MainWindow.xaml");
+        var doc = XDocument.Load(xamlPath);
+        XNamespace wpf = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var buttons = doc.Descendants(wpf + "Button")
+            .Where(b => (string?)b.Attribute("Style") == "{StaticResource SidebarNavButtonStyle}")
+            .ToList();
+        Assert.Equal(5, buttons.Count);
+
+        foreach (var (name, automationName, tag) in ExpectedNavButtons)
+        {
+            var button = buttons.Single(b => (string?)b.Attribute(x + "Name") == name);
+            Assert.Equal(tag, (string?)button.Attribute("Tag"));
+            Assert.Equal(automationName, (string?)button.Attribute("AutomationProperties.Name"));
+        }
+
+        // Tags must be sequential 0..4 for predictable navigation ordering.
+        var tags = buttons.Select(b => (string?)b.Attribute("Tag")).OrderBy(t => t).ToArray();
+        Assert.Equal(new[] { "0", "1", "2", "3", "4" }, tags);
+    }
+
     [Fact]
     public void InnoScript_RequiresExactlyOneSigningMode()
     {

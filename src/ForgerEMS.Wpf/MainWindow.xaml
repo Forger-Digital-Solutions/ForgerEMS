@@ -585,7 +585,7 @@
 
         <Style x:Key="SidebarNavButtonStyle" TargetType="Button">
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
-            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Focusable" Value="True" />
             <Setter Property="Height" Value="52" />
             <Setter Property="Margin" Value="0,0,0,12" />
             <Setter Property="Padding" Value="16,0" />
@@ -615,6 +615,10 @@
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="NavBorder" Property="Opacity" Value="0.86" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="NavBorder" Property="BorderThickness" Value="2" />
+                                <Setter TargetName="NavBorder" Property="BorderBrush" Value="#FF57C7E8" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="NavBorder" Property="Opacity" Value="0.55" />
@@ -1083,11 +1087,11 @@
                         Tag values are 0-based MainTabControl indices and must stay in sync
                         with the TabItem order below.
                     -->
-                    <Button x:Name="NavUsbButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="0" Click="OnSidebarNavigateClick" Content="USB Builder" />
-                    <Button x:Name="NavPortUsbIntelligenceButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="1" Click="OnSidebarNavigateClick" Content="Port / USB Intelligence" />
-                    <Button x:Name="NavToolkitButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="2" Click="OnSidebarNavigateClick" Content="▤  Toolkit Manager" />
-                    <Button x:Name="NavDriverHubButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="3" Click="OnSidebarNavigateClick" Content="▥  Driver Hub" />
-                    <Button x:Name="NavSettingsButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="4" Click="OnSidebarNavigateClick" Content="☰  Settings" />
+                    <Button x:Name="NavUsbButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="0" Click="OnSidebarNavigateClick" Content="USB Builder" AutomationProperties.Name="USB Builder" />
+                    <Button x:Name="NavPortUsbIntelligenceButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="1" Click="OnSidebarNavigateClick" Content="Port / USB Intelligence" AutomationProperties.Name="Port / USB Intelligence" />
+                    <Button x:Name="NavToolkitButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="2" Click="OnSidebarNavigateClick" Content="▤  Toolkit Manager" AutomationProperties.Name="Toolkit Manager" />
+                    <Button x:Name="NavDriverHubButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="3" Click="OnSidebarNavigateClick" Content="▥  Driver Hub" AutomationProperties.Name="Driver Hub" />
+                    <Button x:Name="NavSettingsButton" Style="{StaticResource SidebarNavButtonStyle}" Tag="4" Click="OnSidebarNavigateClick" Content="☰  Settings" AutomationProperties.Name="Settings" />
                 </StackPanel>
 
                 <Border Grid.Row="1"

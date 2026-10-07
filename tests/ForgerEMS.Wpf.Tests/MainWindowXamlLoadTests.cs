@@ -289,6 +289,29 @@ public sealed class MainWindowXamlLoadTests
                 Assert.NotNull(mainWindow.TryFindResource("ReadableComboBoxItemStyle"));
                 Assert.NotNull(mainWindow.TryFindResource("SecondaryButtonStyle"));
                 Assert.NotNull(mainWindow.TryFindResource("FooterButtonStyle"));
+
+                // Sidebar navigation accessibility: all five screens must be
+                // keyboard-reachable tab stops with glyph-free automation names.
+                var navExpectations = new (string Name, string AutomationName)[]
+                {
+                    ("NavUsbButton", "USB Builder"),
+                    ("NavPortUsbIntelligenceButton", "Port / USB Intelligence"),
+                    ("NavToolkitButton", "Toolkit Manager"),
+                    ("NavDriverHubButton", "Driver Hub"),
+                    ("NavSettingsButton", "Settings"),
+                };
+                foreach (var (name, automationName) in navExpectations)
+                {
+                    var button = mainWindow.FindName(name) as Button;
+                    Assert.NotNull(button);
+                    Assert.True(button.Focusable, $"{name} must be focusable for keyboard navigation.");
+                    Assert.True(
+                        System.Windows.Input.KeyboardNavigation.GetIsTabStop(button),
+                        $"{name} must remain a tab stop.");
+                    Assert.Equal(automationName,
+                        System.Windows.Automation.AutomationProperties.GetName(button));
+                }
+
                 mainWindow.Close();
                 app.Shutdown();
             }
