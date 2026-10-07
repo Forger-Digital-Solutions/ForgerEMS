@@ -6,6 +6,7 @@ using Xunit;
 
 namespace ForgerEMS.Wpf.Tests;
 
+[Collection(ReleaseValidatorPerformanceCollection.Name)]
 public sealed class ReleaseValidatorPerformanceTests
 {
     private static string RepoRoot
