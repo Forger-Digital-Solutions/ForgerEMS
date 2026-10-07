@@ -9,7 +9,7 @@ ForgerEMS is a local-device support workflow tool, USB toolkit/profile builder, 
 - The in-app Kyra assistant (chat, online providers, gateway, slash commands, and related settings/memory surfaces) has been completely removed. Assistant configuration and memory files previously saved on the device are left untouched and are no longer read.
 - The update checker discovers releases by semantic version — the highest eligible stable (or explicitly opted-in prerelease) tag/name — rather than publication date. It defaults to stable releases only, ignores drafts, and rejects malformed release metadata. Persisted beta/RC channel preferences are honored.
 - The build version is sourced from the repository `VERSION` file as the single version authority; app, installer, and diagnostics display one consistent version.
-- Update downloads verify an expected SHA256 taken from trusted same-release metadata, follow only trusted redirects, require exact publisher and chain validation that fails closed, and extract ZIP payloads through safe path-validated extraction.
+- Update downloads verify an expected SHA256 taken from trusted same-release metadata and follow only trusted redirects. Executable update installers require exact publisher and chain validation that fails closed; managed ZIP extraction uses safe path validation.
 - Driver/vendor resources are discovered through dynamic metadata, with manual official-page exceptions where safe automated verification is unsupported.
 - Windows Update and Driver Store inventory is read-only. Hardware-ID candidate correlation is advisory only — ForgerEMS does not automatically install or remove drivers.
 - `System.Management`, `System.IO.Ports`, and `System.Threading.AccessControl` were updated to 10.0.12.
