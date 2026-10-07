@@ -120,8 +120,24 @@ public sealed class ResourceProviderResolver
 
             var tag = GetStr(root, "tag_name");
             var name = GetStr(root, "name");
-            if (!ReleaseVersionParser.TryParseFromGitHubRelease(tag, name, out var sem, out var versionLabel)
-                || sem.Prerelease is not null)
+            if (!ReleaseVersionParser.TryParseFromGitHubRelease(tag, name, out var sem, out var versionLabel))
+            {
+                // Resource-only fallback: vendor two-part numeric tag ("v4.15") parses as X.Y.0;
+                // anchored to the whole string so suffixes/dates still reject. Label keeps "4.15".
+                var twoPart = Regex.Match(tag ?? string.Empty, @"^[vV]?([0-9]+\.[0-9]+)$",
+                    RegexOptions.None, RegexTimeout);
+                if (!twoPart.Success
+                    || !AppSemanticVersion.TryParse(twoPart.Groups[1].Value + ".0", out sem))
+                {
+                    return Fail(descriptor, ResourceResolutionState.UnableToVerify,
+                        ResourceFailureCategory.MetadataInvalid,
+                        "Latest GitHub release does not carry an unambiguous stable semantic version.");
+                }
+
+                versionLabel = twoPart.Groups[1].Value;
+            }
+
+            if (sem.Prerelease is not null)
             {
                 return Fail(descriptor, ResourceResolutionState.UnableToVerify,
                     ResourceFailureCategory.MetadataInvalid,
@@ -466,22 +482,69 @@ public sealed class ResourceProviderResolver
         }
 
         var assetRegex = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+        var fileVersionRegex = new Regex(@"^ubuntu-(?<version>[0-9]+(?:\.[0-9]+){1,3})-",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+
         var match = entries.Keys.Where(k => assetRegex.IsMatch(k)).ToList();
-        if (match.Count != 1)
+        if (match.Count == 0)
         {
             return Fail(descriptor, ResourceResolutionState.UnableToVerify,
                 ResourceFailureCategory.MetadataInvalid,
-                $"Ubuntu SHA256SUMS has {match.Count} entries matching '{pattern}'.");
+                $"Ubuntu SHA256SUMS has no entries matching '{pattern}'.");
+        }
+
+        // Every pattern-matching entry must carry a parseable version in the selected
+        // LTS family; an unparseable or foreign-family entry fails closed rather than
+        // being silently ignored. Versions are normalized to four components so that
+        // lexically different files describing the same build (24.04.5 vs 24.04.05)
+        // collide instead of picking first/last wins.
+        static Version Normalize4(Version v) =>
+            new(v.Major, v.Minor, v.Build < 0 ? 0 : v.Build, v.Revision < 0 ? 0 : v.Revision);
+
+        var candidates = new List<(string Name, Version Parsed, string Label)>();
+        foreach (var fileName in match)
+        {
+            var versionMatch = fileVersionRegex.Match(fileName);
+            if (!versionMatch.Success
+                || !Version.TryParse(versionMatch.Groups["version"].Value, out var fileVersion)
+                || fileVersion.Major != best.ParsedVersion.Major
+                || fileVersion.Minor != best.ParsedVersion.Minor)
+            {
+                return Fail(descriptor, ResourceResolutionState.UnableToVerify,
+                    ResourceFailureCategory.MetadataInvalid,
+                    $"Ubuntu SHA256SUMS entry '{fileName}' is not a parseable " +
+                    $"{best.ParsedVersion.Major}.{best.ParsedVersion.Minor}-family image name.");
+            }
+
+            candidates.Add((fileName, Normalize4(fileVersion), versionMatch.Groups["version"].Value));
+        }
+
+        var ordered = candidates.OrderByDescending(c => c.Parsed).ToList();
+        var top = ordered[0];
+        var stanzaFloor = Normalize4(best.ParsedVersion);
+        if (top.Parsed < stanzaFloor)
+        {
+            return Fail(descriptor, ResourceResolutionState.UnableToVerify,
+                ResourceFailureCategory.MetadataInvalid,
+                $"Ubuntu SHA256SUMS newest image {top.Label} is older than the declared " +
+                $"supported version {best.Version}.");
+        }
+
+        if (ordered.Count > 1 && ordered[1].Parsed == top.Parsed)
+        {
+            return Fail(descriptor, ResourceResolutionState.RequiresUserAction,
+                ResourceFailureCategory.AmbiguousSelection,
+                $"Multiple Ubuntu images normalize to version {top.Label}; refusing first/last-wins selection.");
         }
 
         return new ResourceResolution
         {
             Descriptor = descriptor,
             State = ResourceResolutionState.ResolvedMetadata,
-            Version = best.Version,
-            ArtifactUri = new Uri(sumsUri, match[0]).AbsoluteUri,
-            ArtifactFileName = match[0],
-            ExpectedSha256 = entries[match[0]]
+            Version = top.Label,
+            ArtifactUri = new Uri(sumsUri, top.Name).AbsoluteUri,
+            ArtifactFileName = top.Name,
+            ExpectedSha256 = entries[top.Name]
         };
     }
 

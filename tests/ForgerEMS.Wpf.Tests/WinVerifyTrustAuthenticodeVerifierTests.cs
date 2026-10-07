@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using ForgerEMS.Wpf.Services.Resources;
 using Xunit;
@@ -110,6 +111,33 @@ public sealed class WinVerifyTrustAuthenticodeVerifierTests
         {
             File.Delete(temp);
         }
+    }
+
+    [Fact]
+    public void NativeInteropStructLayout_MatchesX64SdkExpectations()
+    {
+        // x64 layout contract vs wintrust.h (10.0.26100.0) — guard against a field
+        // reorder/regression silently corrupting the P/Invoke signature.
+        Assert.Equal(8, IntPtr.Size); // win-x64 test host only
+
+        var fileInfo = typeof(WinVerifyTrustAuthenticodeVerifier)
+            .GetNestedType("WINTRUST_FILE_INFO", BindingFlags.NonPublic);
+        Assert.NotNull(fileInfo);
+        Assert.Equal(32, Marshal.SizeOf(fileInfo!));
+        Assert.Equal(0, (int)Marshal.OffsetOf(fileInfo!, "cbStruct"));
+        Assert.Equal(8, (int)Marshal.OffsetOf(fileInfo!, "pcwszFilePath"));
+        Assert.Equal(16, (int)Marshal.OffsetOf(fileInfo!, "hFile"));
+        Assert.Equal(24, (int)Marshal.OffsetOf(fileInfo!, "pgKnownSubject"));
+
+        var data = typeof(WinVerifyTrustAuthenticodeVerifier)
+            .GetNestedType("WINTRUST_DATA", BindingFlags.NonPublic);
+        Assert.NotNull(data);
+        Assert.Equal(80, Marshal.SizeOf(data!));
+        Assert.Equal(40, (int)Marshal.OffsetOf(data!, "pFile"));
+        Assert.Equal(48, (int)Marshal.OffsetOf(data!, "dwStateAction"));
+        Assert.Equal(56, (int)Marshal.OffsetOf(data!, "hWVTStateData"));
+        Assert.Equal(64, (int)Marshal.OffsetOf(data!, "pwszURLReference"));
+        Assert.Equal(72, (int)Marshal.OffsetOf(data!, "dwProvFlags"));
     }
 
     private static string FindRepoFile(params string[] segments)

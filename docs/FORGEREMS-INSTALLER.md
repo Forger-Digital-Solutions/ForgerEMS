@@ -175,6 +175,25 @@ captured signed uninstaller are each signed **and** verified during compile.
 Production fails closed when credentials are missing/invalid, the source tree
 is dirty, or any required signature is absent or invalid.
 
+For GitHub-hosted production runners, the protected `production-release`
+environment must have required reviewers and authorized secrets:
+`FORGEREMS_SIGNING_CERT_THUMBPRINT`, `FORGEREMS_SIGNING_PFX_BASE64`, and
+`FORGEREMS_SIGNING_PFX_PASSWORD`. `Initialize-ReleaseSigningCertificate.ps1`
+validates the existing identity in memory before importing it into the
+disposable runner's `CurrentUser\My` store. It writes no PFX file, exports no
+key and generates no certificate. A thumbprint alone cannot provision a key
+on a fresh hosted runner. Supplying secrets or running this workflow requires
+separate owner authorization; unsigned candidates are never publishable.
+
+`Windows Installer Lifecycle` is a separate manual validation workflow with
+read-only repository permissions. It builds an unsigned test candidate and
+uses the official, hash-bound `v1.2.3-preview.1` upgrade fixture on a disposable
+Windows runner. It neither publishes releases nor uploads binaries. Its
+registry/file/self-test evidence does not replace interactive GUI, consent or
+DPI QA. `Test-ForgerEMSInstallerLifecycle.ps1` refuses execution outside an
+identified disposable VirtualBox/QEMU guest or explicitly selected GitHub-hosted
+Windows VM; there is no development-host bypass.
+
 ## Output Location
 
 Expected installer output:
@@ -204,8 +223,8 @@ providers manually, and the provider is local/read-only.
 
 When you move to a new version:
 
-1. update the WPF project version metadata in
-   `src\ForgerEMS.Wpf\ForgerEMS.Wpf.csproj`
+1. update the authoritative repository `VERSION` file; project metadata and
+   installer versions derive from it
 2. build/publish the new frontend
 3. build the installer. Production packaging is signed by default and fails
    closed when no certificate is configured:

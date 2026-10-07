@@ -175,6 +175,7 @@
         <!-- Compact "⋯" toggle that opens an overflow popup with advanced actions (Copy Link, Add Shortcut to USB).
              Kept off the primary action row so cards stay store-style and uncluttered. -->
         <Style x:Key="DriverHubOverflowToggleStyle" TargetType="ToggleButton">
+            <Setter Property="AutomationProperties.Name" Value="More driver tool actions" />
             <Setter Property="Width" Value="32" />
             <Setter Property="Height" Value="32" />
             <Setter Property="MinWidth" Value="32" />

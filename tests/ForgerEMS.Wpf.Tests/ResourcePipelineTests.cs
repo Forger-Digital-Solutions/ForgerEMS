@@ -104,6 +104,11 @@ public sealed class ResourceCatalogTests
         Assert.NotNull(kali);
         Assert.Contains("kali.download", kali!.AllowedHosts);
         Assert.Contains("cdimage.kali.org", kali.AllowedHosts);
+        // Shipped policy: 45s metadata budget (measured serial fetch ~21.7s) and
+        // Kali checksum/base URLs on the canonical kali.download host.
+        Assert.Equal(TimeSpan.FromSeconds(45), catalog.MetadataTimeout);
+        Assert.Equal("https://kali.download/base-images/current/SHA256SUMS", kali.SourceUri.ToString());
+        Assert.Equal("https://kali.download/base-images/current/", kali.BaseUrl.ToString());
     }
 
     [Fact]
@@ -520,6 +525,248 @@ public sealed class ResourceProviderResolverTests
         var result = await resolver.ResolveAsync(descriptor, CancellationToken.None);
         Assert.Equal(ResourceResolutionState.RequiresUserAction, result.State);
         Assert.False(result.IsDownloadEligible);
+    }
+
+    // ---------- github two-part numeric tag fallback (resource providers only) ----------
+
+    private static ResourceDescriptor PolicyDescriptor(string id)
+    {
+        var catalog = ResourceCatalog.Parse(File.ReadAllText(
+            Path.Combine(ResourceCatalogTests.RepoRoot(), "manifests", "resource-policy.json")));
+        return catalog.Find(id)!;
+    }
+
+    [Theory]
+    [InlineData("v4.15")]
+    [InlineData("4.15")]
+    public async Task GitHubStable_TwoPartNumericTag_ResolvesWithVendorLabel(string tag)
+    {
+        var descriptor = PolicyDescriptor("rufus"); // pattern ^rufus-[0-9.]+p\.exe$
+        var url = $"https://github.com/pbatard/rufus/releases/download/{tag}/rufus-4.15p.exe";
+        var resolver = Resolver(_ => Json(ReleaseJson(
+            tag: tag, digest: ShaZ, assetName: "rufus-4.15p.exe", assetUrl: url)));
+        var result = await resolver.ResolveAsync(descriptor, CancellationToken.None);
+        Assert.Equal(ResourceResolutionState.ResolvedMetadata, result.State);
+        Assert.Equal("4.15", result.Version);
+        Assert.Equal(ShaZ, result.ExpectedSha256);
+        Assert.Equal(url, result.ArtifactUri);
+    }
+
+    [Fact]
+    public void AppSemanticVersion_StillRejectsTwoPartTag()
+    {
+        // The app updater parser stays strict; the two-part fallback exists only inside
+        // the resource provider, not in shared version parsing.
+        Assert.False(VentoyToolkitSetup.Wpf.Services.AppSemanticVersion.TryParse("v4.15", out _));
+        Assert.False(VentoyToolkitSetup.Wpf.Services.AppSemanticVersion.TryParse("4.15", out _));
+    }
+
+    [Theory]
+    [InlineData("v4.15-beta")]
+    [InlineData("v4.15.2-extra")]
+    [InlineData("2026-10-07")]
+    [InlineData("nightly")]
+    public async Task GitHubStable_NonWholeNumericTag_Rejected(string tag)
+    {
+        var url = $"https://github.com/pbatard/rufus/releases/download/{tag}/rufus-4.15p.exe";
+        var resolver = Resolver(_ => Json(ReleaseJson(
+            tag: tag, digest: ShaZ, assetName: "rufus-4.15p.exe", assetUrl: url)));
+        var result = await resolver.ResolveAsync(PolicyDescriptor("rufus"), CancellationToken.None);
+        Assert.Equal(ResourceResolutionState.UnableToVerify, result.State);
+        Assert.Equal(ResourceFailureCategory.MetadataInvalid, result.FailureCategory);
+    }
+
+    // ---------- ubuntu-lts filename-version selection ----------
+
+    private static ResourceDescriptor UbuntuDescriptor() => new()
+    {
+        ResourceId = "ubuntu-desktop",
+        DisplayName = "Ubuntu LTS Desktop",
+        Provider = ResourceProviderKind.UbuntuLts,
+        SourceUri = "https://changelogs.ubuntu.com/meta-release-lts",
+        AssetPattern = "^ubuntu-[0-9.]+-desktop-amd64\\.iso$",
+        Architecture = "x64",
+        Channel = "lts"
+    };
+
+    private const string NobleMetaRelease = """
+        Dist: noble
+        Name: Noble Numbat
+        Version: 24.04.3 LTS
+        Date: Thu, 15 Aug 2025 12:00:00 UTC
+        Supported: 1
+        LTS: true
+
+        Dist: resolute
+        Name: Resolute
+        Version: 26.04
+        Date: Thu, 15 Aug 2026 12:00:00 UTC
+        Supported: 0
+
+        """;
+
+    private static ResourceProviderResolver UbuntuResolver(string sums) => Resolver(req =>
+    {
+        var host = req.RequestUri!.Host;
+        if (host.Equals("changelogs.ubuntu.com", StringComparison.OrdinalIgnoreCase))
+        {
+            return Json(NobleMetaRelease);
+        }
+
+        if (host.Equals("releases.ubuntu.com", StringComparison.OrdinalIgnoreCase))
+        {
+            return Json(sums);
+        }
+
+        return new HttpResponseMessage(HttpStatusCode.NotFound);
+    });
+
+    [Fact]
+    public async Task UbuntuLts_NewestPointReleaseWins()
+    {
+        var shaOld = new string('a', 64);
+        var shaNew = new string('b', 64);
+        var sums = $"{shaOld} *ubuntu-24.04.3-desktop-amd64.iso\n{shaNew} *ubuntu-24.04.4-desktop-amd64.iso\n";
+        var result = await UbuntuResolver(sums).ResolveAsync(UbuntuDescriptor(), CancellationToken.None);
+        Assert.Equal(ResourceResolutionState.ResolvedMetadata, result.State);
+        Assert.Equal("24.04.4", result.Version);
+        Assert.Equal(shaNew, result.ExpectedSha256);
+        Assert.Equal("ubuntu-24.04.4-desktop-amd64.iso", result.ArtifactFileName);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task UbuntuLts_FourPartVersionBeatsThreePart_RegardlessOfOrder(bool fourPartFirst)
+    {
+        var sha5 = new string('c', 64);
+        var sha51 = new string('d', 64);
+        var sums = fourPartFirst
+            ? $"{sha51} *ubuntu-24.04.5.1-desktop-amd64.iso\n{sha5} *ubuntu-24.04.5-desktop-amd64.iso\n"
+            : $"{sha5} *ubuntu-24.04.5-desktop-amd64.iso\n{sha51} *ubuntu-24.04.5.1-desktop-amd64.iso\n";
+        var result = await UbuntuResolver(sums).ResolveAsync(UbuntuDescriptor(), CancellationToken.None);
+        Assert.Equal("24.04.5.1", result.Version);
+        Assert.Equal(sha51, result.ExpectedSha256);
+    }
+
+    [Fact]
+    public async Task UbuntuLts_EqualNormalizedVersions_AreAmbiguous()
+    {
+        var sums = $"{new string('e', 64)} *ubuntu-24.04.5-desktop-amd64.iso\n" +
+            $"{new string('f', 64)} *ubuntu-24.04.05-desktop-amd64.iso\n";
+        var result = await UbuntuResolver(sums).ResolveAsync(UbuntuDescriptor(), CancellationToken.None);
+        Assert.Equal(ResourceResolutionState.RequiresUserAction, result.State);
+        Assert.Equal(ResourceFailureCategory.AmbiguousSelection, result.FailureCategory);
+    }
+
+    [Fact]
+    public async Task UbuntuLts_ExplicitZeroRevision_Ambiguous()
+    {
+        // 24.04.5 and 24.04.5.0 normalize to the same four-part version -> no first/last wins.
+        var sums = $"{new string('e', 64)} *ubuntu-24.04.5-desktop-amd64.iso\n" +
+            $"{new string('f', 64)} *ubuntu-24.04.5.0-desktop-amd64.iso\n";
+        var result = await UbuntuResolver(sums).ResolveAsync(UbuntuDescriptor(), CancellationToken.None);
+        Assert.Equal(ResourceResolutionState.RequiresUserAction, result.State);
+        Assert.Equal(ResourceFailureCategory.AmbiguousSelection, result.FailureCategory);
+    }
+
+    [Fact]
+    public async Task UbuntuLts_ImageOlderThanStanza_Rejected()
+    {
+        // Metadata declares 24.04.3 LTS supported, but the index only offers 24.04.2.
+        var sums = $"{new string('a', 64)} *ubuntu-24.04.2-desktop-amd64.iso\n";
+        var result = await UbuntuResolver(sums).ResolveAsync(UbuntuDescriptor(), CancellationToken.None);
+        Assert.Equal(ResourceResolutionState.UnableToVerify, result.State);
+        Assert.Equal(ResourceFailureCategory.MetadataInvalid, result.FailureCategory);
+    }
+
+    [Fact]
+    public async Task UbuntuLts_ForeignFamilyEntry_FailsMetadataInvalid()
+    {
+        var sums = $"{new string('a', 64)} *ubuntu-24.04.4-desktop-amd64.iso\n" +
+            $"{new string('b', 64)} *ubuntu-26.04-desktop-amd64.iso\n";
+        var result = await UbuntuResolver(sums).ResolveAsync(UbuntuDescriptor(), CancellationToken.None);
+        Assert.Equal(ResourceResolutionState.UnableToVerify, result.State);
+        Assert.Equal(ResourceFailureCategory.MetadataInvalid, result.FailureCategory);
+    }
+
+    [Fact]
+    public async Task UbuntuLts_OnlyOtherRoleEntries_FailsMetadataInvalid()
+    {
+        var sums = $"{new string('a', 64)} *ubuntu-24.04.4-live-server-amd64.iso\n";
+        var result = await UbuntuResolver(sums).ResolveAsync(UbuntuDescriptor(), CancellationToken.None);
+        Assert.Equal(ResourceResolutionState.UnableToVerify, result.State);
+        Assert.Equal(ResourceFailureCategory.MetadataInvalid, result.FailureCategory);
+    }
+
+    [Fact]
+    public async Task UbuntuLts_ConflictingHashes_Rejected()
+    {
+        var sums = $"{new string('a', 64)} *ubuntu-24.04.4-desktop-amd64.iso\n" +
+            $"{new string('b', 64)} *ubuntu-24.04.4-desktop-amd64.iso\n";
+        var result = await UbuntuResolver(sums).ResolveAsync(UbuntuDescriptor(), CancellationToken.None);
+        Assert.Equal(ResourceResolutionState.UnableToVerify, result.State);
+        Assert.Equal(ResourceFailureCategory.MetadataInvalid, result.FailureCategory);
+    }
+
+    // ---------- systeminformer policy fixture ----------
+
+    private static ResourceDescriptor SystemInformerDescriptor() => PolicyDescriptor("systeminformer");
+
+    private static string SystemInformerReleaseJson(params (string Name, string Digest)[] assets)
+    {
+        var assetJson = string.Join(", ", assets.Select(a =>
+            $"{{\"name\": \"{a.Name}\", \"browser_download_url\": " +
+            $"\"https://github.com/winsiderss/systeminformer/releases/download/v4.0.26241.138/{a.Name}\", " +
+            $"\"digest\": \"sha256:{a.Digest}\", \"size\": 12345}}"));
+        return $$"""
+            {
+              "tag_name": "v4.0.26241.138",
+              "draft": false,
+              "prerelease": false,
+              "published_at": "2026-01-01T00:00:00Z",
+              "assets": [{{assetJson}}]
+            }
+            """;
+    }
+
+    [Fact]
+    public async Task SystemInformerPolicy_CurrentBinZip_Resolves()
+    {
+        var descriptor = SystemInformerDescriptor();
+        var resolver = Resolver(_ => Json(SystemInformerReleaseJson(
+            ("systeminformer-4.0.26241.138-bin.zip", ShaZ))));
+        var result = await resolver.ResolveAsync(descriptor, CancellationToken.None);
+        Assert.Equal(ResourceResolutionState.ResolvedMetadata, result.State);
+        Assert.Equal("4.0.26241.138", result.Version);
+        Assert.Equal("systeminformer-4.0.26241.138-bin.zip", result.ArtifactFileName);
+        Assert.Equal(ShaZ, result.ExpectedSha256);
+    }
+
+    [Theory]
+    [InlineData("systeminformer-4.0.26241.138-src.zip")]
+    [InlineData("systeminformer-4.0.26241.138-bin-x86.zip")]
+    [InlineData("systeminformer-4.0.26241.138-bin.zip.bak")]
+    [InlineData("systeminformer-4.0.26241.138-setup.exe")]
+    public async Task SystemInformerPolicy_NonBinAssets_NotSelected(string assetName)
+    {
+        var descriptor = SystemInformerDescriptor();
+        var resolver = Resolver(_ => Json(SystemInformerReleaseJson((assetName, ShaZ))));
+        var result = await resolver.ResolveAsync(descriptor, CancellationToken.None);
+        Assert.Equal(ResourceResolutionState.UnableToVerify, result.State);
+        Assert.Equal(ResourceFailureCategory.MetadataInvalid, result.FailureCategory);
+    }
+
+    [Fact]
+    public async Task SystemInformerPolicy_OldAndNewLayouts_Ambiguous()
+    {
+        var descriptor = SystemInformerDescriptor();
+        var resolver = Resolver(_ => Json(SystemInformerReleaseJson(
+            ("systeminformer-4.0.26241.138-bin.zip", ShaZ),
+            ("systeminformer-4.0.26241.138-release-bin.zip", new string('a', 64)))));
+        var result = await resolver.ResolveAsync(descriptor, CancellationToken.None);
+        Assert.Equal(ResourceResolutionState.RequiresUserAction, result.State);
+        Assert.Equal(ResourceFailureCategory.AmbiguousSelection, result.FailureCategory);
     }
 
     private sealed class DelegateHandler(Func<HttpRequestMessage, HttpResponseMessage> respond)

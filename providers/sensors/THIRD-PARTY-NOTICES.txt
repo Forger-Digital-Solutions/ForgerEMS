@@ -67,13 +67,16 @@ Only the PawnIO modules source zip is shipped as corresponding source in this
 package. Source for the MPL-covered packages above is available from the pinned
 upstream repositories listed here and in docs/THIRD-PARTY-SENSOR-NOTICES.md.
 
-Microsoft packages actually resolved in this build (pinned above the NuGet
-dependency minimums of System.Management 10.0.2 / System.IO.Ports 10.0.3 /
-System.Threading.AccessControl 10.0.3 declared by LibreHardwareMonitorLib):
+Microsoft packages actually resolved in this build (the first three are
+pinned above the NuGet dependency minimums of System.Management 10.0.2 /
+System.IO.Ports 10.0.3 / System.Threading.AccessControl 10.0.3 declared by
+LibreHardwareMonitorLib; System.CodeDom is transitively resolved and is not a
+direct project pin):
 
 - System.Management 10.0.12
 - System.IO.Ports 10.0.12
 - System.Threading.AccessControl 10.0.12
+- System.CodeDom 10.0.12
 
 .NET runtime:
 

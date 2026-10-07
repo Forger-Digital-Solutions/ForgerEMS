@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "defaultChannel": "stable",
-  "metadataTimeoutSeconds": 20,
+  "metadataTimeoutSeconds": 45,
   "maximumAttempts": 2,
   "cacheTtlMinutes": 60,
   "policy": {
@@ -91,8 +91,8 @@
       "id": "kali",
       "name": "Kali Linux Installer",
       "provider": "checksum-index",
-      "source": "https://cdimage.kali.org/current/SHA256SUMS",
-      "baseUrl": "https://cdimage.kali.org/current/",
+      "source": "https://kali.download/base-images/current/SHA256SUMS",
+      "baseUrl": "https://kali.download/base-images/current/",
       "allowedHosts": [ "cdimage.kali.org", "kali.download" ],
       "assetPattern": "^kali-linux-[0-9.]+-installer-amd64\\.iso$",
       "architecture": "x64",
@@ -188,7 +188,7 @@
       "provider": "github-stable",
       "repository": "winsiderss/systeminformer",
       "source": "https://github.com/winsiderss/systeminformer/releases/latest",
-      "assetPattern": "^systeminformer-[0-9.]+-release-bin\\.zip$",
+      "assetPattern": "^systeminformer-[0-9.]+-(?:release-)?bin\\.zip$",
       "architecture": "x64",
       "platform": "Windows"
     },

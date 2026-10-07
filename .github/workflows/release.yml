@@ -21,10 +21,9 @@ jobs:
     name: Publish GitHub Release
     runs-on: windows-latest
     # Protected environment: repository owner must configure 'production-release'
-    # with required reviewers and provision the Authenticode certificate in the
-    # runner certificate store (thumbprint via secret
-    # FORGEREMS_SIGNING_CERT_THUMBPRINT). This workflow never imports or creates
-    # certificates; -RequireSigning fails closed when they are absent.
+    # with required reviewers and authorized production PFX/password/thumbprint
+    # secrets. The disposable runner imports that existing identity in memory;
+    # it never generates/exports a key or silently falls back to unsigned output.
     environment: production-release
     defaults:
       run:
@@ -80,6 +79,14 @@ jobs:
           Add-Content -Path $env:GITHUB_OUTPUT -Value "tag=$tag"
           Add-Content -Path $env:GITHUB_OUTPUT -Value "installer=$installer"
           Add-Content -Path $env:GITHUB_OUTPUT -Value "zip=$zip"
+
+      - name: Provision authorized production signing identity
+        env:
+          FORGEREMS_SIGNING_CERT_THUMBPRINT: ${{ secrets.FORGEREMS_SIGNING_CERT_THUMBPRINT }}
+          FORGEREMS_SIGNING_PFX_BASE64: ${{ secrets.FORGEREMS_SIGNING_PFX_BASE64 }}
+          FORGEREMS_SIGNING_PFX_PASSWORD: ${{ secrets.FORGEREMS_SIGNING_PFX_PASSWORD }}
+        run: |
+          .\tools\Initialize-ReleaseSigningCertificate.ps1 -CertificateThumbprint $env:FORGEREMS_SIGNING_CERT_THUMBPRINT
 
       - name: Assemble Ventoy core release bundle
         run: .\tools\build-backend-release.ps1

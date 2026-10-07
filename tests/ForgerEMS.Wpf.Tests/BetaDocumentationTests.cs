@@ -188,6 +188,18 @@ public sealed class BetaDocumentationTests
     }
 
     [Fact]
+    public void UpdateSystem_DoesNotClaimPrereleaseTagsArePublished()
+    {
+        var text = File.ReadAllText(Path.Combine(RepoRoot, "docs", "UPDATE_SYSTEM.md"));
+        // The only published release is v1.2.3-preview.1; prerelease-shaped tags must not
+        // be described as published history.
+        Assert.DoesNotContain("remain published", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("published history", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not imply those tags are published", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("unsignedCandidate", text, StringComparison.Ordinal); // unsigned warning preserved
+    }
+
+    [Fact]
     public void KyraProvider_Setup_doc_is_removed()
     {
         Assert.False(File.Exists(Path.Combine(RepoRoot, "docs", "KYRA_PROVIDER_ENVIRONMENT_SETUP.md")));

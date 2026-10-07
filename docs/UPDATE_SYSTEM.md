@@ -2,7 +2,7 @@
 
 This document describes how **in-app update checks** relate to **GitHub Releases** — not to every git push or branch tip.
 
-**Current release (v1.2.4):** the in-app display line is **ForgerEMS v1.2.4** (see `AppReleaseInfo`). Historical preview tags used semver prereleases such as `v1.2.4-preview.4`; those tags remain published history, and the parser still accepts prerelease-shaped tags when the user has explicitly opted into the Beta/RC channel. Locally built **unsigned candidates** share the version number but are distinct from production releases — they carry no Authenticode signature, are marked `unsignedCandidate`/`productionEligible=false` in their `release.json`, and must never be published or treated as shipped releases. Env overrides: `FORGEREMS_GITHUB_OWNER`, `FORGEREMS_GITHUB_REPO`, `FORGEREMS_UPDATE_USER_AGENT` — see `docs/ENVIRONMENT.md` and `docs/UPDATE-SYSTEM-v1.2.0.md`.
+**Current release (v1.2.4):** the in-app display line is **ForgerEMS v1.2.4** (see `AppReleaseInfo`). Historical preview tags used semver prereleases such as `v1.2.4-preview.4`. The parser accepts semantic prerelease tags only when Beta/RC is explicitly enabled; this does not imply those tags are published. Locally built **unsigned candidates** share the version number but are distinct from production releases — they carry no Authenticode signature, are marked `unsignedCandidate`/`productionEligible=false` in their `release.json`, and must never be published or treated as shipped releases. Env overrides: `FORGEREMS_GITHUB_OWNER`, `FORGEREMS_GITHUB_REPO`, `FORGEREMS_UPDATE_USER_AGENT` — see `docs/ENVIRONMENT.md` and `docs/UPDATE-SYSTEM-v1.2.0.md`.
 
 ---
 

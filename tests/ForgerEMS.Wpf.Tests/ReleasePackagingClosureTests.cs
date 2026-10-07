@@ -542,6 +542,28 @@ public sealed class ReleasePackagingClosureTests
     }
 
     [Fact]
+    public void DriverHubOverflowToggles_HaveReadableAutomationName()
+    {
+        // The two icon-only '?' toggles inherit their accessible name from the style.
+        var xamlPath = Path.Combine(RepoRoot, "src", "ForgerEMS.Wpf", "MainWindow.xaml");
+        var doc = XDocument.Load(xamlPath);
+        XNamespace wpf = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var style = doc.Descendants(wpf + "Style")
+            .Single(s => (string?)s.Attribute(x + "Key") == "DriverHubOverflowToggleStyle");
+        Assert.Contains(style.Elements(wpf + "Setter"), s =>
+            (string?)s.Attribute("Property") == "AutomationProperties.Name" &&
+            (string?)s.Attribute("Value") == "More driver tool actions");
+
+        var toggles = doc.Descendants(wpf + "ToggleButton")
+            .Where(t => (string?)t.Attribute("Style") == "{StaticResource DriverHubOverflowToggleStyle}")
+            .ToList();
+        Assert.Equal(2, toggles.Count);
+        Assert.All(toggles, t => Assert.Null(t.Attribute("AutomationProperties.Name"))); // inherit from style
+    }
+
+    [Fact]
     public void InnoScript_RequiresExactlyOneSigningMode()
     {
         var iss = File.ReadAllText(Path.Combine(RepoRoot, "installer", "ForgerEMS.iss"));
@@ -597,6 +619,8 @@ public sealed class ReleasePackagingClosureTests
     [InlineData("tools/build-forgerems-installer.ps1")]
     [InlineData("tools/stage-prerelease.ps1")]
     [InlineData("tools/sign-release-artifact.ps1")]
+    [InlineData("tools/Initialize-ReleaseSigningCertificate.ps1")]
+    [InlineData("tools/Test-ForgerEMSInstallerLifecycle.ps1")]
     public void TouchedPowerShellScripts_ParseCleanly(string relativePath)
     {
         var path = Path.Combine(RepoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
@@ -607,6 +631,158 @@ public sealed class ReleasePackagingClosureTests
             "if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Error $_.Message }; exit 1 }",
             expectSuccess: false);
         Assert.Equal(0, result.ExitCode);
+    }
+
+    [Fact]
+    public void SigningInitializer_RefusesBeforeAnyCertificateWorkOutsideGithubHostedRunner()
+    {
+        var thumbprint = new string('0', 40);
+        var result = RunPowerShellFile(
+            Path.Combine(RepoRoot, "tools", "Initialize-ReleaseSigningCertificate.ps1"),
+            new[] { "-CertificateThumbprint", thumbprint },
+            new Dictionary<string, string?>
+            {
+                ["GITHUB_ACTIONS"] = "false",
+                ["RUNNER_ENVIRONMENT"] = "self-hosted",
+                ["FORGEREMS_SIGNING_PFX_BASE64"] = null,
+                ["FORGEREMS_SIGNING_PFX_PASSWORD"] = null
+            });
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("restricted to a disposable GitHub-hosted", result.Output + result.Error, StringComparison.OrdinalIgnoreCase);
+
+        var probe = RunPowerShellRaw(
+            $"if (Test-Path 'Cert:\\CurrentUser\\My\\{thumbprint}') {{ 'present' }} else {{ 'absent' }}",
+            expectSuccess: false);
+        Assert.Contains("absent", probe.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void InstallerLifecycleHarness_RefusesBeforeCreatingEvidenceOutsideDisposableGuest()
+    {
+        var evidenceRoot = Path.Combine(Path.GetTempPath(), "forgerems-lifecycle-" + Guid.NewGuid().ToString("N"));
+        var zero64 = new string('0', 64);
+        var result = RunPowerShellFile(
+            Path.Combine(RepoRoot, "tools", "Test-ForgerEMSInstallerLifecycle.ps1"),
+            new[]
+            {
+                "-Phase", "CleanInstall",
+                "-DisposableVmId", Guid.Empty.ToString(),
+                "-CandidateInstaller", Path.Combine(Path.GetTempPath(), "nonexistent-candidate.exe"),
+                "-CandidateSha256", zero64,
+                "-PreviousInstaller", Path.Combine(Path.GetTempPath(), "nonexistent-previous.exe"),
+                "-PreviousSha256", zero64,
+                "-SourceHead", new string('0', 40),
+                "-IsolationKind", "VirtualBox",
+                "-EvidenceRoot", evidenceRoot
+            },
+            new Dictionary<string, string?>
+            {
+                ["GITHUB_ACTIONS"] = "false",
+                ["RUNNER_ENVIRONMENT"] = "self-hosted"
+            });
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Refusing installer execution outside the identified disposable Windows guest", result.Output + result.Error, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(evidenceRoot));
+    }
+
+    [Fact]
+    public void InstallerLifecycleWorkflow_IsDispatchOnlyValidationWithNoPublishing()
+    {
+        var workflow = File.ReadAllText(Path.Combine(RepoRoot, ".github", "workflows", "installer-lifecycle.yml"));
+
+        Assert.Contains("workflow_dispatch:", workflow, StringComparison.Ordinal);
+        Assert.Contains("contents: read", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("push:", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("action-gh-release", workflow, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("upload-release-asset", workflow, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("releases/upload", workflow, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ReleaseWorkflow_ProvisionsAuthorizedIdentityInMemoryBeforeSignedBuild()
+    {
+        var workflow = File.ReadAllText(Path.Combine(RepoRoot, ".github", "workflows", "release.yml"));
+
+        Assert.Contains("Initialize-ReleaseSigningCertificate.ps1", workflow, StringComparison.Ordinal);
+        Assert.Contains("environment: production-release", workflow, StringComparison.Ordinal);
+        Assert.Contains("secrets.FORGEREMS_SIGNING_CERT_THUMBPRINT", workflow, StringComparison.Ordinal);
+        Assert.Contains("secrets.FORGEREMS_SIGNING_PFX_BASE64", workflow, StringComparison.Ordinal);
+        Assert.Contains("secrets.FORGEREMS_SIGNING_PFX_PASSWORD", workflow, StringComparison.Ordinal);
+        Assert.Contains("-RequireSigning", workflow, StringComparison.Ordinal);
+        var provisionIndex = workflow.IndexOf("Initialize-ReleaseSigningCertificate.ps1", StringComparison.Ordinal);
+        var buildIndex = workflow.IndexOf("-RequireSigning", StringComparison.Ordinal);
+        Assert.True(provisionIndex < buildIndex, "Identity provisioning must precede the signed build step.");
+    }
+
+    [Fact]
+    public void SigningInitializer_ValidatesIdentityInMemoryAndNeverWritesKeyMaterial()
+    {
+        var script = File.ReadAllText(Path.Combine(RepoRoot, "tools", "Initialize-ReleaseSigningCertificate.ps1"));
+
+        Assert.Contains("EphemeralKeySet", script, StringComparison.Ordinal);
+        Assert.Contains("1.3.6.1.5.5.7.3.3", script, StringComparison.Ordinal); // Code Signing EKU
+        Assert.Contains("NotBefore", script, StringComparison.Ordinal);
+        Assert.Contains("NotAfter", script, StringComparison.Ordinal);
+        Assert.Contains("ExpectedPublisher", script, StringComparison.Ordinal);
+        Assert.Contains("[Array]::Clear($bytes", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("New-SelfSignedCertificate", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Export-PfxCertificate", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Export-Certificate", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Set-Content", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Out-File", script, StringComparison.Ordinal);
+    }
+
+    private static (int ExitCode, string Output, string Error) RunPowerShellFile(
+        string scriptPath,
+        IEnumerable<string> arguments,
+        IReadOnlyDictionary<string, string?> environment)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = ResolvePowerShellExe(),
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+
+        startInfo.ArgumentList.Add("-NoProfile");
+        if (Path.GetFileName(startInfo.FileName).Equals("powershell.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            startInfo.ArgumentList.Add("-ExecutionPolicy");
+            startInfo.ArgumentList.Add("Bypass");
+        }
+
+        startInfo.ArgumentList.Add("-File");
+        startInfo.ArgumentList.Add(scriptPath);
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        foreach (var pair in environment)
+        {
+            if (pair.Value is null)
+            {
+                startInfo.Environment.Remove(pair.Key);
+            }
+            else
+            {
+                startInfo.Environment[pair.Key] = pair.Value;
+            }
+        }
+
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Could not start PowerShell.");
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        if (!process.WaitForExit(60000))
+        {
+            try { process.Kill(entireProcessTree: false); } catch { /* already exited */ }
+            throw new TimeoutException($"PowerShell did not exit within 60 seconds: {scriptPath}");
+        }
+
+        return (process.ExitCode, outputTask.GetAwaiter().GetResult(), errorTask.GetAwaiter().GetResult());
     }
 
     private static (int ExitCode, string Output, string Error) RunPowerShellRaw(string command, bool expectSuccess)

@@ -10,13 +10,14 @@ ForgerEMS is a local-device support workflow tool, USB toolkit/profile builder, 
 - The update checker discovers releases by semantic version — the highest eligible stable (or explicitly opted-in prerelease) tag/name — rather than publication date. It defaults to stable releases only, ignores drafts, and rejects malformed release metadata. Persisted beta/RC channel preferences are honored.
 - The build version is sourced from the repository `VERSION` file as the single version authority; app, installer, and diagnostics display one consistent version.
 - Update downloads verify an expected SHA256 taken from trusted same-release metadata and follow only trusted redirects. Executable update installers require exact publisher and chain validation that fails closed; managed ZIP extraction uses safe path validation.
-- Driver/vendor resources are discovered through dynamic metadata, with manual official-page exceptions where safe automated verification is unsupported.
+- Driver/vendor resources are discovered through dynamic metadata, with manual official-page exceptions where safe automated verification is unsupported. Resource resolution corrections verified for this candidate: two-part vendor tags (e.g. Rufus `v4.15`) resolve via a resource-provider fallback while the app semantic parser stays strict, Ubuntu image selection now picks the newest unique same-family point release with ambiguity/foreign-family fail-closed behavior, and the System Informer asset pattern matches the current official `-bin.zip` layout.
 - Windows Update and Driver Store inventory is read-only. Hardware-ID candidate correlation is advisory only — ForgerEMS does not automatically install or remove drivers.
 - `System.Management`, `System.IO.Ports`, and `System.Threading.AccessControl` were updated to 10.0.12.
 - The optional sensor stack lifecycle is serialized, and a missing sensor provider degrades neutrally. The historical CLR abort observed during test runs has no proven cause; the defensive changes shipped are hardening, not a claimed fix.
 - Production packaging is gated on signing: the app executable, installer, and captured signed uninstaller are each signed and verified during the build, and production fails closed without credentials. An explicit unsigned-candidate mode exists for local builds and marks artifacts non-production.
-- The packaged documentation set was expanded: legal notices, third-party/sensor notices, corresponding-source and LGPL-component replacement guides, and updated quickstart/FAQ/release documentation.
-- The sidebar navigation is keyboard-focusable with a visible focus indicator.
+- The packaged documentation set was expanded: legal notices, third-party/sensor notices (including the transitively resolved `System.CodeDom` 10.0.12), corresponding-source and LGPL-component replacement guides, and updated quickstart/FAQ/release documentation.
+- The sidebar navigation is keyboard-focusable with a visible focus indicator, and the Driver Hub overflow toggles now expose a readable automation name ("More driver tool actions").
+- Signing and installer-lifecycle automation is prepared but **not executed**: a protected-environment release workflow provisions an authorized identity in memory only, and a dispatch-only lifecycle workflow is authored for hosted-runner validation. No signed artifact or installer-run proof exists yet.
 
 ## Downloads
 

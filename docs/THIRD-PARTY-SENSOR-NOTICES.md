@@ -43,11 +43,12 @@ These packages are resolved as NuGet runtime dependencies (declared by `LibreHar
 - **HidSharp 2.6.4** — Apache-2.0 — license text: `providers/sensors/LICENSES/HidSharp-Apache-2.0.txt`
 - **Mono.Posix.NETStandard 1.0.0** — package metadata declares a license URL (`https://go.microsoft.com/fwlink/?linkid=869050`) pointing at the Mono project license, not an SPDX identifier. Current upstream Mono text states the runtime and class libraries are generally MIT-licensed with some third-party (e.g. 3-clause BSD) code; the captured upstream text ships unmodified at `providers/sensors/LICENSES/Mono-project-license.txt`. Exact redistribution scope for Mono.Posix 1.0.0 requires counsel review — no clearance is asserted.
 
-Microsoft packages actually resolved in this build (ForgerEMS pins them above the nuspec minimums declared by LibreHardwareMonitorLib — `System.Management` ≥10.0.2, `System.IO.Ports` ≥10.0.3, `System.Threading.AccessControl` ≥10.0.3):
+Microsoft packages actually resolved in this build (ForgerEMS pins the first three above the nuspec minimums declared by LibreHardwareMonitorLib — `System.Management` ≥10.0.2, `System.IO.Ports` ≥10.0.3, `System.Threading.AccessControl` ≥10.0.3; `System.CodeDom` is transitively resolved and is not a direct project pin):
 
 - `System.Management` 10.0.12
 - `System.IO.Ports` 10.0.12
 - `System.Threading.AccessControl` 10.0.12
+- `System.CodeDom` 10.0.12
 
 Only the PawnIO modules source zip ships as corresponding source in this package. Source for MPL-covered packages is available from the pinned upstream repositories listed above.
 
