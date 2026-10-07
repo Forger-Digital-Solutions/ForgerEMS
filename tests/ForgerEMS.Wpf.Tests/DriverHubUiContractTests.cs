@@ -35,7 +35,7 @@ public sealed class DriverHubUiContractTests
         Assert.Contains("Official driver apps, OEM support, GPU tools, firmware guidance, and Linux driver help.", tab, StringComparison.Ordinal);
         Assert.Contains("Official links only • No auto BIOS flashing • No driver installs without your action", tab, StringComparison.Ordinal);
         Assert.Contains("Recommended for this PC", tab, StringComparison.Ordinal);
-        Assert.Contains("Detected hardware", tab, StringComparison.Ordinal);
+        Assert.Contains("Saved device snapshot", tab, StringComparison.Ordinal);
         Assert.Contains("Search NVIDIA, Intel, Dell, Wi-Fi, Linux, BIOS...", tab, StringComparison.Ordinal);
         Assert.Contains("No Driver Hub cards match your filter.", tab, StringComparison.Ordinal);
 

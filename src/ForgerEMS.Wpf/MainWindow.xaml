@@ -3027,7 +3027,7 @@
                                         <StackPanel>
                                             <TextBlock FontWeight="SemiBold"
                                                        Foreground="{DynamicResource PanelTextBrush}"
-                                                       Text="Detected hardware" />
+                                                       Text="Saved device snapshot" />
                                             <TextBlock Margin="0,6,0,0"
                                                        FontSize="11.5"
                                                        Foreground="{DynamicResource PanelMutedTextBrush}"

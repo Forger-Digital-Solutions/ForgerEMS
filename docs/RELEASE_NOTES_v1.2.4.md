@@ -17,6 +17,7 @@ ForgerEMS is a local-device support workflow tool, USB toolkit/profile builder, 
 - Production packaging is gated on signing: the app executable, installer, and captured signed uninstaller are each signed and verified during the build, and production fails closed without credentials. An explicit unsigned-candidate mode exists for local builds and marks artifacts non-production.
 - The packaged documentation set was expanded: legal notices, third-party/sensor notices (including the transitively resolved `System.CodeDom` 10.0.12), corresponding-source and LGPL-component replacement guides, and updated quickstart/FAQ/release documentation.
 - The sidebar navigation is keyboard-focusable with a visible focus indicator, and the Driver Hub overflow toggles now expose a readable automation name ("More driver tool actions").
+- Driver Hub now labels its hardware card as a **saved local device snapshot**, notes that it may be stale, and still performs no driver-version comparison. System-intelligence report paths resolve under the app runtime root, so isolated runtime profiles no longer read another profile's reports.
 - Signing and installer-lifecycle automation is prepared but **not executed**: a protected-environment release workflow provisions an authorized identity in memory only, and a dispatch-only lifecycle workflow is authored for hosted-runner validation. No signed artifact or installer-run proof exists yet.
 
 ## Downloads

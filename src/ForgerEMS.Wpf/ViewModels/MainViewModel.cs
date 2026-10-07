@@ -4867,10 +4867,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         AppendLog(new LogLine(DateTimeOffset.Now, "[OK] Safe summary copied to clipboard (sanitized for sharing).", LogSeverity.Success));
     }
 
-    private static string GetSystemIntelligenceJsonPath() =>
+    private string GetSystemIntelligenceJsonPath() =>
         Path.Combine(GetRuntimeReportsDirectory(), "system-intelligence-latest.json");
 
-    private static string GetSystemIntelligenceMarkdownPath() =>
+    private string GetSystemIntelligenceMarkdownPath() =>
         Path.Combine(GetRuntimeReportsDirectory(), "flip-report-latest.md");
 
     private void RefreshSystemIntelligenceReportLocationText(string reportState)
@@ -8080,16 +8080,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private static string GetRuntimeReportsDirectory()
-    {
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        if (string.IsNullOrWhiteSpace(localAppData))
-        {
-            localAppData = Path.GetTempPath();
-        }
-
-        return Path.Combine(localAppData, "ForgerEMS", "Runtime", "reports");
-    }
+    private string GetRuntimeReportsDirectory() =>
+        Path.Combine(_appRuntimeService.RuntimeRoot, "reports");
 
     private static bool IsRootPath(string path, string expectedRoot)
     {

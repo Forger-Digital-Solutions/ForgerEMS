@@ -171,7 +171,7 @@ public sealed partial class MainViewModel
             return "No exact vendor/GPU match was found. Showing universal official starting points.";
         }
 
-        return "Recommendations are based on detected vendor/GPU/CPU/OS data only; no driver version comparison is performed.";
+        return "Guidance uses a saved local device snapshot, which may be stale; no driver version comparison is performed.";
     }
 
     private static string BuildDriverHubDetectedHardwareText(SystemProfile? profile)
@@ -188,7 +188,7 @@ public sealed partial class MainViewModel
                $"CPU: {profile.Cpu}" + Environment.NewLine +
                gpu + Environment.NewLine +
                $"Network: {profile.NetworkStatus}" + Environment.NewLine +
-               $"OS: {profile.OperatingSystem}";
+               $"Snapshot OS: {profile.OperatingSystem}";
     }
 
     private SystemProfile? TryLoadDriverHubSystemProfile()

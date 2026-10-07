@@ -62,7 +62,7 @@ Driver Hub is an official-link-first catalog. It opens vendor/project pages, ope
 
 Separately, the read-only Windows maintenance scan inventories installed driver packages and may compare device hardware IDs against candidates offered by the Windows Update service configured by the OS (Microsoft, WSUS, or enterprise) to flag a possible update candidate for review. A hardware-ID match is a candidate indicator, not proof of rank, OEM applicability, architecture, or signature; the scan performs no install/remove and vendor links remain informational.
 
-Driver, BIOS, and firmware compatibility remains the responsibility of the technician/user. Confirm the exact model, power and battery/AC state, vendor instructions, warranty terms, and rollback/recovery procedure before firmware updates. A Driver Hub recommendation means "based on detected vendor/GPU/CPU/platform," not "needed," "outdated," or "safe to install."
+Driver, BIOS, and firmware compatibility remains the responsibility of the technician/user. Confirm the exact model, power and battery/AC state, vendor instructions, warranty terms, and rollback/recovery procedure before firmware updates. A Driver Hub recommendation means "based on a saved local device snapshot (vendor/GPU/CPU/platform) that may be stale," not "needed," "outdated," or "safe to install."
 
 ---
 
