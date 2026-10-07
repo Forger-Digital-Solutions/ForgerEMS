@@ -417,6 +417,35 @@ public sealed class ReleasePackagingClosureTests
     }
 
     [Fact]
+    public void SignedUninstallerCapture_ExactFilenames_NoOverwrite_NoDatEnumeration()
+    {
+        var helper = File.ReadAllText(Path.Combine(RepoRoot, "tools", "sign-release-artifact.ps1"));
+        var build = File.ReadAllText(Path.Combine(RepoRoot, "tools", "build-release.ps1"));
+
+        // Inno 6.x signs uninst.e32.tmp/uninst.e64.tmp in SignedUninstallerDir
+        // then deletes them — the helper captures a verified copy, which is the
+        // only durable uninstaller artifact for our callback flow.
+        Assert.Contains("uninst.e32.tmp", helper, StringComparison.Ordinal);
+        Assert.Contains("uninst.e64.tmp", helper, StringComparison.Ordinal);
+        Assert.Contains("VerifiedUninstallerPath", helper, StringComparison.Ordinal);
+        Assert.Contains("[System.IO.File]::Copy($artifact, $VerifiedUninstallerPath, $false)", helper, StringComparison.Ordinal);
+        Assert.Contains("already exists - refusing to overwrite", helper, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("parent directory does not exist", helper, StringComparison.OrdinalIgnoreCase);
+
+        // The callback passes the capture path through (quoted), and the
+        // post-compile gate requires that exact file and verify-only checks it.
+        Assert.Contains("-VerifiedUninstallerPath $q", build, StringComparison.Ordinal);
+        Assert.Contains("verified-uninstaller.exe", build, StringComparison.Ordinal);
+        Assert.Contains("Test-Path -LiteralPath $verifiedUninstallerPath", build, StringComparison.Ordinal);
+        Assert.Contains("Invoke-ForgerEMSSign -Path $verifiedUninstallerPath -VerifyOnly", build, StringComparison.Ordinal);
+
+        // The old *.dat cached-uninstaller enumeration can never succeed in
+        // real signed mode — it must be gone entirely.
+        Assert.DoesNotContain("*.dat", build, StringComparison.Ordinal);
+        Assert.DoesNotContain("cachedUninstallers", build, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SignedUninstallerDir_NeverRemovesPreexistingDirectory()
     {
         var build = File.ReadAllText(Path.Combine(RepoRoot, "tools", "build-release.ps1"));

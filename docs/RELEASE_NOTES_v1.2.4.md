@@ -14,7 +14,7 @@ ForgerEMS is a local-device support workflow tool, USB toolkit/profile builder, 
 - Windows Update and Driver Store inventory is read-only. Hardware-ID candidate correlation is advisory only — ForgerEMS does not automatically install or remove drivers.
 - `System.Management`, `System.IO.Ports`, and `System.Threading.AccessControl` were updated to 10.0.12.
 - The optional sensor stack lifecycle is serialized, and a missing sensor provider degrades neutrally. The historical CLR abort observed during test runs has no proven cause; the defensive changes shipped are hardening, not a claimed fix.
-- Production packaging is gated on signing: the app executable, installer, and cached uninstaller are each signed and verified during the build, and production fails closed without credentials. An explicit unsigned-candidate mode exists for local builds and marks artifacts non-production.
+- Production packaging is gated on signing: the app executable, installer, and captured signed uninstaller are each signed and verified during the build, and production fails closed without credentials. An explicit unsigned-candidate mode exists for local builds and marks artifacts non-production.
 - The packaged documentation set was expanded: legal notices, third-party/sensor notices, corresponding-source and LGPL-component replacement guides, and updated quickstart/FAQ/release documentation.
 - The sidebar navigation is keyboard-focusable with a visible focus indicator.
 

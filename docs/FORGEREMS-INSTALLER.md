@@ -171,7 +171,7 @@ Production packaging is **not** done here — use the canonical signed path:
 LocalMachine), signs the frontend executable, and configures Inno Setup with a
 `ForgerEMSRelease` SignTool callback (absolute Windows PowerShell invoking
 `tools\sign-release-artifact.ps1`) so the installer, temporary copies, and the
-cached signed uninstaller are each signed **and** verified during compile.
+captured signed uninstaller are each signed **and** verified during compile.
 Production fails closed when credentials are missing/invalid, the source tree
 is dirty, or any required signature is absent or invalid.
 

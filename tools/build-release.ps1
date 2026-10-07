@@ -197,6 +197,9 @@ function Get-ForgerEMSSignToolCallback {
     # ISCC /S callback: absolute Windows PowerShell invoking the helper with
     # Inno's $f (quoted file name) and $q (quote) sequences per the official
     # SignTool docs. $f already expands to a quoted path — do not wrap it in $q.
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$VerifiedUninstallerPath
+    )
     $powershell = Join-Path $env:WINDIR "System32\WindowsPowerShell\v1.0\powershell.exe"
     foreach ($pair in @(
         @('powershell', $powershell),
@@ -205,7 +208,8 @@ function Get-ForgerEMSSignToolCallback {
         @('thumbprint', $CertificateThumbprint),
         @('store', $script:ForgerEMSCertificateStore),
         @('timestampUrl', $TimestampUrl),
-        @('publisher', $ExpectedPublisher)
+        @('publisher', $ExpectedPublisher),
+        @('verifiedUninstallerPath', $VerifiedUninstallerPath)
     )) {
         Assert-SigningCallbackValue -Name $pair[0] -Value $pair[1]
     }
@@ -220,7 +224,8 @@ function Get-ForgerEMSSignToolCallback {
         '-CertificateStore ' + $script:ForgerEMSCertificateStore + ' ' +
         '-SignToolPath $q' + $script:ForgerEMSSigntool + '$q ' +
         '-TimestampUrl $q' + $TimestampUrl + '$q ' +
-        '-ExpectedPublisher $q' + $ExpectedPublisher + '$q'
+        '-ExpectedPublisher $q' + $ExpectedPublisher + '$q ' +
+        '-VerifiedUninstallerPath $q' + $VerifiedUninstallerPath + '$q'
     )
 }
 
@@ -811,8 +816,11 @@ else {
         else {
             Ensure-Dir -Path $signedUninstallerDir
         }
+        # Inno deletes the signed uninst.eXX.tmp after embedding it; the
+        # callback captures a verified copy here for release attestation.
+        $verifiedUninstallerPath = Join-Path $signedUninstallerDir 'verified-uninstaller.exe'
         $isccArgs.Add("/DSignedUninstallerDir=$signedUninstallerDir")
-        $isccArgs.Add("/SForgerEMSRelease=$(Get-ForgerEMSSignToolCallback)")
+        $isccArgs.Add("/SForgerEMSRelease=$(Get-ForgerEMSSignToolCallback -VerifiedUninstallerPath $verifiedUninstallerPath)")
     }
     else {
         $isccArgs.Add("/DUnsignedCandidate=1")
@@ -842,17 +850,15 @@ else {
             Invoke-ForgerEMSSign -Path $versionedInstallerPath
         }
 
-        # Cached signed uninstaller(s): Inno copies the signed unins000 stub
-        # into SignedUninstallerDir — every cached copy must pass the same
-        # verification contract.
-        $cachedUninstallers = @(Get-ChildItem -LiteralPath $signedUninstallerDir -Filter "*.dat" -File -ErrorAction SilentlyContinue)
-        if ($cachedUninstallers.Count -eq 0) {
-            throw "SignedUninstaller is required but no cached signed uninstaller was emitted to $signedUninstallerDir (fail closed)."
+        # Captured signed uninstaller: Inno embeds the signed uninst.eXX.tmp
+        # bytes into the installer and then deletes the temporary file, so the
+        # helper's verified copy is the durable artifact — it must exist and
+        # pass the same verification contract.
+        if (-not (Test-Path -LiteralPath $verifiedUninstallerPath -PathType Leaf)) {
+            throw "SignedUninstaller is required but the signing callback did not capture a verified uninstaller to $verifiedUninstallerPath (fail closed)."
         }
-        foreach ($uninstaller in $cachedUninstallers) {
-            Invoke-ForgerEMSSign -Path $uninstaller.FullName -VerifyOnly
-        }
-        Write-Step "Verified $($cachedUninstallers.Count) cached signed uninstaller(s)."
+        Invoke-ForgerEMSSign -Path $verifiedUninstallerPath -VerifyOnly
+        Write-Step "Verified captured signed uninstaller."
     }
 
     Copy-Item -LiteralPath $versionedInstallerPath -Destination (Join-Path $releaseRoot (Split-Path -Leaf $versionedInstallerPath)) -Force

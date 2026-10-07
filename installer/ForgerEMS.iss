@@ -44,7 +44,7 @@
 
 #ifdef RequireSigning
   #ifndef SignedUninstallerDir
-    #error SignedUninstallerDir must be passed by the build script (fresh signing directory for the cached signed uninstaller).
+    #error SignedUninstallerDir must be passed by the build script (fresh signing directory for the captured signed uninstaller).
   #endif
 #endif
 

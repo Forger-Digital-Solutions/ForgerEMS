@@ -34,8 +34,15 @@ param(
     # Verify-only mode: run the same verification contract (signtool /pa,
     # Authenticode status, exact publisher, timestamp certificate) without
     # adding another signature. Used for artifacts the Inno callback has
-    # already signed (e.g. cached signed uninstallers).
-    [switch]$VerifyOnly
+    # already signed (e.g. the captured signed uninstaller).
+    [switch]$VerifyOnly,
+
+    # Inno 6.x deletes SignedUninstallerDir\uninst.eXX.tmp right after the
+    # callback signs it — the signed bytes are embedded in the installer, no
+    # persistent cache exists. When the artifact being verified is that
+    # temporary uninstaller stub, capture a verified copy to this path
+    # (no overwrite, parent must already exist) for release attestation.
+    [string]$VerifiedUninstallerPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -183,6 +190,24 @@ if (-not [string]::Equals($actualSubject.Trim(), $ExpectedPublisher.Trim(), [Sys
 
 if ($null -eq $signature.TimeStamperCertificate) {
     Fail "Signature has no timestamp certificate (RFC3161 timestamp required)"
+}
+
+# Verified-uninstaller capture: Inno deletes the signed uninst.eXX.tmp after
+# embedding it, so the only durable artifact is a verified copy made here —
+# after signature, publisher, and timestamp checks have passed.
+if (-not [string]::IsNullOrEmpty($VerifiedUninstallerPath)) {
+    $leaf = [System.IO.Path]::GetFileName($artifact)
+    if ($leaf.Equals('uninst.e32.tmp', [System.StringComparison]::OrdinalIgnoreCase) -or
+        $leaf.Equals('uninst.e64.tmp', [System.StringComparison]::OrdinalIgnoreCase)) {
+        $captureDir = [System.IO.Path]::GetDirectoryName($VerifiedUninstallerPath)
+        if ([string]::IsNullOrEmpty($captureDir) -or -not (Test-Path -LiteralPath $captureDir -PathType Container)) {
+            Fail "VerifiedUninstallerPath parent directory does not exist: $captureDir"
+        }
+        if (Test-Path -LiteralPath $VerifiedUninstallerPath) {
+            Fail "VerifiedUninstallerPath target already exists - refusing to overwrite: $VerifiedUninstallerPath"
+        }
+        [System.IO.File]::Copy($artifact, $VerifiedUninstallerPath, $false)
+    }
 }
 
 return @{
