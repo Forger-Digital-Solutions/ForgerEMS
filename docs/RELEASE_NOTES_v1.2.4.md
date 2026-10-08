@@ -22,7 +22,17 @@ ForgerEMS is a local-device support workflow tool, USB toolkit/profile builder, 
 
 ## Downloads
 
-Candidate artifacts exist only under the local `.verify/v1.2.4-final-certification` workspace. **No public v1.2.4 release has been published.** Final hashes and provenance ship with each release in `CHECKSUMS.sha256` and `release.json`; verify hashes before use. Never treat or describe unsigned artifacts as production-authenticated.
+Published as **GitHub Release `v1.2.4-preview.1`** on 2026-10-08.
+
+| Asset | Filename | Size | SHA-256 | Status |
+|-------|----------|------|---------|--------|
+| Portable ZIP | `ForgerEMS-v1.2.4.zip` | 81,742,749 bytes | `61A000203FD3E866C10221856322AD318A38562B5CE9E122626205997373B137` | Unsigned preview |
+| Windows Installer | `ForgerEMS-Setup-v1.2.4.exe` | 61,780,805 bytes | `F7C3541860015A533D437CE80B8D0D8B70DD78F0DE9CF47091353C1175B8A9BB` | Unsigned preview |
+
+Source revision for the artifacts: `fc54150844b36c2e6d6a4fd18d6ea9dd065fd4fb`.
+The repository HEAD at the time of release packaging differs because it includes release-tooling, documentation, and certification reporting changes that happened after the build.
+
+Always verify the SHA-256 of any downloaded file against the release page before running it. Never treat unsigned preview artifacts as production-certified.
 
 ## Known Limits
 

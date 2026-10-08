@@ -2,8 +2,12 @@
 
 ## Supported Versions
 
-ForgerEMS is currently maintained on the `main` branch and the latest tagged release.
-Security fixes are prioritized for the newest supported release line.
+| Version | Status | Notes |
+|---------|--------|-------|
+| `v1.2.4-preview.1` | Current public preview | Security fixes are prioritized for this line. |
+| `v1.2.3-preview.1` | Superseded preview | Update to `v1.2.4-preview.1` when possible. |
+
+ForgerEMS is maintained on the `main` branch and the latest tagged preview/release. Security fixes are prioritized for the newest supported release line. Preview builds are provided for testing and feedback and are not certified for production use.
 
 ## Reporting a Vulnerability
 

@@ -2,13 +2,16 @@
 
 **Forger Engineering Maintenance Suite** — a Windows desktop app for technicians who work with USB toolkits, repairs, and diagnostics.
 
-**Current release line:** **v1.2.4** — **ForgerEMS v1.2.4** (safe Dr. Forge CLI Intake bridge with parsed local report sections, USB Builder Profile picker, portable app USB profile, Driver Hub/vendor guidance, near-instant USB hotplug detection, Port / USB Intelligence results dashboard, port/USB mapping, persistent Live Logs, first-run Terms consent gate, and semantic-version update checks).
+**Current release:** **v1.2.4-preview.1** — public preview of **ForgerEMS v1.2.4** (safe Dr. Forge CLI Intake bridge with parsed local report sections, USB Builder Profile picker, portable app USB profile, Driver Hub/vendor guidance, near-instant USB hotplug detection, Port / USB Intelligence results dashboard, port/USB mapping, persistent Live Logs, first-run Terms consent gate, and semantic-version update checks).
 
-**Kickstarter:** Coming soon.
+- **Status:** public preview / prerelease — not production-certified.
+- **Binaries:** unsigned; Windows SmartScreen may warn.
+- **Source revision for artifacts:** `fc54150844b36c2e6d6a4fd18d6ea9dd065fd4fb`.
+- **Official website:** [https://forgerdigitalsolutions.com](https://forgerdigitalsolutions.com)
 
 **Support:** [ForgerDigitalSolutions@outlook.com](mailto:ForgerDigitalSolutions@outlook.com) — send **sanitized** screenshots and short log excerpts only; never passwords, keys, or private files.
 
-**Support development (optional):** ForgerEMS remains usable without donating. Public platform links are intentionally pending owner configuration: [Ko-fi](DONATION_LINK_TODO) · [Sponsor](SPONSOR_LINK_TODO) · [PayPal](PAYPAL_LINK_TODO). Donations do not purchase ownership, guaranteed features, priority support, investment returns, or equity. See [donation transparency](docs/marketing/DONATION_TRANSPARENCY.md).
+**Support development (optional):** ForgerEMS remains usable without donating. Public support/donation links are configured by the owner when available. Donations do not purchase ownership, guaranteed features, priority support, investment returns, or equity.
 
 ---
 
@@ -50,20 +53,34 @@ ForgerEMS never bypasses licenses, activation, DRM, account locks, or vendor aut
 
 ---
 
-## Download (portable ZIP-first)
+## Download v1.2.4-preview.1
 
-**Start with the portable ZIP from GitHub Releases unless you already know you want the installer.** The ZIP extracts to a runnable ForgerEMS app folder and includes legal/help docs for review before first launch.
+**Start with the portable ZIP unless you already know you want the installer.** The ZIP extracts to a runnable ForgerEMS app folder and includes legal/help docs for review before first launch.
 
-1. Open **[Releases — Forger-Digital-Solutions/ForgerEMS](https://github.com/Forger-Digital-Solutions/ForgerEMS/releases)**.
-2. Under **Assets**, download:
-   - `ForgerEMS-v<version>.zip` portable app ZIP
+| Asset | Filename | Size | SHA-256 |
+|-------|----------|------|---------|
+| Portable ZIP | `ForgerEMS-v1.2.4.zip` | 81,742,749 bytes | `61A000203FD3E866C10221856322AD318A38562B5CE9E122626205997373B137` |
+| Windows Installer | `ForgerEMS-Setup-v1.2.4.exe` | 61,780,805 bytes | `F7C3541860015A533D437CE80B8D0D8B70DD78F0DE9CF47091353C1175B8A9BB` |
+
+1. Open the **[v1.2.4-preview.1 release](https://github.com/Forger-Digital-Solutions/ForgerEMS/releases/tag/v1.2.4-preview.1)**.
+2. Under **Assets**, download the file you want.
 3. **Wait** until the download finishes completely (see [docs/DOWNLOAD_TROUBLESHOOTING.md](docs/DOWNLOAD_TROUBLESHOOTING.md) if you see `.crdownload` or stalls).
-4. Extract to a **short path** (for example `Desktop\ForgerEMS`).
-5. Open the extracted folder and double-click **`START_HERE.bat`** or **`ForgerEMS.exe`**. The first launch shows the Terms of Use gate before the main tools unlock.
+4. For the ZIP, extract to a **short path** (for example `Desktop\ForgerEMS`), then run **`START_HERE.bat`** or **`ForgerEMS.exe`**. The first launch shows the Terms of Use gate before the main tools unlock.
 
-Optionally verify integrity using **`CHECKSUMS.sha256`** from the **same** release page before you run anything.
+### SHA-256 verification (PowerShell)
 
-The standalone **`ForgerEMS-Setup-v<version>.exe`** on the release is the installed-app path and includes a license/terms page when built with Inno Setup.
+```powershell
+Get-FileHash .\ForgerEMS-v1.2.4.zip -Algorithm SHA256
+Get-FileHash .\ForgerEMS-Setup-v1.2.4.exe -Algorithm SHA256
+```
+
+Compare the output with the hashes above. The release page also includes `CHECKSUMS.sha256`.
+
+### Signature status
+
+The v1.2.4-preview.1 artifacts are **unsigned**. Windows may show an unknown-publisher warning; see [Why is Windows warning me?](#beta-smartscreen-and-trust) below.
+
+The standalone installer is the installed-app path and includes a license/terms page when built with Inno Setup.
 
 **Helpful links**
 
@@ -72,6 +89,27 @@ The standalone **`ForgerEMS-Setup-v<version>.exe`** on the release is the instal
 - [Download troubleshooting](docs/DOWNLOAD_TROUBLESHOOTING.md)
 - [Beta tester quickstart](docs/BETA_TESTER_QUICKSTART.md)
 - [How in-app updates work](docs/UPDATE_SYSTEM.md)
+- [Privacy / data handling](docs/PRIVACY_AND_DATA_HANDLING.md)
+- [Terms of Use](docs/TERMS_OF_USE.md)
+- [Security policy](SECURITY.md)
+
+---
+
+## System requirements
+
+- Windows 10 or Windows 11 (x64)
+- A normal user account; administrator approval is requested only for optional deeper scans
+- Internet access is optional: update checks and managed downloads use the network when you trigger them, but core local workflows work offline
+
+## Known limitations of this preview
+
+- **Unsigned binaries.** Windows SmartScreen and some browsers may warn.
+- **Preview status.** Features, packaging, and docs may change between builds.
+- **Installer lifecycle certification** is not complete; the isolated VM test environment expired before final install/upgrade/uninstall proof.
+- **Deep sensor / driver coverage** is limited to bundled safe read-only providers; no kernel driver is installed by default.
+- Diagnostics and guidance are informational, not guaranteed repair or compatibility assurances.
+
+See [docs/RELEASE_NOTES_v1.2.4.md](docs/RELEASE_NOTES_v1.2.4.md) and [docs/FORGEREMS-WPF-PACKAGING.md](docs/FORGEREMS-WPF-PACKAGING.md) for more.
 
 ---
 

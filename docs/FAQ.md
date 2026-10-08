@@ -10,6 +10,66 @@ ForgerEMS is independent and is not affiliated with, sponsored by, or endorsed b
 
 ---
 
+## Quick-start FAQ
+
+### What is ForgerEMS?
+ForgerEMS (Forger Engineering Maintenance Suite) is a Windows technician workbench built by Forger Digital Solutions for USB toolkit creation, drive validation, USB/port intelligence, system information, Driver Hub vendor guidance, and local-first diagnostics.
+
+### What does it do?
+It gives technicians one local app to prepare USB repair media, validate removable drives, map USB ports, look up official vendor driver/support pages, and inspect local system context. It does not repair devices automatically or replace professional judgment.
+
+### Is it free?
+ForgerEMS preview builds are distributed at no cost. Future licensing tiers may be introduced; the current preview does not enforce paid licensing.
+
+### Which Windows versions are supported?
+Windows 10 build 19041 (20H1) or later, x64. Windows 11 is recommended. Wine/VM environments are experimental and not production-certified.
+
+### Does it require installation?
+No. The **portable ZIP** runs without installation after extraction. A separate **installer EXE** is available for users who prefer an installed app.
+
+### What is the difference between the installer and the portable ZIP?
+- **Portable ZIP:** extract anywhere and run `ForgerEMS.exe` or `START_HERE.bat`. Leaves no Windows Installer footprint and is easy to move between PCs.
+- **Installer:** writes the app into `Program Files`, creates Start-menu shortcuts, and can enable optional Deep Sensor Mode. Both packages contain the same app files.
+
+### Does it need administrator privileges?
+Most features work as a normal user. Only optional actions such as Elevated Scan or Deep Sensor Mode may request administrator approval through Windows UAC. The app never silently elevates.
+
+### Does it install drivers?
+No. ForgerEMS does not install, load, start, or ship a kernel driver in this preview. The optional Deep Sensor Mode uses bundled user-mode read-only sensor providers where packaged. Driver Hub only opens vendor web pages or copies shortcuts.
+
+### Does it modify system settings?
+No global system changes are made. The installer writes its own registry keys and shortcuts. The app reads Windows/driver information only; it does not change Windows Update settings, install drivers, or modify system configuration.
+
+### Does it require internet access?
+Core local workflows work offline. Internet is used only for user-triggered actions such as update checks, `Verify Links` metadata probes, or opening vendor web pages from Driver Hub.
+
+### Does it collect diagnostic information?
+ForgerEMS stores logs, reports, and profiles **locally** under `%LOCALAPPDATA%\ForgerEMS\`. No automatic telemetry or diagnostic upload to Forger Digital Solutions occurs. Support bundles are exported only when you explicitly choose to and confirm.
+
+### How is personal information handled?
+ForgerEMS keeps personal/device context on your machine. It does not sell user data or upload it automatically. Support emails should include only sanitized screenshots and short log excerpts; never send passwords, keys, serial numbers, or private customer data.
+
+### How do I update ForgerEMS?
+Use the in-app update check (Settings → check for updates). It reads public GitHub Releases for this repo and lists eligible newer versions; nothing is downloaded or installed unless you confirm. You can also download the latest ZIP manually from the [releases page](https://github.com/Forger-Digital-Solutions/ForgerEMS/releases).
+
+### How do I uninstall it?
+- **Portable:** delete the extracted folder and remove `%LOCALAPPDATA%\ForgerEMS\` if you no longer want your local data.
+- **Installer:** use **Add or remove programs** (or **Apps → Installed apps**) and uninstall **ForgerEMS**. You may also remove leftover data under `%LOCALAPPDATA%\ForgerEMS\` if desired.
+
+### Where can I report bugs?
+Email [ForgerDigitalSolutions@outlook.com](mailto:ForgerDigitalSolutions@outlook.com) with the app version, Windows version, steps to reproduce, expected vs actual behavior, and sanitized logs. Do not send secrets. See [BETA_ISSUE_REPORT_TEMPLATE.md](BETA_ISSUE_REPORT_TEMPLATE.md).
+
+### How can I request features?
+Send a short description of the workflow or problem to [ForgerDigitalSolutions@outlook.com](mailto:ForgerDigitalSolutions@outlook.com) or open a focused GitHub issue/discussion if public feedback is enabled.
+
+### What limitations apply to preview releases?
+Preview builds are unsigned, may contain bugs, and are not production-certified. Features, UI, packaging, and docs may change. Diagnostics and guidance are advisory, not guaranteed. The current installer lifecycle certification is incomplete.
+
+### How do I identify the authentic official download?
+Only download from the official GitHub repository: `Forger-Digital-Solutions/ForgerEMS`. The release page shows the exact filenames `ForgerEMS-v1.2.4.zip` and `ForgerEMS-Setup-v1.2.4.exe` with published SHA-256 hashes. Verify the hash with `Get-FileHash` in PowerShell before running.
+
+---
+
 ## What should I download first?
 
 **The portable ZIP — not the standalone EXE first.** On [GitHub Releases](https://github.com/Forger-Digital-Solutions/ForgerEMS/releases), under **Assets**, choose `ForgerEMS-v<version>.zip`, extract, review the included docs, then run **`START_HERE.bat`** or **`ForgerEMS.exe`**.

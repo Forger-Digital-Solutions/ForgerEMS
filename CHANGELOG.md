@@ -1,8 +1,13 @@
 # Changelog
 
-## v1.2.4 — Modernization candidate (2026-10-06)
+## v1.2.4 — Public Preview v1.2.4-preview.1 (2026-10-08)
 
-Modernization source state for the v1.2.4 release line. See `docs/RELEASE_NOTES_v1.2.4.md` for the current provisional release notes.
+Public preview release published on GitHub Releases as `v1.2.4-preview.1` on 2026-10-08. See `docs/RELEASE_NOTES_v1.2.4.md` for the current provisional release notes.
+
+- **Release channel:** public preview — not production-certified.
+- **Artifacts:** `ForgerEMS-v1.2.4.zip` and `ForgerEMS-Setup-v1.2.4.exe`, both unsigned; SHA-256 checksums published on the release page.
+- **Source revision for artifacts:** `fc54150844b36c2e6d6a4fd18d6ea9dd065fd4fb`.
+- **Repository modernization:** README, FAQ, CHANGELOG, SECURITY, and legal docs updated for the v1.2.4 preview.
 
 - **Kyra/assistant product surface removed:** the Kyra assistant UI, provider plumbing, and shared assistant code were retired; shared redaction was extracted to dedicated sanitizer services.
 - **Self-update hardening:** semantic-version release selection, malformed metadata rejected fail-closed, no API tokens forwarded to artifact hosts, manual allowed-host redirects, capped responses, and expected-SHA/asset-digest validation for managed downloads.
