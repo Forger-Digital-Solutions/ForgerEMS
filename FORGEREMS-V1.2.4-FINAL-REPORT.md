@@ -4,6 +4,136 @@ Date: 2026-10-08. Evidence root: `.verify/v1.2.4-closure/`.
 This is the single authoritative certification report. Earlier artifacts and
 failed campaigns remain preserved; they are not silently substituted for final evidence.
 
+## Latest Production-Certification Unblock Round
+
+Observed 2026-10-08 at 11:17-11:19 UTC. **FORGEREMS_V1.2.4_BLOCKED**.
+Neither required external prerequisite became available. No signing,
+installer execution, unchanged TCG replay, host installation, elevation,
+permission change, push, public release or production-eligibility change occurred.
+
+### Repository And Preserved Candidate
+
+Starting HEAD was `fc54150844b36c2e6d6a4fd18d6ea9dd065fd4fb`, branch
+`release/v1.2.4-modernization`, working tree clean. This round changes only this
+certification report; no runtime, installer, manifest, workflow, dependency or
+test source changes. Its documentation-only commit is the final repository HEAD,
+recorded after commit in
+`.verify/v1.2.4-closure/unblock-round-20261008/unblock-attestation.json`.
+
+The unchanged release-candidate source remains **fc54150844b36c2e6d6a4fd18d6ea9dd065fd4fb**.
+No new production artifact is generated from the report-only commit. The
+preserved candidate's sourceHead/dirty-zero evidence is not rewritten to name
+the newer documentation commit. Earlier exact-repository-HEAD predicates below
+describe their original build checkpoint, not a new production certification.
+
+| Preserved Unsigned Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `.verify/v1.2.4-closure/release/ForgerEMS-Setup-v1.2.4.exe` | 61780805 | F7C3541860015A533D437CE80B8D0D8B70DD78F0DE9CF47091353C1175B8A9BB |
+| `.verify/v1.2.4-closure/release/ForgerEMS-v1.2.4.zip` | 81742749 | 61A000203FD3E866C10221856322AD318A38562B5CE9E122626205997373B137 |
+
+Both sizes/hashes were independently rechecked against current files before
+editing. App and installer Authenticode were directly rechecked: **NotSigned**,
+no signer/timestamp certificate. ZIP Authenticode is not applicable.
+The existing `final-artifact-attestation.json`, checksums and artifacts are
+preserved unchanged. `productionEligible:false` remains unchanged.
+
+### Signing Boundary
+
+Fresh read-only evidence: `unblock-round-20261008/signing-discovery.txt` and
+`gh-ci-inventory.txt`, relative to the evidence root.
+CurrentUser/My: eight certificates, zero Code Signing EKU identities.
+LocalMachine/My: one certificate, zero Code Signing EKU identities.
+No signing/certificate/PFX/Trusted Signing/Key Vault/Azure/HSM environment
+variable names or authorized production-material references were established.
+Repository references are configuration, not an available authorized identity.
+
+All four read-only GitHub queries exit 0: repository environments empty,
+zero self-hosted runners, no signing secrets/variables. Only the previously
+recorded unrelated obsolete Kyra secret/variable names remain; no values are
+printed and no configuration is deleted. No approved remote signing service
+or owner-authorized PFX/HSM mechanism is established.
+
+SDK signtool and existing signing tooling are available. Inspection confirms
+SHA-256/RFC3161, Code Signing EKU/private-key/validity checks, exact publisher,
+signtool plus Authenticode verification, and temporary-uninstaller capture.
+This is tooling readiness, not an executed authorized signing operation.
+Signer subject, issuer, thumbprint, validity and chain are NOT APPLICABLE to
+the unsigned product; no ambiguous/developer identity is substituted.
+
+Required owner action: provision an authorized ForgerEMS production identity
+through the existing certificate-store path, or explicitly provision the
+protected `production-release` environment and its
+`FORGEREMS_SIGNING_CERT_THUMBPRINT`, `FORGEREMS_SIGNING_PFX_BASE64` and
+`FORGEREMS_SIGNING_PFX_PASSWORD` secrets. Obtain credentials securely; do not
+place key material in source, reports or chat. Merely finding a private key
+would not establish authorization. No public workflow is invoked by this round.
+
+### Windows Isolation Boundary
+
+Fresh evidence: `isolation-host.txt`, `vbox-vminfo.txt` and `wsl-state.txt`
+under `unblock-round-20261008/`.
+Sandbox executables remain absent. Hyper-V module/service/hypervisor are present,
+but non-elevated Get-VM is authorization-denied. The existing VirtualBox
+capability-trial VM is powered off and is the same EFI-stalled setup, not a ready
+Windows test system. No new sanctioned VMware/cloud/test-runner path is established.
+
+WSL user is uid 1000, not in kvm; `/dev/kvm` is root:kvm mode 0660 and neither
+readable nor writable. No QEMU/TPM process is running. The prior external WSL
+shutdown and zero ready-marker result remain unchanged.
+Owned QCOW2, firmware variables, TPM data and serial evidence are retained;
+there is no saved running-memory snapshot or completed Windows installation.
+The staged obsolete payload ISO is not attached or promoted to current input.
+No material configuration/permission change justifies replaying unchanged TCG.
+
+Required external action: supply an approved ready disposable Windows VM/runner
+with administrative guest access and revert/reboot/evidence-transfer capability,
+or authorize the narrowly scoped KVM access needed to attempt accelerated QEMU.
+Approval alone is not lifecycle proof. Guest acceptance must precede execution:
+OS/build/architecture, identity, clean baseline, disk/network/security state,
+reset capability and evidence transfer. Existing authenticated Microsoft LTSC
+evaluation media and the authentic v1.2.3-preview.1 fixture remain available.
+
+### Explicit Release Answers And Gate Disposition
+
+| Question / Gate | Current Answer |
+| --- | --- |
+| A: authorized production signing | NO; BLOCKED, no qualifying identity |
+| B: exact installer clean-installed on disposable Windows | NO; BLOCKED / NOT EXECUTED |
+| C: authentic previous-release upgrade | NO; BLOCKED / NOT EXECUTED |
+| D: uninstall, reboot and residue | NO; BLOCKED / NOT EXECUTED; no residue classification claimed |
+| E: driver changes | None performed by this round; installer driver-store/service/task deltas remain unexecuted |
+| F: Defender | Preserved exact unsigned artifacts PASS, no threats, exit 0 at 11:04:35 UTC; no signed-artifact scan exists |
+| G: release-candidate commit | fc54150844b36c2e6d6a4fd18d6ea9dd065fd4fb; report-only repository commit recorded separately |
+| H: final candidate hashes | Independently rechecked; table above; no signed replacement exists |
+| I: production eligibility | FALSE; unchanged, not set by this report |
+| J: public-release blockers | Authorized production signing and usable Windows lifecycle execution |
+| Reinstall / lifecycle integrity | BLOCKED / NOT EXECUTED |
+| Secret/security-sensitive residue audit | No guest install exists to inspect; not claimed PASS |
+| SmartScreen reputation | NOT TESTED; signature validity would not establish reputation |
+
+The already-proven Release suite at fc541508 passes **1703/0/0**; five
+consecutive code-stability runs pass **1703/0/0** each. Exact portable self-test
+and GUI close exit 0, final ZIP inspection and unsigned Defender evidence remain
+valid for the unchanged candidate. No fresh campaign, full suite, live resource
+probe, vulnerability derivation or artifact rebuild is represented as executed
+in this prerequisite-only round. Original command/exit evidence remains linked
+through `final-artifact-attestation.json`.
+
+Prior native stress, 19/20 metadata resolution with Rescuezilla fail-safe,
+458-binary/14-identity notice inventory and no known NuGet advisory entries are
+retained, not reopened. Historical CLR attribution remains unproved at
+`GCHandleStore::CreateHandleOfType+0xC0`; no new crash-clearance claim is made.
+Driver operations stay read-only/advisory. Wider DPI/accessibility and qualified
+SDK/WinRT, Mono and PawnIO legal limitations remain as recorded below.
+
+No current signed production build or completed installer lifecycle exists.
+The new RELEASED terminal status cannot be justified; no gate is relaxed.
+The following sections retain the preceding closure history and its evidence.
+
+FORGEREMS_V1.2.4_BLOCKED
+
+## Previous Closure Record
+
 ## Executive Result
 
 **Production certification remains BLOCKED.** Authorized production signing
