@@ -584,6 +584,14 @@ function Get-ManagedItemsMissingChecksumCoverage {
 
         if ($hasSha256 -or $hasSha256Url -or $hasSha512 -or $hasSha512Url) { continue }
 
+        # Runtime-resolved resources get their verified artifact SHA-256 from the
+        # managed-resource overlay (Test-ResolvedOverlayGate) — no static hash is
+        # pinned in the manifest by design. They must still name a resourceId that
+        # exists in manifests\resource-policy.json.
+        $requiresResolution = $false
+        if ($null -ne $item.requiresResolution) { $requiresResolution = [bool]$item.requiresResolution }
+        if ($requiresResolution -and -not [string]::IsNullOrWhiteSpace([string]$item.resourceId)) { continue }
+
         $missing.Add([PSCustomObject]@{
             Name = [string]$item.name
             Dest = [string]$item.dest
