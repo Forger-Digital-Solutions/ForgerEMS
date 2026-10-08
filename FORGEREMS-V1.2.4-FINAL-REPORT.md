@@ -1,526 +1,362 @@
-# ForgerEMS v1.2.4 Final Report
+# ForgerEMS v1.2.4 Final Release Report
 
-Date: 2026-10-07
+Date: 2026-10-08. Evidence root: `.verify/v1.2.4-closure/`.
+This is the single authoritative certification report. Earlier artifacts and
+failed campaigns remain preserved; they are not silently substituted for final evidence.
 
 ## Executive Result
 
-Production release closure is **BLOCKED**. The engineering candidate is substantially
-complete, but authorized production signing and a usable isolated Windows installer
-environment are unavailable. Clean install, previous-version upgrade and uninstall
-are not proved. No publication, push, host driver replacement or host installation
-was performed.
+**Production certification remains BLOCKED.** Authorized production signing
+credentials are unavailable, and isolated clean install, upgrade and uninstall
+have not been demonstrated. The code candidate passes five consecutive broad
+Release runs, native verification stress and portable execution.
 
-This pass actively fixed signing entrypoints/uninstaller handling, packaged notices
-and documentation, confirmed stale links, startup diagnostic isolation, and keyboard
-navigation. It preserved the completed modernization rather than restarting it.
-Repeated tests and portable execution are evidence, not production certification.
-
-The final artifact build follows the commit containing this report. Its exact HEAD,
-hashes, sizes, signatures and commands are recorded in the final evidence files
-identified below. This avoids a self-referential report hash and prevents treating
-validation-candidate hashes as final artifact hashes.
+Confirmed defects repaired during closure include provider version/asset parsing,
+bounded metadata transport, CI signing-key provisioning, report-path isolation,
+cached Driver Hub wording and test synchronization. No release gate is weakened.
+Nothing is pushed, tagged publicly, published or installed on the development host.
+No host driver is installed, removed or replaced.
 
 ## Repository State
 
-- Repository: `I:\ForgerEMS_App\repo`.
-- Branch: `release/v1.2.4-modernization`; origin:
-  `https://github.com/Forger-Digital-Solutions/ForgerEMS.git`.
-- Implementation checkpoint: `5e77cf630550bac7f439f4cfa5867ce65e22e8f3`.
-- Final artifact source HEAD: read `release/release.json` and
-  `final-build-attestation.txt` under `.verify/v1.2.4-final-certification`.
-- Require source HEAD equal the final repository HEAD and dirty count zero;
-  a mismatch invalidates final-artifact provenance.
-- Evidence and old outputs are ignored, preserved, and not silently substituted
-  for fresh results. No unrelated working changes were reverted.
+- Repository: `I:\ForgerEMS_App\repo`; branch `release/v1.2.4-modernization`.
+- Starting HEAD: `c08167df8a7b84f92f7612c97a8fe65f0df21919`, clean.
+- Engineering commits: `b4e926216912c131fe12649f0f3fee1def3cafd4`,
+  `62faece3ac818537c7515cfe75d167c8cd53bfbd`,
+  `335262a4a564d1c38a49f4238703c470e2fa286b` and
+  `c883e3f985a3148068cdb14ac93f2f085bb2bee8`.
+- Latest fully tested code HEAD: `c883e3f985a3148068cdb14ac93f2f085bb2bee8`.
+- Final artifact build follows the report-only commit. Its exact source HEAD,
+  dirty count, sizes, hashes and signature results are recorded in
+  `final-build-attestation.txt` and `release/release.json`.
+- Final provenance requires sourceHead equal repository HEAD, dirty count zero
+  and independently checked file hashes. A mismatch invalidates final packaging.
 
-## Continuation Baseline
+## Starting Certification Baseline
 
-Direct baseline verification found clean branch HEAD
-`bf917f5c2af2133e3b613741b40fdcc9cdb1e109`,
-message `Record v1.2.4 candidate evidence and partial certification`.
-There were zero staged/modified/untracked files. Ignored artifacts were present.
-`evidence/git-baseline.txt` records the branch, commit, remotes and ignored sample.
+Direct checks established version `1.2.4`, clean source and matching starting
+release metadata. App FileVersion is `1.2.4.0`, ProductVersion `1.2.4`;
+backend version is separately `2026.10.06.1`. `VERSION` remains authoritative.
 
-The preceding candidate was built from
-`e8820b8953c2da27c20f1dd6c7bac57eada4d5f8`; the intervening baseline commit
-changed the report only. Artifact versions, metadata, signatures and hashes were
-rechecked, not accepted on the strength of the prior report.
-Evidence: `evidence/artifact-provenance.txt`.
+Starting installer: 61,780,931 bytes, SHA-256
+`A0C0848FAE1EE0C6938DDAC639E7FBB1255CC56679E7ED88430D884C3ACD6614`.
+Starting ZIP: 81,740,240 bytes, SHA-256
+`8A7572A5B0BDDB6B943F7CF468EAE61A152C41BE0BD4EF101616A4A2A67F5B06`.
+Both are unsigned and non-production. These are baseline, not final hashes.
+Evidence: `evidence/lead-findings.md`.
 
-## Previous Partial Gates
+## Signing Infrastructure Discovery
 
-Closed available engineering gaps: LocalMachine signing-store selection, explicit
-unsigned entrypoint guards, verified uninstaller capture, callback quoting,
-fail-closed Git provenance, missing packaged documentation/licensing guidance,
-confirmed broken URL replacements, and inaccessible keyboard navigation.
+Read-only discovery inspected CurrentUser/My (eight certificates),
+LocalMachine/My (one), EKUs, private-key availability, cryptographic providers,
+enrollment configuration, environment variable names, repository references,
+SDK signtool, release workflows and GitHub configuration.
+No authorized Code Signing identity, hardware/enterprise identity or configured
+Azure/Trusted Signing/Key Vault/HSM/PFX path was established.
+Development, EFS and localhost ServerAuth identities are not production signers.
+No key is exported and no secret value is printed.
 
-Still open: trusted signing, isolated installer lifecycle, complete UI/DPI coverage,
-historical crash attribution, all-link verification, some resource adapters, and
-redistribution/relinking legal questions. Advisory driver behavior is a deliberate
-safety boundary, not an unimplemented promise of automatic installation.
+GitHub discovery found zero self-hosted runners and no configured repository
+environments. The old unused external Kyra secret/variable names are not runtime
+references; they were not deleted through a side-effecting API.
+Evidence: `evidence/environment-discovery.txt`, `evidence/lead-findings.md`;
+the final refresh is separately retained under `evidence/`.
 
-## CLR Abort Investigation
+## Historical Release Signature Analysis
 
-The saved original output records 699 passes, 29 assertion failures and an internal
-CLR `0x80131506` abort. The original TRX was subsequently overwritten and cannot
-establish crash-time test ordering.
+Official release discovery identifies `v1.2.3-preview.1`, prerelease, published
+2026-07-02; remote tag `c98feeb769380db7b1c3b9eb1518a78f1dbf9351`.
+The authentic previous installer is 65,967,832 bytes, SHA-256
+`E3597E2657789BB359DFA7BE93156BB3C0C6BEF90690EAEE189489EF90B1B4D0`,
+matching the independent GitHub API digest.
+Authenticode is NotSigned; signtool verification exits 1 with no signature.
+Signer, issuer, certificate chain, expiration and timestamp digests are not
+applicable. No historical signing identity can be inferred.
+Evidence: `evidence/previous-release-inspection.txt`.
 
-Windows telemetry independently identifies testhost.exe faulting in CoreCLR 8.0.31,
-exception `0xc0000005`, offset `0x1064f0`, PID 27688, WER bucket
-1642125279669840107. Preserved dump: `evidence/testhost.exe.27688.dmp`,
-29,289,100 bytes, SHA256:
-`164CF17C519D5B9469168942CF302880271B8B28C2458FE1E1DEA2957AA104C`.
+## Signing Result
 
-dotnet-dump 8.0.547301 loaded the dump and produced thread/managed-stack output.
-Concurrent stacks include intelligence/sensor orchestration, overlay and download
-tests. They do not identify the faulting native instruction or prove causality.
-`eestack` is unsupported by this tool; the final command exits 1 and is not
-represented as a successful native debugger diagnosis.
+**BLOCKED: legitimate authorized credentials must be provisioned by the owner.**
+Production packaging defaults to fail closed; unsigned builds require explicit
+`-UnsignedCandidate` and record `productionEligible:false`.
+The hosted-runner initializer now validates owner-supplied identity, thumbprint,
+validity, private key, Code Signing EKU and exact publisher before importing
+in memory. Protected environment and secrets still require owner provisioning.
+No production import/signing operation or self-signed substitute is performed.
 
-The process-global sensor lifecycle race is a credible mechanism addressed by
-serialization, not a proven historical cause. WinVerifyTrust layout, native memory
-ownership/state-close ordering and flags were reviewed. WUA COM runs in a separate
-PowerShell process. Neither is blamed without discriminating evidence.
+Signing uses SHA-256, RFC3161 timestamping, correct certificate-store selection,
+signtool verification, exact publisher and timestamp certificate checks.
+Inno 6.7.3 compiler-source review establishes callback uninstallers are temporary
+files. Verified bytes are captured before cleanup; existing capture paths are
+not overwritten. Failure-path/argument regression tests are passing.
+Actual credentialed app, installer and embedded-uninstaller signing is unexecuted,
+not a PASS inferred from stubs or source inspection.
 
-Classification: historical native runtime/test-process crash, root cause unknown,
-not reproduced in the recorded later complete runs. Non-reproduction does not
-establish a non-product cause. Evidence: `evidence/CLR-lead-investigation.md`,
-`evidence/CLR-dump-lead-review.md`, `evidence/historical-dump-analysis.txt`,
-event-log/ WER captures and the separate TRX/logs.
+## Windows Isolation Discovery
 
-## Kyra Final Audit
+Sandbox is unavailable. Hyper-V inventory is authorization-denied. No existing
+registered VirtualBox Windows guest or available CI execution path was found.
+New local-only lifecycle workflow and guest harness are prepared but not invoked
+through an unapproved push or workflow dispatch.
 
-Runtime, UI, SDK, gateway, configuration and package surfaces remain removed.
-No obsolete test infrastructure was restored. Historical user files are not
-unnecessarily deleted and are no longer read by the retired assistant.
-The validated ZIP has zero Kyra-named entries; final inventory is recorded
-separately with final artifact evidence.
+VirtualBox 7.2.12 starts an owned VM but its Windows boot trials stall in EFI.
+Existing WSL QEMU 8.2.2/OVMF provides a second path: an owned q35/TCG/2CPU/4GB
+guest with private TPM helper, no networking/host sharing and an owned QCOW2.
+Official Windows 11 Enterprise LTSC 2024 evaluation ISO is 5,112,850,432 bytes,
+SHA-256 `67CEC5865EAA037A72DDC633A717A10A2BED50778862267223DDB9C60EF5DA68`,
+matching Microsoft's independent hash PDF, page 5.
 
-`evidence/final-source-residuals.txt` classifies meaningful remaining categories:
-historical docs/release notes/audits; negative removal tests; current statements
-that the feature was removed; local-host rejection tests/policy; placeholder
-rejection; original license prose; and names such as Process Hacker.
-`autodownload` also matches the broad case-insensitive TODO substring search.
-Actual remaining TODOs include future port-power deep sensors and unenforced
-Pro-license verification; neither is a completed v1.2.4 capability.
+Guest Windows kernel execution is observed, but setup never produced a ready
+marker. The last recorded long observation showed zero new block IO over about
+53 minutes with the guest still executing; this does not identify the stall's
+cause. On 2026-10-08 the refresh found QEMU/TPM no longer running after external
+WSL shutdown: signal 15 from systemd-shutdown, not established as a guest crash.
+Owned disk, firmware variables, TPM state and serial logs remain on disk.
+No unchanged TCG reboot is treated as progress. KVM device access is unavailable
+to the WSL user. Elevated use was requested but not approved or attempted.
+Evidence: `evidence/qemu/`, `evidence/windows-media-integrity.json`,
+final isolation refresh under `evidence/`.
 
-## Version Consistency
+## Clean Install
 
-`VERSION` is authoritative: 1.2.4. Validated app file version is 1.2.4.0 and
-product version 1.2.4; installer uses the same version authority.
-Backend date-version is separately 2026.10.06.1 and the packaged self-test verifies
-frontend/backend alignment. Candidate channel `preview` and unsigned flags do not
-change the semantic app version to an obsolete preview number.
+**BLOCKED / NOT EXECUTED in a ready Windows guest.** Installer compilation,
+firmware/kernel boot and portable launch do not prove install paths, registration,
+shortcuts, consent, installed UI or installed self-test behavior.
 
-## Published Release Truth
+## Previous-Version Upgrade
 
-Official release evidence identifies `v1.2.3-preview.1`, prerelease, published
-2026-07-02T22:48:18Z. No published stable release or public v1.2.4 was found.
-Assets: prior installer, portable ZIP, CHECKSUMS.sha256, release.json and download
-instructions. Remote tag points to `c98feeb769380db7b1c3b9eb1518a78f1dbf9351`;
-local historical tags differ. Evidence:
-`evidence/github-release-v1.2.3-preview.1.json` and prior remote-tag capture.
-Public release state is independent of the local candidate.
+**BLOCKED / NOT EXECUTED.** Authentic prior fixture is available and byte-verified.
+The prepared harness checks prior settings, inert legacy configuration, version,
+single product registration and migration. Preparation is not upgrade proof.
 
-## Updater Security
+## Uninstall
 
-Highest eligible semantic version wins; drafts, malformed metadata, wrong
-architecture and untrusted URLs are excluded. Stable-only is the default;
-persisted explicit prerelease opt-in remains supported. Older releases do not
-authorize a downgrade.
+**BLOCKED / NOT EXECUTED.** Installer-owned file/shortcut/registration removal and
+intentional user-data preservation require actual isolated execution.
+No installer or uninstaller is run on the development host.
 
-Expected SHA256 originates from trusted same-release metadata/checksums, not a
-digest calculated from the downloaded bytes and compared to itself. Metadata
-requests are bounded; authentication stays on the GitHub API host.
-Executable update installers require chain verification and exact publisher
-SimpleName equality. Cached-only revocation fails closed; native DLL resolution
-is pinned to System32. Provider flags are 0x1180.
+## Reinstall / Repair
 
-Tests cover prior expiry/schema fail-open cases, exact publisher versus
-prefix/suffix/substring, missing/mismatched hashes, redirects, corrupt metadata,
-cancellation/offline failures and unsafe extraction. ZIP bytes do not themselves
-carry Authenticode. Installation/restart/rollback remain manual.
+Same-version reinstall and install-after-uninstall remain unexecuted.
+No distinct repair mode is implemented; repair is NOT APPLICABLE.
 
-## Managed Resource Discovery
+## CoreCLR Crash Investigation
 
-Frozen live evidence: `evidence/resource-probe-final.json`, source HEAD
-134ec32deddb915e6aa305a3750518e0e1c1ffa9, policy SHA256
-`9EEB285E900AEDCEEE9034FC26F08EC27A1D6890C3E2C98B465CBC43CD5DDBAC`.
-Later signing/report changes do not alter the resolver/policy; use this capture,
-not a re-derived network answer. Scope: real resolver classes and packaged policy,
-live metadata followed by controlled offline cache fixtures, no payload installation.
+The historical crash is confirmed, but its root cause remains unproved.
+Process-global LibreHardwareMonitor lifecycle serialization addresses a credible
+native lifetime hazard, not a demonstrated historical trigger.
+No reproducible product-side native crash occurred in the completed campaigns.
+Residual attribution risk remains PARTIAL, not erased by later passing tests.
 
-All rows target x64 in this probe. Installed versions are unknown/not detected;
-no per-tool installed-version capability is manufactured. LTS rows use LTS;
-other dynamic rows use stable. Resolved metadata includes expected SHA256, but
-artifact download/signature verification was not executed by this probe.
+## Dump Findings
 
-| Dynamic Resource | Official Metadata Source | Captured Version / Result |
+Preserved dump SHA-256:
+`164CF17C519D5B9469168942CF302880271B8B28C2458FE1E1DEA2957AA104C4`.
+The prior report omitted the last hexadecimal character; direct bytes correct it.
+Exception is read access violation `0xc0000005`, address `0x0000019182840000`,
+OS thread 12544, managed thread 29, CoreCLR 8.0.31 offset `0x1064F0`.
+Exact Microsoft symbols resolve `GCHandleStore::CreateHandleOfType+0xC0`.
+SOS reports ExecutionEngineException / `0x80131506`; the initiating caller is
+not recovered. Handle-table walking fails. verifyheap checks zero objects:
+its zero-error output is NOT evidence that captured memory is intact.
+Evidence: `crash-context.json`, `fault-symbol.txt`, `gc-analysis.txt`,
+`fault-full-stack.txt` and the preserved original dump.
+
+## Native Interop Audit
+
+WinVerifyTrust SDK review covers LONG/DWORD widths, pointer alignment, action GUID,
+file union, UI-none, VERIFY/CLOSE, flags `0x1180`, string/pointer lifetimes and
+single cleanup. Regression tests pin x64 file-info size 32/data size 80 and offsets.
+Inventory uses OS CIM/PnPUtil/DISM, not new custom SetupAPI/Driver Store P/Invoke.
+WUA runs synchronously in a separate PowerShell process with no manual RCW
+over-release or install action. Volume/power scalar layouts are checked.
+Deep sensor/driver activation is not used to modify host drivers.
+
+## Native Stress Campaign
+
+Three completed catalog-fixture runs total 30,000 verifier calls and 60,000
+GCHandle cycles, zero errors; catalog-signed cmd.exe is not an embedded positive.
+Three completed embedded-SDK runs total another 30,000 calls and 60,000 cycles:
+6,000 valid signatures, 6,000 wrong-publisher rejections, 18,000
+unsigned/malformed/missing rejections, zero errors.
+An incomplete attempt with no captured exit/result is excluded.
+Finite handle/memory samples do not establish an unlimited-lifetime leak guarantee.
+Evidence: `evidence/native-stress*.json` and separate command/exit logs.
+
+## Full-Suite Stability
+
+At clean `c883e3f`, FIVE consecutive broad Release runs with `--blame-crash`
+each pass **1703 passed / 0 failed / 0 skipped**, exit 0.
+Every TRX counter was independently read. Evidence:
+`test-results/closure-latest-stability-1..5.trx` and matching command/head logs.
+Guest CPUs are paused only for controlled campaigns and resumed afterward.
+
+Earlier failures remain recorded: whole-PowerShell 15s performance assertion
+and a five-second benchmark re-enable wait. The performance collection now
+runs separately from competing tests, without increasing its deadline.
+The benchmark test previously blocked the captured test context with SpinWait;
+it now subscribes before completion and asynchronously awaits the same five-second
+bound. All token/cancellation assertions and production command code are unchanged.
+This repairs a synchronization hazard, not proof of the precise earlier scheduling.
+Focused benchmark/command verification passes 22/22.
+
+## Dynamic Resource Coverage
+
+Frozen final-policy probe: **19 of 20 dynamic descriptors resolve metadata**,
+up from 11; 50 total descriptors have 19 ResolvedMetadata, 29 RequiresUserAction
+and 2 Unsupported. Thirty descriptors remain explicit manual/unsupported exceptions.
+This is metadata evidence, not downloaded-payload/signature/applicability certification.
+Probe source was dirty during implementation; its exact policy bytes are retained,
+SHA-256 `E493BFB00AC8CCB9E795FB47773AD9C1DFD7DBA13A534E4A05A768284C5A70B8`.
+
+| Previously Unresolved Resource | Official Source | Final Result / Action |
 | --- | --- | --- |
-| Rescuezilla | GitHub rescuezilla/rescuezilla | RequiresUserAction: four matching flavors |
-| Ventoy | GitHub ventoy/Ventoy | 1.1.17, ResolvedMetadata |
-| Ubuntu desktop | changelogs.ubuntu.com/meta-release-lts | UnableToVerify: two checksum matches |
-| Kali | cdimage.kali.org/current/SHA256SUMS | 2026.2, ResolvedMetadata |
-| Angry IP Scanner | GitHub angryip/ipscan | 3.10.0, ResolvedMetadata |
-| Driver Store Explorer | GitHub lostindark/DriverStoreExplorer | 1.0.26, ResolvedMetadata |
-| RustDesk | GitHub rustdesk/rustdesk | 1.5.0, ResolvedMetadata |
-| Rufus | GitHub pbatard/rufus | UnableToVerify: ambiguous stable version |
-| Etcher | GitHub balena-io/etcher | 2.1.7, ResolvedMetadata |
-| Notepad++ | GitHub notepad-plus-plus/notepad-plus-plus | 8.9.8.1, ResolvedMetadata |
-| System Informer | GitHub winsiderss/systeminformer | UnableToVerify: asset pattern mismatch |
-| PuTTY | the.earth.li/~sgtatham/putty/latest/sha256sums | 0.85, ResolvedMetadata |
-| Ubuntu server | changelogs.ubuntu.com/meta-release-lts | UnableToVerify: two checksum matches |
-| Debian netinst | cdimage.debian.org/debian-cd/current | UnableToVerify: 20s timeout |
-| Debian GNOME | cdimage.debian.org/debian-cd/current-live | UnableToVerify: 20s timeout |
-| Debian KDE | cdimage.debian.org/debian-cd/current-live | UnableToVerify: 20s timeout |
-| Debian XFCE | cdimage.debian.org/debian-cd/current-live | UnableToVerify: 20s timeout |
-| KeePassXC | GitHub keepassxreboot/keepassxc | 2.7.12, ResolvedMetadata |
-| TestDisk | cgsecurity.org/testdisk_sha256.txt | 7.2, ResolvedMetadata |
-| PowerToys | GitHub microsoft/PowerToys | 0.101.2362.0, ResolvedMetadata |
+| Rufus | GitHub pbatard/rufus | 4.15; strict two-part numeric tag handling |
+| System Informer | GitHub winsiderss/systeminformer | 4.0.26241.138; anchored current asset naming |
+| Ubuntu desktop/server | Ubuntu LTS metadata/checksums | 26.04.1; latest same-family point release; equal normalized versions rejected |
+| Debian netinst/GNOME/KDE/XFCE | cdimage.debian.org | 13.7.0; diagnosed ~21s response, bounded 45s metadata budget |
+| Kali | kali.download official checksums | 2026.2; canonical vendor endpoint, no random mirror allowlist expansion |
+| Rescuezilla | GitHub rescuezilla/rescuezilla | RequiresUserAction / AmbiguousSelection; no arbitrary flavor choice |
 
-Of 50 descriptors, live states are 11 ResolvedMetadata, 29 RequiresUserAction,
-8 UnableToVerify, 2 Unsupported. There are 20 dynamic descriptors and 30 explicit
-official-page exceptions, not 50 automatically updated tools.
-Fresh offline cache preserves 11 metadata resolutions; expired-cache fixture
-returns those 11 as CachedStale with download eligibility false.
+No hash, ambiguity, architecture or applicability gate is relaxed.
+Offline/stale state and failure categories remain distinct.
+Evidence: `evidence/resource-probe-policy-final.json`,
+`evidence/metadata-transport-serial.json`.
 
-Official-page exceptions requiring user action: SystemRescue, GParted, Clonezilla,
-Memtest86+, Linux Mint, CrystalDiskInfo, BlueScreenView, Alpine, VeraCrypt,
-Wireshark, Proxmox VE/Backup, Fedora Server/Workstation, FreeBSD, OpenBSD,
-Rocky minimal/DVD, Alma minimal/DVD, NetBSD, openSUSE, Arch, Xubuntu, Lubuntu,
-Kubuntu, TrueNAS and Parrot. FreeDOS live/USB are Unsupported for requested x64.
-Per-row official URLs, failure, cache, integrity, compatibility, install/rollback
-and reboot fields remain in the frozen JSON. Unknown fields stay unknown.
+## Link Validation
 
-Ambiguous matching, changed asset schemas and timeouts remain safe failures, not
-silent last-wins choices. Current external resolution coverage is partial.
+Current-source audit records 209 HTTP-reachable URLs, 33 unable to verify,
+two broken backend verification examples (not production links), 16 original
+upstream-license HTTP references, four namespaces, two schemas, one scheme
+literal and seven templates. Browser follow-up has three loaded pages, five
+bot-filtered and 25 unable to verify. Bot challenges are not successful checks.
+No confirmed additional production 404 is established. Coverage remains PARTIAL.
+Evidence: `evidence/current-links.json`, `evidence/browser-current-links.json`.
 
-## Windows Integration
+## Driver Safety Boundary
 
-The maintenance probe reports OS edition/version/build/architecture, service
-states, reboot indicators, visible policy, driver bindings and WUA offers/history.
-It performs read-only search, not update download/install, policy bypass, repair
-or a forced feature upgrade. A successful search is not proof of servicing health,
-support entitlement, absence of safeguards or a fully current machine.
-Prior real-host capture is retained; fresh packaged GUI invocation of the inner
-maintenance control was unavailable through the UI Automation client.
+Driver Store is read-only inventory and device correlation. Update guidance remains
+advisory: no automatic install/removal or firmware flashing. A saved snapshot may
+be stale and does not prove version applicability. Report helpers now use the
+injected runtime root; four regression tests prevent cross-profile report access.
+Latest portable screenshot shows "No local device snapshot loaded", not the old
+host snapshot. No host driver change occurred.
 
-## Driver Store
+## Windows Update Validation
 
-Structured inventory correlates installed device bindings and published INF names.
-Prior captured host evidence contains 126 third-party packages and 227 binding
-rows; these are dated observations, not fresh measurements or equal scopes.
-Bound, boot-critical, critical-class and uncertain packages are protected.
-Possible superseded/rollback labels are advisory. RemovalPermitted remains false.
-Inventory signer text is not cryptographic verification of a package.
+Read-only live OS/WUA evidence is preserved in
+`evidence/windows-maintenance-checkupdates.txt`; host build is 26300, UBR 9457.
+No updates are installed or host OS upgrade forced. Policy/support/servicing
+uncertainty remains explicit. WUA observations are not guest installer evidence.
 
-## Driver Applicability Boundary
+## Visual / DPI QA
 
-Bindings expose hardware/compatible IDs, device name, provider, version/date, INF,
-reported signed state and package information where available.
-Vendor portals are informational. Exact-ID matches against WUA offers identify
-candidates, not independently verified OEM suitability, rank, OS/architecture,
-signature, recovery or rollback. InstallationPermitted remains false.
-No arbitrary vendor driver installation or Driver Store removal is implemented.
-
-## Supply Chain
-
-Transfers bind expected hashes and sizes, restrict HTTPS redirects, use partial
-staging and promote only verified data. Extraction rejects traversal, rooted/UNC
-paths, ADS, reserved names, symlinks/reparse roots and inflated-size violations.
-Backend checksums/version alignment are validated separately.
-Portable QA exercised no destructive USB workflow or host-driver mutation.
-
-## Signing
-
-No authorized code-signing certificate/private key is available in accessible
-CurrentUser/LocalMachine stores; signing thumbprint configuration is unset.
-Windows SDK signtool exists. See `evidence/phase4-env-check.txt`.
-Unsigned app and installer are NotSigned, with no signer/timestamp to report.
-Self-signed certificates were not fabricated.
-
-Production defaults fail closed; unsigned builds require explicit -UnsignedCandidate
-and emit signed=false, unsignedCandidate=true, productionEligible=false.
-Helper gates include private key, validity, code-signing EKU, SHA256/RFC3161,
-signtool verification, exact publisher and timestamp presence.
-LocalMachine selection adds /sm. Callback values reject injection metacharacters.
-
-Upstream Inno 6.7.3 source proves callback-mode signed uninstallers are temporary
-uninst.e32.tmp files, not persistent *.dat caches. The helper captures verified bytes
-before Inno deletes the temporary file; postcompile verification requires the
-captured copy. Existing files are never overwritten for that capture.
-Inno's $f is already quoted; harmless argument-capture execution proves paths
-with spaces survive the callback. It is not a substitute for real signing.
-Evidence: upstream compiler-source capture, callback-stub output and regressions.
-The credentialed signing/uninstaller path remains unexecuted and blocked.
-
-## Dependency / Vulnerability Review
-
-Genuine official NuGet restore/cache and clean build inputs were used. Earlier
-fabricated-cache results remain disqualified. Product package references did not
-change during closure; prior captured advisory query reports zero known vulnerable
-packages, not a guarantee of no vulnerability. Compatibility-pinned sensor
-dependencies and test-only xUnit v2 deprecation are documented rather than
-blindly upgraded. .NET runtime is 8.0.31, SDK 8.0.425; .NET 8 support ends
-2026-11-10 and migration planning remains necessary.
-Prior detailed graph/advisory evidence is under
-`.verify/v1.2.4-continuation/packages-*-final.json` and
-`runtime-dependency-inventory.json`.
-
-## Third-Party Licensing
-
-Packaged notices include MPL LibreHardwareMonitor/dependencies, HidSharp Apache,
-Mono upstream text, Microsoft runtime notices and the original Windows SDK RTF.
-LHM 0.9.6 is a loose replaceable assembly; pinned upstream commit is
-3d331e3370efb858411f19511373eff65a218701.
-
-Embedded PawnIO 0.1.6 modules have LGPL-2.1-or-later notice/license and corresponding
-source ZIP, SHA256
-`647BF55985837302B00AD2C05FC3FB700F140AF2E34693F390FF2DB47B608867`.
-The source archive includes upstream compiler binary/source RPMs as data.
-No PawnIO kernel driver/installer is bundled. The new replacement guide explains
-both DLL copies, rebuild sources and the difference between ForgerEMS's lack of
-a DLL authenticity gate and upstream PawnIO trust restrictions.
-No claim that arbitrary modified modules work with a signed upstream driver is made.
-
-Windows SDK RTF is 246,945 original bytes, SHA256
-`DD07EB178E00C6BBA4148457FC00FF77CD4887EB521D504186FE59C9EC8BBE62`;
-the validated packaged copy matches. Native Mono.Posix helpers and WinRT/SDK
-assemblies are included in the dependency-scope review, not silently omitted.
-Exact Mono/SDK redistribution scope and PawnIO relinking/trust implications still
-require qualified review. Technical notice/source packaging is not attorney
-clearance. Third-party rights are not overridden by proprietary terms.
-
-## Link Audit
-
-Broader production-source capture includes runtime CS/XAML, manifests and current
-docs; historical/developer/test URI scopes are distinguished. Its old state is not
-rewritten to pretend later replacements were already verified.
-Confirmed repairs include EndeavourOS, Emsisoft, Surface driver guidance,
-Windows 2000 lifecycle index, SanDisk, TrueNAS, Slackware, DDU and MSI support.
-MSI category 404s were replaced with the functioning support root.
-SanDisk portal notes explicitly do not claim WD HDD coverage.
-
-`evidence/changed-urls-recheck.json` records seven of nine canonical destinations
-returning HTTP 200; MSI and SlackDocs rejected the raw checker with 403 but worked
-in recorded real-browser checks. TrueNAS/DDU canonical redirects were captured.
-Challenge-blocked vendor destinations, rejected policies and URI templates remain
-unverified/manual; an HTTP 403 is not counted as success. No arbitrary mirror
-was substituted. Full all-link closure remains partial.
-Evidence: `production-links-current.json`, browser batches/replacements and
-changed-URL recheck under `evidence/`.
-
-## About / FAQ / Privacy / Terms
-
-Current documentation accurately describes local diagnostics, settings-controlled
-GitHub/vendor requests and user-triggered WUA against configured Microsoft/WSUS
-services. Support bundles are not automatically uploaded; redaction requires
-review. Administrator rights, optional sensor behavior and manual/vendor download
-boundaries are disclosed. Stable-channel preference does not imply artifact signing.
-
-Published documentation paths now agree across csproj, release builder and Inno:
-21 current docs plus root SECURITY.md and sensor replacement guidance are packaged.
-Relative links are regression-tested; obsolete Kyra QA checklists are excluded.
-README/developer-only references are explicitly source-checkout-only.
-About/FAQ/Legal content is reviewed in source and tests, but those actual packaged
-dialogs were not invoked through the available UI Automation client.
-
-## Visual QA
-
-Real owned-window screenshots of the freshly extracted validation candidate cover
-consent, welcome dismissal, five navigation screens, minimum size and relaunch.
-Consent was confined to an isolated profile and persisted across relaunch.
-App processes closed gracefully. Screens are under `qa-validated/screens`;
-the earlier capture set is preserved under `qa-gui/screens`.
-
-Visible navigation/version/driver-advisory copy and the focus cue were inspected.
-This is not complete dialog/error-state/maintenance interaction QA. Inner page
-controls were unavailable through the automation client. Only 96 DPI (100%) was
-captured; 125%/150% and multiple supported Windows configurations remain untested.
-No redesign or destructive device workflow was used to generate screenshots.
+Five primary tabs, minimum-size layout and relaunch were captured in earlier
+candidate QA. Latest Driver Hub screenshot was directly inspected and confirms
+the empty snapshot state. Its owned window reports DPI 120: actual **125%**.
+100%/150% multi-environment visual coverage is not established.
+Occluded terms captures are excluded. Old automation-name mismatches are recorded;
+no missing control is fabricated as passing.
+Evidence: `qa-gui-validation/screens/`, `latest-qa/screens/driverhub-latest.png`.
 
 ## Accessibility
 
-A confirmed defect was fixed: sidebar Focusable=False prevented keyboard access.
-All five navigation buttons now have focusable tab stops, glyph-free automation
-names and an IsKeyboardFocused border cue. Static XAML and real STA-window tests
-verify the contract. UIA shell navigation and the rendered focus cue are recorded.
-Complete keyboard activation, tab order, screen-reader behavior and inner-control
-accessibility remain partial; inaccessible automation is not silently treated as
-proof that every control works.
+Primary navigation permits keyboard focus, visible focus indication and readable
+automation names. Icon-only overflow names are added. Focused regressions and
+the broad suite pass. Full traversal/dialog/high-DPI certification remains PARTIAL;
+some card content is absent from the exposed UI Automation tree.
 
-## Automated Tests
+## Third-Party Licensing
 
-Fresh results, not copied baseline numbers:
+Measured validation PE inventory has 459 bundle entries and maps 458 binaries
+to 14 identities, zero unmapped. This is technical inventory, not legal clearance.
+System.CodeDom's separate MIT notice is now included. Microsoft runtime/SDK,
+LibreHardwareMonitor/MPL, HidSharp/Apache, Mono and PawnIO notices ship.
+PawnIO LGPL source ZIP SHA-256:
+`647BF55985837302B00AD2C05FC3FB700F140AF2E34693F390FF2DB47B608867`.
+No PawnIO kernel driver is bundled; replacement/source instructions are packaged.
+SDK/WinRT and Mono redistribution scope and PawnIO relinking/trust implications
+remain counsel-review qualifications. No mandatory counsel-signoff policy was found.
+Evidence: `evidence/validation-binary-inventory.json`, packaged
+`providers/sensors/THIRD-PARTY-NOTICES.txt` and `providers/sensors/LICENSES/`.
 
-| Run | Source | Passed | Failed | Skipped |
-| --- | --- | ---: | ---: | ---: |
-| Baseline Release 1 | bf917f5 | 1627 | 0 | 0 |
-| Baseline Release 2 | bf917f5 | 1627 | 0 | 0 |
-| Baseline Release 3 | bf917f5 | 1627 | 0 | 0 |
-| Phase 4 Release 1 | d26b37d | 1666 | 0 | 0 |
-| Phase 4 Release 2 | d26b37d | 1666 | 0 | 0 |
-| Phase 4 Release 3 | d26b37d | 1666 | 0 | 0 |
-| Phase 5 full Release | 134ec32 | 1666 | 0 | 0 |
-| Final signing-capture/doc focused | pre-5e77cf6 working delta | 36 | 0 | 0 |
+## Vulnerability Review
 
-Final-HEAD full-suite result is captured after this report's commit in
-`test-results/phase6-final.trx` and `phase6-final.log`. Use its exact counters for
-the final count; the added capture regression changes the count, not the prior
-captured results. Do not sum overlapping runs into a unique test count.
+Official NuGet advisory query includes transitive product/test packages.
+The 2026-10-08 refresh exits 0 with no vulnerable-package entries for either
+project: `evidence/dotnet-list-vulnerable-closure-final.json` and matching log.
+This is known-advisory evidence, not
+a guarantee of no vulnerability. .NET 8 migration remains necessary before
+support ends 2026-11-10. No casual major upgrade occurs during closure.
 
-The intervening phase-3 full run had 1663 passes and one stale Windows 2000 URL
-expectation failure, since corrected. It was not a CLR abort.
-Evidence for failed attempts is retained rather than erased.
-Analyzer warnings remain; the build is not claimed warning-free.
+## Final Build / Artifact Manifest / Artifact Hashes
 
-## Stress / Repeat Tests
+Final destination: `.verify/v1.2.4-closure/release/`, fresh and non-overwriting.
+Build from the clean report commit, Release/win-x64, explicit unsigned candidate.
+Exact final source HEAD, filenames, sizes and SHA-256 values are recorded in
+`final-build-attestation.txt`, `release/release.json`, `release/CHECKSUMS.sha256`
+and final machine-readable artifact attestation. These are final-build evidence,
+not reused hashes from `validation-release/` or `latest-release/`.
+Portable extraction/self-test must verify the actual final ZIP, numeric owned
+process exit and package contents. Final output is accepted only after these checks.
 
-Three consecutive post-navigation-fix Release runs use --blame-crash and separate
-TRX/logs, each exit 0. Durations including first rebuild: 99.5s, 69.9s, 71.6s.
-SDK 8.0.425, runtime 8.0.31, VSTest 17.11.1 x64.
-`phase4-run-meta.json` records exact commands/times/source. Further phase-5 full
-run also passes. No repeat abort was observed. This remains non-reproduction
-evidence, not definitive attribution of the historical native crash.
+## Artifact Signatures / Defender Scan
 
-## Clean Build
+Production signatures are BLOCKED. App and installer remain NotSigned;
+ZIP Authenticode is not applicable. All manifests identify unsigned/non-production.
+The local Defender final scan uses MpCmdRun custom-file scan with
+`-DisableRemediation`; command, timestamp, exit and result are retained in
+`evidence/final-defender-scan.txt`. No public malware-analysis upload occurs.
+Final attestation records whether this exact-artifact gate passed; earlier
+candidate no-threat results alone do not establish a final scan.
 
-Validated-candidate build succeeded from clean committed 134ec32. The subsequent
-signing-capture fix is locally committed and focused-tested. Final unsigned build
-is deliberately performed after this report commit from a clean tree.
-Final restore/build command, exit status and provenance are recorded in
-`final-build.log` and `final-build-attestation.txt`.
-No prior artifact is silently promoted to final status.
+## Remaining Risk
 
-## Portable ZIP Validation
+Owner action: provision an authorized production Code Signing identity and protected
+release environment; execute real signing, timestamp and uninstaller verification.
+Provide a usable sanctioned disposable Windows guest/runner, or approve the narrowly
+requested KVM permission, then run actual clean install/upgrade/uninstall/reinstall.
+KVM approval would permit an attempt, not guarantee successful setup.
+Historical CLR attribution, wider DPI/accessibility, bot-filtered links and legal
+qualifications remain explicit. Driver applicability stays advisory by design.
 
-Independent clean extraction of the validation candidate launched without installer
-state. --self-test exits 0; bundled backend is found and version/checksums align;
-required scripts exist, deep sensor mode is Off and unsafe capabilities false.
-Writes/consent remain in process-isolated LOCALAPPDATA/TEMP/TMP.
-Evidence: `qa-validated/localappdata/ForgerEMS/Runtime/diagnostics/published-self-test.txt`.
-Final exact-HEAD extraction/self-test evidence is separately under `qa-final/`.
-The safe extraction regressions are not a claim that hostile archives were executed.
-
-## Installer Validation
-
-Actual Inno compiler guard cases reject missing/conflicting signing modes and
-accept explicit unsigned candidate mode. Candidate installer compilation succeeds.
-No usable disposable Windows environment is accessible: Hyper-V enumeration is
-permission-denied, Windows Sandbox executable and VirtualBox are unavailable.
-Linux WSL distributions are not a substitute for Windows installer lifecycle QA.
-See `evidence/vm-availability.txt` and `evidence/phase4-env-check.txt`.
-
-Clean install, registration, shortcuts, first installed launch and installed
-uninstaller signature remain **BLOCKED**, not inferred from compilation.
-No host installer was executed to work around this boundary.
-
-## Upgrade Validation
-
-Prior supported public candidate is v1.2.3-preview.1, with legitimate installer
-asset metadata preserved. Actual install-old/create-state/upgrade/new-launch,
-settings preservation, duplicate-registration and stale Kyra-component cleanup
-remain **BLOCKED** by unavailable Windows isolation.
-Reinstall/repair are unproved. Downgrade is documented unsupported; the updater
-rejects older releases, but no claim that old published installers block downgrade
-is made.
-
-## Uninstall Validation
-
-Actual uninstall and residue inspection remain **BLOCKED**. Intended policy retains
-user settings, consent, logs/reports outside the installation folder. This is
-documented intent, not observed lifecycle evidence. Binaries, shortcuts, registry,
-services/tasks and deliberate retained data require isolated before/after testing.
-
-## Artifact Hashes
-
-Final unsigned candidates:
-`.verify/v1.2.4-final-certification/release/ForgerEMS-v1.2.4.zip` and
-`.verify/v1.2.4-final-certification/release/ForgerEMS-Setup-v1.2.4.exe`.
-Final SHA256 values are in `release/CHECKSUMS.sha256`; exact sizes/source HEAD,
-architecture, versions, signatures and commands are in `release/release.json`
-and `final-build-attestation.txt`. These are generated from the final report
-commit, not the earlier source checkpoint.
-
-The following values belong ONLY to the retained validation run at 134ec32:
-
-| Validation Artifact | Bytes | SHA256 |
-| --- | ---: | --- |
-| validated-candidate/release/ForgerEMS-Setup-v1.2.4.exe | 61778568 | F50641E1A3CC4EE2656D1DB01226994DCCCF63D71087D3D8B81870B21D6B742B |
-| validated-candidate/release/ForgerEMS-v1.2.4.zip | 81741359 | 17EDCEA800421C8D3F3A4FB33251056BE800E229162B80E0D10C5856511EAFE3 |
-
-Validation metadata: win-x64, Release, preview, unsignedCandidate=true,
-productionEligible=false, sourceDirtyFileCount=0. App/installer are NotSigned.
-Its ZIP contains 80 entries, no Kyra-named entries and no .sys/.inf/.cat entries.
-Final package inventory must be checked independently against final evidence.
-Hashes detect byte changes; they are not production publisher authentication.
-
-## Local Security Scan
-
-Local Windows Defender is available with real-time protection enabled.
-Final artifact-only custom scan uses -DisableRemediation and records command,
-stdout/stderr and exit in `final-defender-scan.log`.
-No proprietary binary was uploaded to an arbitrary reputation service.
-A no-threat local scan is not proof that software is vulnerability-free.
-
-## Commits
-
-Local continuation commits:
-- b4984f0: signing, packaged notices, resource links and diagnostic isolation.
-- d26b37d: keyboard navigation/focus and corrected lifecycle URL test expectation.
-- dd4b24c: verified candidate release notes.
-- 134ec32: executable-only signature wording.
-- 5e77cf6: correct callback-mode signed-uninstaller capture.
-- Final report commit: exact SHA recorded by final artifact provenance.
-
-No branch/tag push, GitHub release or production update-feed modification occurred.
-
-## Remaining Issues
-
-1. Authorized production signing certificate/private-key access and exact publisher
-   identity, followed by real credentialed app/installer/uninstaller verification.
-2. Accessible disposable Windows environment for clean install, prior-version
-   upgrade, reinstall/downgrade policy and uninstall/residue evidence.
-3. Native-debugger-level historical CLR attribution or convincing non-product
-   evidence; repeated non-reproduction alone does not establish causality.
-4. Complete dialogs/error states, maintenance interactions, keyboard/screen reader,
-   125%/150% DPI and supported-system visual coverage.
-5. Resource ambiguity/schema/timeouts and remaining challenge/template link review.
-6. Qualified redistribution/relinking review for PawnIO, Mono.Posix and SDK/WinRT.
-
-## Release Certification
-
-PASS for candidate packaging is not PASS for signed production release or installer
-lifecycle. Evidence paths below are relative to the certification root unless
-explicitly marked continuation. Final artifact rows require the associated final
-build attestation and matching clean source HEAD; this report alone is not an
-artifact attestation.
+## Certification Matrix
 
 | Gate | Status | Evidence | Blocking? |
 | --- | --- | --- | --- |
-| Repository integrity | PASS | git-baseline, local commits; final attestation requires clean matching HEAD | No |
-| Kyra removal | PASS | residual classification, negative tests, ZIP inventory | No |
-| v1.2.4 consistency | PASS | VERSION, version tests, PE metadata, packaged self-test | No |
-| Genuine dependencies | PASS | genuine NuGet cache/restore and build logs; placeholder evidence disqualified | No |
-| Updater correctness | PASS | security regressions, exact publisher/flags/expiry/hash/redirect review | No |
-| Artifact integrity | PASS | validation hashes; final CHECKSUMS and source attestation | No |
-| Signing | BLOCKED | no authorized code-signing credential; unsigned NotSigned artifacts | Yes |
-| Resource discovery | PARTIAL | frozen 50-row live/cache capture, 11 resolved metadata rows | Yes |
-| Windows integration | PARTIAL | read-only backend evidence/tests; packaged control invocation incomplete | Yes |
-| Driver Store | PASS | conservative inventory/protection regressions and dated host capture | No |
-| Driver safety | PASS | InstallationPermitted=false; RemovalPermitted=false; advisory documentation | No |
-| Links | PARTIAL | confirmed fixes/browser evidence; remaining challenges/templates | Yes |
-| Legal/license notices | PARTIAL | shipped licenses/source/replacement aid; qualified scope review outstanding | Yes |
-| Automated tests | PASS | three 1666/0/0 runs, phase5 and focused fixes; final phase6 TRX | No |
-| CLR stability | PARTIAL | repeated clean runs and dump review; native cause unknown | Yes |
-| Visual QA | PARTIAL | fresh real screenshots; inner dialogs/DPI coverage incomplete | Yes |
-| Portable ZIP | PASS | clean extract, isolated launch/relaunch/self-test; final qa-final evidence | No |
-| Clean install | BLOCKED | no accessible disposable Windows environment | Yes |
-| Upgrade | BLOCKED | previous-version lifecycle not executed | Yes |
-| Uninstall | BLOCKED | uninstall/residue lifecycle not executed | Yes |
-| Final packaging | PARTIAL | clean unsigned candidate build/attestation; production signing unavailable | Yes |
+| Repository integrity | PASS | clean tested HEAD; final source attestation required | No |
+| Kyra removal | PASS | removal/package regressions; no active restored feature | No |
+| Version consistency | PASS | VERSION, metadata, bundled self-test | No |
+| Updater | PASS | security regression suite | No |
+| Expected hashes | PASS | vendor/release-bound metadata; integrity regressions | No |
+| Redirect security | PASS | resolver/updater policy tests | No |
+| Signature verification code | PASS | SDK layouts; embedded positive/negative stress | No |
+| Production artifact signing | BLOCKED | no authorized Code Signing identity | Yes |
+| Inno uninstaller signing | BLOCKED | pipeline reviewed/tested; real signing unexecuted | Yes |
+| CoreCLR stability | PARTIAL | five clean 1703-test runs; 60000 native calls; cause unknown | Residual risk |
+| Windows isolation | BLOCKED | guest kernel runs; no ready Windows setup | Yes |
+| Clean install | BLOCKED | not executed | Yes |
+| Previous-version upgrade | BLOCKED | authentic fixture available; not executed | Yes |
+| Uninstall | BLOCKED | not executed | Yes |
+| Portable package | PASS | clean candidate self-test/GUI; final attestation required | No |
+| Resource resolution | PARTIAL | 19/20 dynamic; Rescuezilla ambiguous; manual exceptions | No |
+| Windows Update integration | PASS | live read-only WUA evidence and regressions | No |
+| Driver Store diagnostics | PASS | read-only inventory/correlation and regressions | No |
+| Driver applicability boundary | PASS | advisory only; no automatic install/removal | No |
+| Link audit | PARTIAL | current HTTP/browser evidence; unverified destinations | No |
+| Visual QA | PARTIAL | actual 125%; 100/150% not established | No |
+| Accessibility | PARTIAL | navigation fixed; broader UIA/traversal gaps | No |
+| Licensing/notices | PARTIAL | inventory/notices/source present; qualified interpretations | No |
+| Vulnerability review | PASS | official transitive advisory output; final refresh evidence | No |
+| Test suite | PASS | five consecutive 1703/0/0 Release/crash-enabled runs | No |
+| Final packaging | PASS | clean candidate proven; exact-final-HEAD attestation required | No |
+| Defender scan | PARTIAL | candidate no threats; exact final scan disposition in attestation | No |
 
-External mandatory prerequisites prevent production closure. Engineering progress
-and candidate validation are retained; no production-ready claim is made.
+## Final Certification
+
+Unsigned candidate engineering is validated, not authenticated production distribution.
+Final artifacts require the linked post-report build evidence to be accepted.
+Mandatory signing and actual isolated installer lifecycle gates remain unsatisfied.
+No publication is authorized by this report.
 
 FORGEREMS_V1.2.4_BLOCKED
