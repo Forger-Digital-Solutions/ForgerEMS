@@ -1,5 +1,11 @@
 # ForgerEMS v1.2.4 Public Preview
 
+> **Historical / superseded.** This is the release note for the
+> `v1.2.4-preview.4` Public Preview tag. It describes features (including the
+> Kyra assistant surface) that have since been removed or reworked in the
+> v1.2.4 modernization line. Retained for history; see
+> `docs/RELEASE_NOTES_v1.2.4.md` for the current release notes.
+
 ## ForgerEMS v1.2.4-preview.4 — Public Preview
 
 ForgerEMS is a locally validated public preview of a Windows maintenance, diagnostics, recovery, driver-guidance, and USB toolkit application developed by Forger Digital Solutions.

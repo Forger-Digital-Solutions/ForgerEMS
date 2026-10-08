@@ -28,7 +28,7 @@ Never display/send by default:
 - raw logs
 - API keys/tokens
 
-Redaction is enforced through `HardwarePrivacyRedactor` (delegates to shared Kyra-side redaction patterns).
+Redaction is enforced through `HardwarePrivacyRedactor` (delegates to shared diagnostic redaction patterns).
 
 ## Resale Engine Model
 
@@ -93,6 +93,6 @@ No auto-posting is implemented.
 - unknown/missing hardware fields do not crash
 - privacy redaction removes sensitive strings
 - offline estimator runs without API/config
-- Kyra resale responses stay honest about offline vs market-data limits
+- resale estimate output stays honest about offline vs market-data limits
 - OfferUp/Facebook requests never return hallucinated live prices
 - beta feedback: **ForgerDigitalSolutions@outlook.com** (no secrets in email; see in-app Legal/FAQ)

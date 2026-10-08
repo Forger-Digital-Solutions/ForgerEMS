@@ -7,6 +7,8 @@
 - Warning count: **0**
 - Errors: 0
 
+> **Historical note:** this review documents the v1.1.4-era codebase. References to the in-app assistant (Kyra) describe code removed in v1.2.4.
+
 ## v1.1.4 Cleanup (resolved)
 
 All previously tracked **CA1822** (mark members static) and **CA1859** (concrete types / return types) warnings in the WPF project were fixed in a low-risk pass:

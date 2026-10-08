@@ -1,24 +1,20 @@
-# Public FAQ — ForgerEMS v1.2.4 Public Preview
+# Public FAQ — ForgerEMS v1.2.4
 
 ## What is ForgerEMS?
 
-A Windows desktop **technician suite** for safer USB toolkit work, local system intelligence, toolkit manifest health, diagnostics helpers, and Kyra — an in-app assistant that prefers **offline** and **local-scan** facts.
+A Windows desktop **technician suite** for safer USB toolkit work, local system intelligence, toolkit manifest health, and diagnostics helpers.
 
 ## Is it free?
 
-The **Public Preview** build line is **free** to try. Future **Pro** packaging may exist; this preview does not include payment.
+The **v1.2.4** build line is **free** to try. Future **Pro** packaging may exist; this release does not include payment.
 
-## What is Pro Preview?
+## What is Pro?
 
-A **label** for advanced or best-effort surfaces (e.g. deeper USB intelligence). During preview, many capabilities stay unlocked for feedback — see the Settings → What's included card.
-
-## Is Kyra online?
-
-**Optional.** Default posture is offline/local. Online models require operator configuration and appropriate keys in environment variables — never share keys in email or screenshots.
+A **label** for advanced or best-effort surfaces (e.g. deeper USB intelligence). Many capabilities stay unlocked for feedback — see the Settings → What's included card.
 
 ## Does it work offline?
 
-Yes for core flows that use local scripts and disk-backed reports. Update checks and online models need network.
+Yes for core flows that use local scripts and disk-backed reports. Update checks need network.
 
 ## Does it collect data?
 

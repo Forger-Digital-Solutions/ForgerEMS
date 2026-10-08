@@ -38,12 +38,12 @@ public sealed class SafeTestingEnvironmentStatus
         sb.AppendLine("ForgerEMS — safe testing summary (no secrets)");
         if (!string.IsNullOrWhiteSpace(unifiedDiagnosticsHeadline))
         {
-            sb.AppendLine(CopilotRedactor.Redact(unifiedDiagnosticsHeadline.Trim(), enabled: true));
+            sb.AppendLine(DiagnosticRedactor.Redact(unifiedDiagnosticsHeadline.Trim(), enabled: true));
         }
 
         sb.AppendLine();
         sb.Append(FormatSummary());
-        return CopilotRedactor.Redact(sb.ToString(), enabled: true).TrimEnd();
+        return DiagnosticRedactor.Redact(sb.ToString(), enabled: true).TrimEnd();
     }
 }
 

@@ -67,7 +67,7 @@ public sealed class UsbBuilderProfileItemModelTests
         Assert.Contains(UsbBuilderProfileItemCatalog.ForCategory("oem-tools"),
             item => string.Equals(item.ManifestEntryName, "MSI Laptop Support", System.StringComparison.Ordinal));
         Assert.Contains(UsbBuilderProfileItemCatalog.ForCategory("linux-rescue"),
-            item => string.Equals(item.ManifestEntryName, "Arch Linux 2026.05.01 (x86_64)", System.StringComparison.Ordinal));
+            item => string.Equals(item.ManifestEntryName, "Rescuezilla", System.StringComparison.Ordinal));
         Assert.Contains(UsbBuilderProfileItemCatalog.ForCategory("diagnostics"),
             item => string.Equals(item.ManifestEntryName, "HWiNFO Download Page", System.StringComparison.Ordinal));
     }
@@ -94,6 +94,7 @@ public sealed class UsbBuilderProfileItemModelTests
         var managed = UsbBuilderProfileItemCatalog.All
             .First(i => !i.RequiresUserSuppliedMedia &&
                         i.Kind == UsbBuilderProfileItemKind.ManagedDownload &&
+                        i.SpaceEstimate.TypicalBytes is > 0 &&
                         i.CanToggle);
         managed.IsSelected = true;
         managed.ExistsOnUsb = true;

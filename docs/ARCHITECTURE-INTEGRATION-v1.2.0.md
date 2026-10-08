@@ -1,5 +1,11 @@
 # ForgerEMS architecture integration — v1.2.0 Public Preview
 
+> **Historical / superseded.** This document describes the v1.2.0 Public Preview
+> architecture, including the **Kyra** assistant surface, which has since been
+> removed from the product. It is retained for audit/history only — it does not
+> describe the current v1.2.4 tree and must not be treated as current
+> documentation.
+
 This note maps how major subsystems connect. Paths are typical for an installed user profile (`%LOCALAPPDATA%\ForgerEMS\` and `...\ForgerEMS\Runtime\`).
 
 ## Data flow overview

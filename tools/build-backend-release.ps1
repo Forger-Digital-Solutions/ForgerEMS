@@ -29,7 +29,8 @@ exit without building.
 [CmdletBinding()]
 param(
     [switch]$ZipOutput,
-    [switch]$ShowVersion
+    [switch]$ShowVersion,
+    [string]$ReleaseFamilyRoot = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -218,6 +219,14 @@ function Get-ManagedItemsMissingChecksumCoverage {
         $hasSha512Url = -not [string]::IsNullOrWhiteSpace([string]$item.sha512Url)
         if ($hasSha256 -or $hasSha256Url -or $hasSha512 -or $hasSha512Url) { continue }
 
+        # Runtime-resolved resources get their verified artifact SHA-256 from the
+        # managed-resource overlay (Test-ResolvedOverlayGate) — no static hash is
+        # pinned in the manifest by design. They must still name a resourceId that
+        # exists in manifests\resource-policy.json.
+        $requiresResolution = $false
+        if ($null -ne $item.requiresResolution) { $requiresResolution = [bool]$item.requiresResolution }
+        if ($requiresResolution -and -not [string]::IsNullOrWhiteSpace([string]$item.resourceId)) { continue }
+
         $missing.Add([PSCustomObject]@{
             Name = [string]$item.name
             Dest = [string]$item.dest
@@ -345,12 +354,14 @@ function Get-ReleaseChecksumRelativePaths {
         "Update-ForgerEMS.ps1",
         "Verify-VentoyCore.ps1",
         "ForgerEMS.Runtime.ps1",
+        "Get-ForgerEMSWindowsMaintenance.ps1",
         "SystemIntelligence/Invoke-ForgerEMSSystemScan.ps1",
         "ToolkitManager/Get-ForgerEMSToolkitHealth.ps1",
         "ToolkitManager/ChecksumResolver.ps1",
         "ToolkitManager/ToolkitHealthCache.ps1",
         "ForgerEMS.updates.json",
         "manifests/ForgerEMS.updates.schema.json",
+        "manifests/resource-policy.json",
         "manifests/vendor.inventory.json",
         "manifests/vendor.inventory.schema.json",
         "VERSION.txt",
@@ -595,7 +606,11 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $canonicalScriptRoot = Join-Path $repoRoot "backend"
 $manifestRoot = Join-Path $repoRoot "manifests"
 $bundleDocsRoot = Join-Path $repoRoot "docs\ventoy-core\bundle"
-$releaseFamilyRoot = Join-Path $repoRoot "release\ventoy-core"
+$releaseFamilyRoot = if ([string]::IsNullOrWhiteSpace($ReleaseFamilyRoot)) {
+    Join-Path $repoRoot "release\ventoy-core"
+} else {
+    Get-NormalizedPath -Path $ReleaseFamilyRoot
+}
 $manifestPath = Join-Path $manifestRoot "ForgerEMS.updates.json"
 $schemaPath = Join-Path $manifestRoot "ForgerEMS.updates.schema.json"
 $vendorInventoryPath = Join-Path $manifestRoot "vendor.inventory.json"
@@ -709,7 +724,8 @@ foreach ($scriptName in @(
     "Setup_Toolkit.ps1",
     "Update-ForgerEMS.ps1",
     "Verify-VentoyCore.ps1",
-    "ForgerEMS.Runtime.ps1"
+    "ForgerEMS.Runtime.ps1",
+    "Get-ForgerEMSWindowsMaintenance.ps1"
 )) {
     Copy-Item -LiteralPath (Join-Path $canonicalScriptRoot $scriptName) -Destination (Join-Path $targetRoot $scriptName) -Force
 }
@@ -721,6 +737,7 @@ Copy-Item -LiteralPath (Join-Path $canonicalScriptRoot "ToolkitManager\ToolkitHe
 
 Copy-Item -LiteralPath $manifestPath -Destination (Join-Path $targetRoot "ForgerEMS.updates.json") -Force
 Copy-Item -LiteralPath $schemaPath -Destination (Join-Path $targetRoot "manifests\ForgerEMS.updates.schema.json") -Force
+Copy-Item -LiteralPath (Join-Path $manifestRoot "resource-policy.json") -Destination (Join-Path $targetRoot "manifests\resource-policy.json") -Force
 Copy-Item -LiteralPath $vendorInventoryPath -Destination (Join-Path $targetRoot "manifests\vendor.inventory.json") -Force
 Copy-Item -LiteralPath $vendorInventorySchemaPath -Destination (Join-Path $targetRoot "manifests\vendor.inventory.schema.json") -Force
 Copy-Item -Path (Join-Path $bundleDocsRoot "*") -Destination (Join-Path $targetRoot "docs") -Recurse -Force

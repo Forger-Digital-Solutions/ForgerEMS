@@ -38,9 +38,7 @@ public sealed class UsbBuilderProfilePickerTests
             new VentoyIntegrationService(new PowerShellRunnerService(), new AppRuntimeService()),
             new ManagedDownloadResolverService(new HttpClient()),
             new AppRuntimeService(),
-            new UsbBenchmarkService(new PowerShellRunnerService()),
-            new CopilotService(new CopilotProviderRegistry()),
-            new CopilotProviderRegistry());
+            new UsbBenchmarkService(new PowerShellRunnerService()));
 
     [Fact]
     public void EveryCategoryCard_ExposesPickerCommandThatCanExecute()

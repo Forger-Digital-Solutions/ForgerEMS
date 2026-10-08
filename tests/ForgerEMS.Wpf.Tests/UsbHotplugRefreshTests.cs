@@ -106,7 +106,6 @@ public sealed class UsbHotplugRefreshTests
     private static MainViewModel BuildViewModel(FakeRuntime runtime, IUsbDetectionService detection)
     {
         var powerShell = new PowerShellRunnerService();
-        var registry = new CopilotProviderRegistry();
         return new MainViewModel(
             new BackendDiscoveryService(),
             powerShell,
@@ -118,8 +117,6 @@ public sealed class UsbHotplugRefreshTests
             new ManagedDownloadResolverService(new HttpClient()),
             runtime,
             new StubBenchmarkService(),
-            new CopilotService(registry),
-            registry,
             usbIntelligenceService: new UsbIntelligenceService(),
             autoIntelligenceOrchestrator: new NoOpAutoIntelligenceOrchestrator());
     }

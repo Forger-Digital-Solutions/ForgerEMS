@@ -4,7 +4,7 @@
 |---|---|---|
 | ForgerEMS | Public Preview | Flagship currently available Windows technician-assist preview. |
 | Dr. Forge | Active Development | Companion CLI/intake integration is documented; public package availability requires owner confirmation. |
-| Kyra | Active Development | Local-first assistant capabilities are included in ForgerEMS; standalone public availability requires owner confirmation. |
+| Kyra | Retired | The in-app assistant was removed from ForgerEMS in v1.2.4; there is no standalone public availability. |
 | SurvivalOS | Owner confirmation required | Status and public availability are not established by this repository. |
 | RecoveryStudio | Owner confirmation required | Status and public availability are not established by this repository. |
 | FarmStand / FarmFinder | Owner confirmation required | Status and public availability are not established by this repository. |

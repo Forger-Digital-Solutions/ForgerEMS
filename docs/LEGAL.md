@@ -4,7 +4,7 @@
 
 **Not legal advice.** This document is ordinary software disclaimer language for operators and beta testers; it is not legal counsel.
 
-**Current v1.2.4-preview.4 legal docs:** see [TERMS_OF_USE.md](TERMS_OF_USE.md), [PRIVACY_AND_DATA_HANDLING.md](PRIVACY_AND_DATA_HANDLING.md), [LEGAL_NOTICES.md](LEGAL_NOTICES.md), and [USER_CONSENT_FLOW.md](USER_CONSENT_FLOW.md). Those files are the current first-run consent and packaging references; this page remains as a practical preview notice.
+**Current v1.2.4 legal docs:** see [TERMS_OF_USE.md](TERMS_OF_USE.md), [PRIVACY_AND_DATA_HANDLING.md](PRIVACY_AND_DATA_HANDLING.md), [LEGAL_NOTICES.md](LEGAL_NOTICES.md), and [USER_CONSENT_FLOW.md](USER_CONSENT_FLOW.md). Those files are the current first-run consent and packaging references; this page remains as a practical preview notice.
 
 ---
 
@@ -18,10 +18,9 @@ ForgerEMS Public Preview and beta-line builds are prerelease software provided *
 
 ForgerEMS **does not** implement a background “phone home” telemetry product that sends your usage analytics to Forger Digital Solutions.
 
-- The app **does not** harvest or upload **API keys** or **passwords** you might use elsewhere on your PC.  
-- **Session-only** credentials used inside the app for optional online Kyra paths are described in [PRIVACY.md](PRIVACY.md) and operator documentation; they are **not** written to ordinary settings files as a default design goal for those paths.
+- The app **does not** harvest or upload **API keys** or **passwords** you might use elsewhere on your PC.
 
-**Expected network use (not hidden “analytics”):** HTTPS calls to **GitHub** when you use **in-app update checks**, calls to the **ForgerEMS Gateway** (including **`/v1/kyra/research`** and **`/v1/kyra/status`** when enabled) when beta Gateway mode is configured, and calls to **third-party AI endpoints** only when an operator has enabled those Kyra providers. See [UPDATE_SYSTEM.md](UPDATE_SYSTEM.md) and [KYRA_PROVIDER_ENVIRONMENT_SETUP.md](KYRA_PROVIDER_ENVIRONMENT_SETUP.md).
+**Expected network use (not hidden “analytics”):** HTTPS calls to **GitHub** when you use **in-app update checks**, and metadata-only link checks or managed downloads to official vendor sources when you use Toolkit Manager. See [UPDATE_SYSTEM.md](UPDATE_SYSTEM.md) and [ENVIRONMENT.md](ENVIRONMENT.md).
 
 Normal workflows store **logs and reports on your machine** under `%LOCALAPPDATA%\ForgerEMS\`. **You** choose what to email for support.
 
@@ -59,9 +58,11 @@ ForgerEMS catalog entries use a fixed set of action labels in their `.url` filen
 
 ## Driver Hub, drivers, BIOS, and firmware
 
-Driver Hub is an official-link-first catalog. It opens vendor/project pages, opens official app/download pages only when that action is explicitly shown, copies official links, and writes `.url` shortcuts to a selected USB when you choose that action. It does **not** auto-install drivers, auto-run installers, auto-download model-specific OEM driver packages, submit service tags or serial numbers, compare installed driver versions, or automate BIOS/firmware flashing.
+Driver Hub is an official-link-first catalog. It opens vendor/project pages, opens official app/download pages only when that action is explicitly shown, copies official links, and writes `.url` shortcuts to a selected USB when you choose that action. It does **not** auto-install drivers, auto-run installers, auto-download model-specific OEM driver packages, submit service tags or serial numbers, or automate BIOS/firmware flashing.
 
-Driver, BIOS, and firmware compatibility remains the responsibility of the technician/user. Confirm the exact model, power and battery/AC state, vendor instructions, warranty terms, and rollback/recovery procedure before firmware updates. A Driver Hub recommendation means "based on detected vendor/GPU/CPU/platform," not "needed," "outdated," or "safe to install."
+Separately, the read-only Windows maintenance scan inventories installed driver packages and may compare device hardware IDs against candidates offered by the Windows Update service configured by the OS (Microsoft, WSUS, or enterprise) to flag a possible update candidate for review. A hardware-ID match is a candidate indicator, not proof of rank, OEM applicability, architecture, or signature; the scan performs no install/remove and vendor links remain informational.
+
+Driver, BIOS, and firmware compatibility remains the responsibility of the technician/user. Confirm the exact model, power and battery/AC state, vendor instructions, warranty terms, and rollback/recovery procedure before firmware updates. A Driver Hub recommendation means "based on a saved local device snapshot (vendor/GPU/CPU/platform) that may be stale," not "needed," "outdated," or "safe to install."
 
 ---
 
@@ -114,32 +115,17 @@ Hardware, diagnostics, Hardware X-Ray sensor coverage, and resale-oriented summa
 
 ---
 
-## Optional online providers
+## Credentials and secrets
 
-Kyra can use offline/local answers by default. If an operator enables ForgerEMS Gateway or online AI/API providers, prompts and optional sanitized context may be sent to the configured gateway/provider under that service's terms. Provider API keys must not be embedded in the desktop app, installer, release ZIP, appsettings, `.env.example`, docs, source code, or registry defaults. Do not paste API keys, tokens, passwords, product keys, private documents, or sensitive customer data into Kyra or support messages.
+ForgerEMS does not embed third-party API keys in the desktop app, installer, release ZIP, appsettings, `.env.example`, docs, source code, or registry defaults. Do not paste API keys, tokens, passwords, product keys, private documents, or sensitive customer data into support messages.
 
-ForgerEMS Beta Gateway tokens are revocable access tokens, not provider API keys. They should be limited, rotatable, and replaceable during beta without shipping provider keys to testers.
-
-Current prices, availability, latest versions, weather, news, stocks, crypto, and similar realtime facts require a configured live provider/tool. Offline/local Kyra may provide local observations and verification steps, but must not present invented realtime data as fact.
+ForgerEMS does not sell user data.
 
 ---
 
-## Kyra Intelligence Network
+## Technician-assist scope
 
-Kyra Intelligence Network is **Local-first repair memory + optional anonymous community learning**.
-
-- Local Kyra Memory stores sanitized machine-scoped repair notes on the user's PC.
-- Anonymous community intelligence sharing is optional, off by default, and requires explicit opt-in.
-- Community sharing is not active in this release. The setting is visible for preview only; no community data leaves the device in this build.
-- Users can keep Kyra local-only, opt out in Settings, export Kyra memory, and delete Kyra memory.
-
-ForgerEMS does not sell user data. Local Kyra Memory stays on this PC unless the user explicitly enables a future sharing option. Realtime Kyra Gateway sends only sanitized request context needed to answer current-data questions. Provider API keys are stored server-side and are not included in the desktop app. Anonymous Community Intelligence sharing is optional and off by default.
-
----
-
-## Technician-assist scope (Public Preview)
-
-ForgerEMS is **technician-assist software**, not a replacement for professional judgement. The Public Preview line specifically **does not promise**:
+ForgerEMS is **technician-assist software**, not a replacement for professional judgement. Builds specifically **do not promise**:
 
 - Guaranteed **repair** of any device, OS, application, or partition.
 - Guaranteed **data recovery** from failing, corrupted, encrypted, or wiped media.

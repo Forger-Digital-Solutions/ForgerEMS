@@ -42,9 +42,6 @@ public static class FeatureGateService
     public static bool IsUsbIntelligenceExperienceEnabled(LicenseTier tier) =>
         tier is not LicenseTier.Free;
 
-    public static bool IsAdvancedKyraProviderConfigurationHighlighted(LicenseTier tier) =>
-        tier is LicenseTier.BetaTesterPro or LicenseTier.Pro or LicenseTier.Developer;
-
     public static bool IsMarketplaceValuationStubVisible(LicenseTier tier) =>
         tier != LicenseTier.Free && ForgerEmsFeatureFlags.MarketplaceEnabled;
 }

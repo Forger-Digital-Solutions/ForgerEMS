@@ -48,21 +48,63 @@ public sealed class CatalogFreshnessTests
     [Fact]
     public void Freshness_EveryFileEntryHasFreshnessBlock()
     {
-        using var doc = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
-        var missing = doc.RootElement.GetProperty("items").EnumerateArray()
-            .Where(i => string.Equals(GetString(i, "type"), "file", StringComparison.OrdinalIgnoreCase))
-            .Where(i => !i.TryGetProperty("freshness", out _))
-            .Select(i => GetString(i, "name"))
-            .ToArray();
+        // Pinned file entries carry a freshness block; runtime-resolved
+        // (requiresResolution) entries must NOT claim a pinned version — their
+        // artifact/version come from the trusted overlay at download time.
+        var bad = new List<string>();
+        foreach (var item in FileEntries())
+        {
+            var hasFreshness = item.TryGetProperty("freshness", out _);
+            if (IsResolved(item))
+            {
+                var pinned = hasFreshness
+                    ? GetString(item.GetProperty("freshness"), "currentPinnedVersion")
+                    : string.Empty;
+                if (!string.IsNullOrWhiteSpace(pinned))
+                {
+                    bad.Add($"{GetString(item, "name")}: resolved entry must not claim currentPinnedVersion '{pinned}'.");
+                }
+            }
+            else if (!hasFreshness)
+            {
+                bad.Add($"{GetString(item, "name")}: pinned file entry is missing a freshness block.");
+            }
+        }
 
-        Assert.Empty(missing);
+        Assert.Empty(bad);
+    }
+
+    [Fact]
+    public void ResolvedFileEntries_ArePolicyBacked()
+    {
+        // Every runtime-resolved file entry must name a resourceId and carry no
+        // static checksum fields — the verified digest arrives via the overlay.
+        var bad = new List<string>();
+        foreach (var item in FileEntries())
+        {
+            if (!IsResolved(item)) { continue; }
+            var name = GetString(item, "name");
+            if (string.IsNullOrWhiteSpace(GetString(item, "resourceId")))
+            {
+                bad.Add($"{name}: requiresResolution entry has no resourceId.");
+            }
+            foreach (var pinField in new[] { "sha256", "sha512", "sha256Url", "sha512Url" })
+            {
+                if (item.TryGetProperty(pinField, out _))
+                {
+                    bad.Add($"{name}: resolved entry must not carry static '{pinField}'.");
+                }
+            }
+        }
+        Assert.NotEmpty(FileEntries().Where(IsResolved).ToArray());
+        Assert.Empty(bad);
     }
 
     [Fact]
     public void Freshness_StatusValuesAreInValidSet()
     {
         var bad = new List<string>();
-        foreach (var item in FileEntries())
+        foreach (var item in FreshnessEntries())
         {
             var f = item.GetProperty("freshness");
             var status = GetString(f, "freshnessStatus");
@@ -78,7 +120,7 @@ public sealed class CatalogFreshnessTests
     public void Freshness_UpdateChannelsAreInValidSet_NoBetaNightlyRC()
     {
         var bad = new List<string>();
-        foreach (var item in FileEntries())
+        foreach (var item in FreshnessEntries())
         {
             var f = item.GetProperty("freshness");
             var channel = GetString(f, "updateChannel");
@@ -105,7 +147,7 @@ public sealed class CatalogFreshnessTests
         // latestKnownStableVersion must NEVER contain pre-release tokens; the
         // freshness audit explicitly chases stable/LTS/ESR only.
         var bad = new List<string>();
-        foreach (var item in FileEntries())
+        foreach (var item in FreshnessEntries())
         {
             var version = GetString(item.GetProperty("freshness"), "latestKnownStableVersion");
             foreach (var forbidden in new[] { "beta", "rc", "nightly", "canary", "alpha", "dev", "preview" })
@@ -123,7 +165,7 @@ public sealed class CatalogFreshnessTests
     public void Freshness_ChecksumModeValuesAreInValidSet()
     {
         var bad = new List<string>();
-        foreach (var item in FileEntries())
+        foreach (var item in FreshnessEntries())
         {
             var mode = GetString(item.GetProperty("freshness"), "checksumVerificationMode");
             if (!ValidChecksumModes.Contains(mode))
@@ -138,7 +180,7 @@ public sealed class CatalogFreshnessTests
     public void Freshness_UpstreamReleaseTypesAreInValidSet()
     {
         var bad = new List<string>();
-        foreach (var item in FileEntries())
+        foreach (var item in FreshnessEntries())
         {
             var t = GetString(item.GetProperty("freshness"), "upstreamReleaseType");
             if (!ValidUpstreamTypes.Contains(t))
@@ -153,7 +195,7 @@ public sealed class CatalogFreshnessTests
     public void Freshness_RequiresManualReviewMatchesStatusClass()
     {
         var bad = new List<string>();
-        foreach (var item in FileEntries())
+        foreach (var item in FreshnessEntries())
         {
             var f = item.GetProperty("freshness");
             var status = GetString(f, "freshnessStatus");
@@ -171,7 +213,7 @@ public sealed class CatalogFreshnessTests
     public void Freshness_MajorVersionBoundaryImpliesMajorUpdateStatus()
     {
         var bad = new List<string>();
-        foreach (var item in FileEntries())
+        foreach (var item in FreshnessEntries())
         {
             var f = item.GetProperty("freshness");
             var boundary = GetBool(f, "majorVersionBoundary");
@@ -188,7 +230,7 @@ public sealed class CatalogFreshnessTests
     public void Freshness_UpToDateEntriesHaveMatchingVersions()
     {
         var bad = new List<string>();
-        foreach (var item in FileEntries())
+        foreach (var item in FreshnessEntries())
         {
             var f = item.GetProperty("freshness");
             if (GetString(f, "freshnessStatus") != "UpToDate") { continue; }
@@ -214,7 +256,7 @@ public sealed class CatalogFreshnessTests
             "PatchUpdateAvailable", "MinorUpdateAvailable", "MajorUpdateAvailable"
         };
         var bad = new List<string>();
-        foreach (var item in FileEntries())
+        foreach (var item in FreshnessEntries())
         {
             var f = item.GetProperty("freshness");
             var status = GetString(f, "freshnessStatus");
@@ -234,19 +276,60 @@ public sealed class CatalogFreshnessTests
     }
 
     [Fact]
-    public void CrystalDiskInfo_RemainsPinnedUntilTheOfficialUpdateHasChecksumProof()
+    public void CatalogItems_ManifestEntryDestMatchesManifest()
     {
-        var item = FileEntries().Single(i =>
-            string.Equals(GetString(i, "name"), "CrystalDiskInfo 9.8.0 (standard zip)", StringComparison.Ordinal));
-        var freshness = item.GetProperty("freshness");
+        // Curated catalog rows name a manifest entry and emit that name plus
+        // their UsbRelativePath as backend selectors. If the paths drift, the
+        // dest: selector silently matches nothing and the selected item is
+        // dropped from the USB build.
+        using var doc = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
+        var destByName = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var item in doc.RootElement.GetProperty("items").EnumerateArray())
+        {
+            destByName[GetString(item, "name")] = GetString(item, "dest");
+        }
 
-        Assert.Equal("9.8.0", GetString(freshness, "currentPinnedVersion"));
-        Assert.Equal("9.9.1", GetString(freshness, "latestKnownStableVersion"));
-        Assert.Equal("MinorUpdateAvailable", GetString(freshness, "freshnessStatus"));
-        Assert.Equal("sha256-pinned", GetString(freshness, "checksumVerificationMode"));
-        Assert.Contains("machine-readable checksum", GetString(freshness, "updateRecommendation"), StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("ManagedDownload", GetString(item, "downloadMode"));
-        Assert.False(item.TryGetProperty("sha256Url", out _), "Do not invent a vendor checksum URL for this pinned-only entry.");
+        var bad = new List<string>();
+        foreach (var row in VentoyToolkitSetup.Wpf.Services.UsbBuilderProfileItemCatalog.All)
+        {
+            // Drop-folder/portal rows use UsbRelativePath as the user's manual
+            // target, not a manifest selector — they are intentionally exempt.
+            if (row.RequiresUserSuppliedMedia || row.VendorPortalOnly ||
+                string.IsNullOrWhiteSpace(row.ManifestEntryName) || string.IsNullOrWhiteSpace(row.UsbRelativePath))
+            {
+                continue;
+            }
+            if (!destByName.TryGetValue(row.ManifestEntryName, out var dest))
+            {
+                bad.Add($"{row.Id}: manifest entry '{row.ManifestEntryName}' not found.");
+                continue;
+            }
+            if (!string.Equals(row.UsbRelativePath, dest, StringComparison.Ordinal))
+            {
+                bad.Add($"{row.Id}: catalog dest '{row.UsbRelativePath}' != manifest dest '{dest}'.");
+            }
+        }
+        Assert.Empty(bad);
+    }
+
+    [Fact]
+    public void CrystalDiskInfo_RemainsManualOnlyUntilTheOfficialUpdateHasChecksumProof()
+    {
+        // CrystalDiskInfo upstream does not publish a machine-readable checksum we
+        // can bind to, so it must stay a manual vendor-page link — never a managed
+        // file download with an invented or missing checksum.
+        using var doc = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
+        var entries = doc.RootElement.GetProperty("items").EnumerateArray()
+            .Where(i => GetString(i, "name").Contains("CrystalDiskInfo", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.NotEmpty(entries);
+        Assert.All(entries, i =>
+        {
+            Assert.Equal("page", GetString(i, "type"));
+            Assert.False(i.TryGetProperty("sha256Url", out _), "Do not invent a vendor checksum URL for this entry.");
+            Assert.False(i.TryGetProperty("sha256", out _), "Do not pin an unverified CrystalDiskInfo checksum.");
+        });
     }
 
     [Fact]
@@ -256,7 +339,7 @@ public sealed class CatalogFreshnessTests
         // appear in either the entry's url or its name. Prevents drift where a
         // freshness audit silently re-labels an entry to a different version.
         var bad = new List<string>();
-        foreach (var item in FileEntries())
+        foreach (var item in FreshnessEntries())
         {
             var pinned = GetString(item.GetProperty("freshness"), "currentPinnedVersion");
             if (string.IsNullOrWhiteSpace(pinned)) { continue; }
@@ -275,7 +358,7 @@ public sealed class CatalogFreshnessTests
     public void Freshness_LastAuditTimestampIsIsoLike()
     {
         var bad = new List<string>();
-        foreach (var item in FileEntries())
+        foreach (var item in FreshnessEntries())
         {
             var ts = GetString(item.GetProperty("freshness"), "lastFreshnessAuditUtc");
             if (string.IsNullOrWhiteSpace(ts))
@@ -318,7 +401,7 @@ public sealed class CatalogFreshnessTests
         // sha256url-only requires sha256Url but no sha256.
         // github-asset-digest requires an api.github.com sha256Url.
         var bad = new List<string>();
-        foreach (var item in FileEntries())
+        foreach (var item in FreshnessEntries())
         {
             var mode = GetString(item.GetProperty("freshness"), "checksumVerificationMode");
             var hasSha = item.TryGetProperty("sha256", out _);
@@ -374,10 +457,12 @@ public sealed class CatalogFreshnessTests
         using var doc = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
         var statuses = doc.RootElement.GetProperty("items").EnumerateArray()
             .Where(i => string.Equals(GetString(i, "type"), "file", StringComparison.OrdinalIgnoreCase))
+            .Where(i => i.TryGetProperty("freshness", out _))
             .Select(i => GetString(i.GetProperty("freshness"), "freshnessStatus"))
             .ToArray();
 
-        Assert.NotEmpty(statuses);
+        // Zero freshness-bearing entries is legal while every managed file is
+        // runtime-resolved; the validity rules apply to whatever is present.
         foreach (var s in statuses)
         {
             Assert.Contains(s, ValidStatuses);
@@ -399,6 +484,14 @@ public sealed class CatalogFreshnessTests
             }
         }
     }
+
+    // File entries that carry a freshness block (pinned entries). Runtime-resolved
+    // entries have none by design — their artifact/version arrive via the overlay.
+    private static IEnumerable<JsonElement> FreshnessEntries() =>
+        FileEntries().Where(i => i.TryGetProperty("freshness", out _));
+
+    private static bool IsResolved(JsonElement item) =>
+        item.TryGetProperty("requiresResolution", out var v) && v.ValueKind == JsonValueKind.True;
 
     private static string GetString(JsonElement item, string propertyName) =>
         item.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String

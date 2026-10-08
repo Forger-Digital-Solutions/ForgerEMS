@@ -1,6 +1,4 @@
 ﻿#pragma warning disable CA1822 // DI-related code; instance methods called via interface references
-// FORGEREMS_KYRA_ADAPTER: ForgerEMS-specific coupling; stays in ForgerEMS.KyraAdapter.
-// ForgerEMS USB/pricing recommendation engine; no equivalent in Kyra.Core.
 using System.Globalization;
 using System.IO;
 using System.Net.Http;
@@ -12,8 +10,6 @@ using VentoyToolkitSetup.Wpf.Configuration;
 using VentoyToolkitSetup.Wpf.Infrastructure;
 using VentoyToolkitSetup.Wpf.Models;
 using VentoyToolkitSetup.Wpf.Services.Intelligence;
-using VentoyToolkitSetup.Wpf.Services.Kyra;
-using VentoyToolkitSetup.Wpf.Services.KyraTools;
 
 namespace VentoyToolkitSetup.Wpf.Services;
 
@@ -23,7 +19,7 @@ public sealed class RecommendationEngine
     {
         if (profile is null)
         {
-            return ["Add a local device snapshot so Kyra can use local hardware facts."];
+            return ["Add a local device snapshot so diagnostics can use local hardware facts."];
         }
 
         var recommendations = new List<string>();

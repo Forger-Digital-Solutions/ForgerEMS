@@ -83,11 +83,13 @@ public static class UsbBuilderProfileFullManagedDownloadPlanner
             }
 
             // Checksum coverage is mandatory under require-for-release; an entry that loses it
-            // counts as safety-excluded rather than eligible.
+            // counts as safety-excluded rather than eligible. Resolution-backed entries carry
+            // their expected SHA-256 in the fresh verified overlay, not in static fields.
             var hasChecksum = !string.IsNullOrWhiteSpace(GetJsonString(item, "sha256")) ||
                               !string.IsNullOrWhiteSpace(GetJsonString(item, "sha256Url")) ||
                               !string.IsNullOrWhiteSpace(GetJsonString(item, "sha512")) ||
-                              !string.IsNullOrWhiteSpace(GetJsonString(item, "sha512Url"));
+                              !string.IsNullOrWhiteSpace(GetJsonString(item, "sha512Url")) ||
+                              GetJsonBool(item, "requiresResolution");
             if (!hasChecksum)
             {
                 excludedBySafety++;

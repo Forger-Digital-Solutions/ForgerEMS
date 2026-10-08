@@ -1,6 +1,10 @@
 # ForgerEMS Beta Release Checklist
 
-## v1.2.4 Public Preview (current line)
+> **Historical / superseded.** This checklist targeted the `1.2.4-preview.*`
+> beta line. The current release gate is `docs/FORGEREMS-RELEASE-READINESS.md`
+> (v1.2.4). Retained for history.
+
+## v1.2.4 Public Preview (historical line)
 
 Target: **1.2.4-preview.1** — *ForgerEMS v1.2.4 Public Preview*
 
@@ -20,13 +24,8 @@ Target (historical): **v1.1.4** — *ForgerEMS Beta v1.1.4 — Whole-App Intelli
 
 ## Beta Safety
 
-- [ ] Offline Local Kyra works without API keys
-- [ ] Free provider pool remains optional
-- [ ] Kyra **Refresh Provider Status** updates labels after env/session changes (no restart)
 - [ ] GitHub Releases update check is non-blocking and fails gracefully offline (no silent install)
 - [ ] Beta support email + “do not email secrets” warning visible in header/logs and About/FAQ/Legal
-- [ ] System context sharing defaults to OFF
-- [ ] Session-only key storage warning is visible
 - [ ] USB safety warning mentions VTOYEFI/tiny EFI partitions
 - [ ] USB target drive letter + size are visible before destructive actions
 - [ ] Toolkit Manual wording is clear (licensing/EULA)
@@ -68,7 +67,7 @@ Target (historical): **v1.1.4** — *ForgerEMS Beta v1.1.4 — Whole-App Intelli
 
 - [ ] Complete [FINAL_MANUAL_SMOKE_TEST.md](FINAL_MANUAL_SMOKE_TEST.md) or attach signed results
 
-## v1.1.12-rc.4 hardening (USB / managed downloads / Kyra / Toolkit copy)
+## v1.1.12-rc.4 hardening (USB / managed downloads / Toolkit copy)
 
 - [ ] Run USB benchmark; confirm **Benchmark summary** shows completed read/write line and Diagnostics “View benchmark details”.
 - [ ] Start benchmark twice quickly; duplicate start must **not** cancel the first run.
@@ -76,6 +75,5 @@ Target (historical): **v1.1.4** — *ForgerEMS Beta v1.1.4 — Whole-App Intelli
 - [ ] Induce **PARTIALLY_STAGED** managed downloads; confirm `ForgerEMS-managed-download-result.json` appears on USB root and **Retry Failed Downloads** panel shows failed rows.
 - [ ] Use **Retry Failed Downloads**; confirm script only revisits retryable destinations.
 - [ ] Run System Intelligence; confirm default route / link speed look reasonable when Ethernet is present.
-- [ ] Ask Kyra “what PC are we working on?” with a known scan — answer must match **system-intelligence-latest.json** (no invented Ryzen/RTX/RAM).
 - [ ] Settings → Check for updates: button re-enables after success/failure; latest line never stays blank after a completed check.
 - [ ] Toolkit Manager: **Manual / Info** filter works; healthy toolkit with only manual/info items should **not** read as a failure.

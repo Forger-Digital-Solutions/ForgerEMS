@@ -1,6 +1,10 @@
 name: release
 
-# Publishes versioned assets to GitHub Releases (portable ZIP first). See docs/UPDATE_SYSTEM.md for how the app checks updates.
+# Stages a signed release candidate (portable ZIP + installer) as a workflow
+# artifact. This workflow NEVER publishes: publication happens only in
+# promote-release.yml after the certification endpoint verifies signed gate
+# receipts bound to these exact bytes. See docs/UPDATE_SYSTEM.md for how the
+# app checks updates.
 
 on:
   push:
@@ -13,6 +17,7 @@ on:
         required: true
         type: string
 
+
 permissions:
   contents: write
 
@@ -20,18 +25,23 @@ jobs:
   publish:
     name: Publish GitHub Release
     runs-on: windows-latest
+    # Protected environment: repository owner must configure 'production-release'
+    # with required reviewers and authorized production PFX/password/thumbprint
+    # secrets. The disposable runner imports that existing identity in memory;
+    # it never generates/exports a key or silently falls back to unsigned output.
+    environment: production-release
     defaults:
       run:
         shell: pwsh
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: 8.0.x
 
@@ -40,9 +50,11 @@ jobs:
 
       - name: Resolve version and assets
         id: meta
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
         run: |
           if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
-            $ver = '${{ inputs.version }}'.Trim()
+            $ver = "$env:VERSION_INPUT".Trim()
             $tag = "v$ver"
             git fetch --tags
             $ref = git rev-parse --verify "refs/tags/$tag" 2>$null
@@ -53,6 +65,19 @@ jobs:
             $tag = $env:GITHUB_REF_NAME
             $ver = $tag.TrimStart('v')
           }
+          if ($ver -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$') {
+            throw "Version '$ver' is not a strict semantic version; refusing to package."
+          }
+          # Fail closed if the tag does not point at the checked-out commit —
+          # never build a release from source other than the tagged revision.
+          $tagCommit = (git rev-parse --verify "refs/tags/$tag^{commit}" 2>$null).Trim()
+          $headCommit = (git rev-parse HEAD).Trim()
+          if (-not $tagCommit) {
+            throw "Could not resolve commit for tag '$tag'."
+          }
+          if ($tagCommit -ne $headCommit) {
+            throw "Tag '$tag' resolves to $tagCommit but checkout HEAD is $headCommit; refusing to build untagged source."
+          }
           $installer = "ForgerEMS-Setup-v$ver.exe"
           $zip = "ForgerEMS-v$ver.zip"
           Add-Content -Path $env:GITHUB_OUTPUT -Value "version=$ver"
@@ -60,63 +85,45 @@ jobs:
           Add-Content -Path $env:GITHUB_OUTPUT -Value "installer=$installer"
           Add-Content -Path $env:GITHUB_OUTPUT -Value "zip=$zip"
 
+      - name: Provision authorized production signing identity
+        env:
+          FORGEREMS_SIGNING_CERT_THUMBPRINT: ${{ secrets.FORGEREMS_SIGNING_CERT_THUMBPRINT }}
+          FORGEREMS_SIGNING_PFX_BASE64: ${{ secrets.FORGEREMS_SIGNING_PFX_BASE64 }}
+          FORGEREMS_SIGNING_PFX_PASSWORD: ${{ secrets.FORGEREMS_SIGNING_PFX_PASSWORD }}
+        run: |
+          .\tools\Initialize-ReleaseSigningCertificate.ps1 -CertificateThumbprint $env:FORGEREMS_SIGNING_CERT_THUMBPRINT
+
       - name: Assemble Ventoy core release bundle
         run: .\tools\build-backend-release.ps1
 
       - name: Build release (installer + portable ZIP)
-        run: .\tools\build-release.ps1 -Version ${{ steps.meta.outputs.version }}
+        # Requires the signing certificate provisioned in the runner store under
+        # the protected 'production-release' environment; the build fails closed
+        # (before compilation) when it is absent.
+        env:
+          RELEASE_VERSION: ${{ steps.meta.outputs.version }}
+          FORGEREMS_SIGNING_CERT_THUMBPRINT: ${{ secrets.FORGEREMS_SIGNING_CERT_THUMBPRINT }}
+        run: .\tools\build-release.ps1 -Version $env:RELEASE_VERSION -RequireSigning -CertificateThumbprint $env:FORGEREMS_SIGNING_CERT_THUMBPRINT
 
       - name: Test (Release)
         run: dotnet test .\ForgerEMS.sln -c Release
 
-      - name: Compose release notes
-        run: |
-          $ver = '${{ steps.meta.outputs.version }}'
-          $zip = "ForgerEMS-v$ver.zip"
-          $exe = "ForgerEMS-Setup-v$ver.exe"
-          $nl = [Environment]::NewLine
-          $header =
-            "## DOWNLOAD THE PORTABLE ZIP FIRST$nl$nl" +
-            "Download **$zip** for the portable ForgerEMS app package.$nl" +
-            "Extract the ZIP, open the inner folder, then run **START_HERE.bat** or **ForgerEMS.exe**.$nl$nl" +
-            "The installer **$exe** is published separately for users who prefer an installed app and are comfortable running a standalone installer.$nl$nl" +
-            "On first launch, review and accept the ForgerEMS Terms of Use before using the main tools. Review docs/TERMS_OF_USE.md, docs/PRIVACY_AND_DATA_HANDLING.md, and docs/LEGAL_NOTICES.md before sharing logs, support bundles, Kyra context, or exported reports.$nl$nl" +
-            "**Incomplete Chrome download?** A .crdownload file is not finished — do not rename or run it. See docs/DOWNLOAD_TROUBLESHOOTING.md in the repo.$nl$nl" +
-            "---$nl$nl" +
-            "### Release assets$nl" +
-            "- **Portable ZIP:** $zip$nl" +
-            "- **Installer:** $exe$nl" +
-            "- **CHECKSUMS.sha256**, **release.json**, **DOWNLOAD_BETA.txt**$nl$nl" +
-            "---$nl$nl"
-          $body = $header
-          $specificDocs = Join-Path "docs" ("RELEASE_NOTES_v{0}.md" -f $ver)
-          $specificRoot = "RELEASE_NOTES_v{0}.md" -f $ver
-          $specific = if (Test-Path -LiteralPath $specificDocs) { $specificDocs } elseif (Test-Path -LiteralPath $specificRoot) { $specificRoot } else { $null }
-          if ($specific) {
-            $body += (Get-Content -LiteralPath $specific -Raw)
-          } else {
-            $candidates = @()
-            $candidates += Get-ChildItem -LiteralPath "docs" -Filter "RELEASE_NOTES*.md" -File -ErrorAction SilentlyContinue
-            $candidates += Get-ChildItem -LiteralPath "." -Filter "RELEASE_NOTES*.md" -File -ErrorAction SilentlyContinue
-            $fallback = $candidates | Sort-Object Name | Select-Object -First 1
-            if ($fallback) {
-              $body += (Get-Content -LiteralPath $fallback.FullName -Raw)
-            }
-          }
-          Set-Content -LiteralPath "release-body.md" -Value $body -Encoding utf8
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload signed release candidate
+        # Staging only — this workflow cannot publish. The promote-release
+        # workflow downloads these exact bytes and only publishes after the
+        # certification endpoint verifies receipts bound to them. Never rebuild
+        # or re-sign in the promotion path.
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          tag_name: ${{ steps.meta.outputs.tag }}
-          name: ForgerEMS ${{ steps.meta.outputs.version }}
-          body_path: release-body.md
-          fail_on_unmatched_files: true
-          files: |
+          name: signed-release-candidate
+          if-no-files-found: error
+          retention-days: 30
+          path: |
             release/current/${{ steps.meta.outputs.installer }}
             release/current/${{ steps.meta.outputs.zip }}
+            release/current/app/ForgerEMS.exe
+            release/current/uninstaller/verified-uninstaller.exe
             release/current/CHECKSUMS.sha256
             release/current/release.json
+            release/current/candidate-certification.json
             release/current/DOWNLOAD_BETA.txt
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

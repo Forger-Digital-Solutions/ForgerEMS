@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.2.4 — Public Preview v1.2.4-preview.1 (2026-10-08)
+
+Public preview release published on GitHub Releases as `v1.2.4-preview.1` on 2026-10-08. See `docs/RELEASE_NOTES_v1.2.4.md` for the current provisional release notes.
+
+- **Release channel:** public preview — not production-certified.
+- **Artifacts:** `ForgerEMS-v1.2.4.zip` and `ForgerEMS-Setup-v1.2.4.exe`, both unsigned; SHA-256 checksums published on the release page.
+- **Source revision for artifacts:** `fc54150844b36c2e6d6a4fd18d6ea9dd065fd4fb`.
+- **Repository modernization:** README, FAQ, CHANGELOG, SECURITY, and legal docs updated for the v1.2.4 preview.
+
+- **Kyra/assistant product surface removed:** the Kyra assistant UI, provider plumbing, and shared assistant code were retired; shared redaction was extracted to dedicated sanitizer services.
+- **Self-update hardening:** semantic-version release selection, malformed metadata rejected fail-closed, no API tokens forwarded to artifact hosts, manual allowed-host redirects, capped responses, and expected-SHA/asset-digest validation for managed downloads.
+- **Windows maintenance (read-only):** Driver Hub gained a diagnostic Windows maintenance card (services, reboot indicators, update policy, WUA offers, Driver Store assessments — no install/remove/repair actions). Toolkit Manager gained the managed-resource "Check Everything" card.
+- **Bundled backend/resources:** `manifests/resource-policy.json` plus the Windows-maintenance probe are bundled; resolved-overlay downloads require manifest-hash binding, TTL, per-descriptor allow-listed transfer, and SHA-256 verification.
+- **Packaging/licensing:** `tools/build-release.ps1` defaults to signed production packaging (fail closed without a certificate), supports explicit `-UnsignedCandidate` local candidates, isolated output roots, and provider license/source materials under `providers/sensors/`. GitHub Actions are pinned to verified commit SHAs.
+- **Version authority:** frontend `1.2.4` from `VERSION`; backend manifest `2026.10.06.1`.
+
+Earlier `v1.2.4-preview.*` entries below are historical Public Preview notes; the Kyra features they describe were part of the retired product surface and no longer exist in the tree.
+
 ## v1.2.4-preview.4 — Public Preview (2026-07-05)
 
 ### Dr. Forge local report detail browsing

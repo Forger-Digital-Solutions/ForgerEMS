@@ -113,7 +113,6 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
         };
 
         var usbDiag = UsbDiagnosticsComposer.Build(withRec, options.MachineProfile);
-        var narrative = UsbKyraNarrativeBuilder.Build(withRec);
 
         IntelligenceLogWriter.Append("usb-intelligence.log", $"Topology snapshot: {summary}");
         if (match is not null)
@@ -143,7 +142,6 @@ public sealed class UsbIntelligenceService : IUsbIntelligenceService
             SummaryLine = summary,
             TopologyDiff = diff,
             UsbDiagnostics = usbDiag,
-            KyraUsbNarrative = narrative,
             MachineProfileFingerprint = fingerprint,
             SelectedTargetBenchmark = refinedBench,
             SelectedTargetStablePortKey = match?.StablePortKey,

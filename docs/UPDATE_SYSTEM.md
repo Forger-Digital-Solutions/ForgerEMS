@@ -2,7 +2,7 @@
 
 This document describes how **in-app update checks** relate to **GitHub Releases** — not to every git push or branch tip.
 
-**Public Preview (v1.2.1+):** shipping tags use semver prereleases such as **`v1.2.4-preview.4`**. The in-app display line is **ForgerEMS v1.2.4 Public Preview** (see `AppReleaseInfo`). Env overrides: `FORGEREMS_GITHUB_OWNER`, `FORGEREMS_GITHUB_REPO`, `FORGEREMS_UPDATE_USER_AGENT` — see `docs/ENVIRONMENT.md` and `docs/UPDATE-SYSTEM-v1.2.0.md`.
+**Current release (v1.2.4):** the in-app display line is **ForgerEMS v1.2.4** (see `AppReleaseInfo`). Historical preview tags used semver prereleases such as `v1.2.4-preview.4`. The parser accepts semantic prerelease tags only when Beta/RC is explicitly enabled; this does not imply those tags are published. Locally built **unsigned candidates** share the version number but are distinct from production releases — they carry no Authenticode signature, are marked `unsignedCandidate`/`productionEligible=false` in their `release.json`, and must never be published or treated as shipped releases. Env overrides: `FORGEREMS_GITHUB_OWNER`, `FORGEREMS_GITHUB_REPO`, `FORGEREMS_UPDATE_USER_AGENT` — see `docs/ENVIRONMENT.md` and `docs/UPDATE-SYSTEM-v1.2.0.md`.
 
 ---
 
@@ -18,12 +18,12 @@ It does **not**:
 - Infer “latest” from random download URLs  
 - Treat the installer filename as the source of truth for version numbers  
 
-The app uses the GitHub **Releases** API, reads the list of releases, and picks the **newest eligible release** using **`published_at`** (newest first), then applies your **channel** setting:
+The app uses the GitHub **Releases** API, reads the list of releases, and picks the eligible release with the **highest semantic version** parsed from `tag_name`/`name` under your **channel** setting:
 
-- **Include Beta / RC** (typical for beta builds): prereleases are allowed.  
-- **Stable only**: prereleases are skipped; only non-prerelease releases count.
+- **Include Beta / RC**: prereleases are allowed.
+- **Stable only** (default): prereleases are skipped — both GitHub-flagged prereleases and releases whose parsed version carries a semver prerelease suffix, even if mislabeled as stable.
 
-The **version** used for comparison comes from the release **`tag_name`** / **`name`** (for example `v1.2.4-preview.4`, `1.2.4-preview.4`, or `ForgerEMS v1.2.4-preview.4`; older tags used `v1.1.12-rc.*`), **not** from guessing based on asset filenames.
+The **version** used for comparison comes from the release **`tag_name`** / **`name`** (for example `v1.2.4` or `ForgerEMS v1.2.4`; the parser also accepts historical prerelease-shaped tags such as `v1.2.4-preview.4`, `1.2.4-preview.4`, and `v1.1.12-rc.*` under the Beta/RC channel), **not** from guessing based on asset filenames.
 
 ---
 
@@ -41,7 +41,7 @@ git push origin main
 git push origin v1.1.12-rc.3
 ```
 
-(Annotated tags are fine if your release process uses them; the important part is that a **GitHub Release** exists for the tag and **`published_at`** reflects when it went public.)
+(Annotated tags are fine if your release process uses them; the important part is that a **GitHub Release** exists for the tag and the tag — or, failing that, the release title — carries a parseable semantic version; `published_at` is only informational.)
 
 After GitHub Actions (for example `.github/workflows/release.yml`) finishes, the release page should show assets such as:
 
@@ -49,7 +49,7 @@ After GitHub Actions (for example `.github/workflows/release.yml`) finishes, the
 - `ForgerEMS-Setup-v{version}.exe` (**advanced / direct**; SmartScreen is often stricter)  
 - `CHECKSUMS.sha256`, `DOWNLOAD_BETA.txt`, and other release metadata as you publish them  
 
-**Users will not receive updates from every commit** — only when a new **release** (with a `published_at` they can fetch) supersedes what they already have under the selected channel.
+**Users will not receive updates from every commit** — only when a new **release** (with a higher semantic version than what they run) is eligible under the selected channel. A release where neither the tag nor the release name yields a parseable version is skipped and never offered.
 
 ---
 
@@ -60,11 +60,11 @@ After the newest eligible release is chosen, the app **inspects assets** on that
 1. Preferred **ZIP** patterns (ForgerEMS + Beta naming, or `ForgerEMS-v*.zip`), then other **.zip** assets.  
 2. A **standalone `.exe`** is treated as **Advanced** in the UI — not the primary “just download this” path for beta testers.
 
-If the tag cannot be parsed as a semver, the app may still show that a **newer release may exist**, with a link to the **GitHub Release** page, without crashing.
+If neither a release's tag nor its name parses as a semver, that release is **skipped** — it is never offered as an update. If every published release is unparseable, the check fails with a metadata-invalid diagnostic rather than guessing.
 
 Under **Settings → App updates**, copy explains:
 
-> Latest release is chosen by GitHub release publish date, then assets are inspected.
+> Latest release is chosen by highest semantic version tag, then assets are inspected.
 
 The **Copy Update Diagnostics** button copies a safe diagnostic summary for support. It includes version/channel/update-check state and redacted failure detail; it is not an installer action and does not copy secrets.
 

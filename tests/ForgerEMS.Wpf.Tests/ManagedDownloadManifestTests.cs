@@ -36,6 +36,9 @@ public sealed class ManagedDownloadManifestTests
         var missing = document.RootElement.GetProperty("items")
             .EnumerateArray()
             .Where(item => string.Equals(GetString(item, "type"), "file", StringComparison.OrdinalIgnoreCase))
+            // requiresResolution entries carry no static checksum: the expected SHA-256 is bound at
+            // runtime by the resolved overlay, which the backend gate verifies before any download.
+            .Where(item => !(item.TryGetProperty("requiresResolution", out var rr) && rr.ValueKind == JsonValueKind.True))
             .Where(item => string.IsNullOrWhiteSpace(GetString(item, "sha256")) &&
                            string.IsNullOrWhiteSpace(GetString(item, "sha256Url")) &&
                            string.IsNullOrWhiteSpace(GetString(item, "sha512")) &&
@@ -44,6 +47,62 @@ public sealed class ManagedDownloadManifestTests
             .ToArray();
 
         Assert.Empty(missing);
+    }
+
+    [Fact]
+    public void ManagedDownloadManifest_ResolvedResourcesHavePolicyDescriptors()
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
+        using var policy = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/resource-policy.json")));
+        var policyProviders = policy.RootElement.GetProperty("resources")
+            .EnumerateArray()
+            .ToDictionary(
+                r => r.GetProperty("id").GetString() ?? string.Empty,
+                r => r.GetProperty("provider").GetString() ?? string.Empty,
+                StringComparer.Ordinal);
+
+        var violations = new List<string>();
+        foreach (var item in document.RootElement.GetProperty("items").EnumerateArray())
+        {
+            if (!item.TryGetProperty("requiresResolution", out var rr) || rr.ValueKind != JsonValueKind.True)
+            {
+                continue;
+            }
+
+            var name = GetString(item, "name");
+            if (!string.Equals(GetString(item, "type"), "file", StringComparison.OrdinalIgnoreCase))
+            {
+                violations.Add($"{name}: requiresResolution must be a file item.");
+            }
+
+            var resourceId = GetString(item, "resourceId");
+            if (string.IsNullOrWhiteSpace(resourceId) || !policyProviders.TryGetValue(resourceId, out var provider))
+            {
+                violations.Add($"{name}: resourceId '{resourceId}' has no resource-policy descriptor.");
+                continue;
+            }
+
+            var strategy = GetString(item, "resolveStrategy");
+            if (!string.Equals(strategy, provider, StringComparison.Ordinal))
+            {
+                violations.Add($"{name}: resolveStrategy '{strategy}' does not match policy provider '{provider}'.");
+            }
+
+            if (!GetString(item, "url").StartsWith("https://", StringComparison.Ordinal))
+            {
+                violations.Add($"{name}: resolved resource must keep an https canonical URL.");
+            }
+
+            foreach (var checksumField in new[] { "sha256", "sha256Url", "sha512", "sha512Url" })
+            {
+                if (item.TryGetProperty(checksumField, out _))
+                {
+                    violations.Add($"{name}: must not pin {checksumField}; checksum arrives via the resolved overlay.");
+                }
+            }
+        }
+
+        Assert.Empty(violations);
     }
 
     [Fact]
@@ -120,7 +179,8 @@ public sealed class ManagedDownloadManifestTests
                 violations.Add($"{name}: type=file must map to ManagedDownload.");
             }
 
-            if (mode == ManifestPromotionPolicy.ManagedDownload && !hasChecksum)
+            if (mode == ManifestPromotionPolicy.ManagedDownload && !hasChecksum &&
+                !(item.TryGetProperty("requiresResolution", out var rr) && rr.ValueKind == JsonValueKind.True))
             {
                 violations.Add($"{name}: ManagedDownload lacks checksum proof.");
             }
@@ -316,14 +376,16 @@ public sealed class ManagedDownloadManifestTests
     [Fact]
     public void ManagedDownloadManifest_Batch2PromotedEntriesHaveValidChecksumAndMetadata()
     {
+        // Versioned per-release entries were migrated to resolution-backed managed downloads;
+        // VeraCrypt demoted to a page entry (no machine-readable checksum source it can bind).
         var promoted = new[]
         {
-            "Notepad++ 8.9.6 Portable (x64)",
-            "System Informer 3.2.25011 Portable",
-            "VeraCrypt 1.26.24 Setup (x64)",
-            "PuTTY 0.83 64-bit Installer"
+            "Notepad++ Portable",
+            "System Informer",
+            "PuTTY 64-bit Installer"
         };
 
+        var policyProviders = LoadPolicyProviders();
         using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
         foreach (var name in promoted)
         {
@@ -332,22 +394,7 @@ public sealed class ManagedDownloadManifestTests
                 .SingleOrDefault(e => string.Equals(GetString(e, "name"), name, StringComparison.Ordinal));
 
             Assert.NotEqual(default, item.ValueKind);
-            Assert.Equal("file", GetString(item, "type"));
-            Assert.True(item.TryGetProperty("enabled", out var enabled) && enabled.GetBoolean(), $"{name} must be enabled.");
-
-            var sha256 = GetString(item, "sha256");
-            Assert.Equal(64, sha256.Length);
-            Assert.All(sha256, c => Assert.True(Uri.IsHexDigit(c), $"{name}: sha256 must be hex."));
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "sourceType")), $"{name}: sourceType is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "fragilityLevel")), $"{name}: fragilityLevel is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "fallbackRule")), $"{name}: fallbackRule is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "licenseNote")), $"{name}: licenseNote is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "recommendedUse")), $"{name}: recommendedUse is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "technicianNotes")), $"{name}: technicianNotes is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "architecture")), $"{name}: architecture is required.");
-            Assert.Equal("official", GetString(item, "sourceTrust"));
-            Assert.True(item.TryGetProperty("maintenanceRank", out var rank) && rank.ValueKind == JsonValueKind.Number,
-                $"{name}: maintenanceRank is required.");
+            AssertResolutionBackedEntry(item, name, policyProviders);
         }
     }
 
@@ -358,7 +405,7 @@ public sealed class ManagedDownloadManifestTests
     [InlineData("Advanced IP Scanner Download Page", "Vendor portal selects build/region; no stable versioned URL or machine-readable checksum file.")]
     [InlineData("Everything Search Download Page", "Vendor portal selects per-architecture installer; no machine-readable checksum file at a stable URL.")]
     [InlineData("GPU-Z Download Page", "TechPowerUp vendor portal with mirror/CDN selection; no machine-readable checksum file.")]
-    [InlineData("DDU Download Page", "Guru3D vendor portal with rotating mirror selection; no machine-readable checksum file.")]
+    [InlineData("DDU Download Page", "Wagnardsoft publisher page without a machine-readable checksum file; third-party mirrors are avoided.")]
     [InlineData("NVCleanInstall Download Page", "TechPowerUp vendor portal with mirror selection; no machine-readable checksum file.")]
     public void ManagedDownloadManifest_Batch3UnsafeCandidatesStayManualOnly(string itemName, string reasonDocumented)
     {
@@ -384,11 +431,13 @@ public sealed class ManagedDownloadManifestTests
     [Fact]
     public void ManagedDownloadManifest_Batch3PromotedEntriesHaveValidChecksumAndMetadata()
     {
+        // Wireshark demoted to a page entry; the surviving batch entries are resolution-backed.
         var promoted = new[]
         {
-            "Wireshark 4.6.6 Win64 Installer"
+            "Rufus Portable"
         };
 
+        var policyProviders = LoadPolicyProviders();
         using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
         foreach (var name in promoted)
         {
@@ -397,65 +446,19 @@ public sealed class ManagedDownloadManifestTests
                 .SingleOrDefault(e => string.Equals(GetString(e, "name"), name, StringComparison.Ordinal));
 
             Assert.NotEqual(default, item.ValueKind);
-            Assert.Equal("file", GetString(item, "type"));
-            Assert.True(item.TryGetProperty("enabled", out var enabled) && enabled.GetBoolean(), $"{name} must be enabled.");
-
-            var sha256 = GetString(item, "sha256");
-            Assert.Equal(64, sha256.Length);
-            Assert.All(sha256, c => Assert.True(Uri.IsHexDigit(c), $"{name}: sha256 must be hex."));
-
-            var sha256Url = GetString(item, "sha256Url");
-            Assert.StartsWith("https://", sha256Url, StringComparison.Ordinal);
-
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "sourceType")), $"{name}: sourceType is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "fragilityLevel")), $"{name}: fragilityLevel is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "fallbackRule")), $"{name}: fallbackRule is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "licenseNote")), $"{name}: licenseNote is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "recommendedUse")), $"{name}: recommendedUse is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "technicianNotes")), $"{name}: technicianNotes is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "architecture")), $"{name}: architecture is required.");
-            Assert.Equal("official", GetString(item, "sourceTrust"));
-            Assert.True(item.TryGetProperty("maintenanceRank", out var rank) && rank.ValueKind == JsonValueKind.Number,
-                $"{name}: maintenanceRank is required.");
+            AssertResolutionBackedEntry(item, name, policyProviders);
         }
     }
 
     [Fact]
-    public void ManagedDownloadManifest_Batch3PromotedSourceUrlsArePinned()
+    public void ManagedDownloadManifest_Batch3PromotedSourceUrlsAreCanonical()
     {
-        using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
-        var expectations = new Dictionary<string, (string urlFragment, string checksumFragment)>
-        {
-            ["Wireshark 4.6.6 Win64 Installer"] = ("/win64/Wireshark-4.6.6-x64.exe", "/SIGNATURES-4.6.6.txt")
-        };
-
-        foreach (var (name, (urlFragment, checksumFragment)) in expectations)
-        {
-            var item = document.RootElement.GetProperty("items")
-                .EnumerateArray()
-                .SingleOrDefault(e => string.Equals(GetString(e, "name"), name, StringComparison.Ordinal));
-            var url = GetString(item, "url");
-            var sha256Url = GetString(item, "sha256Url");
-
-            Assert.StartsWith("https://", url, StringComparison.Ordinal);
-            Assert.Contains(urlFragment, url, StringComparison.Ordinal);
-            Assert.DoesNotContain("/latest", url, StringComparison.OrdinalIgnoreCase);
-
-            Assert.StartsWith("https://", sha256Url, StringComparison.Ordinal);
-            Assert.Contains(checksumFragment, sha256Url, StringComparison.Ordinal);
-        }
-    }
-
-    [Fact]
-    public void ManagedDownloadManifest_Batch2PromotedSourceUrlsArePinned()
-    {
+        // Resolution-backed entries keep the official canonical entry-point URL the provider
+        // resolver starts from (a github-stable releases/latest URL is expected, not a stale pin).
         using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
         var expectations = new Dictionary<string, string>
         {
-            ["Notepad++ 8.9.6 Portable (x64)"] = "/releases/download/v8.9.6/",
-            ["System Informer 3.2.25011 Portable"] = "/releases/download/v3.2.25011.2103/",
-            ["VeraCrypt 1.26.24 Setup (x64)"] = "/releases/download/VeraCrypt_1.26.24/",
-            ["PuTTY 0.83 64-bit Installer"] = "/putty/0.83/"
+            ["Rufus Portable"] = "github.com/pbatard/rufus/releases/latest"
         };
 
         foreach (var (name, expectedFragment) in expectations)
@@ -467,26 +470,47 @@ public sealed class ManagedDownloadManifestTests
 
             Assert.StartsWith("https://", url, StringComparison.Ordinal);
             Assert.Contains(expectedFragment, url, StringComparison.Ordinal);
-            Assert.DoesNotContain("/latest", url, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("releases/latest", url, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public void ManagedDownloadManifest_Batch2PromotedSourceUrlsAreCanonical()
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
+        var expectations = new Dictionary<string, string>
+        {
+            ["Notepad++ Portable"] = "github.com/notepad-plus-plus/notepad-plus-plus/releases/latest",
+            ["System Informer"] = "github.com/winsiderss/systeminformer/releases/latest",
+            ["PuTTY 64-bit Installer"] = "the.earth.li"
+        };
+
+        foreach (var (name, expectedFragment) in expectations)
+        {
+            var item = document.RootElement.GetProperty("items")
+                .EnumerateArray()
+                .SingleOrDefault(e => string.Equals(GetString(e, "name"), name, StringComparison.Ordinal));
+            var url = GetString(item, "url");
+
+            Assert.StartsWith("https://", url, StringComparison.Ordinal);
+            Assert.Contains(expectedFragment, url, StringComparison.Ordinal);
         }
     }
 
     [Fact]
     public void ManagedDownloadManifest_Batch4PromotedIsoEntriesHaveValidChecksumAndMetadata()
     {
+        // Versioned per-release ISO entries were migrated to resolution-backed managed downloads;
+        // the version pin and expected SHA-256 are bound at runtime by the resolved overlay.
         var promoted = new[]
         {
-            "Proxmox VE 9.2-1 ISO Installer",
-            "Ubuntu Server 24.04.4 LTS (amd64)",
-            "Debian GNU/Linux 13.5.0 netinst (amd64)",
-            "Fedora Server 44-1.7 DVD (x86_64)",
-            "FreeBSD 15.0-RELEASE amd64 disc1 ISO",
-            "OpenBSD 7.9 amd64 install ISO",
-            "Rocky Linux 10.1 Minimal (x86_64)",
-            "AlmaLinux 10.2 Minimal (x86_64)"
+            "Ubuntu LTS Desktop",
+            "Ubuntu LTS Server",
+            "Debian Stable Netinst",
+            "Kali Linux Installer",
+            "Rescuezilla"
         };
 
+        var policyProviders = LoadPolicyProviders();
         using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
         foreach (var name in promoted)
         {
@@ -495,39 +519,24 @@ public sealed class ManagedDownloadManifestTests
                 .SingleOrDefault(e => string.Equals(GetString(e, "name"), name, StringComparison.Ordinal));
 
             Assert.NotEqual(default, item.ValueKind);
-            Assert.Equal("file", GetString(item, "type"));
-            Assert.True(item.TryGetProperty("enabled", out var enabled) && enabled.GetBoolean(), $"{name} must be enabled.");
-
-            var sha256 = GetString(item, "sha256");
-            Assert.Equal(64, sha256.Length);
-            Assert.All(sha256, c => Assert.True(Uri.IsHexDigit(c), $"{name}: sha256 must be hex."));
-            Assert.Equal("official", GetString(item, "sourceTrust"));
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "fallbackRule")), $"{name}: fallbackRule is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "technicianNotes")), $"{name}: technicianNotes is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "secureBootNote")), $"{name}: secureBootNote is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "ventoyNotes")), $"{name}: ventoyNotes is required.");
-            Assert.Equal("UpToDate", GetString(item.GetProperty("freshness"), "freshnessStatus"));
-            Assert.Equal("stable", GetString(item.GetProperty("freshness"), "updateChannel"));
+            AssertResolutionBackedEntry(item, name, policyProviders);
         }
     }
 
     [Fact]
-    public void ManagedDownloadManifest_Batch4PromotedSourceUrlsArePinnedAndStableOnly()
+    public void ManagedDownloadManifest_Batch4PromotedSourceUrlsAreCanonicalAndStableOnly()
     {
-        var promoted = new[]
+        var expectations = new Dictionary<string, string>
         {
-            "Proxmox VE 9.2-1 ISO Installer",
-            "Ubuntu Server 24.04.4 LTS (amd64)",
-            "Debian GNU/Linux 13.5.0 netinst (amd64)",
-            "Fedora Server 44-1.7 DVD (x86_64)",
-            "FreeBSD 15.0-RELEASE amd64 disc1 ISO",
-            "OpenBSD 7.9 amd64 install ISO",
-            "Rocky Linux 10.1 Minimal (x86_64)",
-            "AlmaLinux 10.2 Minimal (x86_64)"
+            ["Ubuntu LTS Desktop"] = "changelogs.ubuntu.com/meta-release-lts",
+            ["Ubuntu LTS Server"] = "changelogs.ubuntu.com/meta-release-lts",
+            ["Debian Stable Netinst"] = "cdimage.debian.org/debian-cd/current/amd64/iso-cd/SHA256SUMS",
+            ["Kali Linux Installer"] = "cdimage.kali.org/current/SHA256SUMS",
+            ["Rescuezilla"] = "github.com/rescuezilla/rescuezilla/releases/latest"
         };
 
         using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
-        foreach (var name in promoted)
+        foreach (var (name, expectedFragment) in expectations)
         {
             var item = document.RootElement.GetProperty("items")
                 .EnumerateArray()
@@ -535,11 +544,7 @@ public sealed class ManagedDownloadManifestTests
 
             var url = GetString(item, "url");
             Assert.StartsWith("https://", url, StringComparison.Ordinal);
-            foreach (var forbidden in new[] { "/latest", "nightly", "beta", "rc", "snapshot", "development" })
-            {
-                Assert.DoesNotContain(forbidden, url, StringComparison.OrdinalIgnoreCase);
-                Assert.DoesNotContain(forbidden, GetString(item, "name"), StringComparison.OrdinalIgnoreCase);
-            }
+            Assert.Contains(expectedFragment, url, StringComparison.Ordinal);
         }
     }
 
@@ -610,66 +615,40 @@ public sealed class ManagedDownloadManifestTests
     [Fact]
     public void ManagedDownloadManifest_Batch5PromotedIsoEntriesHaveValidChecksumAndMetadata()
     {
-        // 2026-05-25 follow-up promotion pass: NetBSD 10.1 amd64 and openSUSE Leap 16.0 x86_64 offline installer.
-        // NetBSD uses SHA-512 coverage (vendor publishes only SHA512); openSUSE uses SHA-256 coverage
-        // (vendor publishes a per-file .iso.sha256 companion).
+        // NetBSD/openSUSE per-release pins were demoted to page entries; the surviving
+        // checksum-index managed entries bind version + SHA-256 at resolution time.
+        var promoted = new[]
+        {
+            "Debian Stable Live GNOME",
+            "Debian Stable Live KDE",
+            "Debian Stable Live Xfce"
+        };
+
+        var policyProviders = LoadPolicyProviders();
         using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
+        foreach (var name in promoted)
+        {
+            var item = document.RootElement.GetProperty("items")
+                .EnumerateArray()
+                .SingleOrDefault(e => string.Equals(GetString(e, "name"), name, StringComparison.Ordinal));
 
-        var netbsd = document.RootElement.GetProperty("items")
-            .EnumerateArray()
-            .SingleOrDefault(e => string.Equals(GetString(e, "name"), "NetBSD 10.1 amd64 ISO Installer", StringComparison.Ordinal));
-        Assert.NotEqual(default, netbsd.ValueKind);
-        Assert.Equal("file", GetString(netbsd, "type"));
-        Assert.True(netbsd.TryGetProperty("enabled", out var nbEnabled) && nbEnabled.GetBoolean(), "NetBSD entry must be enabled.");
-
-        var sha512 = GetString(netbsd, "sha512");
-        Assert.Equal(128, sha512.Length);
-        Assert.All(sha512, c => Assert.True(Uri.IsHexDigit(c), "NetBSD sha512 must be hex."));
-        var sha512Url = GetString(netbsd, "sha512Url");
-        Assert.StartsWith("https://cdn.netbsd.org/", sha512Url, StringComparison.Ordinal);
-        Assert.False(netbsd.TryGetProperty("sha256", out _), "NetBSD entry must not carry sha256 alongside sha512.");
-        Assert.False(netbsd.TryGetProperty("sha256Url", out _), "NetBSD entry must not carry sha256Url alongside sha512Url.");
-        Assert.Equal("official", GetString(netbsd, "sourceTrust"));
-        Assert.False(string.IsNullOrWhiteSpace(GetString(netbsd, "fallbackRule")), "NetBSD entry: fallbackRule is required.");
-        Assert.False(string.IsNullOrWhiteSpace(GetString(netbsd, "technicianNotes")), "NetBSD entry: technicianNotes is required.");
-        Assert.False(string.IsNullOrWhiteSpace(GetString(netbsd, "secureBootNote")), "NetBSD entry: secureBootNote is required.");
-        Assert.False(string.IsNullOrWhiteSpace(GetString(netbsd, "ventoyNotes")), "NetBSD entry: ventoyNotes is required.");
-        Assert.Equal("UpToDate", GetString(netbsd.GetProperty("freshness"), "freshnessStatus"));
-        Assert.Equal("sha512-pinned", GetString(netbsd.GetProperty("freshness"), "checksumVerificationMode"));
-
-        var opensuse = document.RootElement.GetProperty("items")
-            .EnumerateArray()
-            .SingleOrDefault(e => string.Equals(GetString(e, "name"), "openSUSE Leap 16.0 Offline Installer (x86_64)", StringComparison.Ordinal));
-        Assert.NotEqual(default, opensuse.ValueKind);
-        Assert.Equal("file", GetString(opensuse, "type"));
-        Assert.True(opensuse.TryGetProperty("enabled", out var osEnabled) && osEnabled.GetBoolean(), "openSUSE entry must be enabled.");
-
-        var sha256 = GetString(opensuse, "sha256");
-        Assert.Equal(64, sha256.Length);
-        Assert.All(sha256, c => Assert.True(Uri.IsHexDigit(c), "openSUSE sha256 must be hex."));
-        var sha256Url = GetString(opensuse, "sha256Url");
-        Assert.StartsWith("https://download.opensuse.org/", sha256Url, StringComparison.Ordinal);
-        Assert.EndsWith(".iso.sha256", sha256Url, StringComparison.Ordinal);
-        Assert.Equal("official", GetString(opensuse, "sourceTrust"));
-        Assert.False(string.IsNullOrWhiteSpace(GetString(opensuse, "fallbackRule")), "openSUSE entry: fallbackRule is required.");
-        Assert.False(string.IsNullOrWhiteSpace(GetString(opensuse, "technicianNotes")), "openSUSE entry: technicianNotes is required.");
-        Assert.False(string.IsNullOrWhiteSpace(GetString(opensuse, "secureBootNote")), "openSUSE entry: secureBootNote is required.");
-        Assert.False(string.IsNullOrWhiteSpace(GetString(opensuse, "ventoyNotes")), "openSUSE entry: ventoyNotes is required.");
-        Assert.Equal("UpToDate", GetString(opensuse.GetProperty("freshness"), "freshnessStatus"));
-        Assert.Equal("sha256-pinned", GetString(opensuse.GetProperty("freshness"), "checksumVerificationMode"));
+            Assert.NotEqual(default, item.ValueKind);
+            AssertResolutionBackedEntry(item, name, policyProviders);
+        }
     }
 
     [Fact]
-    public void ManagedDownloadManifest_Batch5PromotedSourceUrlsArePinnedAndStableOnly()
+    public void ManagedDownloadManifest_Batch5PromotedSourceUrlsAreCanonicalAndStableOnly()
     {
         using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
-        var promoted = new[]
+        var expectations = new Dictionary<string, string>
         {
-            "NetBSD 10.1 amd64 ISO Installer",
-            "openSUSE Leap 16.0 Offline Installer (x86_64)"
+            ["Debian Stable Live GNOME"] = "cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/SHA256SUMS",
+            ["Debian Stable Live KDE"] = "cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/SHA256SUMS",
+            ["Debian Stable Live Xfce"] = "cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/SHA256SUMS"
         };
 
-        foreach (var name in promoted)
+        foreach (var (name, expectedFragment) in expectations)
         {
             var item = document.RootElement.GetProperty("items")
                 .EnumerateArray()
@@ -677,10 +656,7 @@ public sealed class ManagedDownloadManifestTests
 
             var url = GetString(item, "url");
             Assert.StartsWith("https://", url, StringComparison.Ordinal);
-            foreach (var forbidden in new[] { "/latest", "nightly", "beta", "rc", "snapshot", "development", "tumbleweed" })
-            {
-                Assert.DoesNotContain(forbidden, url, StringComparison.OrdinalIgnoreCase);
-            }
+            Assert.Contains(expectedFragment, url, StringComparison.Ordinal);
         }
     }
 
@@ -1163,171 +1139,48 @@ public sealed class ManagedDownloadManifestTests
     [Fact]
     public void ManagedDownloadManifest_Batch6PromotedExpansionEntriesHaveValidChecksumAndMetadata()
     {
-        // 2026-05-27 catalog-expansion wave. Each entry below was promoted from a page entry
-        // (or added alongside one) after live revalidation of the official artifact URL and
-        // a binding check against the upstream checksum source. Mixed coverage: most entries
-        // use sha256, Debian Live uses sha512 (cdimage.debian.org/debian-cd publishes
-        // SHA512SUMS but not SHA256SUMS in the iso-hybrid directory).
-        // Entries whose checksumVerificationMode is exactly "sha256-pinned" (per-file or
-        // project-wide sha256 file at a stable upstream URL).
-        var sha256Promoted = new[]
+        // The per-version pinned expansion entries were migrated to resolution-backed managed
+        // downloads (or demoted to pages). The surviving file entries assert the resolution
+        // contract: policy descriptor, matching resolveStrategy, canonical https entry point.
+        var promoted = new[]
         {
-            "Fedora Workstation 44-1.7 Live (x86_64)",
-            "Arch Linux 2026.05.01 (x86_64)",
-            "Xubuntu 24.04.4 LTS Desktop (amd64)",
-            "Lubuntu 24.04.4 LTS Desktop (amd64)",
-            "Kubuntu 24.04.4 LTS Desktop (amd64)",
-            "FreeDOS 1.4 LiveCD",
-            "FreeDOS 1.4 FullUSB",
-            "TrueNAS SCALE 24.10.2 (amd64)",
-            "Proxmox Backup Server 4.2-1 ISO Installer",
-            "Rocky Linux 10.1 DVD (x86_64)",
-            "AlmaLinux 10.2 DVD (x86_64)",
-            "Parrot Security 7.2 (amd64)",
-            "TestDisk 7.2 Win64 Portable (zip)"
+            "Angry IP Scanner",
+            "Driver Store Explorer",
+            "RustDesk",
+            "balenaEtcher",
+            "KeePassXC Portable",
+            "TestDisk Win64",
+            "Microsoft PowerToys"
         };
 
-        // Entries sourced from GitHub releases use the api.github.com per-asset digest
-        // endpoint, so checksumVerificationMode is "github-asset-digest", but the sha256
-        // is still pinned in the manifest. Asserted shape is the same except for that mode.
-        var githubAssetDigestPromoted = new[]
-        {
-            "KeePassXC 2.7.12 Win64 Portable (zip)",
-            "Microsoft PowerToys 0.99.1 (x64 user setup)"
-        };
-
-        var sha512Promoted = new[]
-        {
-            "Debian Live 13.5.0 GNOME (amd64)",
-            "Debian Live 13.5.0 KDE (amd64)",
-            "Debian Live 13.5.0 Xfce (amd64)"
-        };
-
+        var policyProviders = LoadPolicyProviders();
         using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
-
-        foreach (var name in sha256Promoted)
+        foreach (var name in promoted)
         {
             var item = document.RootElement.GetProperty("items")
                 .EnumerateArray()
                 .SingleOrDefault(e => string.Equals(GetString(e, "name"), name, StringComparison.Ordinal));
 
             Assert.NotEqual(default, item.ValueKind);
-            Assert.Equal("file", GetString(item, "type"));
-            Assert.True(item.TryGetProperty("enabled", out var enabled) && enabled.GetBoolean(), $"{name} must be enabled.");
-
-            var sha256 = GetString(item, "sha256");
-            Assert.Equal(64, sha256.Length);
-            Assert.All(sha256, c => Assert.True(Uri.IsHexDigit(c), $"{name}: sha256 must be hex."));
-
-            var sha256Url = GetString(item, "sha256Url");
-            Assert.StartsWith("https://", sha256Url, StringComparison.Ordinal);
-
-            Assert.False(item.TryGetProperty("sha512", out _), $"{name} must not carry sha512 alongside sha256.");
-            Assert.False(item.TryGetProperty("sha512Url", out _), $"{name} must not carry sha512Url alongside sha256Url.");
-
-            Assert.Equal("official", GetString(item, "sourceTrust"));
-            Assert.Equal(ManifestPromotionPolicy.ManagedDownload, GetString(item, "downloadMode"));
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "fallbackRule")), $"{name}: fallbackRule is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "technicianNotes")), $"{name}: technicianNotes is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "recommendedUse")), $"{name}: recommendedUse is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "licenseNote")), $"{name}: licenseNote is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "sourceType")), $"{name}: sourceType is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "fragilityLevel")), $"{name}: fragilityLevel is required.");
-            Assert.True(item.TryGetProperty("maintenanceRank", out var rank) && rank.ValueKind == JsonValueKind.Number,
-                $"{name}: maintenanceRank is required.");
-            Assert.Equal("UpToDate", GetString(item.GetProperty("freshness"), "freshnessStatus"));
-            Assert.Equal("stable", GetString(item.GetProperty("freshness"), "updateChannel"));
-            Assert.Equal("sha256-pinned", GetString(item.GetProperty("freshness"), "checksumVerificationMode"));
-        }
-
-        foreach (var name in githubAssetDigestPromoted)
-        {
-            var item = document.RootElement.GetProperty("items")
-                .EnumerateArray()
-                .SingleOrDefault(e => string.Equals(GetString(e, "name"), name, StringComparison.Ordinal));
-
-            Assert.NotEqual(default, item.ValueKind);
-            Assert.Equal("file", GetString(item, "type"));
-            Assert.True(item.TryGetProperty("enabled", out var enabled) && enabled.GetBoolean(), $"{name} must be enabled.");
-
-            var sha256 = GetString(item, "sha256");
-            Assert.Equal(64, sha256.Length);
-            Assert.All(sha256, c => Assert.True(Uri.IsHexDigit(c), $"{name}: sha256 must be hex."));
-
-            var sha256Url = GetString(item, "sha256Url");
-            Assert.StartsWith("https://api.github.com/repos/", sha256Url, StringComparison.Ordinal);
-
-            Assert.False(item.TryGetProperty("sha512", out _), $"{name} must not carry sha512 alongside sha256.");
-            Assert.False(item.TryGetProperty("sha512Url", out _), $"{name} must not carry sha512Url alongside sha256Url.");
-
-            Assert.Equal("official", GetString(item, "sourceTrust"));
-            Assert.Equal(ManifestPromotionPolicy.ManagedDownload, GetString(item, "downloadMode"));
-            Assert.Equal("github-release", GetString(item, "sourceType"));
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "fallbackRule")), $"{name}: fallbackRule is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "technicianNotes")), $"{name}: technicianNotes is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "recommendedUse")), $"{name}: recommendedUse is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "licenseNote")), $"{name}: licenseNote is required.");
-            Assert.False(string.IsNullOrWhiteSpace(GetString(item, "fragilityLevel")), $"{name}: fragilityLevel is required.");
-            Assert.True(item.TryGetProperty("maintenanceRank", out var rank) && rank.ValueKind == JsonValueKind.Number,
-                $"{name}: maintenanceRank is required.");
-            Assert.Equal("UpToDate", GetString(item.GetProperty("freshness"), "freshnessStatus"));
-            Assert.Equal("stable", GetString(item.GetProperty("freshness"), "updateChannel"));
-            Assert.Equal("github-asset-digest", GetString(item.GetProperty("freshness"), "checksumVerificationMode"));
-        }
-
-        foreach (var name in sha512Promoted)
-        {
-            var item = document.RootElement.GetProperty("items")
-                .EnumerateArray()
-                .SingleOrDefault(e => string.Equals(GetString(e, "name"), name, StringComparison.Ordinal));
-
-            Assert.NotEqual(default, item.ValueKind);
-            Assert.Equal("file", GetString(item, "type"));
-            Assert.True(item.TryGetProperty("enabled", out var enabled) && enabled.GetBoolean(), $"{name} must be enabled.");
-
-            var sha512 = GetString(item, "sha512");
-            Assert.Equal(128, sha512.Length);
-            Assert.All(sha512, c => Assert.True(Uri.IsHexDigit(c), $"{name}: sha512 must be hex."));
-
-            var sha512Url = GetString(item, "sha512Url");
-            Assert.StartsWith("https://cdimage.debian.org/", sha512Url, StringComparison.Ordinal);
-
-            Assert.False(item.TryGetProperty("sha256", out _), $"{name} must not carry sha256 alongside sha512.");
-            Assert.False(item.TryGetProperty("sha256Url", out _), $"{name} must not carry sha256Url alongside sha512Url.");
-
-            Assert.Equal("official", GetString(item, "sourceTrust"));
-            Assert.Equal(ManifestPromotionPolicy.ManagedDownload, GetString(item, "downloadMode"));
-            Assert.Equal("sha512-pinned", GetString(item.GetProperty("freshness"), "checksumVerificationMode"));
+            AssertResolutionBackedEntry(item, name, policyProviders);
         }
     }
 
-    [Fact]
-    public void ManagedDownloadManifest_Batch6PromotedSourceUrlsArePinnedAndStableOnly()
+    public void ManagedDownloadManifest_Batch6PromotedSourceUrlsAreCanonicalAndStableOnly()
     {
-        var promoted = new[]
+        var expectations = new Dictionary<string, string>
         {
-            "Fedora Workstation 44-1.7 Live (x86_64)",
-            "Arch Linux 2026.05.01 (x86_64)",
-            "Xubuntu 24.04.4 LTS Desktop (amd64)",
-            "Lubuntu 24.04.4 LTS Desktop (amd64)",
-            "Kubuntu 24.04.4 LTS Desktop (amd64)",
-            "Debian Live 13.5.0 GNOME (amd64)",
-            "Debian Live 13.5.0 KDE (amd64)",
-            "Debian Live 13.5.0 Xfce (amd64)",
-            "FreeDOS 1.4 LiveCD",
-            "FreeDOS 1.4 FullUSB",
-            "TrueNAS SCALE 24.10.2 (amd64)",
-            "Proxmox Backup Server 4.2-1 ISO Installer",
-            "Rocky Linux 10.1 DVD (x86_64)",
-            "AlmaLinux 10.2 DVD (x86_64)",
-            "Parrot Security 7.2 (amd64)",
-            "KeePassXC 2.7.12 Win64 Portable (zip)",
-            "TestDisk 7.2 Win64 Portable (zip)",
-            "Microsoft PowerToys 0.99.1 (x64 user setup)"
+            ["Angry IP Scanner"] = "github.com/angryip/ipscan/releases/latest",
+            ["Driver Store Explorer"] = "github.com/lostindark/DriverStoreExplorer/releases/latest",
+            ["RustDesk"] = "github.com/rustdesk/rustdesk/releases/latest",
+            ["balenaEtcher"] = "github.com/balena-io/etcher/releases/latest",
+            ["KeePassXC Portable"] = "github.com/keepassxreboot/keepassxc/releases/latest",
+            ["TestDisk Win64"] = "cgsecurity.org/testdisk_sha256.txt",
+            ["Microsoft PowerToys"] = "github.com/microsoft/PowerToys/releases/latest"
         };
 
         using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
-        foreach (var name in promoted)
+        foreach (var (name, expectedFragment) in expectations)
         {
             var item = document.RootElement.GetProperty("items")
                 .EnumerateArray()
@@ -1336,7 +1189,8 @@ public sealed class ManagedDownloadManifestTests
             Assert.NotEqual(default, item.ValueKind);
             var url = GetString(item, "url");
             Assert.StartsWith("https://", url, StringComparison.Ordinal);
-            foreach (var forbidden in new[] { "/latest", "nightly", "beta", "rc-", "snapshot", "/development/" })
+            Assert.Contains(expectedFragment, url, StringComparison.Ordinal);
+            foreach (var forbidden in new[] { "nightly", "beta", "rc-", "snapshot", "/development/" })
             {
                 Assert.DoesNotContain(forbidden, url, StringComparison.OrdinalIgnoreCase);
             }
@@ -1344,15 +1198,14 @@ public sealed class ManagedDownloadManifestTests
     }
 
     [Fact]
-    public void ManagedDownloadManifest_Batch6GithubReleasePromotedEntriesUseAssetDigestEndpoint()
+    public void ManagedDownloadManifest_Batch6GithubReleasePromotedEntriesUseGitHubStableStrategy()
     {
-        // KeePassXC and PowerToys are sourced from GitHub releases; their sha256Url must route
-        // through the api.github.com per-asset digest endpoint so the resolver can rebind
-        // checksums without scraping HTML.
+        // KeePassXC and PowerToys resolve through the github-stable provider; the per-asset
+        // digest/SHA-256 is bound into the overlay at runtime rather than pinned here.
         var promoted = new[]
         {
-            "KeePassXC 2.7.12 Win64 Portable (zip)",
-            "Microsoft PowerToys 0.99.1 (x64 user setup)"
+            "KeePassXC Portable",
+            "Microsoft PowerToys"
         };
 
         using var document = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/ForgerEMS.updates.json")));
@@ -1364,9 +1217,8 @@ public sealed class ManagedDownloadManifestTests
 
             Assert.NotEqual(default, item.ValueKind);
             Assert.Equal("github-release", GetString(item, "sourceType"));
+            Assert.Equal("github-stable", GetString(item, "resolveStrategy"));
             Assert.StartsWith("https://github.com/", GetString(item, "url"), StringComparison.Ordinal);
-            Assert.StartsWith("https://api.github.com/repos/", GetString(item, "sha256Url"), StringComparison.Ordinal);
-            Assert.Equal("github-asset-digest", GetString(item.GetProperty("freshness"), "checksumVerificationMode"));
         }
     }
 
@@ -1379,6 +1231,48 @@ public sealed class ManagedDownloadManifestTests
         item.TryGetProperty(propertyName, out var value) &&
         value.ValueKind is JsonValueKind.True or JsonValueKind.False &&
         value.GetBoolean();
+
+    private static IReadOnlyDictionary<string, string> LoadPolicyProviders()
+    {
+        using var policy = JsonDocument.Parse(File.ReadAllText(FindRepoFile("manifests/resource-policy.json")));
+        return policy.RootElement.GetProperty("resources")
+            .EnumerateArray()
+            .ToDictionary(
+                r => r.GetProperty("id").GetString() ?? string.Empty,
+                r => r.GetProperty("provider").GetString() ?? string.Empty,
+                StringComparer.Ordinal);
+    }
+
+    // Resolution-backed managed entries no longer pin per-version artifact URLs or checksums:
+    // the backend resolver binds the current version + expected SHA-256 into an overlay at
+    // runtime, and Update-ForgerEMS.ps1 fails closed unless that overlay validates. The static
+    // contract is therefore the policy linkage, not a frozen payload.
+    private static void AssertResolutionBackedEntry(JsonElement item, string name, IReadOnlyDictionary<string, string> policyProviders)
+    {
+        Assert.Equal("file", GetString(item, "type"));
+        Assert.True(item.TryGetProperty("enabled", out var enabled) && enabled.GetBoolean(), $"{name} must be enabled.");
+        Assert.True(item.TryGetProperty("requiresResolution", out var rr) && rr.GetBoolean(), $"{name} must require resolution.");
+        Assert.Equal(ManifestPromotionPolicy.ManagedDownload, GetString(item, "downloadMode"));
+        Assert.Equal("official", GetString(item, "sourceTrust"));
+        Assert.False(string.IsNullOrWhiteSpace(GetString(item, "fallbackRule")), $"{name}: fallbackRule is required.");
+        Assert.False(string.IsNullOrWhiteSpace(GetString(item, "recommendedUse")), $"{name}: recommendedUse is required.");
+        Assert.False(string.IsNullOrWhiteSpace(GetString(item, "licenseNote")), $"{name}: licenseNote is required.");
+        Assert.False(string.IsNullOrWhiteSpace(GetString(item, "architecture")), $"{name}: architecture is required.");
+        Assert.True(item.TryGetProperty("maintenanceRank", out var rank) && rank.ValueKind == JsonValueKind.Number,
+            $"{name}: maintenanceRank is required.");
+
+        var resourceId = GetString(item, "resourceId");
+        Assert.False(string.IsNullOrWhiteSpace(resourceId), $"{name}: resourceId is required.");
+        Assert.True(policyProviders.TryGetValue(resourceId, out var provider),
+            $"{name}: resourceId '{resourceId}' has no resource-policy descriptor.");
+        Assert.Equal(provider, GetString(item, "resolveStrategy"));
+
+        Assert.StartsWith("https://", GetString(item, "url"), StringComparison.Ordinal);
+        foreach (var checksumField in new[] { "sha256", "sha256Url", "sha512", "sha512Url" })
+        {
+            Assert.False(item.TryGetProperty(checksumField, out _), $"{name} must not pin {checksumField}; it arrives via the resolved overlay.");
+        }
+    }
 
     private static bool HasChecksumProof(JsonElement item) =>
         !string.IsNullOrWhiteSpace(GetString(item, "sha256")) ||

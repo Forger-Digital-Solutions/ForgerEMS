@@ -16,11 +16,4 @@ public sealed class FeatureGateServiceTests
     {
         Assert.False(FeatureGateService.IsUsbIntelligenceExperienceEnabled(LicenseTier.Free));
     }
-
-    [Fact]
-    public void BetaTesterPro_HighlightsAdvancedKyraConfig()
-    {
-        Assert.True(FeatureGateService.IsAdvancedKyraProviderConfigurationHighlighted(LicenseTier.BetaTesterPro));
-        Assert.False(FeatureGateService.IsAdvancedKyraProviderConfigurationHighlighted(LicenseTier.PublicPreview));
-    }
 }

@@ -167,7 +167,7 @@ public sealed class TermsConsentGateTests
             "I have read and agree to the ForgerEMS Terms of Use and understand the Privacy/Data Handling notes.",
             TermsConsentStore.RequiredAgreementText);
         Assert.Equal(
-            "I understand that logs, support bundles, Kyra context, and exported reports may contain local device/context information. I will review exported files before sharing them.",
+            "I understand that logs, support bundles, and exported reports may contain local device/context information. I will review exported files before sharing them.",
             TermsConsentStore.RequiredSharingNoticeText);
         Assert.StartsWith(
             TermsConsentStore.CurrentTermsRevisionDate + ".",
@@ -227,8 +227,6 @@ public sealed class TermsConsentGateTests
 
         Assert.Contains("TermsConsentStore.RequiredSharingNoticeText", source, StringComparison.Ordinal);
         Assert.Contains("ConfirmExportOrSharingConsent", source, StringComparison.Ordinal);
-        Assert.Contains("Export Kyra Memory", source, StringComparison.Ordinal);
-        Assert.Contains("Export Kyra Intelligence Memory", source, StringComparison.Ordinal);
         Assert.Contains("Create Support Bundle", source, StringComparison.Ordinal);
         Assert.Contains("MainToolsEnabled = false", source, StringComparison.Ordinal);
         Assert.Contains("ExitForgerEms()", source, StringComparison.Ordinal);
@@ -237,7 +235,6 @@ public sealed class TermsConsentGateTests
     private static MainViewModel BuildViewModel(FakeRuntime runtime)
     {
         var powerShell = new PowerShellRunnerService();
-        var registry = new CopilotProviderRegistry();
         return new MainViewModel(
             new BackendDiscoveryService(),
             powerShell,
@@ -249,8 +246,6 @@ public sealed class TermsConsentGateTests
             new ManagedDownloadResolverService(new HttpClient()),
             runtime,
             new UsbBenchmarkService(powerShell),
-            new CopilotService(registry),
-            registry,
             usbIntelligenceService: new UsbIntelligenceService(),
             autoIntelligenceOrchestrator: new NoOpAutoIntelligenceOrchestrator());
     }

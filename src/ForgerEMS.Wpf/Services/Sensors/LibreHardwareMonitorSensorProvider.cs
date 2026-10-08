@@ -12,7 +12,25 @@ namespace VentoyToolkitSetup.Wpf.Services;
 public class LibreHardwareMonitorSensorProvider : IHardwareSensorProvider
 {
     private const string ProviderVersion = "0.9.6";
+
+    // LibreHardwareMonitor allocates process-global native buffers on
+    // Computer.Open() and frees them on Close() with no internal locking or
+    // refcounting (OpCode._codeBuffer/CpuId delegates, static mutexes). Two
+    // overlapping probe lifecycles can free a buffer still in use, so every
+    // provider instance funnels the entire Open -> read -> Close lifecycle
+    // through this one process-wide gate.
+    private static readonly object ProbeGate = new();
+
     private readonly bool? _packagedOverride;
+
+    internal static void RunExclusiveProbe(Action probe)
+    {
+        ArgumentNullException.ThrowIfNull(probe);
+        lock (ProbeGate)
+        {
+            probe();
+        }
+    }
 
     public LibreHardwareMonitorSensorProvider(bool? packagedOverride = null)
     {
@@ -68,41 +86,44 @@ public class LibreHardwareMonitorSensorProvider : IHardwareSensorProvider
             notes.Add("Running ForgerEMS as administrator may improve LibreHardwareMonitor sensor coverage on some systems.");
         }
         var failures = new List<string>();
-        Computer? computer = null;
-        try
+        RunExclusiveProbe(() =>
         {
-            computer = new Computer
-            {
-                IsCpuEnabled = true,
-                IsGpuEnabled = true,
-                IsMemoryEnabled = true,
-                IsMotherboardEnabled = true,
-                IsControllerEnabled = true,
-                IsNetworkEnabled = true,
-                IsStorageEnabled = true
-            };
-            computer.Open();
-
-            foreach (var hardware in computer.Hardware)
-            {
-                ReadHardware(hardware, readings, failures);
-            }
-        }
-        catch (Exception ex)
-        {
-            failures.Add($"LibreHardwareMonitor probe failed safely: {ex.Message}");
-        }
-        finally
-        {
+            Computer? computer = null;
             try
             {
-                computer?.Close();
+                computer = new Computer
+                {
+                    IsCpuEnabled = true,
+                    IsGpuEnabled = true,
+                    IsMemoryEnabled = true,
+                    IsMotherboardEnabled = true,
+                    IsControllerEnabled = true,
+                    IsNetworkEnabled = true,
+                    IsStorageEnabled = true
+                };
+                computer.Open();
+
+                foreach (var hardware in computer.Hardware)
+                {
+                    ReadHardware(hardware, readings, failures);
+                }
             }
             catch (Exception ex)
             {
-                failures.Add($"LibreHardwareMonitor close failed safely: {ex.Message}");
+                failures.Add($"LibreHardwareMonitor probe failed safely: {ex.Message}");
             }
-        }
+            finally
+            {
+                try
+                {
+                    computer?.Close();
+                }
+                catch (Exception ex)
+                {
+                    failures.Add($"LibreHardwareMonitor close failed safely: {ex.Message}");
+                }
+            }
+        });
 
         AddUnavailableCoverageNotes(readings);
 

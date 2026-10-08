@@ -91,86 +91,6 @@ public sealed class WelcomeCenterTests
     }
 
     [Fact]
-    public void WelcomeCenter_InfoAndActionButtonsDoNotCloseWelcomeCenter()
-    {
-        using var vm = BuildViewModel(NewRuntime());
-        var capture = new WelcomeInfoCapture();
-        vm.WelcomeCenterInfoAction = capture.Capture;
-
-        vm.BetaWelcomeKyraKeepLocalOnlyCommand.Execute(null);
-        vm.BetaWelcomeKyraViewSharingPreviewCommand.Execute(null);
-
-        Assert.Equal(System.Windows.Visibility.Visible, vm.BetaWelcomeVisibility);
-        Assert.Contains(capture.Messages, item => item.Title == "Keep Local Only");
-        Assert.Contains(capture.Messages, item => item.Title == "View What Would Be Shared");
-    }
-
-    [Fact]
-    public void HelpImproveKyra_DoesNotOpenSeparateWindow_UsesInlineConfirmation()
-    {
-        using var vm = BuildViewModel(NewRuntime());
-        ResetKyraSharingState(vm);
-        var capture = new WelcomeInfoCapture();
-        vm.WelcomeCenterInfoAction = capture.Capture;
-
-        vm.BetaWelcomeKyraShareResolvedCategories = true;
-        vm.BetaWelcomeKyraHelpImproveCommand.Execute(null);
-
-        // No ScrollableInfoWindow / WelcomeCenterInfoAction call for Help Improve Kyra.
-        Assert.DoesNotContain(capture.Messages, item => item.Title == "Help Improve Kyra");
-        Assert.Equal(System.Windows.Visibility.Visible, vm.BetaWelcomeKyraConfirmVisibility);
-        Assert.True(vm.BetaWelcomeKyraConfirmHasSelection);
-        Assert.False(vm.KyraCommunitySharingEnabled);
-        Assert.Equal(System.Windows.Visibility.Visible, vm.BetaWelcomeVisibility);
-    }
-
-    [Fact]
-    public void HelpImproveKyra_NoCategorySelected_ShowsInlineHintWithoutEnableButton()
-    {
-        using var vm = BuildViewModel(NewRuntime());
-        ResetKyraSharingState(vm);
-
-        vm.BetaWelcomeKyraHelpImproveCommand.Execute(null);
-
-        Assert.Equal(System.Windows.Visibility.Visible, vm.BetaWelcomeKyraConfirmVisibility);
-        Assert.False(vm.BetaWelcomeKyraConfirmHasSelection);
-        Assert.False(vm.KyraCommunitySharingEnabled);
-    }
-
-    [Fact]
-    public void HelpImproveKyra_ConfirmEnable_DoesNotUncheckSharingCheckboxes()
-    {
-        using var vm = BuildViewModel(NewRuntime());
-        ResetKyraSharingState(vm);
-
-        vm.BetaWelcomeKyraShareResolvedCategories = true;
-        vm.BetaWelcomeKyraHelpImproveCommand.Execute(null);
-        vm.BetaWelcomeKyraConfirmEnableCommand.Execute(null);
-
-        Assert.True(vm.KyraCommunitySharingEnabled);
-        Assert.True(vm.KyraShareResolvedIssueFixPatterns);
-        // Regression guard: confirming must not auto-uncheck the Welcome Center boxes the user just set.
-        Assert.True(vm.BetaWelcomeKyraShareResolvedCategories);
-        Assert.Equal(System.Windows.Visibility.Collapsed, vm.BetaWelcomeKyraConfirmVisibility);
-        Assert.Equal(System.Windows.Visibility.Visible, vm.BetaWelcomeVisibility);
-    }
-
-    [Fact]
-    public void HelpImproveKyra_Cancel_DoesNotChangeSharingSettings()
-    {
-        using var vm = BuildViewModel(NewRuntime());
-        ResetKyraSharingState(vm);
-
-        vm.BetaWelcomeKyraShareResolvedCategories = true;
-        vm.BetaWelcomeKyraHelpImproveCommand.Execute(null);
-        vm.BetaWelcomeKyraCancelConfirmCommand.Execute(null);
-
-        Assert.False(vm.KyraCommunitySharingEnabled);
-        Assert.False(vm.KyraShareResolvedIssueFixPatterns);
-        Assert.Equal(System.Windows.Visibility.Collapsed, vm.BetaWelcomeKyraConfirmVisibility);
-    }
-
-    [Fact]
     public void WelcomeCenter_XamlRemovesDontShowAgainAndAddsReopenCommand()
     {
         var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
@@ -208,12 +128,12 @@ public sealed class WelcomeCenterTests
         // line (AppVersionFooterText) must not sit directly under the headline anymore -
         // it now lives in the small muted footer near the bottom of the dialog.
         var headlineIndex = overlay.IndexOf("ForgerEMS Welcome Center", StringComparison.Ordinal);
-        var kyraPrivacyIndex = overlay.IndexOf("Kyra privacy and learning", StringComparison.Ordinal);
+        var quickActionsIndex = overlay.IndexOf("Technician quick actions", StringComparison.Ordinal);
         var versionBindingIndex = overlay.IndexOf("{Binding AppVersionFooterText}", StringComparison.Ordinal);
 
         Assert.True(headlineIndex >= 0);
-        Assert.True(kyraPrivacyIndex > headlineIndex);
-        Assert.True(versionBindingIndex > kyraPrivacyIndex, "Version line should be below the main content, not directly under the headline.");
+        Assert.True(quickActionsIndex > headlineIndex);
+        Assert.True(versionBindingIndex > quickActionsIndex, "Version line should be below the main content, not directly under the headline.");
     }
 
     [Fact]
@@ -227,6 +147,17 @@ public sealed class WelcomeCenterTests
         Assert.Contains("NeverShowWelcomeCenterAgainCommand", overlay, StringComparison.Ordinal);
         Assert.Contains("Never show this Welcome Center again", overlay, StringComparison.Ordinal);
         Assert.Contains("{Binding WelcomeCenterFooterCopyrightText}", overlay, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WelcomeCenter_ContainsNoAssistantSurface()
+    {
+        var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
+        var overlay = ExtractBlock(xaml, "BetaWelcomeOverlay", "FullLogsOverlay");
+
+        Assert.DoesNotContain("Kyra", overlay, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Copilot", overlay, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("assistant", overlay, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -251,9 +182,6 @@ public sealed class WelcomeCenterTests
             "DismissBetaWelcome",
             ExtractMethod(code, "OnStartUsbBuilderFromBetaWelcomeClick"),
             StringComparison.Ordinal);
-        // OnRunSystemScanFromWelcomeClick was removed with the Welcome Center's
-        // inventory-scan quick action.
-        Assert.DoesNotContain("OnRunSystemScanFromWelcomeClick", code, StringComparison.Ordinal);
         Assert.DoesNotContain(
             "DismissBetaWelcome",
             ExtractMethod(code, "OnRunUsbBenchmarkFromWelcomeClick"),
@@ -281,7 +209,6 @@ public sealed class WelcomeCenterTests
     {
         runtime.EnsureInitialized();
         var powerShell = new PowerShellRunnerService();
-        var registry = new CopilotProviderRegistry();
         return new MainViewModel(
             new BackendDiscoveryService(),
             powerShell,
@@ -293,24 +220,8 @@ public sealed class WelcomeCenterTests
             new ManagedDownloadResolverService(new HttpClient()),
             runtime,
             new UsbBenchmarkService(powerShell),
-            new CopilotService(registry),
-            registry,
             usbIntelligenceService: new UsbIntelligenceService(),
             autoIntelligenceOrchestrator: new NoOpAutoIntelligenceOrchestrator());
-    }
-
-    /// <summary>
-    /// Normalizes Kyra sharing state regardless of HKLM\Software\ForgerEMS installer-consent
-    /// registry values that may already be set on the host machine from a prior real install
-    /// (SeedBetaWelcomeKyraCheckboxesFromSettings reads that registry on a fresh profile).
-    /// </summary>
-    private static void ResetKyraSharingState(MainViewModel vm)
-    {
-        vm.BetaWelcomeKyraShareRepairIntelligence = false;
-        vm.BetaWelcomeKyraShareHardwarePatterns = false;
-        vm.BetaWelcomeKyraShareResolvedCategories = false;
-        vm.BetaWelcomeKyraShareCrashDiagnostics = false;
-        vm.KyraCommunitySharingEnabled = false;
     }
 
     private static FakeRuntime NewRuntime() =>
@@ -349,16 +260,6 @@ public sealed class WelcomeCenterTests
         Assert.True(start >= 0, $"Could not find method {methodName}.");
         var next = code.IndexOf("\n    private ", start + signature.Length, StringComparison.Ordinal);
         return next > start ? code[start..next] : code[start..];
-    }
-
-    private sealed class WelcomeInfoCapture
-    {
-        public List<Message> Messages { get; } = [];
-
-        public void Capture(string title, string body, string? actionText, Action? action) =>
-            Messages.Add(new Message(title, body, actionText, action));
-
-        public sealed record Message(string Title, string Body, string? ActionText, Action? Action);
     }
 
     private sealed class FakeRuntime(string runtimeRoot) : IAppRuntimeService

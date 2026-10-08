@@ -27,7 +27,7 @@ public static class ToolkitReadinessScorer
 {
     /// <param name="omitLiveUsbVentoyContext">
     /// When true, skips USB selection/Ventoy penalties used in the live Toolkit Manager UI.
-    /// Use for Kyra/report-only evaluation where those signals are intentionally absent.
+    /// Use for report-only evaluation where those signals are intentionally absent.
     /// </param>
     /// <param name="linkVerification">Optional HTTP metadata verification aligned with toolkit report + USB scope.</param>
     public static ToolkitReadinessResult Evaluate(
@@ -293,7 +293,7 @@ public static class ToolkitReadinessScorer
             return "Low confidence: toolkit report listed no item rows.";
         }
 
-        return "Medium confidence: readiness from toolkit-health JSON only (USB/Ventoy not evaluated in Kyra context).";
+        return "Medium confidence: readiness from toolkit-health JSON only (USB/Ventoy target not yet evaluated).";
     }
 
     private static string BuildNextAction(ToolkitReadinessLabel label, List<string> blockers) => label switch

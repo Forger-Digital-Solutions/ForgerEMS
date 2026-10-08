@@ -1,5 +1,7 @@
 # ForgerEMS v1.1.4 — Final manual smoke test
 
+> **Historical checklist for the retired v1.1.4 beta build.** Some sections (for example the in-app assistant steps) describe features removed in v1.2.4 and do not apply to current builds.
+
 **Purpose:** Gate a beta “launch” build after automated restore/build/test/package are green. Complete every section or mark **BLOCKED** / **N/A** with a short note.
 
 **Installer:** `dist\installer\ForgerEMS-Setup-v1.1.4.exe` (rebuild with `.\tools\build-release.ps1` if needed).

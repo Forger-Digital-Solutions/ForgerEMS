@@ -225,7 +225,7 @@ public static class SystemIntelligenceAutomationMerger
                 points = issueCount,
                 rationale = issueCount == 0
                     ? "No issues were promoted from the evaluator."
-                    : $"{issueCount} issue row(s) were generated for Kyra and diagnostics."
+                    : $"{issueCount} issue row(s) were generated for diagnostics."
             }
         };
 

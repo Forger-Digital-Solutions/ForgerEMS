@@ -130,7 +130,7 @@ public static class SupportBundleExporter
         sb.AppendLine($"FORGEREMS_RELEASE_CHANNEL: {ForgerEmsEnvironmentConfiguration.ReleaseChannel}");
         sb.AppendLine($"UpdateSource: {ForgerEmsEnvironmentConfiguration.GitHubOwner}/{ForgerEmsEnvironmentConfiguration.GitHubRepo}");
         sb.AppendLine($"TelemetryEnabled(env): {ForgerEmsEnvironmentConfiguration.TelemetryEnabled}");
-        sb.AppendLine($"RuntimeRoot: {CopilotRedactor.Redact(runtime.RuntimeRoot, enabled: true)}");
+        sb.AppendLine($"RuntimeRoot: {DiagnosticRedactor.Redact(runtime.RuntimeRoot, enabled: true)}");
         AddPlain(zip, "bundle-metadata.txt", sb.ToString());
     }
 
@@ -267,7 +267,7 @@ public static class SupportBundleExporter
 
     private static void AddRedactedString(ZipArchive zip, string entryName, string? text)
     {
-        var body = CopilotRedactor.Redact(text ?? string.Empty, enabled: true);
+        var body = DiagnosticRedactor.Redact(text ?? string.Empty, enabled: true);
         AddPlain(zip, entryName, body);
     }
 

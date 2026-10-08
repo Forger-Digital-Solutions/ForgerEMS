@@ -59,7 +59,6 @@ public sealed class UsbBenchmarkHardeningTests
     {
         var powerShell = new PowerShellRunnerService();
         var runtime = new AppRuntimeService();
-        var registry = new CopilotProviderRegistry();
         var vm = new MainViewModel(
             new BackendDiscoveryService(),
             powerShell,
@@ -71,8 +70,6 @@ public sealed class UsbBenchmarkHardeningTests
             new ManagedDownloadResolverService(new HttpClient()),
             runtime,
             benchmarkService,
-            new CopilotService(registry),
-            registry,
             usbIntelligenceService: new UsbIntelligenceService(),
             autoIntelligenceOrchestrator: new NoOpAutoIntelligenceOrchestrator());
         vm.UsbTargets.Add(target);
@@ -436,8 +433,26 @@ public sealed class UsbBenchmarkHardeningTests
         await WaitForStartedAsync(service, 1);
         vm.CancelUsbIntelligenceBenchmarkCommand.Execute(null);
         Assert.True(service.Tokens[0].IsCancellationRequested);
-        first.SetResult(CancelledResult());
-        Assert.True(SpinWait.SpinUntil(() => vm.RunUsbIntelligenceBenchmarkCommand.CanExecute(null), TimeSpan.FromSeconds(5)));
+        var reenabled = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        EventHandler onStateChanged = (_, _) =>
+        {
+            if (vm.RunUsbIntelligenceBenchmarkCommand.CanExecute(null))
+            {
+                reenabled.TrySetResult(true);
+            }
+        };
+        vm.RunUsbIntelligenceBenchmarkCommand.CanExecuteChanged += onStateChanged;
+        try
+        {
+            first.SetResult(CancelledResult());
+            // Yield the test synchronization context so the command's captured continuation can finish.
+            await reenabled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(vm.RunUsbIntelligenceBenchmarkCommand.CanExecute(null));
+        }
+        finally
+        {
+            vm.RunUsbIntelligenceBenchmarkCommand.CanExecuteChanged -= onStateChanged;
+        }
 
         vm.RunUsbIntelligenceBenchmarkCommand.Execute(null);
         await WaitForStartedAsync(service, 2);
@@ -501,37 +516,6 @@ public sealed class UsbBenchmarkHardeningTests
         Assert.Equal(UsbBenchmarkResultKind.DeviceRemoved, result.ResultKind);
         Assert.Contains("USB target is no longer available", result.Details, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(logs, line => line.Contains("USB target unavailable", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [Fact]
-    public void KyraNarrative_CacheSuspectedRead_ConfidenceIsMediumNotHigh()
-    {
-        var snapshot = new UsbTopologySnapshot
-        {
-            GeneratedUtc = DateTimeOffset.UtcNow,
-            Devices = [],
-            Controllers = [],
-            Ports = [],
-            SummaryLine = "test",
-            CombinedConfidenceScore = 85,
-            SelectedTargetBenchmark = new UsbIntelligenceBenchmarkResult
-            {
-                Succeeded = true,
-                WriteSpeedMBps = 59.9,
-                ReadSpeedMBps = 4666.0,
-                Classification = UsbSpeedMeasurementClass.Usb3,
-                ConfidenceScore = 85,
-                ReadLikelyCached = true,
-                ReadIsEstimate = true,
-                SummaryLine = "Good write speed; read unverified."
-            }
-        };
-
-        var narrative = UsbKyraNarrativeBuilder.Build(snapshot);
-
-        Assert.DoesNotContain("confidence is high", narrative.ShortAnswer, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("read is unverified", narrative.ShortAnswer, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("cache suspected", narrative.ShortAnswer, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

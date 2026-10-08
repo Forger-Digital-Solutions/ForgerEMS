@@ -364,7 +364,13 @@ public static class ToolkitWorkspacePlanner
         var family = FirstNonBlank(GetJsonString(manifestItem, "family"), selectedView.Family);
         var osCategory = FirstNonBlank(GetJsonString(manifestItem, "osCategory"), selectedView.OsCategory);
         var licenseNote = FirstNonBlank(GetJsonString(manifestItem, "licenseNote"), selectedView.LicenseNote);
-        var hasChecksum = !string.IsNullOrWhiteSpace(GetJsonString(manifestItem, "sha256")) ||
+        // Runtime-resolved resources carry no static hash by design: the verified
+        // artifact SHA-256 arrives via the managed-resource overlay (gated by
+        // Test-ResolvedOverlayGate) at transfer time.
+        var requiresResolution = GetJsonBool(manifestItem, "requiresResolution") &&
+                                 !string.IsNullOrWhiteSpace(GetJsonString(manifestItem, "resourceId"));
+        var hasChecksum = requiresResolution ||
+                          !string.IsNullOrWhiteSpace(GetJsonString(manifestItem, "sha256")) ||
                           !string.IsNullOrWhiteSpace(GetJsonString(manifestItem, "sha256Url")) ||
                           !string.IsNullOrWhiteSpace(GetJsonString(manifestItem, "sha512")) ||
                           !string.IsNullOrWhiteSpace(GetJsonString(manifestItem, "sha512Url"));
@@ -402,7 +408,10 @@ public static class ToolkitWorkspacePlanner
             return QueueDecision(name, dest, url, SelectedManagedDownloadQueueStatus.SkippedMissingChecksum, "Blocked / needs attention: checksum metadata is required before automation.");
         }
 
-        return QueueDecision(name, dest, url, SelectedManagedDownloadQueueStatus.Pending, "Ready to download: managed HTTPS source with checksum metadata.");
+        return QueueDecision(name, dest, url, SelectedManagedDownloadQueueStatus.Pending,
+            requiresResolution
+                ? "Ready to download: managed source; artifact checksum is supplied by the verified resource overlay at transfer time."
+                : "Ready to download: managed HTTPS source with checksum metadata.");
     }
 
     private static SelectedManagedDownloadQueueItem QueueDecision(

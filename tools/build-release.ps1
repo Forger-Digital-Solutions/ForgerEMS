@@ -9,7 +9,8 @@ versioned portable app ZIP for beta distribution, and writes SHA256 checksums un
 release\current\.
 
 .PARAMETER Version
-Release version. Defaults to the WPF project <Version>.
+Release version. Defaults to the repository VERSION file. A different explicit
+value is refused: VERSION is authoritative.
 
 .PARAMETER DryRun
 Runs all CI-safe build and validation work, but skips Inno Setup compilation.
@@ -22,6 +23,31 @@ Skips installer compilation even outside dry-run mode.
 
 .PARAMETER Runtime
 .NET runtime identifier. Defaults to win-x64.
+
+.PARAMETER OutputRoot
+Isolated build output root (defaults to <repo>\dist). Existing publish/intermediate
+folders under it are never touched when they are non-empty — choose a fresh root.
+
+.PARAMETER ReleaseOutputRoot
+Isolated release staging root (defaults to <repo>\release\current). Must not already
+exist and contain files — the script refuses to erase historical artifacts.
+
+.PARAMETER NuGetPackagesPath
+Isolated NuGet packages cache forwarded to dotnet restore --packages.
+
+.PARAMETER RequireSigning
+Production packaging gate: the frontend exe and installer must carry a valid
+Authenticode signature with the expected publisher. Fails closed when no certificate
+is available — there is no silent unsigned production path.
+
+.PARAMETER UnsignedCandidate
+Explicitly permits an unsigned local candidate build. release.json is marked
+unsigned + non-production with the source HEAD and dirty flag. Never publish these
+artifacts as releases.
+
+.PARAMETER CertificateThumbprint / TimestampUrl / ExpectedPublisher
+Signing inputs: certificate thumbprint in CurrentUser\My or LocalMachine\My,
+RFC3161 timestamp server, and the exact publisher SimpleName required on signed outputs.
 #>
 
 #requires -Version 5.1
@@ -33,7 +59,15 @@ param(
     [switch]$SkipInstaller,
     [string]$Configuration = "Release",
     [string]$Runtime = "win-x64",
-    [string]$InnoCompilerPath = ""
+    [string]$InnoCompilerPath = "",
+    [string]$OutputRoot = "",
+    [string]$ReleaseOutputRoot = "",
+    [string]$NuGetPackagesPath = "",
+    [switch]$RequireSigning,
+    [switch]$UnsignedCandidate,
+    [string]$CertificateThumbprint = "",
+    [string]$TimestampUrl = "http://timestamp.digicert.com",
+    [string]$ExpectedPublisher = "Forger Digital Solutions"
 )
 
 $ErrorActionPreference = "Stop"
@@ -46,12 +80,153 @@ $backendBuildScript = Join-Path $repoRoot "tools\build-backend-release.ps1"
 $stageBackendScript = Join-Path $repoRoot "tools\stage-bundled-backend.ps1"
 $installerScript = Join-Path $repoRoot "installer\ForgerEMS.iss"
 $manifestRoot = Join-Path $repoRoot "manifests"
-$distRoot = Join-Path $repoRoot "dist"
+$distRoot = if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
+    Join-Path $repoRoot "dist"
+} else {
+    [IO.Path]::GetFullPath($OutputRoot)
+}
 $runtimeHelperPath = Join-Path $repoRoot "backend\ForgerEMS.Runtime.ps1"
 
 function Write-Step {
     param([Parameter(Mandatory)][string]$Message)
     Write-Host "[ForgerEMS] $Message" -ForegroundColor Cyan
+}
+
+# ---- signing gate: production packaging defaults to signed; unsigned requires the
+# explicit -UnsignedCandidate flag and is marked non-production in release.json ----
+if ($RequireSigning -and $UnsignedCandidate) {
+    throw "-RequireSigning and -UnsignedCandidate are mutually exclusive."
+}
+$signed = -not $UnsignedCandidate
+$script:SigningApplied = $false
+$script:ForgerEMSSigntool = $null
+$script:ForgerEMSCertificateStore = $null
+$signHelperPath = Join-Path $repoRoot "tools\sign-release-artifact.ps1"
+
+function Assert-ForgerEMSSigningPrerequisites {
+    if ([string]::IsNullOrWhiteSpace($CertificateThumbprint)) {
+        throw "Signing required but no -CertificateThumbprint was provided (fail closed)."
+    }
+    if ($CertificateThumbprint -notmatch '^[0-9A-Fa-f]{40}$') {
+        throw "Signing required but -CertificateThumbprint is not a strict 40-hex value (fail closed)."
+    }
+    if (-not (Test-Path -LiteralPath $signHelperPath)) {
+        throw "Signing helper not found: $signHelperPath"
+    }
+
+    $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -match 'x64\\signtool\.exe$' } |
+        Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+    if (-not $signtool) {
+        throw "Signing required but signtool.exe was not found under Windows Kits (fail closed)."
+    }
+
+    # Resolve the certificate store once, preferring CurrentUser then LocalMachine.
+    # The signing helper re-validates private key, validity window, and code-signing
+    # EKU on every invocation.
+    $cert = Get-ChildItem "Cert:\CurrentUser\My\$CertificateThumbprint" -ErrorAction SilentlyContinue
+    if ($cert) {
+        $script:ForgerEMSCertificateStore = 'CurrentUser'
+    }
+    else {
+        $cert = Get-ChildItem "Cert:\LocalMachine\My\$CertificateThumbprint" -ErrorAction SilentlyContinue
+        if ($cert) {
+            $script:ForgerEMSCertificateStore = 'LocalMachine'
+        }
+    }
+    if (-not $cert) {
+        throw "Signing certificate $CertificateThumbprint was not found in CurrentUser\My or LocalMachine\My (fail closed)."
+    }
+
+    return $signtool
+}
+
+if ($signed) {
+    # Fail closed before the expensive restore/build/publish when signing is
+    # required but credentials are unavailable (CI/local unsigned builds must
+    # pass -UnsignedCandidate explicitly instead).
+    $script:ForgerEMSSigntool = Assert-ForgerEMSSigningPrerequisites
+    Write-Step "Signing prerequisites validated: signtool and certificate $CertificateThumbprint ($script:ForgerEMSCertificateStore) are available."
+}
+
+function Invoke-ForgerEMSSign {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [switch]$VerifyOnly
+    )
+
+    $signtool = $script:ForgerEMSSigntool
+    if (-not $signtool) {
+        $signtool = Assert-ForgerEMSSigningPrerequisites
+    }
+    if (-not $script:ForgerEMSCertificateStore) {
+        throw "Signing certificate store was not resolved (fail closed)."
+    }
+
+    $helperArgs = @{
+        Path                  = $Path
+        CertificateThumbprint = $CertificateThumbprint
+        CertificateStore      = $script:ForgerEMSCertificateStore
+        SignToolPath          = $signtool
+        TimestampUrl          = $TimestampUrl
+        ExpectedPublisher     = $ExpectedPublisher
+    }
+    if ($VerifyOnly) { $helperArgs['VerifyOnly'] = $true }
+
+    & $signHelperPath @helperArgs | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "sign-release-artifact failed for '$Path' with exit code $LASTEXITCODE." }
+    $script:SigningApplied = $true
+}
+
+function Assert-SigningCallbackValue {
+    # Values embedded into the ISCC /S sign-tool callback run through a shell —
+    # reject shell metacharacters, unescaped quotes, newlines, and Inno's own
+    # $ and % substitution characters.
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [Parameter(Mandatory)][AllowEmptyString()][string]$Value
+    )
+    foreach ($ch in @('"', "'", '`', '&', '|', ';', '<', '>', '$', '%', "`r", "`n")) {
+        if ($Value.Contains($ch)) {
+            throw "Signing callback value '$Name' contains a forbidden character; refusing to build the /S command."
+        }
+    }
+}
+
+function Get-ForgerEMSSignToolCallback {
+    # ISCC /S callback: absolute Windows PowerShell invoking the helper with
+    # Inno's $f (quoted file name) and $q (quote) sequences per the official
+    # SignTool docs. $f already expands to a quoted path — do not wrap it in $q.
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$VerifiedUninstallerPath
+    )
+    $powershell = Join-Path $env:WINDIR "System32\WindowsPowerShell\v1.0\powershell.exe"
+    foreach ($pair in @(
+        @('powershell', $powershell),
+        @('helper', $signHelperPath),
+        @('signtool', $script:ForgerEMSSigntool),
+        @('thumbprint', $CertificateThumbprint),
+        @('store', $script:ForgerEMSCertificateStore),
+        @('timestampUrl', $TimestampUrl),
+        @('publisher', $ExpectedPublisher),
+        @('verifiedUninstallerPath', $VerifiedUninstallerPath)
+    )) {
+        Assert-SigningCallbackValue -Name $pair[0] -Value $pair[1]
+    }
+
+    # $f expands to the already-quoted file Inno is asking us to sign; $q emits
+    # a double quote for the surrounding arguments.
+    return (
+        '$q' + $powershell + '$q -NoProfile -ExecutionPolicy Bypass -File ' +
+        '$q' + $signHelperPath + '$q ' +
+        '-Path $f ' +
+        '-CertificateThumbprint ' + $CertificateThumbprint + ' ' +
+        '-CertificateStore ' + $script:ForgerEMSCertificateStore + ' ' +
+        '-SignToolPath $q' + $script:ForgerEMSSigntool + '$q ' +
+        '-TimestampUrl $q' + $TimestampUrl + '$q ' +
+        '-ExpectedPublisher $q' + $ExpectedPublisher + '$q ' +
+        '-VerifiedUninstallerPath $q' + $VerifiedUninstallerPath + '$q'
+    )
 }
 
 function Ensure-Dir {
@@ -61,14 +236,20 @@ function Ensure-Dir {
     }
 }
 
-function Get-ProjectVersion {
-    param([Parameter(Mandatory)][string]$Path)
-    [xml]$xml = Get-Content -LiteralPath $Path -Raw
-    $value = $xml.Project.PropertyGroup.Version | Select-Object -First 1
-    if ([string]::IsNullOrWhiteSpace([string]$value)) {
-        throw "Could not read <Version> from $Path"
+function Get-RepoVersion {
+    param([Parameter(Mandatory)][string]$RepoRoot)
+
+    $versionFile = Join-Path $RepoRoot "VERSION"
+    if (-not (Test-Path -LiteralPath $versionFile)) {
+        throw "Authoritative version file not found: $versionFile"
     }
-    return [string]$value
+
+    $value = (Get-Content -LiteralPath $versionFile -Raw).Trim()
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        throw "VERSION file is empty: $versionFile"
+    }
+
+    return $value
 }
 
 function Resolve-IsccPath {
@@ -148,19 +329,34 @@ function Assert-NoDriverArtifacts {
 }
 
 function Copy-ReleaseDocs {
-    param([Parameter(Mandatory)][string]$Destination)
+    param(
+        [Parameter(Mandatory)][string]$Destination,
+        [Parameter(Mandatory)][string]$Version
+    )
 
     $docsDest = Join-Path $Destination "docs"
     Ensure-Dir -Path $docsDest
     $docs = @(
         "ABOUT_FORGEREMS.md",
+        "BETA_ISSUE_REPORT_TEMPLATE.md",
+        "BETA_TESTER_QUICKSTART.md",
+        "DOWNLOAD_TROUBLESHOOTING.md",
+        "ENVIRONMENT.md",
         "FAQ.md",
-        "TERMS_OF_USE.md",
-        "PRIVACY_AND_DATA_HANDLING.md",
+        "FIRST_TESTER_DOWNLOAD_FLOW.md",
+        "FORGER-DEEP-SENSOR-DRIVER-ROADMAP.md",
+        "FORGER-SENSOR-STACK.md",
+        "LEGAL.md",
         "LEGAL_NOTICES.md",
+        "LINUX-WINE-COMPATIBILITY.md",
+        "PRIVACY_AND_DATA_HANDLING.md",
+        "SENSOR-LIMITATIONS.md",
+        "TERMS_OF_USE.md",
+        "THIRD-PARTY-SENSOR-NOTICES.md",
         "THIRD_PARTY_NOTICES.md",
+        "UPDATE_SYSTEM.md",
         "USER_CONSENT_FLOW.md",
-        "RELEASE_NOTES_v1.2.4-preview.5.md"
+        ("RELEASE_NOTES_v{0}.md" -f $Version)
     )
 
     foreach ($doc in $docs) {
@@ -170,6 +366,24 @@ function Copy-ReleaseDocs {
         }
 
         Copy-Item -LiteralPath $source -Destination (Join-Path $docsDest $doc) -Force
+    }
+
+    # docs/marketing is a packaged subfolder — preserve its relative path.
+    $marketingDest = Join-Path $docsDest "marketing"
+    Ensure-Dir -Path $marketingDest
+    $marketingDoc = Join-Path $repoRoot "docs\marketing\PUBLIC-FAQ.md"
+    if (-not (Test-Path -LiteralPath $marketingDoc)) {
+        throw "Required release doc was not found: $marketingDoc"
+    }
+    Copy-Item -LiteralPath $marketingDoc -Destination (Join-Path $marketingDest "PUBLIC-FAQ.md") -Force
+
+    # docs/LEGAL.md links ../SECURITY.md — the target must exist at package root.
+    foreach ($rootDoc in @("SECURITY.md")) {
+        $rootDocSource = Join-Path $repoRoot $rootDoc
+        if (-not (Test-Path -LiteralPath $rootDocSource)) {
+            throw "Required release doc was not found: $rootDocSource"
+        }
+        Copy-Item -LiteralPath $rootDocSource -Destination (Join-Path $Destination $rootDoc) -Force
     }
 }
 
@@ -282,15 +496,9 @@ DEEP SENSOR MODE
 - To turn off the testing override: remove FORGEREMS_DEEP_SENSOR_MODE or set it to Off.
 
 SUPPORT PRIVACY
-- Send logs/screenshots/support bundles/Kyra context only if comfortable.
+- Send logs/screenshots/support bundles only if comfortable.
 - Review exported files before sending them.
 - Do not send product keys, API keys, tokens, passwords, private documents, or sensitive files.
-
-KYRA BETA GATEWAY
-- ForgerEMS v1.2.0 preview/public beta includes Kyra Beta Gateway support.
-- Cloud beta access uses FORGEREMS_KYRA_GATEWAY_URL + FORGEREMS_KYRA_GATEWAY_BETA_TOKEN when configured.
-- No direct AI provider API keys are included in this release.
-- Local/offline Kyra fallback remains available.
 - For operator verification run tools/show-forgerems-env-status.ps1 and tools/audit-config-and-secrets.ps1.
 
 VERIFY INTEGRITY
@@ -435,11 +643,6 @@ ForgerDigitalSolutions@outlook.com
 Security notice:
 Never send API keys, passwords, serial numbers, private documents, or sensitive personal files.
 
-Kyra beta gateway:
-- Cloud beta access uses ForgerEMS Gateway when configured.
-- This release does not include direct provider API keys.
-- Local/offline fallback remains available.
-
 Deep Sensor Mode:
 - May be enabled by the installer or Settings.
 - Uses bundled local read-only hardware sensors where packaged.
@@ -449,7 +652,7 @@ Deep Sensor Mode:
 - Unavailable readings are coverage limits, not failures.
 
 Review before sharing:
-Reports, support bundles, logs, Kyra context, and exported files may include hardware details, network adapter data, USB device details, local paths, and diagnostic notes. Do not send product keys, API keys, tokens, passwords, private documents, or sensitive files.
+Reports, support bundles, logs, and exported files may include hardware details, network adapter data, USB device details, local paths, and diagnostic notes. Do not send product keys, API keys, tokens, passwords, private documents, or sensitive files.
 "@
     Set-Content -LiteralPath $Path -Value $content -Encoding utf8
 }
@@ -460,13 +663,22 @@ foreach ($required in @($solutionPath, $projectPath, $backendBuildScript, $stage
     }
 }
 
+$authoritativeVersion = Get-RepoVersion -RepoRoot $repoRoot
 if ([string]::IsNullOrWhiteSpace($Version)) {
-    $Version = Get-ProjectVersion -Path $projectPath
+    $Version = $authoritativeVersion
+}
+elseif ($Version.Trim() -ne $authoritativeVersion) {
+    throw "Refusing to override authoritative VERSION ($authoritativeVersion) with '$Version'."
 }
 
 $publishDir = Join-Path $distRoot "publish\$Runtime"
 $backendStageRoot = Join-Path $distRoot "backend-stage\backend"
-$releaseRoot = Join-Path $repoRoot "release\current"
+$releaseRoot = if ([string]::IsNullOrWhiteSpace($ReleaseOutputRoot)) {
+    Join-Path $repoRoot "release\current"
+} else {
+    [IO.Path]::GetFullPath($ReleaseOutputRoot)
+}
+$buildId = [Guid]::NewGuid().ToString('D')
 $releaseAppRoot = Join-Path $releaseRoot "app"
 $releaseBackendRoot = Join-Path $releaseAppRoot "backend"
 $releaseManifestRoot = Join-Path $releaseAppRoot "manifests"
@@ -474,19 +686,46 @@ $checksumsPath = Join-Path $releaseRoot "CHECKSUMS.sha256"
 $installerOutputDir = Join-Path $distRoot "installer"
 $installerReleaseName = "ForgerEMS-Setup-v{0}.exe" -f $Version
 $installerReleasePath = Join-Path $releaseRoot $installerReleaseName
-$displayVersionLabel = "ForgerEMS v1.2.4 Public Preview"
-$releaseIdentifierLabel = "ForgerEMS v1.2.4 Public Preview - package $Version (portable app ZIP plus installer)"
+$zipBundleName = "ForgerEMS-v{0}.zip" -f $Version
+$displayVersionLabel = "ForgerEMS v$Version"
+$releaseIdentifierLabel = "ForgerEMS v$Version - package $Version (portable app ZIP plus installer)"
 
 $buildTempRoot = Join-Path $distRoot "tmp"
 Ensure-Dir -Path $buildTempRoot
 $env:TEMP = $buildTempRoot
 $env:TMP = $buildTempRoot
 
+# Isolated release destination must be fresh — never erase historical artifacts.
+if (Test-Path -LiteralPath $releaseRoot) {
+    $existing = Get-ChildItem -LiteralPath $releaseRoot -Force -ErrorAction SilentlyContinue
+    if ($existing) {
+        throw "Release output root already exists and is not empty: $releaseRoot. Choose a fresh -ReleaseOutputRoot; refusing to erase existing artifacts."
+    }
+}
+
 Write-Step "Release version: $Version"
+
+if ($signed) {
+    # Production packaging fails early on a dirty source tree — production
+    # eligibility requires sourceDirtyFileCount = 0 in the emitted metadata.
+    $earlyStatus = @(git -C $repoRoot status --porcelain 2>$null)
+    if ($LASTEXITCODE -ne 0) {
+        throw "git status failed with exit code $LASTEXITCODE; refusing to treat an unreadable source tree as clean for production packaging."
+    }
+    $earlyDirtyCount = @($earlyStatus | Where-Object { $_ }).Count
+    if ($earlyDirtyCount -gt 0) {
+        throw "Production (signed) packaging requires a clean source tree; $earlyDirtyCount dirty file(s) found. Use -UnsignedCandidate for local candidate builds."
+    }
+}
+
 Write-Step "Restoring solution"
 Push-Location $repoRoot
 try {
-    dotnet restore ".\ForgerEMS.sln" --disable-parallel
+    if ([string]::IsNullOrWhiteSpace($NuGetPackagesPath)) {
+        dotnet restore ".\ForgerEMS.sln" --disable-parallel
+    } else {
+        dotnet restore ".\ForgerEMS.sln" --disable-parallel --packages $NuGetPackagesPath
+    }
     if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed with exit code $LASTEXITCODE." }
 }
 finally {
@@ -507,8 +746,19 @@ Write-Step "Publishing WPF app"
 dotnet publish $projectPath -c $Configuration -r $Runtime --self-contained true /p:PublishSingleFile=true /p:Version=$Version /p:InformationalVersion=$Version /p:PublishDir="$publishDir\"
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed with exit code $LASTEXITCODE." }
 
+if ($signed) {
+    Write-Step "Signing frontend executable"
+    $appExe = Join-Path $publishDir "ForgerEMS.exe"
+    if (-not (Test-Path -LiteralPath $appExe)) { throw "Expected publish output was not found: $appExe" }
+    Invoke-ForgerEMSSign -Path $appExe
+}
+elseif ($UnsignedCandidate) {
+    Write-Step "Unsigned candidate build: frontend executable will NOT be Authenticode-signed"
+}
+
 Write-Step "Building backend release bundle"
-& $backendBuildScript
+$backendReleaseFamilyRoot = Join-Path $distRoot "backend-release\ventoy-core"
+& $backendBuildScript -ReleaseFamilyRoot $backendReleaseFamilyRoot
 
 $backendManifest = Get-Content -LiteralPath (Join-Path $manifestRoot "ForgerEMS.updates.json") -Raw | ConvertFrom-Json
 $backendVersion = [string]$backendManifest.coreVersion
@@ -516,24 +766,21 @@ if ([string]::IsNullOrWhiteSpace($backendVersion)) {
     throw "manifests\ForgerEMS.updates.json is missing coreVersion."
 }
 
-$backendReleaseRoot = Join-Path $repoRoot ("release\ventoy-core\{0}" -f $backendVersion)
+$backendReleaseRoot = Join-Path $backendReleaseFamilyRoot $backendVersion
 if (-not (Test-Path -LiteralPath $backendReleaseRoot)) {
     throw "Expected backend release bundle was not found: $backendReleaseRoot"
 }
 
 Write-Step "Staging bundled backend"
-& $stageBackendScript -FrontendVersion $Version -ReleaseBundleRoot $backendReleaseRoot -OutputRoot $backendStageRoot
+& $stageBackendScript -FrontendVersion $Version -ReleaseBundleRoot $backendReleaseRoot -OutputRoot $backendStageRoot -StageFamilyRoot (Split-Path -Parent $backendStageRoot)
 
 Write-Step "Preparing release folder"
 Ensure-Dir -Path (Split-Path -Parent $releaseRoot)
-if (Test-Path -LiteralPath $releaseRoot) {
-    Get-ChildItem -LiteralPath $releaseRoot -Force | Remove-Item -Recurse -Force
-}
 Ensure-Dir -Path $releaseRoot
 Copy-CleanDirectory -Source $publishDir -Destination $releaseAppRoot
 Copy-CleanDirectory -Source $backendStageRoot -Destination $releaseBackendRoot
 Copy-CleanDirectory -Source $manifestRoot -Destination $releaseManifestRoot
-Copy-ReleaseDocs -Destination $releaseAppRoot
+Copy-ReleaseDocs -Destination $releaseAppRoot -Version $Version
 
 Write-Step "Scanning staged release for driver artifacts"
 Assert-NoDriverArtifacts -Roots @($publishDir, $backendStageRoot, $releaseAppRoot) -Context "staged app/backend"
@@ -546,15 +793,43 @@ else {
     Ensure-Dir -Path $installerOutputDir
     $isccPath = Resolve-IsccPath -ExplicitPath $InnoCompilerPath
     $appVersionInfo = ConvertTo-WindowsVersion -Value $Version
-    & $isccPath `
-        "/DAppVersion=$Version" `
-        "/DAppVersionInfo=$appVersionInfo" `
-        ("/DDisplayVersion=$displayVersionLabel") `
-        ("/DReleaseIdentifier=$releaseIdentifierLabel") `
-        "/DPublishDir=$publishDir" `
-        "/DBackendBundleDir=$backendStageRoot" `
-        "/DOutputDir=$installerOutputDir" `
-        $installerScript
+
+    $isccArgs = [System.Collections.Generic.List[string]]::new()
+    $isccArgs.Add("/DAppVersion=$Version")
+    $isccArgs.Add("/DAppVersionInfo=$appVersionInfo")
+    $isccArgs.Add("/DDisplayVersion=$displayVersionLabel")
+    $isccArgs.Add("/DReleaseIdentifier=$releaseIdentifierLabel")
+    $isccArgs.Add("/DPublishDir=$publishDir")
+    $isccArgs.Add("/DBackendBundleDir=$backendStageRoot")
+    $isccArgs.Add("/DOutputDir=$installerOutputDir")
+
+    $signedUninstallerDir = Join-Path $installerOutputDir "signing"
+    if ($signed) {
+        $isccArgs.Add("/DRequireSigning=1")
+        # Fresh directory for the cached signed uninstaller Inno emits. Reuse an
+        # empty directory or create a fresh one — never delete a pre-existing
+        # non-empty directory.
+        if (Test-Path -LiteralPath $signedUninstallerDir) {
+            $existingEntries = @(Get-ChildItem -LiteralPath $signedUninstallerDir -Force -ErrorAction SilentlyContinue)
+            if ($existingEntries.Count -gt 0) {
+                throw "SignedUninstallerDir already exists and is not empty: $signedUninstallerDir. Refusing to remove pre-existing contents - clear it manually or use a fresh output root."
+            }
+        }
+        else {
+            Ensure-Dir -Path $signedUninstallerDir
+        }
+        # Inno deletes the signed uninst.eXX.tmp after embedding it; the
+        # callback captures a verified copy here for release attestation.
+        $verifiedUninstallerPath = Join-Path $signedUninstallerDir 'verified-uninstaller.exe'
+        $isccArgs.Add("/DSignedUninstallerDir=$signedUninstallerDir")
+        $isccArgs.Add("/SForgerEMSRelease=$(Get-ForgerEMSSignToolCallback -VerifiedUninstallerPath $verifiedUninstallerPath)")
+    }
+    else {
+        $isccArgs.Add("/DUnsignedCandidate=1")
+    }
+    $isccArgs.Add($installerScript)
+
+    & $isccPath @isccArgs
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE." }
 
     $versionedInstallerPath = Join-Path $installerOutputDir ("ForgerEMS-Setup-v{0}.exe" -f $Version)
@@ -562,21 +837,80 @@ else {
         throw "Expected installer output was not found: $versionedInstallerPath"
     }
 
+    if ($signed) {
+        # With SignTool=ForgerEMSRelease configured, Inno has already signed the
+        # installer through the callback (which signs AND verifies each
+        # invocation). Verify rather than sign again; fall back to a single
+        # helper sign if the output somehow arrived unsigned.
+        $installerSig = Get-AuthenticodeSignature -FilePath $versionedInstallerPath
+        if ($null -ne $installerSig -and $installerSig.Status -eq [System.Management.Automation.SignatureStatus]::Valid) {
+            Write-Step "Verifying installer signature applied by Inno SignTool callback"
+            Invoke-ForgerEMSSign -Path $versionedInstallerPath -VerifyOnly
+        }
+        else {
+            Write-Step "Signing installer"
+            Invoke-ForgerEMSSign -Path $versionedInstallerPath
+        }
+
+        # Captured signed uninstaller: Inno embeds the signed uninst.eXX.tmp
+        # bytes into the installer and then deletes the temporary file, so the
+        # helper's verified copy is the durable artifact — it must exist and
+        # pass the same verification contract.
+        if (-not (Test-Path -LiteralPath $verifiedUninstallerPath -PathType Leaf)) {
+            throw "SignedUninstaller is required but the signing callback did not capture a verified uninstaller to $verifiedUninstallerPath (fail closed)."
+        }
+        Invoke-ForgerEMSSign -Path $verifiedUninstallerPath -VerifyOnly
+        Write-Step "Verified captured signed uninstaller."
+    }
+
     Copy-Item -LiteralPath $versionedInstallerPath -Destination (Join-Path $releaseRoot (Split-Path -Leaf $versionedInstallerPath)) -Force
+
+    if ($signed -and (Test-Path -LiteralPath $verifiedUninstallerPath -PathType Leaf)) {
+        # The verified signed uninstaller must live under the release root so the
+        # candidate manifest can bind it by a safe contained relative filename.
+        Ensure-Dir -Path (Join-Path $releaseRoot "uninstaller")
+        Copy-Item -LiteralPath $verifiedUninstallerPath -Destination (Join-Path $releaseRoot "uninstaller\verified-uninstaller.exe") -Force
+    }
 }
 
 Write-Step "Writing release metadata"
+$sourceHead = (git -C $repoRoot rev-parse HEAD 2>$null)
+if ($LASTEXITCODE -ne 0 -or -not ($sourceHead -match '^[0-9a-fA-F]{40}$')) {
+    throw "git rev-parse HEAD failed or did not return a 40-hex commit id ('$sourceHead'); refusing to write release metadata with unknown provenance."
+}
+$gitStatusLines = @(git -C $repoRoot status --porcelain 2>$null)
+if ($LASTEXITCODE -ne 0) {
+    throw "git status failed with exit code $LASTEXITCODE; refusing to write release metadata with unknown dirty state."
+}
+$dirtyCount = @($gitStatusLines | Where-Object { $_ }).Count
 $metadata = [ordered]@{
+    schemaVersion = 2
     product = "ForgerEMS"
     publisher = "Forger Digital Solutions"
     version = $Version
     releaseIdentifier = $releaseIdentifierLabel
-    channel = "preview"
+    channel = if ($UnsignedCandidate) { "preview" } else { "stable" }
+    buildId = $buildId
+    candidateKind = if ($UnsignedCandidate) { "UnsignedValidationCandidate" } else { "SignedValidationCandidate" }
+    # Reaching this point means restore/build/publish completed; buildEligible
+    # additionally requires a clean committed source tree.
+    buildEligible = ($dirtyCount -eq 0 -and -not $DryRun)
     backendVersion = $backendVersion
     runtime = $Runtime
     configuration = $Configuration
     dryRun = [bool]$DryRun
+    signed = [bool]$script:SigningApplied
+    unsignedCandidate = [bool]$UnsignedCandidate
+    # Production eligibility is never decided by the builder: only the
+    # certification endpoint (tools/Test-ForgerEMSReleaseCertification.ps1) can
+    # promote a candidate after all mandatory signed receipts verify.
+    productionEligible = $false
+    sourceHead = $sourceHead
+    sourceDirtyFileCount = $dirtyCount
     generatedUtc = (Get-Date).ToUniversalTime().ToString("o")
+}
+if ($UnsignedCandidate) {
+    Write-Warning "UNSIGNED LOCAL CANDIDATE: artifacts are not Authenticode-signed and are marked non-production in release.json. Do not publish."
 }
 $metadata | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $releaseRoot "release.json") -Encoding UTF8
 
@@ -601,7 +935,6 @@ if ($DryRun -or $SkipInstaller) {
 }
 else {
     Write-Step "Creating portable ZIP distribution bundle"
-    $zipBundleName = "ForgerEMS-v{0}.zip" -f $Version
     $zipBundlePath = Join-Path $releaseRoot $zipBundleName
     $packageParent = Join-Path $releaseRoot "package"
     $packageDirName = "ForgerEMS-v{0}" -f $Version
@@ -638,5 +971,40 @@ else {
         Remove-Item -LiteralPath $packageParent -Recurse -Force
     }
 }
+
+Write-Step "Emitting candidate certification manifest"
+# candidate-certification.json binds this build identity to final artifact
+# hashes. It is emitted only after all signing/packaging/final checksums and is
+# never placed inside the portable ZIP.
+$candidateArtifacts = [System.Collections.Generic.List[object]]::new()
+$candidateArtifactSpecs = @(
+    @{ Role = 'Installer'; RelativePath = $installerReleaseName }
+    @{ Role = 'Portable'; RelativePath = $zipBundleName }
+    @{ Role = 'Frontend'; RelativePath = 'app\ForgerEMS.exe' }
+    @{ Role = 'Uninstaller'; RelativePath = 'uninstaller\verified-uninstaller.exe' }
+)
+foreach ($spec in $candidateArtifactSpecs) {
+    $artifactPath = Join-Path $releaseRoot $spec.RelativePath
+    if (Test-Path -LiteralPath $artifactPath -PathType Leaf) {
+        $candidateArtifacts.Add([ordered]@{
+            role = $spec.Role
+            filename = ($spec.RelativePath -replace '\\', '/')
+            sha256 = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash
+            sizeBytes = (Get-Item -LiteralPath $artifactPath).Length
+        })
+    }
+}
+$candidateManifest = [ordered]@{
+    schemaVersion = 1
+    buildId = $buildId
+    generatedUtc = (Get-Date).ToUniversalTime().ToString("o")
+    sourceHead = $sourceHead
+    version = $Version
+    architecture = "x64"
+    runtime = $Runtime
+    sourceDirtyFileCount = $dirtyCount
+    artifacts = @($candidateArtifacts)
+}
+$candidateManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $releaseRoot "candidate-certification.json") -Encoding UTF8
 
 Write-Host "ForgerEMS current release folder ready: $releaseRoot" -ForegroundColor Green

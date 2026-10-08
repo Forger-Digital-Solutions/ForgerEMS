@@ -15,10 +15,10 @@ namespace ForgerEMS.Wpf.Tests;
 // Update-ForgerEMS.ps1 resolution order so bundled wins over USB-side.
 public sealed class PackagedManifestFreshnessTests
 {
-    // 2026-05-27 catalog-expansion (Batch 6) promotion pass added 18 managed file entries
-    // (15 OS / ISO + 3 technician tool), bringing the active count from 32 to 50.
-    // See docs/MANAGED_DOWNLOAD_EXPANSION_REPORT.md for the per-entry proof trail.
-    private const int ExpectedActiveManagedDownloadCount = 50;
+    // After the central-resource migration every managed file entry is a
+    // requiresResolution item bound to a resource-policy descriptor; the active
+    // managed file count is the descriptor-backed set, not the legacy pinned list.
+    private const int ExpectedActiveManagedDownloadCount = 20;
 
     private static string RepoRoot
     {
@@ -49,31 +49,38 @@ public sealed class PackagedManifestFreshnessTests
         Assert.Equal(ExpectedActiveManagedDownloadCount, active);
     }
 
+    // The promotion pass survives the resource-policy migration: each promoted
+    // entry must still exist. Managed entries are runtime-resolved now, so the
+    // version is chosen by the trusted overlay at download time — assert the
+    // entry, its type, and its resource binding rather than a frozen version.
     [Theory]
-    [InlineData("Rufus 4.14",            "4.14")]
-    [InlineData("Ventoy",                "1.1.12")]
-    [InlineData("balenaEtcher 2.1.6",    "2.1.6")]
-    [InlineData("Rescuezilla 2.6.2",     "2.6.2")]
-    [InlineData("MemTest86+ 8.10",       "8.10")]
-    [InlineData("Alpine Linux 3.23.4",   "3.23.4")]
-    [InlineData("AlmaLinux 10.2",        "10.2")]
-    public void SourceManifest_ContainsLatestPromotedVersion(string nameFragment, string expectedLatestStableVersion)
+    [InlineData("Rufus Portable",        "file",  "rufus")]
+    [InlineData("Ventoy Windows Package","file",  "ventoy")]
+    [InlineData("balenaEtcher",          "file",  "etcher")]
+    [InlineData("Rescuezilla",           "file",  "rescuezilla")]
+    [InlineData("MemTest86+",            "page",  "")]
+    [InlineData("Alpine Linux",          "page",  "")]
+    [InlineData("AlmaLinux",             "page",  "")]
+    public void SourceManifest_ContainsPromotedEntry(string nameFragment, string expectedType, string expectedResourceId)
     {
         using var document = JsonDocument.Parse(File.ReadAllText(SourceManifestPath));
         var match = document.RootElement.GetProperty("items")
             .EnumerateArray()
             .FirstOrDefault(item =>
-                string.Equals(GetString(item, "type"), "file", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(GetString(item, "type"), expectedType, StringComparison.OrdinalIgnoreCase) &&
                 (item.TryGetProperty("enabled", out var enabled) ? enabled.GetBoolean() : true) &&
                 GetString(item, "name").Contains(nameFragment, StringComparison.OrdinalIgnoreCase));
 
         Assert.True(
             match.ValueKind != JsonValueKind.Undefined,
-            $"No active managed file item matched '{nameFragment}'. Did a promotion get reverted?");
+            $"No active {expectedType} item matched '{nameFragment}'. Did a promotion get reverted?");
 
-        var freshness = match.GetProperty("freshness");
-        Assert.Equal(expectedLatestStableVersion, GetString(freshness, "latestKnownStableVersion"));
-        Assert.Equal(expectedLatestStableVersion, GetString(freshness, "currentPinnedVersion"));
+        if (expectedType == "file")
+        {
+            Assert.True(match.TryGetProperty("requiresResolution", out var rr) && rr.GetBoolean(),
+                $"Managed item '{nameFragment}' must be requiresResolution (overlay-bound).");
+            Assert.Equal(expectedResourceId, GetString(match, "resourceId"));
+        }
     }
 
     [Fact]
@@ -88,6 +95,47 @@ public sealed class PackagedManifestFreshnessTests
                 string.Equals(sourceHash, packagedHash, StringComparison.OrdinalIgnoreCase),
                 $"Packaged manifest diverges from source: {packagedPath}\nsource={sourceHash}\npackaged={packagedHash}");
         }
+    }
+
+    // A packaged copy belongs to the CURRENT catalog only when its sibling release
+    // metadata names the source manifest's backendVersion. Older staging folders
+    // are preserved historical artifacts (packaging refuses to erase them) and are
+    // intentionally skipped rather than refreshed in place.
+    private static bool IsCurrentVersionPackagedCopy(string packagedManifestPath, string sourceCoreVersion)
+    {
+        var dir = Path.GetDirectoryName(packagedManifestPath)!;
+        var metadataCandidates = new[]
+        {
+            // release\current\app\manifests\x.json -> release\current\release.json
+            Path.GetFullPath(Path.Combine(dir, "..", "..", "release.json")),
+            // dist\backend-stage\backend\x.json -> ForgerEMS.bundled-backend.json
+            Path.Combine(dir, "ForgerEMS.bundled-backend.json"),
+        };
+
+        foreach (var metadataPath in metadataCandidates)
+        {
+            if (!File.Exists(metadataPath))
+            {
+                continue;
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(File.ReadAllText(metadataPath));
+                if (doc.RootElement.TryGetProperty("backendVersion", out var v) &&
+                    v.ValueKind == JsonValueKind.String &&
+                    !string.IsNullOrWhiteSpace(v.GetString()))
+                {
+                    return string.Equals(v.GetString(), sourceCoreVersion, StringComparison.Ordinal);
+                }
+            }
+            catch (JsonException)
+            {
+                // Unparseable sidecar: fall through to the next candidate.
+            }
+        }
+
+        return true; // No metadata sibling — treat as a current copy and require the match.
     }
 
     [Fact]
@@ -139,6 +187,15 @@ public sealed class PackagedManifestFreshnessTests
                 (item.TryGetProperty("enabled", out var enabled) ? enabled.GetBoolean() : true));
     }
 
+    private static string SourceCoreVersion
+    {
+        get
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(SourceManifestPath));
+            return doc.RootElement.TryGetProperty("coreVersion", out var v) ? v.GetString() ?? "" : "";
+        }
+    }
+
     private static IEnumerable<string> PackagedManifestCopiesThatExist()
     {
         var candidates = new[]
@@ -148,7 +205,10 @@ public sealed class PackagedManifestFreshnessTests
             Path.Combine(RepoRoot, "dist", "backend-stage", "backend", "ForgerEMS.updates.json"),
         };
 
-        return candidates.Where(File.Exists);
+        var coreVersion = SourceCoreVersion;
+        return candidates
+            .Where(File.Exists)
+            .Where(path => IsCurrentVersionPackagedCopy(path, coreVersion));
     }
 
     private static string HashFile(string path)

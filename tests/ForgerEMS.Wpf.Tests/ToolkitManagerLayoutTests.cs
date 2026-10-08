@@ -145,7 +145,7 @@ public sealed class ToolkitManagerLayoutTests
         var xaml = File.ReadAllText(FindRepoFile("src", "ForgerEMS.Wpf", "MainWindow.xaml"));
         var tabStart = xaml.IndexOf("<TabItem Header=\"▤  Toolkit Manager\">", StringComparison.Ordinal);
         Assert.True(tabStart >= 0);
-        var tabEnd = xaml.IndexOf("<TabItem Header=\"◇  Kyra (Beta)\">", tabStart, StringComparison.Ordinal);
+        var tabEnd = xaml.IndexOf("<TabItem Header=\"☰  Settings\">", tabStart, StringComparison.Ordinal);
         Assert.True(tabEnd > tabStart);
         return xaml[tabStart..tabEnd];
     }

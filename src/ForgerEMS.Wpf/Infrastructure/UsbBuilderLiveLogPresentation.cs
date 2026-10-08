@@ -16,7 +16,7 @@ public static class UsbBuilderLiveLogPresentation
             return true;
         }
 
-        if (line.Channel is LiveLogChannel.KyraDetail or LiveLogChannel.Diagnostics)
+        if (line.Channel is LiveLogChannel.Diagnostics)
         {
             sidebarDisplayText = string.Empty;
             return false;

@@ -5,11 +5,11 @@
 ## Title ideas
 
 - ForgerEMS — Technician USB & Repair Command Station (Windows)
-- ForgerEMS — Safer Ventoy USBs, System Intelligence, Kyra Offline-First Assistant
+- ForgerEMS — Safer Ventoy USBs, System Intelligence, Honest Toolkit Health
 
 ## One-line pitch
 
-A Windows technician suite that helps you **build safer repair USBs**, **audit toolkit health**, **scan the machine you are working on**, and get **Kyra** answers grounded in **your** scans — **offline by default**.
+A Windows technician suite that helps you **build safer repair USBs**, **audit toolkit health**, and **scan the machine you are working on** — **local-first by default**.
 
 ## Problem
 
@@ -17,7 +17,7 @@ Repair benches and resellers juggle Ventoy sticks, scattered tools, opaque Windo
 
 ## Solution
 
-ForgerEMS centralizes USB builder workflows (with strict unsafe-target blocking), System Intelligence summaries, Toolkit Manager manifest health, Diagnostics, and Kyra — with optional online models **only** when operators configure them.
+ForgerEMS centralizes USB builder workflows (with strict unsafe-target blocking), System Intelligence summaries, Toolkit Manager manifest health, and Drive Validator.
 
 ## Who it is for
 
@@ -28,7 +28,6 @@ Technicians, rebuilders, laptop flippers, and advanced home users who already re
 - **USB Builder (Beta)** — removable targets; blocks OS/system partitions.
 - **System Intelligence (Beta)** — local scan cards; some values are “not exposed by Windows.”
 - **Toolkit Manager (Beta)** — managed vs manual/info items.
-- **Kyra (Preview)** — offline/local first; online optional.
 - **USB Intelligence / port mapping (Pro Preview)** — benchmark-driven hints; topology is best-effort.
 - **Update checker** — GitHub Releases; ZIP-first guidance.
 

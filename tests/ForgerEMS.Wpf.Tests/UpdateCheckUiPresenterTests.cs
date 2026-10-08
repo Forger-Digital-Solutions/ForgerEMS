@@ -86,7 +86,8 @@ public sealed class UpdateCheckUiPresenterTests
             LatestVersionLabel = "v1.2.0",
             ReleaseNotesUrl = "https://github.com/Forger-Digital-Solutions/ForgerEMS/releases/tag/v1.2.0",
             InstallerDownloadUrl = "https://github.com/x/y/releases/download/v1.2.0/ForgerEMS-Setup.exe",
-            InstallerAssetName = "ForgerEMS-Setup.exe"
+            InstallerAssetName = "ForgerEMS-Setup.exe",
+            ExpectedInstallerSha256 = new string('b', 64)
         };
 
         var s = UpdateCheckUiPresenter.Map(result, isManualCheck: true, Installed);
@@ -254,8 +255,10 @@ public sealed class UpdateCheckUiPresenterTests
             ReleaseNotesUrl = "https://github.com/Forger-Digital-Solutions/ForgerEMS/releases/tag/v1.2.0",
             RecommendedZipDownloadUrl = "https://github.com/x/y/releases/download/v1.2.0/ForgerEMS-Beta-v1.2.0.zip",
             RecommendedZipAssetName = "ForgerEMS-Beta-v1.2.0.zip",
+            ExpectedZipSha256 = new string('a', 64),
             InstallerDownloadUrl = "https://github.com/x/y/releases/download/v1.2.0/ForgerEMS-Setup-v1.2.0.exe",
             InstallerAssetName = "ForgerEMS-Setup-v1.2.0.exe",
+            ExpectedInstallerSha256 = new string('b', 64),
             ChecksumsDownloadUrl = "https://github.com/x/y/releases/download/v1.2.0/CHECKSUMS.sha256"
         };
 

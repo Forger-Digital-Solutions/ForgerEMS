@@ -3,13 +3,13 @@
 This document covers the lightweight Windows installer strategy for the native
 `ForgerEMS` frontend and the installed-mode backend bundle.
 
-## Current Preview Status
+## Current Release Status
 
-Current public preview:
+Current release:
 
-- App version: `1.2.4-preview.4`
-- Installer artifact: `ForgerEMS-Setup-v1.2.4-preview.4.exe`
-- Portable artifact: `ForgerEMS-v1.2.4-preview.4.zip`
+- App version: `1.2.4`
+- Installer artifact: `ForgerEMS-Setup-v1.2.4.exe`
+- Portable artifact: `ForgerEMS-v1.2.4.zip`
 
 ForgerEMS now ships both a direct installer and a true portable app ZIP. The
 portable ZIP contains `ForgerEMS.exe`, bundled backend/runtime content, docs,
@@ -79,11 +79,11 @@ Installer note:
 
 Current version example:
 
-- `1.2.4-preview.4`
+- `1.2.4`
 
 Installer output name:
 
-- `ForgerEMS-Setup-v1.2.4-preview.4.exe`
+- `ForgerEMS-Setup-v1.2.4.exe`
 
 Upgrade behavior:
 
@@ -112,9 +112,13 @@ Installer script:
 
 - `installer/ForgerEMS.iss`
 
-Build helper:
+Build helper (unsigned local candidates only):
 
 - `tools/build-forgerems-installer.ps1`
+
+Canonical production release builder (signed, gated):
+
+- `tools/build-release.ps1`
 
 Installed readme:
 
@@ -139,8 +143,14 @@ Bundled backend staging helper:
 
 ### Scripted build
 
+`build-forgerems-installer.ps1` is an **unsigned-candidate-only** adjunct — it
+refuses to run without `-UnsignedCandidate`, compiles with
+`/DUnsignedCandidate=1`, and emits a `*.candidate.json` sidecar next to the
+installer recording `unsignedCandidate=true`, `productionEligible=false`,
+`signed=false`, plus the source HEAD and dirty-file count:
+
 ```powershell
-.\tools\build-forgerems-installer.ps1
+.\tools\build-forgerems-installer.ps1 -UnsignedCandidate
 ```
 
 What the script does:
@@ -149,13 +159,47 @@ What the script does:
 - stages a minimal version-matched backend from a verified release bundle
 - resolves `ISCC.exe`
 - compiles the installer into the output folder
+- writes `<installer>.candidate.json` next to the installer
+
+Production packaging is **not** done here — use the canonical signed path:
+
+```powershell
+.\tools\build-release.ps1 -RequireSigning -CertificateThumbprint <thumbprint>
+```
+
+`build-release.ps1` resolves the certificate store (CurrentUser first, then
+LocalMachine), signs the frontend executable, and configures Inno Setup with a
+`ForgerEMSRelease` SignTool callback (absolute Windows PowerShell invoking
+`tools\sign-release-artifact.ps1`) so the installer, temporary copies, and the
+captured signed uninstaller are each signed **and** verified during compile.
+Production fails closed when credentials are missing/invalid, the source tree
+is dirty, or any required signature is absent or invalid.
+
+For GitHub-hosted production runners, the protected `production-release`
+environment must have required reviewers and authorized secrets:
+`FORGEREMS_SIGNING_CERT_THUMBPRINT`, `FORGEREMS_SIGNING_PFX_BASE64`, and
+`FORGEREMS_SIGNING_PFX_PASSWORD`. `Initialize-ReleaseSigningCertificate.ps1`
+validates the existing identity in memory before importing it into the
+disposable runner's `CurrentUser\My` store. It writes no PFX file, exports no
+key and generates no certificate. A thumbprint alone cannot provision a key
+on a fresh hosted runner. Supplying secrets or running this workflow requires
+separate owner authorization; unsigned candidates are never publishable.
+
+`Windows Installer Lifecycle` is a separate manual validation workflow with
+read-only repository permissions. It builds an unsigned test candidate and
+uses the official, hash-bound `v1.2.3-preview.1` upgrade fixture on a disposable
+Windows runner. It neither publishes releases nor uploads binaries. Its
+registry/file/self-test evidence does not replace interactive GUI, consent or
+DPI QA. `Test-ForgerEMSInstallerLifecycle.ps1` refuses execution outside an
+identified disposable VirtualBox/QEMU guest or explicitly selected GitHub-hosted
+Windows VM; there is no development-host bypass.
 
 ## Output Location
 
 Expected installer output:
 
 ```text
-dist\installer\ForgerEMS-Setup-v1.2.4-preview.4.exe
+dist\installer\ForgerEMS-Setup-v1.2.4.exe
 ```
 
 Release staging output from `build-release.ps1` is generated under `release\current\`.
@@ -179,20 +223,42 @@ providers manually, and the provider is local/read-only.
 
 When you move to a new version:
 
-1. update the WPF project version metadata in
-   `src\ForgerEMS.Wpf\ForgerEMS.Wpf.csproj`
+1. update the authoritative repository `VERSION` file; project metadata and
+   installer versions derive from it
 2. build/publish the new frontend
-3. build the installer with:
+3. build the installer. Production packaging is signed by default and fails
+   closed when no certificate is configured:
 
    ```powershell
-   .\tools\build-release.ps1 -Version 1.2.4-preview.4
+   .\tools\build-release.ps1 -Version 1.2.4 -RequireSigning -CertificateThumbprint <thumbprint>
+   ```
+
+   A local **unsigned candidate** for QA — never publishable — must be requested
+   explicitly and is marked `unsignedCandidate` / `productionEligible=false` in
+   its `release.json`:
+
+   ```powershell
+   .\tools\build-release.ps1 -Version 1.2.4 -UnsignedCandidate
    ```
 
 4. if desired, update any docs that explicitly mention the installer file name
 
-Versioned distribution artifacts (for example `ForgerEMS-Setup-v1.2.4-preview.4.exe` and `ForgerEMS-v1.2.4-preview.4.zip`) should be attached to a GitHub Release for the matching tag, rather than committed under `release\vX.Y.Z\`.
+Versioned distribution artifacts (for example `ForgerEMS-Setup-v1.2.4.exe` and `ForgerEMS-v1.2.4.zip`) should be attached to a GitHub Release for the matching tag, rather than committed under `release\vX.Y.Z\`.
 
 The `AppId` should stay the same so upgrades keep working.
+
+## Retention / Downgrade Policy
+
+- Installing an **older version over a newer install (downgrade) is not
+  supported**. ForgerEMS does not test or guarantee downgrade paths; if an
+  older build must be used, uninstall first and install the older build clean.
+- Do not assert that the installer itself detects or blocks older published
+  installers — treat downgrades as unsupported at the policy level.
+- Upgrades in place preserve user data (settings, consent, profiles, reports
+  under `%LOCALAPPDATA%\ForgerEMS` are outside the install directory and are
+  not removed on upgrade or uninstall).
+- Unsigned-candidate installers (`*.candidate.json` sidecar) are QA-only and
+  must never be published or offered as updates.
 
 ## Installed Layout
 

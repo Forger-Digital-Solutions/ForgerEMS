@@ -39,8 +39,8 @@ public sealed class SettingsRetiredFeatureTests
             Assert.DoesNotContain(retired, settings, StringComparison.OrdinalIgnoreCase);
         }
 
-        // Active settings surfaces stay.
-        Assert.Contains("Kyra Assistant (Beta)", settings, StringComparison.Ordinal);
+        // Active settings surfaces stay; the removed assistant panel must not return.
+        Assert.DoesNotContain("Kyra", settings, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("App Updates", settings, StringComparison.Ordinal);
     }
 
@@ -91,7 +91,6 @@ public sealed class SettingsRetiredFeatureTests
     private static MainViewModel BuildViewModel(FakeRuntime runtime)
     {
         var powerShell = new PowerShellRunnerService();
-        var registry = new CopilotProviderRegistry();
         return new MainViewModel(
             new BackendDiscoveryService(),
             powerShell,
@@ -103,8 +102,6 @@ public sealed class SettingsRetiredFeatureTests
             new ManagedDownloadResolverService(new HttpClient()),
             runtime,
             new UsbBenchmarkService(powerShell),
-            new CopilotService(registry),
-            registry,
             usbIntelligenceService: new UsbIntelligenceService(),
             autoIntelligenceOrchestrator: new NoOpAutoIntelligenceOrchestrator());
     }

@@ -1,10 +1,10 @@
-# ForgerEMS v1.2.4-preview.4 — Dev Beta Smoke Checklist
+# ForgerEMS v1.2.4 — Dev Beta Smoke Checklist
 
-**Scope:** Confirm the v1.2.4 preview build behaves as expected, with focus on Driver Hub, Dr. Forge Intake, managed-download / Download Plan / freshness workflow, and release packaging consistency. Mark each line **OK** / **BLOCKED** / **N/A**. Stop on the first BLOCKED in section 3 or 4 — those are the new-surface gates.
+**Scope:** Confirm the v1.2.4 unsigned candidate build behaves as expected, with focus on Driver Hub, Dr. Forge Intake, managed-download / Download Plan / freshness workflow, and release packaging consistency. Mark each line **OK** / **BLOCKED** / **N/A**. Stop on the first BLOCKED in section 3 or 4 — those are the new-surface gates.
 
 For broader regression coverage, see [FINAL_MANUAL_SMOKE_TEST.md](../FINAL_MANUAL_SMOKE_TEST.md). This checklist is additive, not a replacement.
 
-**Build under test:** `release/current/ForgerEMS-Setup-v1.2.4-preview.4.exe` or the matching portable ZIP `release/current/ForgerEMS-v1.2.4-preview.4.zip`. Published app staging remains at `release/current/app/ForgerEMS.exe`.
+**Build under test:** `release/current/ForgerEMS-Setup-v1.2.4.exe` or the matching portable ZIP `release/current/ForgerEMS-v1.2.4.zip`. Published app staging remains at `release/current/app/ForgerEMS.exe`.
 
 **Trademark / non-endorsement check:** ForgerEMS is independent and is not affiliated with, sponsored by, or endorsed by Microsoft, Linux distributions, hardware vendors, driver vendors, or third-party tools referenced in the app. Names are used only to identify compatibility, official resources, or supported technician workflows.
 
@@ -14,7 +14,7 @@ For broader regression coverage, see [FINAL_MANUAL_SMOKE_TEST.md](../FINAL_MANUA
 
 - [ ] Install (or unzip) the build. Launch ForgerEMS.
 - [ ] Title bar reads **ForgerEMS**. Main window opens centered, not off-screen.
-- [ ] About / status area shows **1.2.4-preview.4**.
+- [ ] About / status area shows **1.2.4**.
 - [ ] On a clean consent state, the **Terms of Use** first-run gate appears before main tools are usable.
 - [ ] Terms, Privacy/Data Handling, Legal Notices, Third-party Notices, and About buttons open readable docs from the gate.
 - [ ] Accepting both checkboxes unlocks the app; declining does not unlock it.
@@ -26,14 +26,13 @@ For broader regression coverage, see [FINAL_MANUAL_SMOKE_TEST.md](../FINAL_MANUA
 
 ## 2. Tab smoke
 
-- [ ] Tab strip shows exactly: **USB Builder**, **Port / USB Intelligence**, **Toolkit Manager**, **Driver Hub**, **Kyra (Beta)**, **Settings** — plus the always-visible **Live Logs** side panel.
+- [ ] Tab strip shows exactly: **USB Builder**, **Port / USB Intelligence**, **Toolkit Manager**, **Driver Hub**, **Settings** — plus the always-visible **Live Logs** side panel.
 - [ ] No **System Intelligence** tab and no **Diagnostics** tab are present. (Both moved to **Dr. Forge**, the dedicated diagnostics / hardware-scan companion.)
 - [ ] App launches without a post-launch lag spike — no automatic background system scan kicks off on startup.
 - [ ] USB Builder tab opens. With no USB attached, the no-drive state is clear.
 - [ ] USB Builder Profile includes **ForgerEMS Portable App** by default and routes it to `_apps\ForgerEMS`, docs to `_docs\ForgerEMS`, and support folders to `_logs\ForgerEMS`.
 - [ ] Port / USB Intelligence tab opens (it does not depend on the removed Diagnostics tab).
-- [ ] Kyra (Beta) tab opens. Send `Hi` — get a response (local or online).
-- [ ] Driver Hub tab opens. Header, safety pill, detected-hardware summary, search, filters, recommendation cards, and compact catalog cards render.
+- [ ] Driver Hub tab opens. Header, safety pill, saved-device-snapshot summary, search, filters, recommendation cards, and compact catalog cards render.
 - [ ] Settings tab opens.
 - [ ] Live Logs side panel shows app activity; **View Full Logs** opens the full-logs overlay.
 
@@ -70,7 +69,7 @@ For broader regression coverage, see [FINAL_MANUAL_SMOKE_TEST.md](../FINAL_MANUA
 - [ ] Open **Driver Hub**.
 - [ ] Confirm header copy: "Official driver apps, OEM support, GPU tools, firmware guidance, and Linux driver help." and the safety pill: "Official links only • No auto BIOS flashing • No driver installs without your action".
 - [ ] With no system scan report present, **Recommended for this PC** shows its generic state (e.g. "Run System Intelligence to personalize recommendations.") and the full catalog still renders. Personalized hardware detection can come from a packaged **Dr. Forge** CLI report when configured; ForgerEMS no longer runs that scan from its own tab.
-- [ ] If a prior `system-intelligence-latest.json` report exists, confirm the detected-hardware card lists OEM, GPU, CPU, Network, and OS when available. (Skip if no report is present — Driver Hub must degrade gracefully to the generic state, not error.)
+- [ ] If a prior `system-intelligence-latest.json` report exists, confirm the **Saved device snapshot** card lists OEM, GPU, CPU, Network, and Snapshot OS when available. The card reflects a saved local snapshot that may be stale. (Skip if no report is present — Driver Hub must degrade gracefully to the generic state, not error.)
 - [ ] Confirm **Recommended for this PC** shows 3-4 store-style cards: brand tile, app name, vendor, badges, **one** prominent primary action, and a small `⋯` overflow button. No visible **Copy Link** or **Add Shortcut** buttons clutter the primary row.
 - [ ] Click `⋯` on a recommended card. The overflow popup shows **Open Page** (only when it differs from the primary action), **Copy Link**, and **Add Shortcut to USB**.
 - [ ] Confirm recommendation copy says "Recommended based on detected ..." or similar detected-source wording, not "Needed", "outdated", "latest installed", or "required".
@@ -163,7 +162,7 @@ Run from a PowerShell prompt against the installed (or unzipped) `release/curren
 ## 8. Release artifact integrity
 
 - [ ] `release/current/CHECKSUMS.sha256` verifies against the on-disk artifacts (use `Get-FileHash -Algorithm SHA256` and compare).
-- [ ] `release/current/release.json` reports `version: 1.2.4-preview.4`, `channel: preview`.
+- [ ] `release/current/release.json` reports `version: 1.2.4` with unsigned-candidate markers (`unsignedCandidate`, `productionEligible: false`).
 
 ## 9. Hard "must not" gates
 

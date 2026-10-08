@@ -9,13 +9,21 @@ modifies MPL-covered source files, those modifications must be made available
 under MPL-2.0 as required by the license.
 
 LibreHardwareMonitorLib 0.9.6 NuGet dependency metadata observed during restore:
-- DiskInfoToolkit 1.1.2
-- HidSharp 2.6.4
-- Mono.Posix.NETStandard 1.0.0
-- RAMSPDToolkit-NDD 1.4.2
-- System.IO.Ports 10.0.3
-- System.Management 10.0.2
-- System.Threading.AccessControl 10.0.3
+- BlackSharp 1.0.7 (MPL-2.0, https://github.com/Blacktempel/BlackSharp)
+- DiskInfoToolkit 1.1.2 (MPL-2.0, https://github.com/Blacktempel/DiskInfoToolkit)
+- HidSharp 2.6.4 (Apache-2.0; license text: LICENSES/HidSharp-Apache-2.0.txt)
+- Mono.Posix.NETStandard 1.0.0 (license URL points at the Mono project license;
+  captured upstream text at LICENSES/Mono-project-license.txt; redistribution
+  scope requires counsel review)
+- RAMSPDToolkit-NDD 1.4.2 (MPL-2.0, https://github.com/Blacktempel/RAMSPDToolkit)
+- System.IO.Ports >= 10.0.3 (resolved 10.0.12 in this build)
+- System.Management >= 10.0.2 (resolved 10.0.12 in this build)
+- System.Threading.AccessControl >= 10.0.3 (resolved 10.0.12 in this build)
+
+LibreHardwareMonitorLib 0.9.6 also embeds PawnIO modules release 0.1.6
+(LGPL-2.1-or-later). Corresponding source ships at
+providers/sensors/SOURCE/PawnIO-Modules-0.1.6-source.zip with license text at
+providers/sensors/LICENSES/PawnIO-Modules-LGPL-2.1.txt.
 
 Release maintainers should re-check dependency notices whenever the pinned
 LibreHardwareMonitorLib package version changes.

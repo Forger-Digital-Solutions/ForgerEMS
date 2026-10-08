@@ -1,8 +1,8 @@
 # ForgerEMS Privacy and Data Handling
 
-Applies to: ForgerEMS `v1.2.4-preview.4` public preview
+Applies to: ForgerEMS `v1.2.4`
 
-ForgerEMS is local-first. It does not upload logs, support bundles, reports, Kyra memory, sensor data, USB inventories, or local device snapshots automatically.
+ForgerEMS is local-first. It does not upload logs, support bundles, reports, sensor data, USB inventories, or local device snapshots automatically.
 
 ## Local Data
 
@@ -20,17 +20,21 @@ Dr. Forge reports may include local device/context information, sensor availabil
 
 Dr. Forge report/archive files are included in ForgerEMS support bundles only when the user explicitly chooses to include them and confirms the support-bundle export. Previewing or generating a report does not upload it and does not attach it to a support bundle automatically.
 
-## Kyra and Providers
-
-Kyra is local-first. Offline/local behavior does not need API keys. If an online provider or gateway is configured and enabled, prompts and optional sanitized context may be sent according to those settings. Provider keys should not be pasted into chat or support email.
-
 ## Exports and Support Bundles
 
-Support bundles, Kyra memory exports, local context exports, and report exports may include local device/context information. ForgerEMS shows a separate confirmation before these actions. Review exported files before sending them.
+Support bundles, local context exports, and report exports may include local device/context information. ForgerEMS shows a separate confirmation before these actions. Review exported files before sending them.
 
 ## USB Builder and Downloads
 
 Some USB Builder features rely on internet access, vendor sites, managed downloads, manual folders, user-supplied files, permissions, or third-party licenses. Downloaded content is governed by the source/vendor terms.
+
+## User-Triggered Requests to External Services
+
+The app makes no ambient telemetry calls, but user-triggered and settings-controlled update features contact external services and share the normal metadata of a network request:
+
+- **Windows maintenance scan (WUA / online search):** a user-initiated Windows / Driver Store update check performs a Windows Update Agent query through the operating system. As with any WUA online search, update-applicability information about the device (OS/build, update applicability data) may be communicated to the Microsoft, WSUS, or enterprise update service configured by the machine's OS/policy. ForgerEMS collects nothing extra and stores only the returned read-only result locally; whether the service is contacted at all depends on that OS/policy configuration.
+- **Update checks and managed resource downloads:** version metadata requests to the GitHub API and metadata/asset downloads from GitHub and allow-listed vendor origins expose the user's IP address and normal HTTP request metadata (URL, user agent, timestamp) to those services, subject to their own policies. Any configured GitHub API token is sent only to `api.github.com`, never to artifact/vendor hosts.
+- **No automatic upload:** ForgerEMS never automatically uploads diagnostic reports, snapshots, or driver findings. Support-bundle and report files are shared only by explicit user action.
 
 ## No Automatic Uploads
 

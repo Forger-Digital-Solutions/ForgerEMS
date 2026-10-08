@@ -1,4 +1,4 @@
-using Kyra.Core;
+using VentoyToolkitSetup.Wpf.Services;
 using VentoyToolkitSetup.Wpf.Infrastructure;
 using Xunit;
 

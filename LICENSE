@@ -14,6 +14,13 @@ create derivative works from this software without prior written authorization.
 Third-party tools, runtimes, libraries, and vendor payloads referenced by this
 project remain governed by their own license terms.
 
+Third-party components remain governed by their own licenses. Nothing in the
+ForgerEMS proprietary terms restricts rights granted by those licenses,
+including access to corresponding source and replacement or debugging of
+modified LGPL-covered components as required by the applicable license.
+Counsel review of bundled-module and relinking obligations is flagged; no
+compliance certification is asserted by this document.
+
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL FORGER

@@ -4,7 +4,7 @@ Copy into email or attach as text. **Do not** include passwords, API keys, produ
 
 ---
 
-**App version:** (e.g. 1.2.4-preview.4 / ForgerEMS v1.2.4 Public Preview)
+**App version:** (e.g. 1.2.4 / ForgerEMS v1.2.4)
 
 **Windows version:** (Win+R → `winver`)
 
@@ -20,7 +20,7 @@ Copy into email or attach as text. **Do not** include passwords, API keys, produ
 
 **Safe logs attached:** (yes/no — paste excerpts or attach zip of sanitized logs only)
 
-**Network:** (online / offline — if relevant to Kyra or updates)
+**Network:** (online / offline — if relevant to update checks or downloads)
 
 ---
 

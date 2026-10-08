@@ -58,7 +58,6 @@ public sealed class BetaDocumentationTests
         Assert.Contains("Not measured", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("USB mapping", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("upload", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Kyra", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Manual Required", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("LOCALAPPDATA", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("DOWNLOAD_TROUBLESHOOTING.md", text, StringComparison.OrdinalIgnoreCase);
@@ -103,32 +102,32 @@ public sealed class BetaDocumentationTests
     }
 
     [Fact]
-    public void Readme_MentionsCurrentBetaAndFaq()
+    public void Readme_MentionsCurrentReleaseAndFaq()
     {
         var text = File.ReadAllText(Path.Combine(RepoRoot, "README.md"));
-        Assert.Contains("1.2.4-preview.4", text, StringComparison.Ordinal);
+        Assert.Contains("v1.2.4", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("KYRA", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("docs/DOWNLOAD_TROUBLESHOOTING.md", text, StringComparison.Ordinal);
-        Assert.Contains("docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md", text, StringComparison.Ordinal);
         Assert.Contains("docs/FAQ.md", text, StringComparison.Ordinal);
         Assert.Contains("docs/TERMS_OF_USE.md", text, StringComparison.Ordinal);
         Assert.Contains("portable ZIP", text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void CurrentLegalDocs_ReferenceVersionPreviewAndConsentBoundaries()
+    public void CurrentLegalDocs_ReferenceVersionAndConsentBoundaries()
     {
         var terms = File.ReadAllText(Path.Combine(RepoRoot, "docs", "TERMS_OF_USE.md"));
         var privacy = File.ReadAllText(Path.Combine(RepoRoot, "docs", "PRIVACY_AND_DATA_HANDLING.md"));
         var consent = File.ReadAllText(Path.Combine(RepoRoot, "docs", "USER_CONSENT_FLOW.md"));
-        var releaseNotes = File.ReadAllText(Path.Combine(RepoRoot, "docs", "RELEASE_NOTES_v1.2.4-preview.4.md"));
+        var releaseNotes = File.ReadAllText(Path.Combine(RepoRoot, "docs", "RELEASE_NOTES_v1.2.4.md"));
 
-        Assert.Contains("2026-07-05.v1.2.4-preview.4", terms, StringComparison.Ordinal);
-        Assert.Contains("public preview", terms, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("2026-10-06.v1.2.4", terms, StringComparison.Ordinal);
+        Assert.Contains("v1.2.4", terms, StringComparison.Ordinal);
         Assert.Contains("not a finished enterprise product", terms, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("support bundles", privacy, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("terms-consent.json", consent, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("First-run Terms", releaseNotes, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("ForgerEMS-v1.2.4-preview.4.zip", releaseNotes, StringComparison.Ordinal);
+        Assert.Contains("update", releaseNotes, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("v1.2.4", releaseNotes, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -160,7 +159,6 @@ public sealed class BetaDocumentationTests
                  {
                      "DOWNLOAD_TROUBLESHOOTING.md",
                      "FIRST_TESTER_DOWNLOAD_FLOW.md",
-                     "KYRA_PROVIDER_ENVIRONMENT_SETUP.md",
                      "RELEASE_NOTES_v1.1.12-rc.1.md",
                      "RELEASE_NOTES_v1.1.12-rc.2.md",
                      "SCRIPT_AUDIT_v1.1.12-rc.1.md",
@@ -190,14 +188,20 @@ public sealed class BetaDocumentationTests
     }
 
     [Fact]
-    public void KyraProvider_Setup_doc_covers_local_and_remote_topics()
+    public void UpdateSystem_DoesNotClaimPrereleaseTagsArePublished()
     {
-        var text = File.ReadAllText(Path.Combine(RepoRoot, "docs", "KYRA_PROVIDER_ENVIRONMENT_SETUP.md"));
-        Assert.Contains("Offline", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("LM Studio", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Ollama", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("OpenAI-compatible", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("setx", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Read-Host", text, StringComparison.OrdinalIgnoreCase);
+        var text = File.ReadAllText(Path.Combine(RepoRoot, "docs", "UPDATE_SYSTEM.md"));
+        // The only published release is v1.2.3-preview.1; prerelease-shaped tags must not
+        // be described as published history.
+        Assert.DoesNotContain("remain published", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("published history", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not imply those tags are published", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("unsignedCandidate", text, StringComparison.Ordinal); // unsigned warning preserved
+    }
+
+    [Fact]
+    public void KyraProvider_Setup_doc_is_removed()
+    {
+        Assert.False(File.Exists(Path.Combine(RepoRoot, "docs", "KYRA_PROVIDER_ENVIRONMENT_SETUP.md")));
     }
 }

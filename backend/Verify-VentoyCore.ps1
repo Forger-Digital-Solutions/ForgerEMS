@@ -489,7 +489,12 @@ function Get-ManifestDownloadModePolicyIssues {
         }
 
         if ($mode -eq "ManagedDownload" -and $requireChecksum -and -not (Test-ManifestItemChecksumProof -Item $item)) {
-            [void]$issues.Add("$name is ManagedDownload without checksum proof under require-for-release.")
+            $requiresRuntimeResolution = ($null -ne $item.PSObject.Properties['requiresResolution'] -and
+                [bool]$item.requiresResolution -and
+                -not [string]::IsNullOrWhiteSpace([string]$item.resourceId))
+            if (-not $requiresRuntimeResolution) {
+                [void]$issues.Add("$name is ManagedDownload without checksum proof under require-for-release.")
+            }
         }
 
         if ($type -eq "page") {
@@ -578,6 +583,14 @@ function Get-ManagedItemsMissingChecksumCoverage {
         $hasSha512Url = -not [string]::IsNullOrWhiteSpace([string]$item.sha512Url)
 
         if ($hasSha256 -or $hasSha256Url -or $hasSha512 -or $hasSha512Url) { continue }
+
+        # Runtime-resolved resources get their verified artifact SHA-256 from the
+        # managed-resource overlay (Test-ResolvedOverlayGate) — no static hash is
+        # pinned in the manifest by design. They must still name a resourceId that
+        # exists in manifests\resource-policy.json.
+        $requiresResolution = $false
+        if ($null -ne $item.requiresResolution) { $requiresResolution = [bool]$item.requiresResolution }
+        if ($requiresResolution -and -not [string]::IsNullOrWhiteSpace([string]$item.resourceId)) { continue }
 
         $missing.Add([PSCustomObject]@{
             Name = [string]$item.name

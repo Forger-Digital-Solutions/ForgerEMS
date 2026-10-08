@@ -21,13 +21,18 @@ installer is reused when available and built only if missing.
 .PARAMETER ReleaseBundleRoot
 Optional explicit release-bundle root passed through to backend staging and
 installer build operations.
+
+.PARAMETER UnsignedCandidate
+Forwarded to build-forgerems-installer.ps1 when this script builds the
+installer. Only unsigned local candidates can be produced here.
 #>
 
 [CmdletBinding()]
 param(
     [string]$OutputRoot = "",
     [switch]$BuildInstaller,
-    [string]$ReleaseBundleRoot = ""
+    [string]$ReleaseBundleRoot = "",
+    [switch]$UnsignedCandidate
 )
 
 $ErrorActionPreference = "Stop"
@@ -73,16 +78,20 @@ function Ensure-Dir {
     }
 }
 
-function Get-ProjectVersion {
-    param([Parameter(Mandatory)][string]$ProjectPath)
+function Get-RepoVersion {
+    param([Parameter(Mandatory)][string]$RepoRoot)
 
-    [xml]$projectXml = Get-Content -LiteralPath $ProjectPath -Raw
-    $versionNode = $projectXml.Project.PropertyGroup.Version | Select-Object -First 1
-    if ([string]::IsNullOrWhiteSpace([string]$versionNode)) {
-        throw "Could not read <Version> from $ProjectPath"
+    $versionFile = Join-Path $RepoRoot "VERSION"
+    if (-not (Test-Path -LiteralPath $versionFile)) {
+        throw "Authoritative version file not found: $versionFile"
     }
 
-    return [string]$versionNode
+    $value = (Get-Content -LiteralPath $versionFile -Raw).Trim()
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        throw "VERSION file is empty: $versionFile"
+    }
+
+    return $value
 }
 
 if (-not (Test-Path -LiteralPath $csprojPath)) {
@@ -101,7 +110,7 @@ if (-not (Test-Path -LiteralPath $installerScriptPath)) {
     throw "Installer script not found: $installerScriptPath"
 }
 
-$version = Get-ProjectVersion -ProjectPath $csprojPath
+$version = Get-RepoVersion -RepoRoot $appRoot
 $expectedInstallerPath = Join-Path $installerDistRoot ("ForgerEMS-Setup-v{0}.exe" -f $version)
 
 Write-Host "Refreshing bundled backend stage..." -ForegroundColor Cyan
@@ -116,7 +125,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $backendStageRoot "Verify-VentoyCore
 
 if ($BuildInstaller -or -not (Test-Path -LiteralPath $expectedInstallerPath)) {
     Write-Host "Building installer..." -ForegroundColor Cyan
-    & $buildInstallerScriptPath -Version $version -ReleaseBundleRoot $ReleaseBundleRoot
+    & $buildInstallerScriptPath -Version $version -ReleaseBundleRoot $ReleaseBundleRoot -UnsignedCandidate:$UnsignedCandidate
     if ($LASTEXITCODE -ne 0) {
         throw "Installer build failed with exit code $LASTEXITCODE."
     }
@@ -133,8 +142,15 @@ if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
 $OutputRoot = Get-NormalizedPath -Path $OutputRoot
 Assert-ChildPath -Parent $workspaceRoot -Child $OutputRoot
 
+# Refuse a nonempty destination rather than clearing it — staging must never
+# erase pre-existing files (evidence, prior candidates, user content).
+if (Test-Path -LiteralPath $OutputRoot) {
+    $existing = Get-ChildItem -LiteralPath $OutputRoot -Force -ErrorAction SilentlyContinue
+    if ($existing) {
+        throw "PreRelease destination already exists and is not empty: $OutputRoot. Choose a fresh -OutputRoot; refusing to erase existing contents."
+    }
+}
 Ensure-Dir -Path $OutputRoot
-Get-ChildItem -LiteralPath $OutputRoot -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
 
 $installerOutputRoot = Join-Path $OutputRoot "installer"
 $backendOutputRoot = Join-Path $OutputRoot "backend"

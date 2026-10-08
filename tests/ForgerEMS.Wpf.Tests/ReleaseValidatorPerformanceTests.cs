@@ -6,6 +6,7 @@ using Xunit;
 
 namespace ForgerEMS.Wpf.Tests;
 
+[Collection(ReleaseValidatorPerformanceCollection.Name)]
 public sealed class ReleaseValidatorPerformanceTests
 {
     private static string RepoRoot
@@ -50,6 +51,7 @@ public sealed class ReleaseValidatorPerformanceTests
                 + Quote(scratchRoot)
                 + " -ManifestName "
                 + Quote(Path.Combine(RepoRoot, "manifests", "ForgerEMS.updates.json"))
+                + " -IncludedCategories forgerems-portable"
                 + " -WhatIf",
             WorkingDirectory = RepoRoot,
             UseShellExecute = false,

@@ -330,9 +330,9 @@ public static class DiagnosticsUiFormatter
             return "Toolkit";
         }
 
-        if (ContainsAny(haystack, "kyra", "copilot", "provider"))
+        if (ContainsAny(haystack, "provider"))
         {
-            return "Kyra provider";
+            return "Provider";
         }
 
         if (ContainsAny(haystack, "backend", "manifest", "script", "powershell"))

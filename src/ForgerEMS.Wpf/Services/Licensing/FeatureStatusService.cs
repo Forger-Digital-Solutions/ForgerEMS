@@ -10,6 +10,5 @@ public static class FeatureStatusService
         • Driver Hub — vendor-first driver links and guidance; no automatic driver installs.
         • Port / USB Intelligence — Port Mapping Wizard, Drive Validator, and USB Benchmark for safe removable targets.
         • Battery Health & System Specifications — local device summaries from your own scans.
-        • Kyra Assistant — local-first help; optional cloud providers only when you configure them.
         """;
 }

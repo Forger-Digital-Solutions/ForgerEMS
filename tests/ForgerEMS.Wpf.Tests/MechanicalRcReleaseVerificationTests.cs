@@ -57,8 +57,8 @@ public sealed class MechanicalRcReleaseVerificationTests
         Assert.Contains("DOWNLOAD THE PORTABLE ZIP FIRST", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("portable ForgerEMS app package", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ForgerEMS-v{0}.zip", text, StringComparison.Ordinal);
-        Assert.Contains("Kyra Beta Gateway", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("No direct AI provider API keys are included", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Kyra", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Copilot", text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -175,31 +175,37 @@ public sealed class MechanicalRcReleaseVerificationTests
         var update = File.ReadAllText(Path.Combine(RepoRoot, "backend", "Update-ForgerEMS.ps1"));
         var health = File.ReadAllText(Path.Combine(RepoRoot, "backend", "ToolkitManager", "Get-ForgerEMSToolkitHealth.ps1"));
         var buildBackend = File.ReadAllText(Path.Combine(RepoRoot, "tools", "build-backend-release.ps1"));
-        var ventoyIntegration = File.ReadAllText(Path.Combine(RepoRoot, "src", "ForgerEMS.Wpf", "Services", "VentoyIntegrationService.cs"));
 
         Assert.DoesNotContain("(Get-FileHash", verify, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("(Get-FileHash", update, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("(Get-FileHash", health, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("(Get-FileHash", buildBackend, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("(Get-FileHash", ventoyIntegration, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Get-ForgerSha256", verify, StringComparison.Ordinal);
         Assert.Contains("Get-ForgerSha256", update, StringComparison.Ordinal);
         Assert.Contains("Get-ForgerSha256", health, StringComparison.Ordinal);
         Assert.Contains("Get-ForgerSha256", buildBackend, StringComparison.Ordinal);
-        Assert.Contains("Get-ForgerSha256", ventoyIntegration, StringComparison.Ordinal);
+        // VentoyIntegrationService hashes via the C# ArtifactDownloadService streaming
+        // SHA-256, not the backend PowerShell helper — its contract is pinned by
+        // VentoyInstallPreparation_UsesResolverArtifactDownloadAndSafeExtraction.
     }
 
     [Fact]
-    public void VentoyInstallPreparation_UsesRuntimeHashHelperAndFriendlyFallbackLogs()
+    public void VentoyInstallPreparation_UsesResolverArtifactDownloadAndSafeExtraction()
     {
+        // Ventoy package flow contract (post-migration): resolves via the 'ventoy' resource
+        // policy descriptor, downloads through ArtifactDownloadService with an expected
+        // SHA-256 + allowed hosts, extracts through SafeZipExtractor, and only launches
+        // Ventoy2Disk through the explicit user-confirmed seam — never a frozen fallback.
         var text = File.ReadAllText(Path.Combine(RepoRoot, "src", "ForgerEMS.Wpf", "Services", "VentoyIntegrationService.cs"));
 
-        Assert.Contains("ForgerEMS.Runtime.ps1", text, StringComparison.Ordinal);
-        Assert.Contains("Get-VerifiedVentoyPackageHash", text, StringComparison.Ordinal);
-        Assert.Contains("Get-ForgerSha256", text, StringComparison.Ordinal);
-        Assert.Contains("Built-in .NET (large-file safe)", text, StringComparison.Ordinal);
-        Assert.Contains("Could not verify Ventoy package checksum", text, StringComparison.Ordinal);
-        Assert.Contains("SHA-256 mismatch for Ventoy package", text, StringComparison.Ordinal);
+        Assert.Contains("VentoyResourceId = \"ventoy\"", text, StringComparison.Ordinal);
+        Assert.Contains("ArtifactDownloadService.ArtifactDownloadRequest", text, StringComparison.Ordinal);
+        Assert.Contains("ExpectedSha256", text, StringComparison.Ordinal);
+        Assert.Contains("AllowedHosts", text, StringComparison.Ordinal);
+        Assert.Contains("SafeZipExtractor", text, StringComparison.Ordinal);
+        Assert.Contains("ExtractToFreshDirectoryAsync", text, StringComparison.Ordinal);
+        Assert.Contains("does not fall back to a frozen archive", text, StringComparison.Ordinal);
+        Assert.Contains("ProcessStarter", text, StringComparison.Ordinal); // launch seam, no direct Process.Start in tests
     }
 
     [Fact]
@@ -243,21 +249,12 @@ public sealed class MechanicalRcReleaseVerificationTests
     }
 
     [Fact]
-    public void CloudflareWorkerStarter_DocumentsNoSecretsAndRateLimitScaffold()
+    public void KyraGatewayStarter_RemovedWithAssistantSurface()
     {
-        var workerReadme = File.ReadAllText(Path.Combine(RepoRoot, "gateway", "cloudflare-worker", "README.md"));
-        var workerGitIgnore = File.ReadAllText(Path.Combine(RepoRoot, "gateway", "cloudflare-worker", ".gitignore"));
-        var workerPackage = File.ReadAllText(Path.Combine(RepoRoot, "gateway", "cloudflare-worker", "package.json"));
-
-        Assert.Contains("Current beta gateway has token validation and request-size limits", workerReadme, StringComparison.Ordinal);
-        Assert.Contains("durable per-token/per-IP rate limiting should be enabled before broad public beta", workerReadme, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("npx wrangler@latest secret put BETA_GATEWAY_TOKEN", workerReadme, StringComparison.Ordinal);
-        Assert.Contains("401/403", workerReadme, StringComparison.Ordinal);
-        Assert.Contains("429", workerReadme, StringComparison.Ordinal);
-        Assert.Contains("500/503", workerReadme, StringComparison.Ordinal);
-        Assert.Contains("wrangler.toml", workerGitIgnore, StringComparison.Ordinal);
-        Assert.Contains(".dev.vars", workerGitIgnore, StringComparison.Ordinal);
-        Assert.Contains("wrangler@latest deploy", workerPackage, StringComparison.OrdinalIgnoreCase);
+        // The Cloudflare worker was Kyra's beta gateway; it was removed with the rest of
+        // the assistant product surface. Pin the removal so it cannot silently return.
+        Assert.False(Directory.Exists(Path.Combine(RepoRoot, "gateway", "cloudflare-worker")),
+            "gateway/cloudflare-worker must not reappear — the Kyra beta gateway was removed.");
     }
 
     private static string RunPowerShell(string command) =>

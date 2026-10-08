@@ -1,3 +1,4 @@
+using VentoyToolkitSetup.Wpf.Services;
 using Xunit;
 
 namespace ForgerEMS.Wpf.Tests;

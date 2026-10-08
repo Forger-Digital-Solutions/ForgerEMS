@@ -236,10 +236,10 @@ public sealed class ToolkitWorkspacePlanningTests
         var manifest = FindRepoFile("manifests", "ForgerEMS.updates.json");
         var promotedNames = new[]
         {
-            "Notepad++ 8.9.6 Portable (x64)",
-            "System Informer 3.2.25011 Portable",
-            "VeraCrypt 1.26.24 Setup (x64)",
-            "PuTTY 0.83 64-bit Installer"
+            "Notepad++ Portable",
+            "System Informer",
+            "Microsoft PowerToys",
+            "PuTTY 64-bit Installer"
         };
 
         using var document = JsonDocument.Parse(File.ReadAllText(manifest));
@@ -274,14 +274,14 @@ public sealed class ToolkitWorkspacePlanningTests
         var manifest = FindRepoFile("manifests", "ForgerEMS.updates.json");
         var promotedNames = new[]
         {
-            "Proxmox VE 9.2-1 ISO Installer",
-            "Ubuntu Server 24.04.4 LTS (amd64)",
-            "Debian GNU/Linux 13.5.0 netinst (amd64)",
-            "Fedora Server 44-1.7 DVD (x86_64)",
-            "FreeBSD 15.0-RELEASE amd64 disc1 ISO",
-            "OpenBSD 7.9 amd64 install ISO",
-            "Rocky Linux 10.1 Minimal (x86_64)",
-            "AlmaLinux 10.2 Minimal (x86_64)"
+            "Rescuezilla",
+            "Ubuntu LTS Server",
+            "Debian Stable Netinst",
+            "Debian Stable Live GNOME",
+            "Debian Stable Live KDE",
+            "Debian Stable Live Xfce",
+            "Ubuntu LTS Desktop",
+            "Kali Linux Installer"
         };
 
         using var document = JsonDocument.Parse(File.ReadAllText(manifest));

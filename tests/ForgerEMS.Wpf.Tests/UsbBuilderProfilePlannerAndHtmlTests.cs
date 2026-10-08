@@ -125,12 +125,12 @@ public sealed class UsbBuilderProfilePlannerAndHtmlTests
     {
         var diagnostics = UsbBuilderProfileOption.FromDefinition(UsbBuilderProfileCatalog.GetRequired("diagnostics"), included: true);
         diagnostics.LoadItems(UsbBuilderProfileItemCatalog.ForCategory("diagnostics"), new HashSet<string>());
-        diagnostics.Items.First(i => string.Equals(i.ManifestEntryName, "Rufus 4.14 Portable (x64)", StringComparison.Ordinal)).IsSelected = true;
+        diagnostics.Items.First(i => string.Equals(i.ManifestEntryName, "Rufus Portable", StringComparison.Ordinal)).IsSelected = true;
 
         var selectors = UsbBuilderProfileItemSelection.BuildSelectedManifestSelectors([diagnostics]);
 
-        Assert.Contains("name:Rufus 4.14 Portable (x64)", selectors);
-        Assert.Contains(@"dest:Tools\Portable\USB\rufus-4.14p.exe", selectors);
+        Assert.Contains("name:Rufus Portable", selectors);
+        Assert.Contains(@"dest:Tools\Portable\USB\rufus.exe", selectors);
         Assert.DoesNotContain(selectors, s => s.Contains("Download Page", StringComparison.OrdinalIgnoreCase));
     }
 

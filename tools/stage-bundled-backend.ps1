@@ -16,13 +16,18 @@ folder under ..\release\ventoy-core\ is used.
 
 .PARAMETER OutputRoot
 Optional destination root. Defaults to .\dist\backend-stage\backend
+
+.PARAMETER StageFamilyRoot
+Optional parent that OutputRoot must live under (the wipe guard). Defaults to
+.\dist\backend-stage. Pass an isolated parent when staging outside the repo dist tree.
 #>
 
 [CmdletBinding()]
 param(
     [string]$FrontendVersion = "",
     [string]$ReleaseBundleRoot = "",
-    [string]$OutputRoot = ""
+    [string]$OutputRoot = "",
+    [string]$StageFamilyRoot = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -38,6 +43,7 @@ $rootFilesToCopy = @(
     "Setup-ForgerEMS.ps1",
     "Update-ForgerEMS.ps1",
     "ForgerEMS.Runtime.ps1",
+    "Get-ForgerEMSWindowsMaintenance.ps1",
     "Setup_Toolkit.ps1",
     "Setup_USB_Toolkit.ps1",
     "ForgerEMS.updates.json",
@@ -157,7 +163,11 @@ if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
 $ReleaseBundleRoot = Resolve-ReleaseBundleRoot -ReleaseFamilyRoot $releaseFamilyRoot -ExplicitRoot $ReleaseBundleRoot
 $OutputRoot = Get-NormalizedPath -Path $OutputRoot
 
-$stageFamilyRoot = Join-Path $workspaceRoot "dist\backend-stage"
+$stageFamilyRoot = if ([string]::IsNullOrWhiteSpace($StageFamilyRoot)) {
+    Join-Path $workspaceRoot "dist\backend-stage"
+} else {
+    Get-NormalizedPath -Path $StageFamilyRoot
+}
 Ensure-Dir -Path $stageFamilyRoot
 Assert-ChildPath -Parent $stageFamilyRoot -Child $OutputRoot
 

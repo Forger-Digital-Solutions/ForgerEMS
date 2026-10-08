@@ -1,0 +1,77 @@
+name: Windows Installer Lifecycle
+
+# Validation only. No push trigger, release creation, binary upload or feed mutation.
+on:
+  workflow_dispatch:
+    inputs:
+      previous_tag:
+        description: Official previous-release lifecycle fixture tag
+        required: true
+        default: v1.2.3-preview.1
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  lifecycle:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
+        with:
+          dotnet-version: 8.0.x
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+      - name: Build clean unsigned validation candidate
+        run: |
+          if ((git rev-parse HEAD).Trim() -ne $env:GITHUB_SHA) { throw 'Checkout provenance mismatch' }
+          if (git status --porcelain) { throw 'Validation requires a clean checkout' }
+          .\tools\build-release.ps1 -UnsignedCandidate
+      - name: Obtain official previous fixture and run lifecycle
+        env:
+          PREVIOUS_TAG: ${{ inputs.previous_tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = $env:PREVIOUS_TAG
+          if ($tag -ne 'v1.2.3-preview.1') { throw 'This v1.2.4 campaign is scoped to the verified published previous fixture; update the harness before changing its baseline' }
+          if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$') { throw 'Invalid previous tag' }
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; 'User-Agent' = 'ForgerEMS-Lifecycle' }
+          $release = Invoke-RestMethod "https://api.github.com/repos/Forger-Digital-Solutions/ForgerEMS/releases/tags/$tag" -Headers $headers
+          if ($release.draft -or $release.tag_name -ne $tag) { throw 'Fixture is not the requested published release' }
+          $assets = @($release.assets | Where-Object name -eq "ForgerEMS-Setup-$tag.exe")
+          if ($assets.Count -ne 1 -or $assets[0].digest -notmatch '^sha256:([0-9a-fA-F]{64})$') { throw 'Fixture digest unavailable or ambiguous' }
+          $expected = $Matches[1]
+          $url = "https://github.com/Forger-Digital-Solutions/ForgerEMS/releases/download/$tag/$($assets[0].name)"
+          if ($assets[0].browser_download_url -ne $url) { throw 'Fixture URL mismatch' }
+          New-Item -ItemType Directory 'C:\ForgerEMS-QA\Input' -Force | Out-Null
+          $previous = 'C:\ForgerEMS-QA\Input\previous.exe'
+          # curl redirects only over HTTPS; GitHub/API digest is independent of artifact bytes.
+          curl.exe --fail --location --proto '=https' --proto-redir '=https' --output $previous $url
+          if ($LASTEXITCODE -ne 0) { throw 'Fixture download failed' }
+          if ((Get-FileHash $previous -Algorithm SHA256).Hash -ne $expected) { throw 'Fixture hash mismatch' }
+          if ((Get-Item $previous).Length -ne $assets[0].size) { throw 'Fixture size mismatch' }
+          $vmId = (Get-CimInstance Win32_ComputerSystemProduct).UUID
+          Set-Content 'C:\ForgerEMS-QA\DISPOSABLE_VM_ID.txt' $vmId
+          $candidate = (Resolve-Path 'release\current\ForgerEMS-Setup-v1.2.4.exe').Path
+          $parameters = @{
+            DisposableVmId = $vmId; IsolationKind = 'GitHubHosted'
+            CandidateInstaller = $candidate; CandidateSha256 = (Get-FileHash $candidate -Algorithm SHA256).Hash
+            PreviousInstaller = $previous; PreviousSha256 = $expected; SourceHead = $env:GITHUB_SHA
+          }
+          # GUI/consent/DPI validation remains separate; these phases prove registry/files/self-test.
+          foreach ($phase in @('CleanInstall','Reinstall','Uninstall','PreviousInstall','SeedUpgradeState','Upgrade','PostUninstall')) {
+            .\tools\Test-ForgerEMSInstallerLifecycle.ps1 @parameters -Phase $phase
+          }
+      - name: Preserve lifecycle evidence only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: installer-lifecycle-evidence
+          path: C:\ForgerEMS-QA\Evidence
+          if-no-files-found: warn

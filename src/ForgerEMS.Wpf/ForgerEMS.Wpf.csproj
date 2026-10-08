@@ -11,24 +11,23 @@
     <AssemblyName>ForgerEMS</AssemblyName>
     <Product>ForgerEMS</Product>
     <Company>Forger Digital Solutions</Company>
-    <Title>ForgerEMS v1.2.4 Public Preview</Title>
-    <Description>ForgerEMS Public Preview - Windows technician utility suite for USB toolkit workflows, Driver Hub guidance, port/USB mapping, drive validation, battery/system summaries, and Kyra local-first help.</Description>
+    <Title>ForgerEMS v$(ForgerEMSReleaseVersion)</Title>
+    <Description>ForgerEMS - Windows technician utility suite for USB toolkit workflows, Driver Hub guidance, port/USB mapping, drive validation, and battery/system summaries.</Description>
     <Authors>Forger Digital Solutions</Authors>
     <ApplicationIcon>Assets\ForgerEMS.ico</ApplicationIcon>
-    <Version>1.2.4-preview.5</Version>
-    <AssemblyVersion>1.2.4.0</AssemblyVersion>
-    <FileVersion>1.2.4.0</FileVersion>
-    <InformationalVersion>1.2.4-preview.5</InformationalVersion>
+    <Version>$(ForgerEMSReleaseVersion)</Version>
+    <AssemblyVersion>$(ForgerEMSReleaseVersion).0</AssemblyVersion>
+    <FileVersion>$(ForgerEMSReleaseVersion).0</FileVersion>
+    <InformationalVersion>$(ForgerEMSReleaseVersion)</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <DebugType>embedded</DebugType>
     <PublishTrimmed>false</PublishTrimmed>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <DefaultItemExcludes>$(DefaultItemExcludes);bin\**;obj\**;.artifacts\**</DefaultItemExcludes>
-    <ForgerNuGetPackageRoot Condition="'$(NuGetPackageRoot)' != ''">$(NuGetPackageRoot)</ForgerNuGetPackageRoot>
-    <ForgerNuGetPackageRoot Condition="'$(ForgerNuGetPackageRoot)' == '' and '$(NUGET_PACKAGES)' != ''">$(NUGET_PACKAGES)\</ForgerNuGetPackageRoot>
+    <ForgerNuGetPackageRoot Condition="'$(NuGetPackageRoot)' != ''">$([MSBuild]::NormalizeDirectory('$(NuGetPackageRoot)'))</ForgerNuGetPackageRoot>
+    <ForgerNuGetPackageRoot Condition="'$(ForgerNuGetPackageRoot)' == '' and '$(NUGET_PACKAGES)' != ''">$([MSBuild]::NormalizeDirectory('$(NUGET_PACKAGES)'))</ForgerNuGetPackageRoot>
     <ForgerNuGetPackageRoot Condition="'$(ForgerNuGetPackageRoot)' == ''">$(UserProfile)\.nuget\packages\</ForgerNuGetPackageRoot>
     <ForgerLibreHardwareMonitorDll>$(ForgerNuGetPackageRoot)librehardwaremonitorlib\0.9.6\runtimes\win-x64\lib\net8.0\LibreHardwareMonitorLib.dll</ForgerLibreHardwareMonitorDll>
-    <IncludeKyraSdkDogfoodTool Condition="'$(IncludeKyraSdkDogfoodTool)' == ''">false</IncludeKyraSdkDogfoodTool>
   </PropertyGroup>
 
   <ItemGroup>
@@ -36,24 +35,16 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Kyra.Core\Kyra.Core.csproj" BuildReference="true" ReferenceOutputAssembly="true" SkipGetTargetFrameworkProperties="true" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Using Include="Kyra.Core" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
-    <PackageReference Include="System.Management" Version="10.0.2" />
+    <PackageReference Include="System.Management" Version="10.0.12" />
+    <PackageReference Include="System.IO.Ports" Version="10.0.12" />
+    <PackageReference Include="System.Threading.AccessControl" Version="10.0.12" />
   </ItemGroup>
 
   <ItemGroup>
     <Resource Include="Assets\ForgerEMS.ico" />
     <Resource Include="Assets\ForgerEMS_Icon.png" />
     <Resource Include="Assets\ForgerEMS_CommandCenterBackground.png" />
-    <Resource Include="Assets\Kyra.png" />
-    <Resource Include="Assets\KyraAdvancedBackground.png" />
   </ItemGroup>
 
   <ItemGroup>
@@ -61,11 +52,13 @@
       <Link>providers\sensors\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </Content>
     <Content Include="$(ForgerLibreHardwareMonitorDll)" Condition="Exists('$(ForgerLibreHardwareMonitorDll)')">
       <Link>providers\sensors\LibreHardwareMonitorLib.dll</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
     </Content>
   </ItemGroup>
 
@@ -105,8 +98,78 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>
     </Content>
-    <Content Include="..\..\docs\RELEASE_NOTES_v1.2.4-preview.4.md">
-      <Link>docs\RELEASE_NOTES_v1.2.4-preview.4.md</Link>
+    <Content Include="..\..\docs\RELEASE_NOTES_v1.2.4.md">
+      <Link>docs\RELEASE_NOTES_v1.2.4.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\BETA_ISSUE_REPORT_TEMPLATE.md">
+      <Link>docs\BETA_ISSUE_REPORT_TEMPLATE.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\BETA_TESTER_QUICKSTART.md">
+      <Link>docs\BETA_TESTER_QUICKSTART.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\DOWNLOAD_TROUBLESHOOTING.md">
+      <Link>docs\DOWNLOAD_TROUBLESHOOTING.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\ENVIRONMENT.md">
+      <Link>docs\ENVIRONMENT.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\FIRST_TESTER_DOWNLOAD_FLOW.md">
+      <Link>docs\FIRST_TESTER_DOWNLOAD_FLOW.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\FORGER-DEEP-SENSOR-DRIVER-ROADMAP.md">
+      <Link>docs\FORGER-DEEP-SENSOR-DRIVER-ROADMAP.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\FORGER-SENSOR-STACK.md">
+      <Link>docs\FORGER-SENSOR-STACK.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\LEGAL.md">
+      <Link>docs\LEGAL.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\LINUX-WINE-COMPATIBILITY.md">
+      <Link>docs\LINUX-WINE-COMPATIBILITY.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\marketing\PUBLIC-FAQ.md">
+      <Link>docs\marketing\PUBLIC-FAQ.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\SENSOR-LIMITATIONS.md">
+      <Link>docs\SENSOR-LIMITATIONS.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\THIRD-PARTY-SENSOR-NOTICES.md">
+      <Link>docs\THIRD-PARTY-SENSOR-NOTICES.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\docs\UPDATE_SYSTEM.md">
+      <Link>docs\UPDATE_SYSTEM.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\..\SECURITY.md">
+      <Link>SECURITY.md</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>Always</CopyToPublishDirectory>
     </Content>
@@ -116,34 +179,26 @@
     <Copy SourceFiles="$(ForgerLibreHardwareMonitorDll)" DestinationFiles="$(OutputPath)providers\sensors\LibreHardwareMonitorLib.dll" SkipUnchangedFiles="true" />
   </Target>
 
-  <Target Name="CopyLibreHardwareMonitorProviderToPublish" AfterTargets="Publish" Condition="Exists('$(ForgerLibreHardwareMonitorDll)')">
-    <Copy SourceFiles="$(ForgerLibreHardwareMonitorDll)" DestinationFiles="$(PublishDir)providers\sensors\LibreHardwareMonitorLib.dll" SkipUnchangedFiles="true" />
+  <Target Name="CopyLibreHardwareMonitorProviderToPublish" AfterTargets="CopyFilesToPublishDirectory">
+    <Error Condition="!Exists('$(ForgerLibreHardwareMonitorDll)')" Text="LibreHardwareMonitorLib runtime asset not found at $(ForgerLibreHardwareMonitorDll) — restore packages first." />
+    <Copy Condition="'$(PublishDir)' != ''" SourceFiles="$(ForgerLibreHardwareMonitorDll)" DestinationFiles="$(PublishDir)providers\sensors\LibreHardwareMonitorLib.dll" SkipUnchangedFiles="true" />
   </Target>
 
-  <Target Name="CopyKyraSdkDogfoodTool" AfterTargets="Build" Condition="'$(IncludeKyraSdkDogfoodTool)' == 'true'">
-    <PropertyGroup>
-      <_KyraSdkDogfoodOut>$(MSBuildThisFileDirectory)..\ForgerEMS.Kyra.SdkDogfood\bin\$(Configuration)\net8.0\</_KyraSdkDogfoodOut>
-      <_KyraSdkDogfoodDest>$(OutputPath)tools\kyra-sdk-dogfood\</_KyraSdkDogfoodDest>
-    </PropertyGroup>
-    <MSBuild Projects="$(MSBuildThisFileDirectory)..\ForgerEMS.Kyra.SdkDogfood\ForgerEMS.Kyra.SdkDogfood.csproj" Properties="Configuration=$(Configuration);UseKyraSdkProjectReference=$(UseKyraSdkProjectReference)" Targets="Build" />
+  <!-- LGPL replaceability: keep the LibreHardwareMonitorLib assembly OUT of the single-file
+       bundle so a modified LGPL-covered component can be swapped by the user. The loose DLL
+       is staged at the publish root AND under providers\sensors (the app's provider probe
+       path); both copies are byte-identical upstream binaries, never modified. The metadata
+       must be applied after ComputeResolvedFilesToPublishList produces ResolvedFileToPublish
+       but before _ComputeResolvedFilesToPublishTypes splits the unbundled copy lists. -->
+  <Target Name="ExcludeLibreHardwareMonitorFromSingleFile"
+          AfterTargets="ComputeResolvedFilesToPublishList"
+          Condition="'$(PublishSingleFile)' == 'true'">
     <ItemGroup>
-      <_KyraSdkDogfoodFiles Include="$(_KyraSdkDogfoodOut)**\*.*" />
+      <ResolvedFileToPublish Update="@(ResolvedFileToPublish)"
+                             Condition="'%(ResolvedFileToPublish.Filename)' == 'LibreHardwareMonitorLib'"
+                             ExcludeFromSingleFile="true"
+                             CopyToPublishDirectory="Always" />
     </ItemGroup>
-    <MakeDir Directories="$(_KyraSdkDogfoodDest)" />
-    <Copy SourceFiles="@(_KyraSdkDogfoodFiles)" DestinationFolder="$(_KyraSdkDogfoodDest)%(RecursiveDir)" SkipUnchangedFiles="true" />
-  </Target>
-
-  <Target Name="CopyKyraSdkDogfoodToolToPublish" AfterTargets="Publish" Condition="'$(IncludeKyraSdkDogfoodTool)' == 'true'">
-    <PropertyGroup>
-      <_KyraSdkDogfoodOut>$(MSBuildThisFileDirectory)..\ForgerEMS.Kyra.SdkDogfood\bin\$(Configuration)\net8.0\</_KyraSdkDogfoodOut>
-      <_KyraSdkDogfoodDest>$(PublishDir)tools\kyra-sdk-dogfood\</_KyraSdkDogfoodDest>
-    </PropertyGroup>
-    <MSBuild Projects="$(MSBuildThisFileDirectory)..\ForgerEMS.Kyra.SdkDogfood\ForgerEMS.Kyra.SdkDogfood.csproj" Properties="Configuration=$(Configuration);UseKyraSdkProjectReference=$(UseKyraSdkProjectReference)" Targets="Build" />
-    <ItemGroup>
-      <_KyraSdkDogfoodPublishFiles Include="$(_KyraSdkDogfoodOut)**\*.*" />
-    </ItemGroup>
-    <MakeDir Directories="$(_KyraSdkDogfoodDest)" />
-    <Copy SourceFiles="@(_KyraSdkDogfoodPublishFiles)" DestinationFolder="$(_KyraSdkDogfoodDest)%(RecursiveDir)" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

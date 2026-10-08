@@ -1,5 +1,8 @@
 <Project>
   <PropertyGroup>
+    <!-- Authoritative product version: root VERSION file (single line, e.g. 1.2.4). -->
+    <ForgerEMSVersionFile>$(MSBuildThisFileDirectory)VERSION</ForgerEMSVersionFile>
+    <ForgerEMSReleaseVersion>$([System.IO.File]::ReadAllText('$(ForgerEMSVersionFile)').Trim())</ForgerEMSReleaseVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>

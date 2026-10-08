@@ -51,45 +51,6 @@ public sealed class ConfigurationAuditDocumentationTests
             "FORGEREMS_UPDATE_USER_AGENT",
             "FORGEREMS_GITHUB_TOKEN",
             "FORGEREMS_UPDATE_TIMEOUT_SECONDS",
-            "FORGEREMS_KYRA_MODE",
-            "FORGEREMS_KYRA_PROVIDER",
-            "FORGEREMS_KYRA_ONLINE_ENABLED",
-            "FORGEREMS_KYRA_SHARE_SYSTEM_CONTEXT",
-            "FORGEREMS_KYRA_REQUIRE_LOCAL_FACTS",
-            "FORGEREMS_KYRA_API_FIRST",
-            "FORGEREMS_KYRA_PROVIDER_PRIORITY",
-            "FORGEREMS_KYRA_PROVIDER_TIMEOUT_SECONDS",
-            "FORGEREMS_KYRA_CONSENSUS_MODE",
-            "FORGEREMS_KYRA_MEMORY_MODE",
-            "FORGEREMS_KYRA_PERSIST_MEMORY",
-            "FORGEREMS_KYRA_MAX_CONTEXT_TURNS",
-            "FORGEREMS_KYRA_CONTEXT_MAX_CHARS",
-            "FORGEREMS_KYRA_PERSONALITY",
-            "FORGEREMS_OPENAI_BASE_URL",
-            "FORGEREMS_OPENAI_MODEL",
-            "FORGEREMS_OPENAI_API_KEY",
-            "FORGEREMS_LMSTUDIO_BASE_URL",
-            "FORGEREMS_LMSTUDIO_MODEL",
-            "FORGEREMS_OLLAMA_BASE_URL",
-            "FORGEREMS_OLLAMA_MODEL",
-            "FORGEREMS_ANTHROPIC_API_KEY",
-            "FORGEREMS_ANTHROPIC_MODEL",
-            "FORGEREMS_GEMINI_API_KEY",
-            "FORGEREMS_GEMINI_MODEL",
-            "FORGEREMS_CUSTOM_PROVIDER_BASE_URL",
-            "FORGEREMS_CUSTOM_PROVIDER_MODEL",
-            "FORGEREMS_CUSTOM_PROVIDER_API_KEY",
-            "FORGEREMS_WEATHER_PROVIDER",
-            "FORGEREMS_WEATHER_API_KEY",
-            "FORGEREMS_WEATHER_DEFAULT_LOCATION",
-            "FORGEREMS_NEWS_PROVIDER",
-            "FORGEREMS_NEWS_API_KEY",
-            "FORGEREMS_FINANCE_PROVIDER",
-            "FORGEREMS_FINANCE_API_KEY",
-            "FORGEREMS_CRYPTO_PROVIDER",
-            "FORGEREMS_CRYPTO_API_KEY",
-            "FORGEREMS_STATS_PROVIDER",
-            "FORGEREMS_STATS_API_KEY",
             "FORGEREMS_DIAGNOSTICS_EXPORT_DIR",
             "FORGEREMS_DIAGNOSTICS_REDACTION_STRICT",
             "FORGEREMS_ENABLE_DIAGNOSTIC_BUNDLE",
@@ -104,7 +65,6 @@ public sealed class ConfigurationAuditDocumentationTests
             "FORGEREMS_TELEMETRY_ENABLED",
             "FORGEREMS_CRASH_REPORTING_ENABLED",
             "FORGEREMS_LICENSE_TIER",
-            "FORGEREMS_DEV_PROVIDER_SETTINGS",
             "FORGEREMS_FORCE_DOTNET_HASH"
         };
 
@@ -121,24 +81,7 @@ public sealed class ConfigurationAuditDocumentationTests
 
         Assert.Contains("FORGEREMS_DEEP_SENSOR_MODE=Off", text, StringComparison.Ordinal);
         Assert.Contains("REPLACE_ME", text, StringComparison.Ordinal);
-        Assert.Contains("OLLAMA_BASE_URL=http://localhost:11434", text, StringComparison.Ordinal);
-        Assert.Contains("LM_STUDIO_BASE_URL=http://localhost:1234/v1", text, StringComparison.Ordinal);
         Assert.DoesNotMatch(RealSecretRegex(), text);
-    }
-
-    [Fact]
-    public void PrivacyAndLegal_DocumentOnlineProviderBehavior()
-    {
-        var privacy = Read("docs", "PRIVACY.md");
-        var legal = Read("docs", "LEGAL.md");
-
-        Assert.Contains("Offline / local Kyra", privacy, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Optional online", privacy, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("System Intelligence context", privacy, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("online AI provider", privacy, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Optional online providers", legal, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("sanitized context", legal, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Do not paste API keys, tokens, passwords", legal, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

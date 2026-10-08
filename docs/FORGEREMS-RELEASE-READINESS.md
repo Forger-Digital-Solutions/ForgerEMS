@@ -1,13 +1,13 @@
 # ForgerEMS Release Readiness
 
-## Current v1.2.4-preview.4 Preview Gate
+## Current v1.2.4 Release Gate
 
 Use this current section for the owner handoff release. The legacy v1.1.1 notes
 below remain as historical installer-planning material only.
 
 Required current docs:
 
-- `docs/RELEASE_NOTES_v1.2.4-preview.4.md`
+- `docs/RELEASE_NOTES_v1.2.4.md`
 - `docs/TERMS_OF_USE.md`
 - `docs/PRIVACY_AND_DATA_HANDLING.md`
 - `docs/LEGAL_NOTICES.md`
@@ -18,8 +18,8 @@ Required current docs:
 
 Expected artifacts under `release/current`:
 
-- `ForgerEMS-Setup-v1.2.4-preview.4.exe`
-- `ForgerEMS-v1.2.4-preview.4.zip`
+- `ForgerEMS-Setup-v1.2.4.exe`
+- `ForgerEMS-v1.2.4.zip`
 - `CHECKSUMS.sha256`
 - `release.json`
 - `DOWNLOAD_BETA.txt`
@@ -27,7 +27,7 @@ Expected artifacts under `release/current`:
 
 Current release checks:
 
-1. `ForgerEMS-v1.2.4-preview.4.zip` is a portable app ZIP. After extraction,
+1. `ForgerEMS-v1.2.4.zip` is a portable app ZIP. After extraction,
    the folder contains `ForgerEMS.exe`, `backend\`, `manifests\`, `docs\`,
    `START_HERE.bat`, `VERIFY.txt`, `release.json`, and inner checksums.
 2. The installer has a Terms/license page from `installer/ForgerEMS-License.txt`
@@ -38,7 +38,7 @@ Current release checks:
    terms version, timestamp, app version/build, and Terms hash.
 5. Terms/Privacy/Legal/About/Third-party Notices are reachable later from the
    app.
-6. Exporting logs, support bundles, Kyra context, or reports requires a separate
+6. Exporting logs, support bundles, or reports requires a separate
    review-before-sharing confirmation.
 7. USB Builder includes the default **ForgerEMS Portable App** profile and routes
    app/docs/log folders to `_apps\ForgerEMS`, `_docs\ForgerEMS`, and
@@ -60,8 +60,8 @@ Build/validation command set:
 dotnet restore .\ForgerEMS.sln
 dotnet build .\ForgerEMS.sln -c Release --no-restore
 dotnet test .\ForgerEMS.sln -c Release
-.\tools\build-release.ps1 -Version 1.2.4-preview.4
-.\tools\Validate-ForgerEMSRelease.ps1 -Version 1.2.4-preview.4 -ReleaseRoot .\release\current
+.\tools\build-release.ps1 -Version 1.2.4 -RequireSigning -CertificateThumbprint <thumbprint>
+.\tools\Validate-ForgerEMSRelease.ps1 -Version 1.2.4 -ReleaseRoot .\release\current
 ```
 
 Manual smoke still required for fully interactive installer clicks and visual
@@ -69,11 +69,11 @@ Manual smoke still required for fully interactive installer clicks and visual
 
 ## Legacy v1.1.1 Installed-Mode Notes
 
-**Historical context:** read `docs/BETA_RC_GO_NO_GO_v1.1.12-rc.2.md`, `docs/FIRST_TESTER_DOWNLOAD_FLOW.md`, `docs/KYRA_PROVIDER_ENVIRONMENT_SETUP.md`, and `docs/DOWNLOAD_TROUBLESHOOTING.md` before older beta waves. Prior human-testing pack: `docs/BETA_HUMAN_TESTING_CHECKLIST_v1.1.11.md`, `docs/MISSING_BEFORE_HUMAN_TESTING_v1.1.11.md`, `docs/BETA_TESTER_QUICKSTART.md`, `docs/BETA_ISSUE_REPORT_TEMPLATE.md`, `docs/RELEASE_NOTES_v1.1.12-rc.2.md` (older: `docs/RELEASE_NOTES_v1.1.12-rc.1.md`, `docs/RELEASE_NOTES_v1.1.11-beta.1.md`).
+**Historical context:** read `docs/BETA_RC_GO_NO_GO_v1.1.12-rc.2.md`, `docs/FIRST_TESTER_DOWNLOAD_FLOW.md`, and `docs/DOWNLOAD_TROUBLESHOOTING.md` before older beta waves. Prior human-testing pack: `docs/BETA_HUMAN_TESTING_CHECKLIST_v1.1.11.md`, `docs/MISSING_BEFORE_HUMAN_TESTING_v1.1.11.md`, `docs/BETA_TESTER_QUICKSTART.md`, `docs/BETA_ISSUE_REPORT_TEMPLATE.md`, `docs/RELEASE_NOTES_v1.1.12-rc.2.md` (older: `docs/RELEASE_NOTES_v1.1.12-rc.1.md`, `docs/RELEASE_NOTES_v1.1.11-beta.1.md`).
 
 This document is the final operator-facing release prep pass for the native
 `ForgerEMS` frontend `v1.1.1`. It is retained for historical reference and is
-not the current v1.2.4-preview.4 release gate.
+not the current v1.2.4 release gate.
 
 It focuses on:
 

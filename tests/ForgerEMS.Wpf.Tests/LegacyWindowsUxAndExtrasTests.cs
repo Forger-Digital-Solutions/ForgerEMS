@@ -135,7 +135,7 @@ public sealed class LegacyWindowsUxAndExtrasTests
     [InlineData("Windows 7",   "https://learn.microsoft.com/lifecycle/products/windows-7")]
     [InlineData("Windows Vista", "https://learn.microsoft.com/lifecycle/products/windows-vista")]
     [InlineData("Windows XP",  "https://learn.microsoft.com/lifecycle/products/windows-xp")]
-    [InlineData("Windows 2000", "https://learn.microsoft.com/lifecycle/products/windows-2000")]
+    [InlineData("Windows 2000", "https://learn.microsoft.com/en-us/lifecycle/products/")]
     public void LegacyWindows_LifecyclePagesPointAtMicrosoftLearn(string version, string expectedUrl)
     {
         var item = ItemAtLegacyDest(version);

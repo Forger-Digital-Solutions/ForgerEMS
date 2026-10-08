@@ -2,8 +2,12 @@
 
 ## Supported Versions
 
-ForgerEMS is currently maintained on the `main` branch and the latest tagged release.
-Security fixes are prioritized for the newest supported release line.
+| Version | Status | Notes |
+|---------|--------|-------|
+| `v1.2.4-preview.1` | Current public preview | Security fixes are prioritized for this line. |
+| `v1.2.3-preview.1` | Superseded preview | Update to `v1.2.4-preview.1` when possible. |
+
+ForgerEMS is maintained on the `main` branch and the latest tagged preview/release. Security fixes are prioritized for the newest supported release line. Preview builds are provided for testing and feedback and are not certified for production use.
 
 ## Reporting a Vulnerability
 
@@ -11,7 +15,7 @@ Please report security issues privately and do not open a public issue first.
 
 - Email: `security@forgerdigitalsolutions.com`
 
-For **non-security beta feedback** (bugs, UX, logs), use **ForgerDigitalSolutions@outlook.com** as described in the app and [README.md](README.md) — not the security inbox.
+For **non-security beta feedback** (bugs, UX, logs), use **ForgerDigitalSolutions@outlook.com** as described in the app and `README.md` (source checkout only — not shipped in packages) — not the security inbox.
 - Subject: `ForgerEMS Security Report`
 - Include:
   - Affected version/commit

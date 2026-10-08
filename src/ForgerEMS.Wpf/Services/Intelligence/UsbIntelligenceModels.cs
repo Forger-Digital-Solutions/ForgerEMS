@@ -21,7 +21,7 @@ public enum UsbPortRiskLevel
     High = 3
 }
 
-/// <summary>USB Builder target quality tier for hints and Kyra (no license gating yet).</summary>
+/// <summary>USB Builder target quality tier for hints (no license gating yet).</summary>
 public enum UsbBuilderQuality
 {
     Unknown = 0,
@@ -289,7 +289,7 @@ public sealed class UsbDeviceInfo
 
     public UsbSpeedClassification InferredSpeed { get; init; }
 
-    /// <summary>Raw PNP — never written to disk or Kyra context.</summary>
+    /// <summary>Raw PNP — never written to disk or exported context.</summary>
     [JsonIgnore]
     public string? PnpDeviceId { get; init; }
 
@@ -450,15 +450,6 @@ public sealed class UsbDiagnosticsEmbeddedSection
     public bool ElevatedTelemetryIsStale { get; init; }
 }
 
-public sealed class KyraUsbNarrative
-{
-    public string ShortAnswer { get; init; } = string.Empty;
-
-    public string LikelyCause { get; init; } = string.Empty;
-
-    public string NextStep { get; init; } = string.Empty;
-}
-
 public sealed class UsbTopologySnapshot
 {
     public DateTimeOffset GeneratedUtc { get; init; }
@@ -477,8 +468,6 @@ public sealed class UsbTopologySnapshot
 
     public UsbDiagnosticsEmbeddedSection? UsbDiagnostics { get; init; }
 
-    public KyraUsbNarrative? KyraUsbNarrative { get; init; }
-
     public string MachineProfileFingerprint { get; init; } = string.Empty;
 
     /// <summary>Latest measurement for the selected USB target (if any).</summary>
@@ -486,7 +475,7 @@ public sealed class UsbTopologySnapshot
 
     public string? SelectedTargetStablePortKey { get; init; }
 
-    /// <summary>User-confirmed label for the current port (safe for Kyra JSON).</summary>
+    /// <summary>User-confirmed label for the current port (safe for exported JSON).</summary>
     public string? SelectedTargetPortUserLabel { get; init; }
 
     public UsbPortLabelValidity SelectedTargetPortLabelValidity { get; init; }

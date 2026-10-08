@@ -1,8 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
-using System.Text;
 using System.Text.Json;
 
 namespace VentoyToolkitSetup.Wpf.Services.Intelligence;
@@ -34,7 +32,7 @@ public static class TechnicianWorkflowPresetCatalog
             "Diagnose Slow Laptop",
             "Find likely bottlenecks using local evidence before repair actions.",
             ["Review a local device snapshot", "Review health score and key watch-outs", "Check RAM/storage/GPU/driver pressure indicators", "Validate with Task Manager during symptom reproduction"],
-            ["Dr. Forge", "Device Context", "Kyra"],
+            ["Dr. Forge", "Device Context"],
             ["Treat unknown/not-exposed as confidence limits, not failures", "Backup customer data before any destructive repair"],
             ["Health score and confidence", "Device Fit/Best Use", "Hardware X-Ray sensor coverage"],
             ["Reproduce issue once in user workflow", "Capture vendor diagnostics if needed"],
@@ -52,7 +50,7 @@ public static class TechnicianWorkflowPresetCatalog
             "Prep Laptop for Resale",
             "Create an evidence-backed resale prep checklist.",
             ["Review local device snapshot and Quick Read", "Review Flip Value and Best Use", "Confirm battery/security/storage confidence limits", "Document honest disclosures"],
-            ["Dr. Forge", "Kyra", "Export Summary"],
+            ["Dr. Forge", "Export Summary"],
             ["Do not claim unknown signals as verified", "Require backup confirmation before wipe/reset steps"],
             ["Flip Value range and confidence", "Best Use / Device Fit", "TPM/Secure Boot verification status"],
             ["Collect cosmetic/runtime notes", "Capture listing photos and condition disclosures"],
@@ -70,7 +68,7 @@ public static class TechnicianWorkflowPresetCatalog
             "Network Troubleshooting",
             "Verify practical network health for repair and update workflows.",
             ["Review network summary and diagnostics", "Identify active physical adapter", "Separate virtual adapter noise from real outage", "Retest connectivity-dependent actions"],
-            ["Dr. Forge", "Port / USB Intelligence", "Kyra"],
+            ["Dr. Forge", "Port / USB Intelligence"],
             ["Do not expose full private IPs in shared logs/reports", "Avoid blind reset commands during initial triage"],
             ["Internet check and adapter role summary", "Unified diagnostics network items"],
             ["Test alternate network path", "Collect safe screenshots/log snippets"],
@@ -79,7 +77,7 @@ public static class TechnicianWorkflowPresetCatalog
             "Battery / Mobile Workstation Check",
             "Assess battery confidence and workstation viability without overclaiming.",
             ["Review battery wear/runtime availability", "Check power/thermal sensor coverage", "Classify confidence level", "Record disclosure-safe notes"],
-            ["Dr. Forge", "Device Context", "Kyra"],
+            ["Dr. Forge", "Device Context"],
             ["Unknown/not-exposed battery data is not failure evidence", "Do not promise runtime without verification"],
             ["Battery wear/cycle availability", "Sensor coverage confidence"],
             ["Run vendor battery diagnostics when data is limited", "Capture charger/runtime notes"],
@@ -104,75 +102,6 @@ public static class TechnicianWorkflowPresetCatalog
         hints.Add("Workflow: Prep Laptop for Resale");
         return hints.Distinct(StringComparer.OrdinalIgnoreCase).Take(2).ToArray();
     }
-
-    public static bool TryBuildKyraWorkflowAnswer(string prompt, out string answer)
-    {
-        answer = string.Empty;
-        if (string.IsNullOrWhiteSpace(prompt))
-        {
-            return false;
-        }
-
-        var normalized = prompt.Trim();
-        var hasCue = ContainsWorkflowCue(normalized);
-        var requested = ResolvePreset(normalized);
-        if (requested is null && hasCue)
-        {
-            requested = ResolvePresetByKeyword(normalized);
-        }
-
-        if (requested is null && !hasCue)
-        {
-            return false;
-        }
-
-        if (requested is null)
-        {
-            answer = "Technician Workflow Presets (dry-run guidance only):" + Environment.NewLine +
-                     string.Join(Environment.NewLine, Presets.Select(p => $"- {p.Name}: {p.Purpose}")) + Environment.NewLine +
-                     "Ask for one by name and Kyra will give a step-by-step checklist with safety warnings and manual-action boundaries.";
-            return true;
-        }
-
-        var sb = new StringBuilder();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Workflow preset: {requested.Name}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Purpose: {requested.Purpose}");
-        sb.AppendLine("Steps:");
-        AppendBullets(sb, requested.Steps);
-        sb.AppendLine("Required tools:");
-        AppendBullets(sb, requested.RequiredTools);
-        sb.AppendLine("Safety warnings:");
-        AppendBullets(sb, requested.SafetyWarnings);
-        sb.AppendLine("ForgerEMS can already check:");
-        AppendBullets(sb, requested.ForgerChecks);
-        sb.AppendLine("Manual action still required:");
-        AppendBullets(sb, requested.ManualActions);
-        sb.AppendLine(CultureInfo.InvariantCulture, $"Next recommended action: {requested.NextRecommendedAction}");
-        sb.AppendLine("Scope note: guidance/checklist only (no destructive automation).");
-        answer = sb.ToString().TrimEnd();
-        return true;
-    }
-
-    private static TechnicianWorkflowPreset? ResolvePreset(string prompt)
-    {
-        return Presets.FirstOrDefault(p => prompt.Contains(p.Name, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool ContainsWorkflowCue(string prompt) =>
-        prompt.Contains("workflow", StringComparison.OrdinalIgnoreCase) ||
-        prompt.Contains("preset", StringComparison.OrdinalIgnoreCase) ||
-        prompt.Contains("checklist", StringComparison.OrdinalIgnoreCase) ||
-        prompt.Contains("triage", StringComparison.OrdinalIgnoreCase);
-
-    private static TechnicianWorkflowPreset? ResolvePresetByKeyword(string prompt) =>
-        prompt.Contains("slow", StringComparison.OrdinalIgnoreCase) ? Presets.FirstOrDefault(p => p.Name.Contains("Diagnose Slow Laptop", StringComparison.Ordinal)) :
-        prompt.Contains("drive health", StringComparison.OrdinalIgnoreCase) || prompt.Contains("smart", StringComparison.OrdinalIgnoreCase) ? Presets.FirstOrDefault(p => p.Name.Contains("Check Drive Health", StringComparison.Ordinal)) :
-        prompt.Contains("resale", StringComparison.OrdinalIgnoreCase) ? Presets.FirstOrDefault(p => p.Name.Contains("Resale", StringComparison.Ordinal)) :
-        prompt.Contains("boot", StringComparison.OrdinalIgnoreCase) ? Presets.FirstOrDefault(p => p.Name.Contains("Boot Triage", StringComparison.Ordinal)) :
-        prompt.Contains("network", StringComparison.OrdinalIgnoreCase) ? Presets.FirstOrDefault(p => p.Name.Contains("Network Troubleshooting", StringComparison.Ordinal)) :
-        prompt.Contains("battery", StringComparison.OrdinalIgnoreCase) ? Presets.FirstOrDefault(p => p.Name.Contains("Battery", StringComparison.Ordinal)) :
-        prompt.Contains("usb repair toolkit", StringComparison.OrdinalIgnoreCase) || prompt.Contains("prep usb", StringComparison.OrdinalIgnoreCase) ? Presets.FirstOrDefault(p => p.Name.Contains("Prep USB Repair Toolkit", StringComparison.Ordinal)) :
-        null;
 
     private static bool NeedsWindowsReadinessVerification(JsonElement root)
     {
@@ -260,11 +189,4 @@ public static class TechnicianWorkflowPresetCatalog
         string nextAction)
         => new(name, purpose, steps, requiredTools, safetyWarnings, forgerChecks, manualActions, nextAction);
 
-    private static void AppendBullets(StringBuilder sb, IEnumerable<string> values)
-    {
-        foreach (var value in values.Where(v => !string.IsNullOrWhiteSpace(v)))
-        {
-            sb.AppendLine(CultureInfo.InvariantCulture, $"- {value}");
-        }
-    }
 }
