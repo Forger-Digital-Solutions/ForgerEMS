@@ -678,6 +678,7 @@ $releaseRoot = if ([string]::IsNullOrWhiteSpace($ReleaseOutputRoot)) {
 } else {
     [IO.Path]::GetFullPath($ReleaseOutputRoot)
 }
+$buildId = [Guid]::NewGuid().ToString('D')
 $releaseAppRoot = Join-Path $releaseRoot "app"
 $releaseBackendRoot = Join-Path $releaseAppRoot "backend"
 $releaseManifestRoot = Join-Path $releaseAppRoot "manifests"
@@ -685,6 +686,7 @@ $checksumsPath = Join-Path $releaseRoot "CHECKSUMS.sha256"
 $installerOutputDir = Join-Path $distRoot "installer"
 $installerReleaseName = "ForgerEMS-Setup-v{0}.exe" -f $Version
 $installerReleasePath = Join-Path $releaseRoot $installerReleaseName
+$zipBundleName = "ForgerEMS-v{0}.zip" -f $Version
 $displayVersionLabel = "ForgerEMS v$Version"
 $releaseIdentifierLabel = "ForgerEMS v$Version - package $Version (portable app ZIP plus installer)"
 
@@ -862,6 +864,13 @@ else {
     }
 
     Copy-Item -LiteralPath $versionedInstallerPath -Destination (Join-Path $releaseRoot (Split-Path -Leaf $versionedInstallerPath)) -Force
+
+    if ($signed -and (Test-Path -LiteralPath $verifiedUninstallerPath -PathType Leaf)) {
+        # The verified signed uninstaller must live under the release root so the
+        # candidate manifest can bind it by a safe contained relative filename.
+        Ensure-Dir -Path (Join-Path $releaseRoot "uninstaller")
+        Copy-Item -LiteralPath $verifiedUninstallerPath -Destination (Join-Path $releaseRoot "uninstaller\verified-uninstaller.exe") -Force
+    }
 }
 
 Write-Step "Writing release metadata"
@@ -875,18 +884,27 @@ if ($LASTEXITCODE -ne 0) {
 }
 $dirtyCount = @($gitStatusLines | Where-Object { $_ }).Count
 $metadata = [ordered]@{
+    schemaVersion = 2
     product = "ForgerEMS"
     publisher = "Forger Digital Solutions"
     version = $Version
     releaseIdentifier = $releaseIdentifierLabel
     channel = if ($UnsignedCandidate) { "preview" } else { "stable" }
+    buildId = $buildId
+    candidateKind = if ($UnsignedCandidate) { "UnsignedValidationCandidate" } else { "SignedValidationCandidate" }
+    # Reaching this point means restore/build/publish completed; buildEligible
+    # additionally requires a clean committed source tree.
+    buildEligible = ($dirtyCount -eq 0 -and -not $DryRun)
     backendVersion = $backendVersion
     runtime = $Runtime
     configuration = $Configuration
     dryRun = [bool]$DryRun
     signed = [bool]$script:SigningApplied
     unsignedCandidate = [bool]$UnsignedCandidate
-    productionEligible = (-not $UnsignedCandidate -and $script:SigningApplied -and -not $SkipInstaller -and -not $DryRun -and $dirtyCount -eq 0)
+    # Production eligibility is never decided by the builder: only the
+    # certification endpoint (tools/Test-ForgerEMSReleaseCertification.ps1) can
+    # promote a candidate after all mandatory signed receipts verify.
+    productionEligible = $false
     sourceHead = $sourceHead
     sourceDirtyFileCount = $dirtyCount
     generatedUtc = (Get-Date).ToUniversalTime().ToString("o")
@@ -917,7 +935,6 @@ if ($DryRun -or $SkipInstaller) {
 }
 else {
     Write-Step "Creating portable ZIP distribution bundle"
-    $zipBundleName = "ForgerEMS-v{0}.zip" -f $Version
     $zipBundlePath = Join-Path $releaseRoot $zipBundleName
     $packageParent = Join-Path $releaseRoot "package"
     $packageDirName = "ForgerEMS-v{0}" -f $Version
@@ -954,5 +971,40 @@ else {
         Remove-Item -LiteralPath $packageParent -Recurse -Force
     }
 }
+
+Write-Step "Emitting candidate certification manifest"
+# candidate-certification.json binds this build identity to final artifact
+# hashes. It is emitted only after all signing/packaging/final checksums and is
+# never placed inside the portable ZIP.
+$candidateArtifacts = [System.Collections.Generic.List[object]]::new()
+$candidateArtifactSpecs = @(
+    @{ Role = 'Installer'; RelativePath = $installerReleaseName }
+    @{ Role = 'Portable'; RelativePath = $zipBundleName }
+    @{ Role = 'Frontend'; RelativePath = 'app\ForgerEMS.exe' }
+    @{ Role = 'Uninstaller'; RelativePath = 'uninstaller\verified-uninstaller.exe' }
+)
+foreach ($spec in $candidateArtifactSpecs) {
+    $artifactPath = Join-Path $releaseRoot $spec.RelativePath
+    if (Test-Path -LiteralPath $artifactPath -PathType Leaf) {
+        $candidateArtifacts.Add([ordered]@{
+            role = $spec.Role
+            filename = ($spec.RelativePath -replace '\\', '/')
+            sha256 = (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash
+            sizeBytes = (Get-Item -LiteralPath $artifactPath).Length
+        })
+    }
+}
+$candidateManifest = [ordered]@{
+    schemaVersion = 1
+    buildId = $buildId
+    generatedUtc = (Get-Date).ToUniversalTime().ToString("o")
+    sourceHead = $sourceHead
+    version = $Version
+    architecture = "x64"
+    runtime = $Runtime
+    sourceDirtyFileCount = $dirtyCount
+    artifacts = @($candidateArtifacts)
+}
+$candidateManifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $releaseRoot "candidate-certification.json") -Encoding UTF8
 
 Write-Host "ForgerEMS current release folder ready: $releaseRoot" -ForegroundColor Green

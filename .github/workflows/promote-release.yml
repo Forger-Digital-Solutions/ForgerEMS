@@ -1,0 +1,193 @@
+name: promote-release
+
+# Promotion/publish workflow — DISPATCH ONLY. Downloads an already-built,
+# already-signed candidate artifact plus externally produced signed gate
+# receipts, runs the certification endpoint over those exact bytes, and only
+# then creates the GitHub Release. It never rebuilds, re-signs, or mutates the
+# candidate ZIP/installer.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without v prefix; must match an existing tag and the repository VERSION (e.g. 1.2.4)"
+        required: true
+        type: string
+      candidate_run_id:
+        description: "Actions run ID of the release.yml staging run that produced signed-release-candidate"
+        required: true
+        type: string
+      receipt_run_id:
+        description: "Actions run ID that produced the release-gate-receipts artifact (CMS-signed gate receipts)"
+        required: true
+        type: string
+
+permissions:
+  contents: write   # release creation
+  actions: read     # gh api / run download for candidate + receipt runs
+
+jobs:
+  promote:
+    name: Certify and publish GitHub Release
+    runs-on: windows-latest
+    # Same protected environment as staging: required reviewers plus the
+    # approved receipt-signer thumbprint var and signing thumbprint secret.
+    environment: production-release
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: v${{ inputs.version }}
+          fetch-depth: 0
+
+      - name: Resolve and bind inputs
+        id: meta
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
+          CANDIDATE_RUN_ID_INPUT: ${{ inputs.candidate_run_id }}
+          RECEIPT_RUN_ID_INPUT: ${{ inputs.receipt_run_id }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ver = "$env:VERSION_INPUT".Trim()
+          if ($ver -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$') {
+            throw "Version '$ver' is not a strict semantic version; refusing promotion."
+          }
+          $versionFile = (Get-Content -LiteralPath "VERSION" -Raw).Trim()
+          if ($ver -ne $versionFile) { throw "Version '$ver' does not match repository VERSION '$versionFile'." }
+          foreach ($id in @($env:CANDIDATE_RUN_ID_INPUT, $env:RECEIPT_RUN_ID_INPUT)) {
+            if ($id -notmatch '^\d+$') { throw "Run IDs must be digits only; got '$id'." }
+          }
+          $tag = "v$ver"
+          $tagCommit = (git rev-parse --verify "refs/tags/$tag^{commit}" 2>$null).Trim()
+          $headCommit = (git rev-parse HEAD).Trim()
+          if (-not $tagCommit -or $tagCommit -ne $headCommit) {
+            throw "Tag '$tag' does not resolve to the checked-out commit; refusing promotion."
+          }
+
+          # Candidate run must be the release.yml staging run for THIS repo,
+          # completed+success, whose head_sha is the tagged commit.
+          $candidateRun = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:CANDIDATE_RUN_ID_INPUT" | ConvertFrom-Json
+          if ($candidateRun.status -ne 'completed' -or $candidateRun.conclusion -ne 'success') {
+            throw "Candidate run $env:CANDIDATE_RUN_ID_INPUT is not a completed success."
+          }
+          if ($candidateRun.path -ne '.github/workflows/release.yml') {
+            throw "Candidate run was produced by '$($candidateRun.path)', not .github/workflows/release.yml."
+          }
+          if ($candidateRun.repository.full_name -ne $env:GITHUB_REPOSITORY) { throw "Candidate run belongs to a different repository." }
+          if ($candidateRun.head_sha -ne $tagCommit) {
+            throw "Candidate run head_sha $($candidateRun.head_sha) does not equal tag commit $tagCommit."
+          }
+
+          # Receipt run must be completed+success in THIS repo, produced at the
+          # same head as the candidate. The CMS signer pin — not the producer's
+          # identity — remains the trust authority.
+          $receiptRun = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:RECEIPT_RUN_ID_INPUT" | ConvertFrom-Json
+          if ($receiptRun.status -ne 'completed' -or $receiptRun.conclusion -ne 'success') {
+            throw "Receipt run $env:RECEIPT_RUN_ID_INPUT is not a completed success."
+          }
+          if ($receiptRun.repository.full_name -ne $env:GITHUB_REPOSITORY) { throw "Receipt run belongs to a different repository." }
+          if ($receiptRun.head_sha -ne $tagCommit) {
+            throw "Receipt run head_sha $($receiptRun.head_sha) does not equal tag commit $tagCommit."
+          }
+
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "version=$ver"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "tag=$tag"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "installer=ForgerEMS-Setup-v$ver.exe"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "zip=ForgerEMS-v$ver.zip"
+
+      - name: Download staged candidate artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+        run: gh run download -R $env:GITHUB_REPOSITORY $env:CANDIDATE_RUN_ID -n signed-release-candidate -D release/current
+
+      - name: Download signed gate receipts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RECEIPT_RUN_ID: ${{ inputs.receipt_run_id }}
+        run: gh run download -R $env:GITHUB_REPOSITORY $env:RECEIPT_RUN_ID -n release-gate-receipts -D .verify/promotion-receipts
+
+      - name: Require production certification before publication
+        # The endpoint verifies the candidate manifest, every receipt's
+        # detached CMS signature against the pinned receipt-author thumbprint,
+        # artifact hashes/signatures, and a clean source tree. It exits nonzero
+        # (failing this step and blocking the release) whenever receipts, pins,
+        # or evidence are missing — there is no bypass switch.
+        env:
+          FORGEREMS_RECEIPT_SIGNER_THUMBPRINT: ${{ vars.FORGEREMS_RECEIPT_SIGNER_THUMBPRINT }}
+          FORGEREMS_SIGNING_CERT_THUMBPRINT: ${{ secrets.FORGEREMS_SIGNING_CERT_THUMBPRINT }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:FORGEREMS_RECEIPT_SIGNER_THUMBPRINT)) {
+            throw "FORGEREMS_RECEIPT_SIGNER_THUMBPRINT is not configured in the protected environment; promotion fails closed."
+          }
+          $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -like '*\x64\*' } | Sort-Object FullName -Descending | Select-Object -First 1
+          if ($null -eq $signtool) { throw "signtool.exe was not found under the Windows SDK on this runner." }
+          .\tools\Test-ForgerEMSReleaseCertification.ps1 `
+            -RepoRoot . `
+            -ReleaseRoot release/current `
+            -CandidateManifest release/current/candidate-certification.json `
+            -ReceiptDirectory .verify/promotion-receipts `
+            -ApprovedReceiptSignerThumbprint $env:FORGEREMS_RECEIPT_SIGNER_THUMBPRINT `
+            -ApprovedArtifactSignerThumbprint $env:FORGEREMS_SIGNING_CERT_THUMBPRINT `
+            -SignToolPath $signtool.FullName `
+            -OutputPath release/current/release-certification.json
+          if ($LASTEXITCODE -ne 0) { throw "Release certification failed (exit $LASTEXITCODE); this candidate is not production eligible." }
+
+      - name: Compose release notes
+        run: |
+          $ver = '${{ steps.meta.outputs.version }}'
+          $zip = "ForgerEMS-v$ver.zip"
+          $exe = "ForgerEMS-Setup-v$ver.exe"
+          $nl = [Environment]::NewLine
+          $header =
+            "## DOWNLOAD THE PORTABLE ZIP FIRST$nl$nl" +
+            "Download **$zip** for the portable ForgerEMS app package.$nl" +
+            "Extract the ZIP, open the inner folder, then run **START_HERE.bat** or **ForgerEMS.exe**.$nl$nl" +
+            "The installer **$exe** is published separately for users who prefer an installed app and are comfortable running a standalone installer.$nl$nl" +
+            "On first launch, review and accept the ForgerEMS Terms of Use before using the main tools. Review docs/TERMS_OF_USE.md, docs/PRIVACY_AND_DATA_HANDLING.md, and docs/LEGAL_NOTICES.md before sharing logs, support bundles, or exported reports.$nl$nl" +
+            "**Incomplete Chrome download?** A .crdownload file is not finished — do not rename or run it. See docs/DOWNLOAD_TROUBLESHOOTING.md in the repo.$nl$nl" +
+            "---$nl$nl" +
+            "### Release assets$nl" +
+            "- **Portable ZIP:** $zip$nl" +
+            "- **Installer:** $exe$nl" +
+            "- **CHECKSUMS.sha256**, **release.json**, **release-certification.json**, **DOWNLOAD_BETA.txt**$nl$nl" +
+            "---$nl$nl"
+          $body = $header
+          $specificDocs = Join-Path "docs" ("RELEASE_NOTES_v{0}.md" -f $ver)
+          $specificRoot = "RELEASE_NOTES_v{0}.md" -f $ver
+          $specific = if (Test-Path -LiteralPath $specificDocs) { $specificDocs } elseif (Test-Path -LiteralPath $specificRoot) { $specificRoot } else { $null }
+          if ($specific) {
+            $body += (Get-Content -LiteralPath $specific -Raw)
+          } else {
+            $candidates = @()
+            $candidates += Get-ChildItem -LiteralPath "docs" -Filter "RELEASE_NOTES*.md" -File -ErrorAction SilentlyContinue
+            $candidates += Get-ChildItem -LiteralPath "." -Filter "RELEASE_NOTES*.md" -File -ErrorAction SilentlyContinue
+            $fallback = $candidates | Sort-Object Name | Select-Object -First 1
+            if ($fallback) {
+              $body += (Get-Content -LiteralPath $fallback.FullName -Raw)
+            }
+          }
+          Set-Content -LiteralPath "release-body.md" -Value $body -Encoding utf8
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: ForgerEMS ${{ steps.meta.outputs.version }}
+          body_path: release-body.md
+          fail_on_unmatched_files: true
+          files: |
+            release/current/${{ steps.meta.outputs.installer }}
+            release/current/${{ steps.meta.outputs.zip }}
+            release/current/CHECKSUMS.sha256
+            release/current/release.json
+            release/current/candidate-certification.json
+            release/current/release-certification.json
+            release/current/DOWNLOAD_BETA.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

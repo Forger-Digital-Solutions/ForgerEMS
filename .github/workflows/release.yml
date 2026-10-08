@@ -1,6 +1,10 @@
 name: release
 
-# Publishes versioned assets to GitHub Releases (portable ZIP first). See docs/UPDATE_SYSTEM.md for how the app checks updates.
+# Stages a signed release candidate (portable ZIP + installer) as a workflow
+# artifact. This workflow NEVER publishes: publication happens only in
+# promote-release.yml after the certification endpoint verifies signed gate
+# receipts bound to these exact bytes. See docs/UPDATE_SYSTEM.md for how the
+# app checks updates.
 
 on:
   push:
@@ -12,6 +16,7 @@ on:
         description: "Version without v prefix (must match an existing tag, e.g. 1.1.4-beta.1)"
         required: true
         type: string
+
 
 permissions:
   contents: write
@@ -103,54 +108,22 @@ jobs:
       - name: Test (Release)
         run: dotnet test .\ForgerEMS.sln -c Release
 
-      - name: Compose release notes
-        run: |
-          $ver = '${{ steps.meta.outputs.version }}'
-          $zip = "ForgerEMS-v$ver.zip"
-          $exe = "ForgerEMS-Setup-v$ver.exe"
-          $nl = [Environment]::NewLine
-          $header =
-            "## DOWNLOAD THE PORTABLE ZIP FIRST$nl$nl" +
-            "Download **$zip** for the portable ForgerEMS app package.$nl" +
-            "Extract the ZIP, open the inner folder, then run **START_HERE.bat** or **ForgerEMS.exe**.$nl$nl" +
-            "The installer **$exe** is published separately for users who prefer an installed app and are comfortable running a standalone installer.$nl$nl" +
-            "On first launch, review and accept the ForgerEMS Terms of Use before using the main tools. Review docs/TERMS_OF_USE.md, docs/PRIVACY_AND_DATA_HANDLING.md, and docs/LEGAL_NOTICES.md before sharing logs, support bundles, or exported reports.$nl$nl" +
-            "**Incomplete Chrome download?** A .crdownload file is not finished — do not rename or run it. See docs/DOWNLOAD_TROUBLESHOOTING.md in the repo.$nl$nl" +
-            "---$nl$nl" +
-            "### Release assets$nl" +
-            "- **Portable ZIP:** $zip$nl" +
-            "- **Installer:** $exe$nl" +
-            "- **CHECKSUMS.sha256**, **release.json**, **DOWNLOAD_BETA.txt**$nl$nl" +
-            "---$nl$nl"
-          $body = $header
-          $specificDocs = Join-Path "docs" ("RELEASE_NOTES_v{0}.md" -f $ver)
-          $specificRoot = "RELEASE_NOTES_v{0}.md" -f $ver
-          $specific = if (Test-Path -LiteralPath $specificDocs) { $specificDocs } elseif (Test-Path -LiteralPath $specificRoot) { $specificRoot } else { $null }
-          if ($specific) {
-            $body += (Get-Content -LiteralPath $specific -Raw)
-          } else {
-            $candidates = @()
-            $candidates += Get-ChildItem -LiteralPath "docs" -Filter "RELEASE_NOTES*.md" -File -ErrorAction SilentlyContinue
-            $candidates += Get-ChildItem -LiteralPath "." -Filter "RELEASE_NOTES*.md" -File -ErrorAction SilentlyContinue
-            $fallback = $candidates | Sort-Object Name | Select-Object -First 1
-            if ($fallback) {
-              $body += (Get-Content -LiteralPath $fallback.FullName -Raw)
-            }
-          }
-          Set-Content -LiteralPath "release-body.md" -Value $body -Encoding utf8
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+      - name: Upload signed release candidate
+        # Staging only — this workflow cannot publish. The promote-release
+        # workflow downloads these exact bytes and only publishes after the
+        # certification endpoint verifies receipts bound to them. Never rebuild
+        # or re-sign in the promotion path.
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          tag_name: ${{ steps.meta.outputs.tag }}
-          name: ForgerEMS ${{ steps.meta.outputs.version }}
-          body_path: release-body.md
-          fail_on_unmatched_files: true
-          files: |
+          name: signed-release-candidate
+          if-no-files-found: error
+          retention-days: 30
+          path: |
             release/current/${{ steps.meta.outputs.installer }}
             release/current/${{ steps.meta.outputs.zip }}
+            release/current/app/ForgerEMS.exe
+            release/current/uninstaller/verified-uninstaller.exe
             release/current/CHECKSUMS.sha256
             release/current/release.json
+            release/current/candidate-certification.json
             release/current/DOWNLOAD_BETA.txt
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

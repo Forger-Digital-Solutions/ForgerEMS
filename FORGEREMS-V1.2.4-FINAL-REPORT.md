@@ -4,7 +4,189 @@ Date: 2026-10-08. Evidence root: `.verify/v1.2.4-closure/`.
 This is the single authoritative certification report. Earlier artifacts and
 failed campaigns remain preserved; they are not silently substituted for final evidence.
 
-## Latest Production-Certification Unblock Round
+## Latest Authorized KVM And Production-Gate Closure Round
+
+Observed 2026-10-08. **FORGEREMS_V1.2.4_BLOCKED**.
+KVM acceleration is now proven and a cloned Windows guest reached its desktop.
+The build/signing-only production-eligibility defect is corrected. Installer
+certification remains unexecuted: the guest's evaluation grace period is expired,
+and no owner-authorized production signing identity has been supplied.
+These are external prerequisites, not evidence of a defective installer.
+
+### Repository And Artifact Provenance
+
+Starting repository HEAD: `a8985ec8f64b1d18a07b77900de374c8c1b19659`, clean.
+The only committed delta from artifact source
+`fc54150844b36c2e6d6a4fd18d6ea9dd065fd4fb` at entry was this report.
+This round changes release tools, workflows, regression tests and this report,
+not shipped application/installer/backend/resource/legal content. No candidate
+rebuild, signing, host installation, driver replacement, push, tag or publication
+occurs. The final local commit and clean-tree state are recorded after commit in
+`.verify/v1.2.4-closure/kvm-production-gate-20261008T114613Z/certification-attestation.json`.
+
+The preserved unsigned artifacts still correspond to **fc541508**, not the
+new release-tool revision. Fresh integrity evidence:
+`.verify/v1.2.4-closure/final-artifact-integrity.json`.
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `.verify/v1.2.4-closure/release/ForgerEMS-Setup-v1.2.4.exe` | 61780805 | F7C3541860015A533D437CE80B8D0D8B70DD78F0DE9CF47091353C1175B8A9BB |
+| `.verify/v1.2.4-closure/release/ForgerEMS-v1.2.4.zip` | 81742749 | 61A000203FD3E866C10221856322AD318A38562B5CE9E122626205997373B137 |
+
+App and installer remain **NotSigned**, with no signer or timestamp.
+The retained exact-artifact Defender result remains no threats / exit 0;
+it was not rerun. Historical attestations and candidate metadata are preserved.
+
+### KVM Capability Result
+
+Ubuntu WSL2, kernel `6.6.114.1-microsoft-standard-WSL2`.
+`/dev/kvm` exists, mode `0660`, owner root, group kvm (gid 993).
+The ordinary uid 1000 remains outside that group and cannot access the device.
+The approved probe ran as uid/gid 0: API **12**, USER_MEMORY, IRQCHIP,
+SET_TSS_ADDR, EXT_CPUID and PIT2 all **1**. KVM_CREATE_VM returned a VM fd,
+which was immediately closed. Result **PASS**, not device-presence inference.
+Two immediate probe executions were captured; no further probes or permission
+changes followed. No guest disk/firmware/TPM was touched by the probe.
+Evidence: `kvm-production-gate-20261008T114613Z/probe-result.json`,
+`probe-run.log` and `probe-context.txt`, relative to the closure evidence root.
+
+### Disposable Windows Environment
+
+QEMU uses KVM only, q35/SMM, host CPU, two CPUs, 4096 MB, standard VGA,
+private Unix QMP/VNC/TPM sockets and **no guest networking or host shares**.
+The old disk-recreating launcher was never used. A full disk clone and copied
+firmware/TPM/auxiliary media live in
+`/root/forgerems-kvm-clone-20261008T120805Z/`.
+Original source `/home/daddy_fds/forgerems-closure-qemu-e86b6629/` remains
+unchanged: all six captured source-state hashes match before and after.
+
+The guest emitted FORGEREMS_GUEST_READY at 12:30:22 UTC and was visually
+confirmed at a normal desktop with elevated PowerShell:
+Windows 11 Enterprise LTSC Evaluation, **10.0.26100**, x64,
+UUID `e86b6629-1d60-44b3-88c1-32d6a74bdb21`.
+An observed WSL restart at approximately 13:32 UTC interrupted baseline
+collection. Its cause is unproved; it is not a ForgerEMS CLR crash.
+The same owned clone subsequently booted back to its desktop.
+
+`slmgr.vbs /dli`, relayed through guest COM1, proves **EnterpriseSEval /
+TIMEBASED_EVAL**, **Notification**, **0xC004F009 (grace time expired)**.
+Installer testing was held. No activation, rearm, clock/key change or network
+change occurred. Direct SoftwareLicensingProduct CIM output was not obtained;
+the serial slmgr output, not a guessed numeric LicenseStatus, is the evidence.
+
+The guest was stopped through QMP system_powerdown; QEMU exited and its TPM
+helper stopped. A private, hashed disk/firmware/TPM checkpoint is preserved at
+`/root/forgerems-kvm-checkpoint-preactivation-20261008T1430Z/`.
+This is **not a clean lifecycle baseline**. No installer phase executed.
+Before resumption, refresh the campaign ISOs with the final reviewed tools:
+the preserved ISOs contain an earlier audit-tool revision.
+
+Evidence under `kvm-clone-20261008T120805Z/`: `isolation-receipt.json`,
+`source-inventory.txt`, `source-inventory-final.txt`, `frame-wake.png`,
+`frame-now3.png`, `serial-ready.log`, `serial-at-wsl-death.log`,
+`licensing-serial-proof.txt`, `serial-final.log`, `checkpoint-hashes.txt`
+and `final-runtime-inventory.txt`. Exact QEMU configurations are preserved
+in `kvm-clone-launch.sh` and `kvm-clone-relaunch.sh` at the closure root.
+The historical TCG stall's cause remains unproved; fixing the cloned guest's
+DVD key prompt does not establish the cause of the historical kernel stall.
+
+### Production Eligibility Gate Fix And Lifecycle Evidence Binding
+
+`build-release.ps1` always writes **productionEligible:false**, with schema 2,
+a build ID and UnsignedValidationCandidate/SignedValidationCandidate labels.
+It emits a separate candidate manifest after final signing, packaging and hashes.
+The temporary signed-uninstaller capture/verification and directory/no-overwrite
+safeguards remain intact. No old-format eligibility boolean is authority.
+
+`Test-ForgerEMSReleaseCertification.ps1` independently checks clean committed
+source, allowed tool/report-only deltas, artifact hashes/sizes, pinned publisher
+signatures/timestamps, signtool verification and the portable frontend identity.
+All mandatory gate receipts must bind source HEAD, version, architecture,
+build ID, manifest SHA-256 and exact installer filename/SHA-256.
+Missing, stale, wrong-artifact, wrong-HEAD, failed, duplicate or malformed
+receipts fail closed. Lifecycle runs must postdate the final candidate manifest.
+
+Every receipt requires a detached SHA-256 CMS signature from a caller-pinned,
+approved, chain-trusted code-signing identity. Online revocation and Code Signing
+application policy are mandatory. Evidence leaves are independently hashed.
+Fixture facts can exercise the pure policy core, not bypass the production
+endpoint. Raw guest records always remain engineering-only and untrusted.
+
+Build/Test/Integrity, Signing, Lifecycle and Security/Portable/Policy gate groups
+jointly determine production eligibility. Lifecycle includes clean install,
+upgrade, uninstall, residue, reinstall, driver/service/task audit and GUI evidence.
+The staging workflow cannot publish. The dispatch-only promotion workflow
+downloads already-built artifacts and signed receipts; it never rebuilds or
+re-signs after lifecycle testing. Actual authorized signing and the production
+endpoint's real-credential happy path remain unexecuted.
+
+### Tests, Focused Policy Checks And Revised Certification Matrix
+
+New broad Release execution: **1735 passed / 0 failed / 0 skipped**, exit 0,
+`full-suite-round/full-suite.trx` and `run.log`.
+The combined focused tooling run passed **80/0/0** (`certification-focused-7.trx`);
+after final audit/clean-CI fixes, the promotion suite passed **35/0/0**, exit 0
+(`certification-focused-8.trx`). The broad result predates these final narrow
+fixes; it is not relabeled as a second final-HEAD broad run.
+No current CLR crash occurred in these tests. Historical root cause is unproved.
+
+Focused production-surface search finds no active Kyra runtime/SDK/gateway/
+navigation or `1.2.4-preview.4`/`1.2.4-preview.5`; remaining tool references are
+negative checks and intentionally seeded legacy upgrade fixtures.
+VERSION remains 1.2.4. The retained resource result is **19/20**, not the
+older 11/20 figure; no new network probe or resolver modification occurred.
+The published previous-release state was not queried anew without network
+approval. The authentic retained v1.2.3-preview.1 fixture remains available.
+
+| Gate | Status | Exact Evidence (closure root unless stated) | Blocking? |
+| --- | --- | --- | --- |
+| Repository integrity | PASS | Starting git status; post-commit certification-attestation.json | No |
+| Product source | PASS | fc541508 provenance; final-artifact-integrity.json; git delta | No |
+| Kyra removal | PASS | Focused production-surface git search; retained package evidence | No |
+| Version consistency | PASS | VERSION; retained release.json; focused/broad tests | No |
+| Tests | PASS | full-suite-round/full-suite.trx; certification-tests/certification-focused-7.trx and -8.trx | No |
+| CLR stability | PARTIAL | New clean run; historical dump/root cause remains unproved | Historical risk requires release-policy review |
+| Portable package | PASS | Retained final-qa/latest-qa.log; unchanged ZIP hash | No |
+| KVM capability | PASS | kvm-production-gate-20261008T114613Z/probe-result.json | No |
+| Disposable Windows | PARTIAL | Desktop/serial proof; licensing-serial-proof.txt; checkpoint | Yes: expired evaluation; baseline not complete |
+| Clean install | BLOCKED | No phase executed | Yes |
+| Upgrade | BLOCKED | No phase executed; authentic previous fixture retained | Yes |
+| Uninstall | BLOCKED | No phase executed | Yes |
+| Reinstall | BLOCKED | No phase executed | Yes |
+| Residue audit | BLOCKED | No completed installed/uninstalled baseline | Yes |
+| Driver/service/task audit | BLOCKED | Baseline collection interrupted; read-only tooling prepared | Yes |
+| Signing pipeline | PARTIAL | Reviewed tooling; focused regression receipts/callback tests | Real identity/provider operation unproved |
+| Authorized signing identity | BLOCKED | No owner-authorized identity supplied; prior discovery retained | Yes |
+| Final artifact signing | BLOCKED | final-artifact-integrity.json: NotSigned | Yes |
+| Lifecycle-artifact binding | PASS | Schema/core/endpoint regression tests; no real production receipts | Receipts still required |
+| Production eligibility | BLOCKED | Builder false; authenticated endpoint gates; current attestation | Yes |
+| Defender | PASS | Retained evidence/final-defender-scan.txt, exact unchanged hashes | No |
+
+### Signing Status And Remaining Owner Action
+
+No signing occurred; no signer, issuer or timestamp exists for these artifacts.
+Preferred acquisition remains an owner-authorized publicly trusted token/HSM
+identity exposed through the Windows certificate store and selected by thumbprint.
+Supply provider, validated publisher identity, public thumbprint, approved
+token/account access and authorization for ForgerEMS; never provide keys/PINs/
+passwords in source or chat. The protected receipt-author pin also requires
+owner approval; the same approved identity may sign reviewed receipts if policy
+permits. No speculative remote-provider adapter was introduced.
+
+The Windows blocker is now precise, not presumed missing acceleration:
+provide/authorize legitimate licensing or evaluation renewal for the preserved
+guest, or supply a valid licensed disposable Windows VM. Guest activation would
+require an explicitly approved network/licensing path; approval alone is not
+proof that activation can resolve the expired evaluation.
+Then validate a clean, rebootable/revertible baseline and run lifecycle phases.
+The unsigned candidate can provide engineering evidence only; final signed bytes
+must ultimately receive their own exact-artifact lifecycle/security receipts.
+
+Updated owner actions:
+`.verify/v1.2.4-closure/unblock-round-20261008/OWNER-ACTIONS.md`.
+Current certification status: **FORGEREMS_V1.2.4_BLOCKED**.
+
+## Previous Production-Certification Unblock Round
 
 Observed 2026-10-08 at 11:17-11:19 UTC. **FORGEREMS_V1.2.4_BLOCKED**.
 Neither required external prerequisite became available. No signing,
