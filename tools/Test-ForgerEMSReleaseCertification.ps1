@@ -54,6 +54,22 @@ Import-Module (Join-Path $PSScriptRoot 'ForgerEMS.ReleaseCertification.psm1') -F
 
 $script:MaxReceiptBytes = 1MB
 
+function Get-FeFileSha256 {
+    # Streaming SHA-256 with no ambient-module dependency: Get-FileHash resolves
+    # through PSModulePath autoloading, which breaks when this Windows-PowerShell
+    # endpoint is spawned under a foreign shell's module path. The certification
+    # hash path must be self-contained.
+    param([Parameter(Mandatory)][string]$Path)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $stream = [IO.File]::OpenRead((Get-Item -LiteralPath $Path -Force).FullName)
+    try {
+        return ([BitConverter]::ToString($sha.ComputeHash($stream))).Replace('-', '')
+    } finally {
+        $stream.Dispose()
+        $sha.Dispose()
+    }
+}
+
 function Test-FeContainedPath {
     # Resolves $Relative under $Root, rejects escapes, and walks EVERY ancestor
     # directory up to $Root so a junction/symlink/reparse anywhere in the chain
@@ -251,7 +267,7 @@ try {
             if ($Paths.ContainsKey($full)) { $ok = $false; continue }
             $Paths[$full] = $true
             $item = Get-Item -LiteralPath $full -Force
-            $hash = (Get-FileHash -LiteralPath $full -Algorithm SHA256).Hash
+            $hash = Get-FeFileSha256 -Path $full
             if ($hash -ne [string]$artifact.sha256 -or $item.Length -ne [int64]$artifact.sizeBytes) { $ok = $false }
         }
         return $ok
@@ -405,7 +421,7 @@ try {
                 $receiptDiagnostics.Add("$name : evidence leaf '$($leaf.path)' escapes the receipt directory or is missing")
                 continue
             }
-            if ((Get-FileHash -LiteralPath $full -Algorithm SHA256).Hash -ne [string]$leaf.sha256) {
+            if ((Get-FeFileSha256 -Path $full) -ne [string]$leaf.sha256) {
                 $evidenceVerified = $false
                 $receiptDiagnostics.Add("$name : evidence leaf '$($leaf.path)' hash mismatch")
             }

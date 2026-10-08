@@ -515,7 +515,8 @@ public sealed class ReleaseCertificationTests
         var diagnostics = doc.RootElement.GetProperty("receiptDiagnostics").EnumerateArray()
             .Select(e => e.GetString()).ToList();
         Assert.True(diagnostics.Any(d => d != null && d.Contains("hash mismatch", StringComparison.OrdinalIgnoreCase)),
-            "Expected an evidence hash-mismatch diagnostic; got: [" + string.Join("; ", diagnostics) + "]");
+            "Expected an evidence hash-mismatch diagnostic; got: [" + string.Join("; ", diagnostics) +
+            "] record: " + doc.RootElement.GetRawText());
     }
 
     /// <summary>
