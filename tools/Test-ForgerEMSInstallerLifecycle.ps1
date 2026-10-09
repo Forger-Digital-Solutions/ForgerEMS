@@ -111,16 +111,26 @@ function Get-Registrations {
 function Invoke-OwnedProcess([string]$file, [string]$arguments, [string]$name, [int]$timeoutSeconds = 180) {
     $out = Join-Path $EvidenceRoot "$Phase-$name.stdout.txt"
     $err = Join-Path $EvidenceRoot "$Phase-$name.stderr.txt"
-    $process = Start-Process -FilePath $file -ArgumentList $arguments -PassThru `
-        -RedirectStandardOutput $out -RedirectStandardError $err
+    # UseShellExecute=$false keeps a real process handle so ExitCode is always
+    # observable; Start-Process can yield a null ExitCode for elevated children.
+    $psi = [System.Diagnostics.ProcessStartInfo]::new($file, $arguments)
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $process = [System.Diagnostics.Process]::Start($psi)
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
     if (-not $process.WaitForExit($timeoutSeconds * 1000)) {
         # Only the process created by this phase is terminated on timeout.
         Stop-Process -Id $process.Id -ErrorAction SilentlyContinue
         throw "$name timed out after $timeoutSeconds seconds"
     }
     $process.WaitForExit()
-    $record.Processes += @{ File = $file; Arguments = $arguments; ExitCode = $process.ExitCode; Stdout = $out; Stderr = $err }
-    Assert ($process.ExitCode -eq 0) "$name exits 0 without a reboot request"
+    [System.IO.File]::WriteAllText($out, $stdoutTask.GetAwaiter().GetResult())
+    [System.IO.File]::WriteAllText($err, $stderrTask.GetAwaiter().GetResult())
+    $exitCode = $process.ExitCode
+    $record.Processes += @{ File = $file; Arguments = $arguments; ExitCode = $exitCode; Stdout = $out; Stderr = $err }
+    Assert ($null -ne $exitCode -and $exitCode -eq 0) "$name exits 0 without a reboot request"
 }
 function Assert-Artifact([string]$file, [string]$expected) {
     Assert (Test-Path -LiteralPath $file -PathType Leaf) "Artifact exists: $file"
