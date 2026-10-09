@@ -175,6 +175,13 @@ function Uninstall {
     Assert (Test-Path -LiteralPath $uninstaller -PathType Leaf) 'Installer-owned uninstaller exists'
     $log = Join-Path $EvidenceRoot "$Phase-uninstall.log"
     Invoke-OwnedProcess $uninstaller "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=`"$log`"" 'uninstall'
+    # Inno unins000.exe hands off to a detached second-phase copy that deletes
+    # the install dir; the spawned process exits before that cleanup finishes.
+    $cleanupDeadline = [DateTimeOffset]::UtcNow.AddSeconds(60)
+    while ([DateTimeOffset]::UtcNow -lt $cleanupDeadline -and
+           (Test-Path -LiteralPath $uninstaller -PathType Leaf)) {
+        Start-Sleep -Seconds 2
+    }
     Assert (@(Get-Registrations).Count -eq 0) 'Product registration removed'
     Assert (-not (Test-Path $app)) 'Main executable removed'
     $ownedPaths = @('backend','manifests','docs','providers','LibreHardwareMonitorLib.dll','unins000.exe')
