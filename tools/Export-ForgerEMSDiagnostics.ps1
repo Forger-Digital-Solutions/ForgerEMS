@@ -20,7 +20,11 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
 }
 function Redact-Text([string]$s) {
     if ([string]::IsNullOrEmpty($s)) { return "" }
-    $t = $s -replace '(?i)[A-Za-z]:\\Users\\[^\\\s]+', '[REDACTED_PRIVATE_PATH]'
+    $t = $s
+    # Secret assignments first so values are never consumed by the path patterns.
+    $t = $t -replace '(?i)\b([A-Z_]*(?:API[_-]?KEY|TOKEN|SECRET|PASSWORD|PASS|CREDENTIAL|BEARER)[A-Z_]*)[=:]\s*[^\s''";,]+', '$1=[REDACTED_SECRET]'
+    $t = $t -replace '\b(sk-[A-Za-z0-9_\-]{8,}|gh[pousr]_[A-Za-z0-9]{10,}|github_pat_[A-Za-z0-9_]{10,}|eyJ[A-Za-z0-9_\-\.]{20,})', '[REDACTED_SECRET]'
+    $t = $t -replace '(?i)[A-Za-z]:\\Users\\[^\\\s]+', '[REDACTED_PRIVATE_PATH]'
     $t = $t -replace '(?i)[A-Za-z]:\\[^\r\n\t ]+', '[REDACTED_PRIVATE_PATH]'
     return $t
 }
@@ -43,7 +47,8 @@ DisplayVersion: ForgerEMS v$Version
 FORGEREMS_RELEASE_CHANNEL: $env:FORGEREMS_RELEASE_CHANNEL
 Update owner/repo: $env:FORGEREMS_GITHUB_OWNER / $env:FORGEREMS_GITHUB_REPO
 
-Redaction: user-profile style paths replaced with [REDACTED_PRIVATE_PATH].
+Redaction: user-profile style paths replaced with [REDACTED_PRIVATE_PATH];
+secret assignments and common credential formats replaced with [REDACTED_SECRET].
 Send only if comfortable. Support: ForgerDigitalSolutions@outlook.com
 Do not email API keys, passwords, or private documents.
 "@
