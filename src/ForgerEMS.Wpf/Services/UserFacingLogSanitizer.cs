@@ -46,11 +46,8 @@ public static class UserFacingLogSanitizer
         var roots = NormalizeSafeRoots(safeRoots);
 
         // Secrets first — these must never leak regardless of where they appear.
-        var redacted = Regex.Replace(value, @"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['""]?[^'""\s;]+", "[REDACTED_TOKEN]");
-        redacted = Regex.Replace(redacted, @"(?i)\b(bearer)\s+[A-Za-z0-9._-]{12,}\b", "[REDACTED_TOKEN]");
-        redacted = Regex.Replace(redacted, @"(?i)\b(ghp|gho|github_pat)_[A-Za-z0-9_]{20,}\b", "[REDACTED_TOKEN]");
-        redacted = Regex.Replace(redacted, @"(?i)\bsk-[A-Za-z0-9_-]{12,}\b", "[REDACTED_API_KEY]");
-        redacted = Regex.Replace(redacted, @"(?i)\bxox[baprs]-[A-Za-z0-9-]+\b", "[REDACTED_TOKEN]");
+        // Shared pattern set lives in DiagnosticRedactor.RedactSecrets.
+        var redacted = DiagnosticRedactor.RedactSecrets(value);
         redacted = Regex.Replace(redacted, @"(?i)[A-Z]:\\Program Files(?: \(x86\))?\\[^\r\n\t ""']+", PrivatePathPlaceholder);
 
         // Always redact user-profile / private cache paths up front (anchored on the
@@ -96,13 +93,9 @@ public static class UserFacingLogSanitizer
             return value;
         }
 
-        // Secrets first — same patterns as the strict sanitizer, but no path
-        // regex follows so the path stays intact.
-        var redacted = Regex.Replace(value, @"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['""]?[^'""\s;]+", "[REDACTED_TOKEN]");
-        redacted = Regex.Replace(redacted, @"(?i)\b(bearer)\s+[A-Za-z0-9._-]{12,}\b", "[REDACTED_TOKEN]");
-        redacted = Regex.Replace(redacted, @"(?i)\b(ghp|gho|github_pat)_[A-Za-z0-9_]{20,}\b", "[REDACTED_TOKEN]");
-        redacted = Regex.Replace(redacted, @"(?i)\bsk-[A-Za-z0-9_-]{12,}\b", "[REDACTED_API_KEY]");
-        redacted = Regex.Replace(redacted, @"(?i)\bxox[baprs]-[A-Za-z0-9-]+\b", "[REDACTED_TOKEN]");
+        // Secrets first — shared pattern set from DiagnosticRedactor.RedactSecrets;
+        // no path regex follows so local paths stay intact.
+        var redacted = DiagnosticRedactor.RedactSecrets(value);
         redacted = Regex.Replace(redacted, @"(?i)\b(service tag|serial|s/n)\s*[:#]?\s*[A-Z0-9-]{5,}\b", "[REDACTED_SERIAL]");
         redacted = Regex.Replace(redacted, @"(?i)\b(bitlocker|recovery)\s*key\s*[:=]?\s*[^\s\r\n]{8,}", "[REDACTED_RECOVERY_KEY]");
         redacted = Regex.Replace(redacted, @"(?i)\b(windows|product)\s*key\s*[:=]?\s*[A-Z0-9-]{10,}", "[REDACTED_LICENSE_KEY]");

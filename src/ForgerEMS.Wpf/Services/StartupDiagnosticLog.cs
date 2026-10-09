@@ -67,7 +67,10 @@ public static class StartupDiagnosticLog
             {
                 foreach (var pair in context)
                 {
-                    builder.AppendLine(FormattableString.Invariant($"{pair.Key}: {DiagnosticRedactor.Redact(pair.Value, enabled: true)}"));
+                    var contextValue = DiagnosticRedactor.IsSensitiveName(pair.Key)
+                        ? "[REDACTED_SECRET]"
+                        : DiagnosticRedactor.Redact(pair.Value, enabled: true);
+                    builder.AppendLine(FormattableString.Invariant($"{pair.Key}: {contextValue}"));
                 }
             }
 

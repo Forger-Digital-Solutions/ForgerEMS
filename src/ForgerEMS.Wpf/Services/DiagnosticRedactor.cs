@@ -3,9 +3,9 @@ using System.Text.RegularExpressions;
 namespace VentoyToolkitSetup.Wpf.Services;
 
 /// <summary>Strips credentials, PII, private paths, and hardware serials from text before persistence or transmission.</summary>
-public static class DiagnosticRedactor
+public static partial class DiagnosticRedactor
 {
-    /// <summary>Returns <paramref name="value"/> with API keys, tokens, Windows paths, IP addresses, MAC addresses, email addresses, and hardware serials replaced by safe placeholder strings. Pass <paramref name="enabled"/> as <see langword="false"/> to bypass redaction (e.g. in tests).</summary>
+    /// <summary>Returns <paramref name="value"/> with credentials/secrets, Windows paths, IP addresses, MAC addresses, email addresses, and hardware serials replaced by safe placeholder strings. Pass <paramref name="enabled"/> as <see langword="false"/> to bypass redaction (e.g. in tests).</summary>
     public static string Redact(string value, bool enabled = true)
     {
         if (!enabled || string.IsNullOrEmpty(value))
@@ -13,11 +13,7 @@ public static class DiagnosticRedactor
             return value;
         }
 
-        var redacted = Regex.Replace(value, @"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*['""]?[^'""\s;]+", "[REDACTED_TOKEN]");
-        redacted = Regex.Replace(redacted, @"(?i)\b(bearer)\s+[A-Za-z0-9._-]{12,}\b", "[REDACTED_TOKEN]");
-        redacted = Regex.Replace(redacted, @"(?i)\b(ghp|gho|github_pat)_[A-Za-z0-9_]{20,}\b", "[REDACTED_TOKEN]");
-        redacted = Regex.Replace(redacted, @"(?i)\bsk-[A-Za-z0-9_-]{12,}\b", "[REDACTED_API_KEY]");
-        redacted = Regex.Replace(redacted, @"(?i)\bxox[baprs]-[A-Za-z0-9-]+\b", "[REDACTED_TOKEN]");
+        var redacted = RedactSecrets(value);
         redacted = Regex.Replace(redacted, @"(?i)[A-Z]:\\Program Files(?: \(x86\))?\\[^\r\n\t ""']+", "[REDACTED_PRIVATE_PATH]");
         redacted = Regex.Replace(redacted, @"[A-Za-z]:\\Users\\([^\\\s]+)", @"[REDACTED_PRIVATE_PATH]");
         redacted = Regex.Replace(redacted, @"[A-Za-z]:\\[^\r\n\t ]+", "[REDACTED_PRIVATE_PATH]");
@@ -31,4 +27,71 @@ public static class DiagnosticRedactor
         redacted = Regex.Replace(redacted, @"(?i)\b(username|user|owner)\s*[:=]\s*[^;\r\n\t ]+", "[REDACTED_USERNAME]");
         return redacted;
     }
+
+    /// <summary>Redacts credential material only (no path/PII rules). Used by log variants that must keep local paths visible, and by callers that need secret-scrubbing on top of their own rules. Handles environment-dump assignments, JSON key/value pairs, Authorization headers, URL userinfo, PEM-style multiline blocks, and common provider token formats.</summary>
+    public static string RedactSecrets(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return value;
+        }
+
+        // Multiline secret material first so line-oriented rules cannot see inside it.
+        var redacted = Regex.Replace(
+            value,
+            @"-----BEGIN [A-Z0-9 ]*-----[\s\S]*?-----END [A-Z0-9 ]*-----",
+            "[REDACTED_PRIVATE_BLOCK]");
+
+        // Authorization headers (scheme + credential together, before the generic assignment rule can leave the token half-visible).
+        redacted = Regex.Replace(
+            redacted,
+            @"(?i)\bauthorization\s*:\s*(?:basic|bearer|digest|negotiate|token|apikey)\s+[^\s;'""]+",
+            "Authorization: [REDACTED_TOKEN]");
+
+        // Credentials embedded in URLs: scheme://user:password@host
+        redacted = Regex.Replace(
+            redacted,
+            @"(?i)\b([a-z][a-z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@",
+            "$1[REDACTED_CREDENTIAL]@");
+
+        // JSON-style pairs: "password": "value", 'api_key': 'value', "token": value
+        redacted = Regex.Replace(
+            redacted,
+            @"(?i)(['""])([A-Za-z0-9_.\-]*(?:api[_-]?key|token|secret|password|passwd|pwd|credential|authorization|bearer|private[_-]?key|client[_-]?secret|access[_-]?key|account[_-]?key|connection[_-]?string|refresh[_-]?token|session[_-]?key)[A-Za-z0-9_.\-]*)\1\s*:\s*(['""]?)[^'\""\s,}\]]+\3",
+            "$1$2$1: \"[REDACTED_SECRET]\"");
+
+        // Environment-dump / config-style assignments: NAME=value or NAME: value where the
+        // name looks credential-bearing. Broad name match catches FORGEREMS_GITHUB_TOKEN=...
+        // and similar long-form dumps even when the value is not a recognised token format.
+        redacted = Regex.Replace(
+            redacted,
+            @"(?i)\b([A-Za-z0-9_]*(?:api[_-]?key|token|secret|password|passwd|pwd|credential|authorization|bearer|private[_-]?key|client[_-]?secret|access[_-]?key|account[_-]?key|connection[_-]?string|refresh[_-]?token|session[_-]?key)[A-Za-z0-9_]*)\s*[:=]\s*['""]?[^'""\s;,}\]\[]+",
+            "$1=[REDACTED_TOKEN]");
+
+        // Bare "Bearer <token>" occurrences outside an Authorization header.
+        redacted = Regex.Replace(redacted, @"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]{8,}\b", "Bearer [REDACTED_TOKEN]");
+
+        // Provider-specific token formats.
+        redacted = Regex.Replace(redacted, @"\b(?:ghp|gho|ghu|ghs|ghr|github_pat)_[A-Za-z0-9_]{16,}\b", "[REDACTED_TOKEN]");
+        redacted = Regex.Replace(redacted, @"\bsk-(?:ant-|live-|test-|proj-)?[A-Za-z0-9_-]{16,}\b", "[REDACTED_API_KEY]");
+        redacted = Regex.Replace(redacted, @"\bxox[baprs]-[A-Za-z0-9-]{10,}\b", "[REDACTED_TOKEN]");
+        redacted = Regex.Replace(redacted, @"\bAKIA[0-9A-Z]{16}\b", "[REDACTED_ACCESS_KEY]");
+        redacted = Regex.Replace(redacted, @"\bglpat-[A-Za-z0-9_-]{15,}\b", "[REDACTED_TOKEN]");
+        redacted = Regex.Replace(redacted, @"\bnpm_[A-Za-z0-9]{30,}\b", "[REDACTED_TOKEN]");
+        redacted = Regex.Replace(redacted, @"\bAIza[0-9A-Za-z_-]{35}\b", "[REDACTED_API_KEY]");
+        redacted = Regex.Replace(redacted, @"\bya29\.[0-9A-Za-z_-]{10,}\b", "[REDACTED_TOKEN]");
+        redacted = Regex.Replace(redacted, @"\bcfut_[A-Za-z0-9_]{20,}\b", "[REDACTED_TOKEN]");
+        redacted = Regex.Replace(redacted, @"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}\b", "[REDACTED_TOKEN]");
+
+        return redacted;
+    }
+
+    /// <summary>Returns <see langword="true"/> when <paramref name="name"/> looks like a credential-bearing identifier (e.g. an environment-variable name or dictionary key such as <c>FORGEREMS_GITHUB_TOKEN</c>). Used so values logged under sensitive names are redacted even when the value itself does not match a known token format.</summary>
+    public static bool IsSensitiveName(string? name)
+    {
+        return !string.IsNullOrEmpty(name) && SensitiveNameRegex().IsMatch(name);
+    }
+
+    [GeneratedRegex(@"(?i)(api[_-]?key|token|secret|password|passwd|pwd|credential|bearer|authorization|private[_-]?key|client[_-]?secret|access[_-]?key|account[_-]?key|connection[_-]?string|refresh[_-]?token|session[_-]?key)", RegexOptions.Compiled)]
+    private static partial Regex SensitiveNameRegex();
 }
